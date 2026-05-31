@@ -29,10 +29,10 @@ function ConteudoStreaming() {
         return;
       }
 
-      // 2. Consulta Real: Procura o token e a DATA DE CRIAÇÃO (created_at)
+      // 2. Consulta Real: Procura o token e a DATA DE CRIAÇÃO (criado_em)
       const { data, error } = await supabase
         .from('ppv_acessos')
-        .select('email, status, created_at')
+        .select('email, status, criado_em') // CORRIGIDO PARA O NOME DA SUA COLUNA
         .eq('token', tokenUrl)
         .single();
 
@@ -44,7 +44,7 @@ function ConteudoStreaming() {
       else if (data.status === 'pago') {
         
         // CÁLCULO DAS 48 HORAS
-        const dataEmissao = new Date(data.created_at);
+        const dataEmissao = new Date(data.criado_em); // CORRIGIDO PARA PUXAR DA COLUNA CERTA
         const agora = new Date();
         // Descobre a diferença em milissegundos e converte para horas
         const horasPassadas = (agora.getTime() - dataEmissao.getTime()) / (1000 * 60 * 60);
