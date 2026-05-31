@@ -11,7 +11,7 @@ export async function POST(request: Request) {
       secure: true,
       auth: {
         user: 'suporteitatame@gmail.com',
-        pass: 'jiyw uwfu jzgv rvix', // Senha de App configurada
+        pass: process.env.SENHA_EMAIL,
       },
     });
 

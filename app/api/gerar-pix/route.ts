@@ -6,8 +6,8 @@ export async function POST(request: Request) {
     const { email, nome, tokenOriginal } = await request.json();
 
     // 1. Configura a sua conta do Mercado Pago
-    const client = new MercadoPagoConfig({ 
-      accessToken: 'APP_USR-701313241281216-053022-64ded2714c1af27ab191e33a38315c79-147895087' 
+   const client = new MercadoPagoConfig({
+   accessToken: process.env.MP_ACCESS_TOKEN || '', 
     });
     const payment = new Payment(client);
 
