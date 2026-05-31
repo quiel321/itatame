@@ -6,9 +6,15 @@ import Navbar from "./components/Navbar";
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
+// 👇 AQUI ESTÁ A MÁGICA DO COMPARTILHAMENTO GLOBAL 👇
 export const metadata: Metadata = {
-  title: "iTatame - Seu Campeonato Online",
-  description: "Plataforma moderna para inscrições e chaves de campeonatos de luta.",
+  title: "iTatame - Sistema de Campeonatos",
+  description: "A melhor plataforma para gestão, chaves e transmissões ao vivo de campeonatos de lutas.",
+  openGraph: {
+    title: "iTatame - Sistema de Campeonatos",
+    description: "Crie eventos, gerencie inscrições, monte chaves e transmita ao vivo. Leve o iTatame para o seu evento!",
+    images: ['/capa-compartilhamento.jpg'], 
+  },
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

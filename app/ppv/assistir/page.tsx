@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { supabase } from "../../lib/supabase"; // Importando a conexão real com o banco!
+import { supabase } from "../../lib/supabase"; 
 
 function ConteudoStreaming() {
   const searchParams = useSearchParams();
@@ -12,8 +12,11 @@ function ConteudoStreaming() {
   const [acessoPermitido, setAcessoPermitido] = useState(false);
   const [userEmail, setUserEmail] = useState("");
   const [tatameFoco, setTatameFoco] = useState<number | null>(null);
+  
+  // NOVO: Estado para informar o motivo exato do bloqueio
+  const [motivoBloqueio, setMotivoBloqueio] = useState("");
 
-  // VALIDAÇÃO REAL DE SEGURANÇA NO SUPABASE
+  // VALIDAÇÃO REAL DE SEGURANÇA NO SUPABASE (Com trava de 48 horas)
   useEffect(() => {
     const validarTokenNoSupabase = async () => {
       setValidando(true);
@@ -21,28 +24,46 @@ function ConteudoStreaming() {
       // 1. Barreira: Se não tem token na URL, bloqueia na hora.
       if (!tokenUrl) {
         setAcessoPermitido(false);
+        setMotivoBloqueio("Nenhum token de acesso foi fornecido na URL.");
         setValidando(false);
         return;
       }
 
-      // 2. Consulta Real: Procura o token na tabela ppv_acessos
+      // 2. Consulta Real: Procura o token e a DATA DE CRIAÇÃO (created_at)
       const { data, error } = await supabase
         .from('ppv_acessos')
-        .select('email, status')
+        .select('email, status, created_at')
         .eq('token', tokenUrl)
         .single();
 
-      // 3. Blindagem Final: Verifica se achou e se está pago
+      // 3. Blindagem Final: Verifica status e expiração de tempo
       if (error || !data) {
-        // Token não existe na tabela ou foi digitado errado
         setAcessoPermitido(false);
-      } else if (data.status === 'pago') {
-        // Token existe E está pago! Acesso liberado!
-        setAcessoPermitido(true);
-        setUserEmail(data.email); // Puxa o e-mail real do banco para a marca d'água
-      } else {
-        // Token existe, mas o status é 'pendente' (ou outro)
+        setMotivoBloqueio("O seu token de acesso é inválido ou não foi encontrado em nosso sistema.");
+      } 
+      else if (data.status === 'pago') {
+        
+        // CÁLCULO DAS 48 HORAS
+        const dataEmissao = new Date(data.created_at);
+        const agora = new Date();
+        // Descobre a diferença em milissegundos e converte para horas
+        const horasPassadas = (agora.getTime() - dataEmissao.getTime()) / (1000 * 60 * 60);
+
+        if (horasPassadas > 48) {
+          // BARRADO: Já se passaram mais de 48 horas
+          setAcessoPermitido(false);
+          setMotivoBloqueio("O seu link de acesso expirou. O período de validade de 48 horas foi encerrado.");
+        } else {
+          // LIBERADO: Está pago e dentro do prazo
+          setAcessoPermitido(true);
+          setUserEmail(data.email); 
+        }
+
+      } 
+      else {
+        // BARRADO: Token existe, mas não está pago
         setAcessoPermitido(false);
+        setMotivoBloqueio("O pagamento deste acesso ainda consta como pendente.");
       }
       
       setValidando(false);
@@ -60,15 +81,17 @@ function ConteudoStreaming() {
 
   const tatameAtual = tatames.find(t => t.id === tatameFoco);
 
+  // TELA DE LOADING
   if (validando) {
     return (
       <div className="min-h-screen bg-[#020202] flex flex-col items-center justify-center text-white">
         <div className="w-12 h-12 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-        <p className="text-zinc-500 text-xs font-black uppercase tracking-widest animate-pulse">A verificar credenciais de acesso no banco de dados...</p>
+        <p className="text-zinc-500 text-xs font-black uppercase tracking-widest animate-pulse">A verificar credenciais de acesso...</p>
       </div>
     );
   }
 
+  // TELA DE BLOQUEIO (Com a mensagem dinâmica)
   if (!acessoPermitido) {
     return (
       <div className="min-h-screen bg-[#050816] flex flex-col items-center justify-center p-6 text-center relative overflow-hidden">
@@ -80,8 +103,8 @@ function ConteudoStreaming() {
           </div>
           
           <h2 className="text-2xl font-black text-white uppercase tracking-tight mb-2">Acesso Bloqueado</h2>
-          <p className="text-zinc-400 text-sm mb-6 leading-relaxed">
-            O seu token de acesso não foi encontrado, o pagamento ainda consta como pendente ou o link expirou.
+          <p className="text-red-400 font-bold text-sm mb-6 leading-relaxed bg-red-500/10 p-3 rounded-lg border border-red-500/20">
+            {motivoBloqueio}
           </p>
           
           <a href="/ppv" className="w-full bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-400 hover:to-yellow-500 text-black font-black uppercase tracking-widest py-4 rounded-xl shadow-lg text-sm transition-transform active:scale-95 block">
@@ -92,10 +115,10 @@ function ConteudoStreaming() {
     );
   }
 
+  // TELA LIBERADA
   return (
     <div className="min-h-screen bg-[#020202] text-white font-sans selection:bg-cyan-500/30">
       
-      {/* 🔴 ADICIONADA A CLASSE 'header-exclusivo-ppv' PARA NÃO SER OCULTADO PELO HACK */}
       <header className="header-exclusivo-ppv bg-[#050505] border-b border-white/5 px-6 py-4 flex flex-col md:flex-row items-center justify-between gap-4 sticky top-0 z-50 shadow-2xl">
         <div className="flex items-center gap-4">
           <span className="text-white font-black text-xl italic tracking-tighter">
@@ -125,7 +148,6 @@ function ConteudoStreaming() {
         </div>
       </header>
 
-      {/* MARCA DE ÁGUA DINÂMICA PUXANDO O E-MAIL DO BANCO DE DADOS */}
       <div className="fixed inset-0 pointer-events-none z-40 overflow-hidden opacity-[0.04] flex flex-wrap gap-20 items-center justify-center p-10">
         {Array.from({ length: 12 }).map((_, i) => (
           <span key={i} className="text-2xl font-black uppercase rotate-[-20deg]">{userEmail}</span>
@@ -210,10 +232,8 @@ function ConteudoStreaming() {
   );
 }
 
-// 🟢 COMPONENTE PRINCIPAL (Onde injetamos o Hack da Navbar para rodar sempre)
+// COMPONENTE PRINCIPAL
 export default function PPVAssistirPage() {
-  
-  // TRUQUE PARA OCULTAR A NAVBAR PRINCIPAL E O ESPAÇAMENTO DO LAYOUT
   useEffect(() => {
     document.body.classList.add('ocultar-nav-global');
     document.documentElement.classList.add('ocultar-nav-global');
@@ -225,21 +245,10 @@ export default function PPVAssistirPage() {
 
   return (
     <>
-      {/* INJEÇÃO DE CSS DE ALTO IMPACTO (HACK) */}
       <style dangerouslySetInnerHTML={{__html: `
-        /* 1. Oculta o header e a nav global (Protegendo a nossa com :not) */
         .ocultar-nav-global header:not(.header-exclusivo-ppv),
-        .ocultar-nav-global nav:not(.nav-exclusiva-ppv) {
-          display: none !important;
-        }
-        
-        /* 2. Remove o espaço preto (padding-top/margin-top) deixado pelo layout.tsx global */
-        .ocultar-nav-global body > div,
-        .ocultar-nav-global body > main,
-        .ocultar-nav-global #__next {
-          padding-top: 0 !important;
-          margin-top: 0 !important;
-        }
+        .ocultar-nav-global nav:not(.nav-exclusiva-ppv) { display: none !important; }
+        .ocultar-nav-global body > div, .ocultar-nav-global body > main, .ocultar-nav-global #__next { padding-top: 0 !important; margin-top: 0 !important; }
       `}} />
 
       <Suspense fallback={

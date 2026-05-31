@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase"; 
+import Link from "next/link"; // Adicionado para o Link do PPV
 
 export default function PPVLandingPage() {
   const [checkoutAberto, setCheckoutAberto] = useState(false);
@@ -15,6 +16,10 @@ export default function PPVLandingPage() {
   const [whatsapp, setWhatsapp] = useState("");
   const [erro, setErro] = useState("");
 
+  // NOVOS ESTADOS PARA O REDIRECIONAMENTO MÁGICO
+  const [tokenAtual, setTokenAtual] = useState("");
+  const [pagamentoAprovado, setPagamentoAprovado] = useState(false);
+
   // TRUQUE PARA OCULTAR A NAVBAR PRINCIPAL E O ESPAÇAMENTO DO LAYOUT
   useEffect(() => {
     document.body.classList.add('ocultar-nav-global');
@@ -25,12 +30,41 @@ export default function PPVLandingPage() {
     };
   }, []);
 
+  // O "ESPIÃO" QUE VERIFICA SE O PAGAMENTO CAIU
+  useEffect(() => {
+    let intervalo: NodeJS.Timeout;
+
+    if (pixGerado && tokenAtual && !pagamentoAprovado) {
+      // A cada 3 segundos, bate no banco e pergunta se o status mudou para 'pago'
+      intervalo = setInterval(async () => {
+        const { data } = await supabase
+          .from('ppv_acessos')
+          .select('status')
+          .eq('token', tokenAtual)
+          .single();
+
+        if (data && data.status === 'pago') {
+          setPagamentoAprovado(true);
+          clearInterval(intervalo);
+          
+          // Comemora na tela por 2 segundos e joga para a transmissão!
+          setTimeout(() => {
+            window.location.href = `/ppv/assistir?token=${tokenAtual}`;
+          }, 2000);
+        }
+      }, 3000); 
+    }
+
+    return () => clearInterval(intervalo);
+  }, [pixGerado, tokenAtual, pagamentoAprovado]);
+
   const handleGerarPix = async (e: React.FormEvent) => {
     e.preventDefault();
     setCarregando(true);
     setErro("");
 
     const tokenSeguro = "tk_" + Math.random().toString(36).substring(2, 10);
+    setTokenAtual(tokenSeguro); // Salva o token gerado no estado para o espião verificar
 
     try {
       const mpResponse = await fetch('/api/gerar-pix', {
@@ -43,6 +77,7 @@ export default function PPVLandingPage() {
       
       if (!mpData.success) throw new Error("Falha ao gerar o Pix. Tente novamente.");
 
+      // Apenas salva no banco como PENDENTE. Nada de mandar e-mail aqui!
       const { error } = await supabase
         .from('ppv_acessos')
         .upsert({
@@ -53,12 +88,6 @@ export default function PPVLandingPage() {
         }, { onConflict: 'email' });
 
       if (error) throw new Error("Erro ao salvar pedido: " + error.message);
-
-      fetch('/api/enviar-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, nome, token: tokenSeguro })
-      }).catch(err => console.log("Aviso: falha ao disparar e-mail", err));
 
       setQrCodeMP(mpData.qrCodeBase64);
       setCopiaECola(mpData.qrCodeCopiaECola);
@@ -97,24 +126,40 @@ export default function PPVLandingPage() {
 
       {/* NAVBAR EXCLUSIVA DO PPV */}
       <nav className="nav-exclusiva-ppv w-full border-b border-white/5 bg-black/40 backdrop-blur-xl sticky top-0 z-50">
-        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2 group cursor-pointer" onClick={() => window.location.href = "/"}>
-            <span className="text-white font-black text-xl italic tracking-tighter transition-transform group-hover:scale-105">
+        <div className="max-w-6xl mx-auto px-4 md:px-6 h-14 md:h-16 flex items-center justify-between">
+          
+          <div className="flex items-center gap-1.5 md:gap-2 group cursor-pointer" onClick={() => window.location.href = "/"}>
+            <span className="text-white font-black text-lg md:text-xl italic tracking-tighter transition-transform group-hover:scale-105">
               <span className="text-red-600">i</span>TATAME
             </span>
-            <span className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest ml-2 border-l border-zinc-700 pl-2 group-hover:text-zinc-300 transition-colors">
-              Pay-Per-View
+            <span className="text-zinc-500 text-[9px] md:text-[10px] font-bold uppercase tracking-widest ml-1.5 md:ml-2 border-l border-zinc-700 pl-1.5 md:pl-2 group-hover:text-zinc-300 transition-colors">
+              <span className="md:hidden">PPV</span>
+              <span className="hidden md:inline">Pay-Per-View</span>
             </span>
           </div>
-          <button onClick={() => setCheckoutAberto(true)} className="hidden md:block cursor-pointer bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-400 hover:to-yellow-500 text-black font-black uppercase tracking-wider text-[10px] px-5 py-2.5 rounded-full transition-all duration-300 hover:scale-105 hover:shadow-[0_0_20px_rgba(234,179,8,0.4)] active:scale-95">
-            Comprar Acesso — R$ 7,99
+
+          <button onClick={() => setCheckoutAberto(true)} className="cursor-pointer bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-400 hover:to-yellow-500 text-black font-black uppercase tracking-wider text-[9px] md:text-[10px] px-4 py-2 md:px-5 md:py-2.5 rounded-full transition-all duration-300 hover:scale-105 hover:shadow-[0_0_20px_rgba(234,179,8,0.4)] active:scale-95">
+            <span className="md:hidden">Comprar</span>
+            <span className="hidden md:inline">Comprar Acesso — R$ 7,99</span>
           </button>
+          
         </div>
       </nav>
 
-      {/* HERO SECTION COMPACTADA */}
-      <main className="max-w-6xl mx-auto px-6 pt-10 md:pt-16 pb-16 grid md:grid-cols-2 gap-8 md:gap-12 items-center relative z-10">
-        <div className="flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-8 duration-700">
+      {/* HERO SECTION - REAJUSTADA PARA DESKTOP */}
+      <main className="max-w-6xl mx-auto px-6 pt-8 md:pt-16 pb-16 grid md:grid-cols-2 gap-8 md:gap-12 items-center relative z-10">
+        
+        {/* PÔSTER INTERATIVO - AGORA MUITO MAIOR NO DESKTOP */}
+        <div className="relative order-1 md:order-2 mb-4 md:mb-0 w-full flex justify-center md:justify-end">
+          <div className="absolute inset-0 bg-gradient-to-tr from-cyan-500/10 to-blue-600/10 blur-[40px] md:blur-[60px] rounded-full mix-blend-screen"></div>
+          <div className="relative bg-zinc-900/50 backdrop-blur-sm border border-white/10 p-2 md:p-3 rounded-3xl md:rounded-[2rem] shadow-2xl rotate-1 md:rotate-2 hover:rotate-0 transition-all duration-700 hover:shadow-[0_0_40px_rgba(6,182,212,0.15)] group w-full max-w-[280px] md:max-w-[480px] lg:max-w-[550px]">
+            <div className="w-full h-auto bg-black rounded-2xl md:rounded-[1.5rem] border border-white/5 overflow-hidden relative flex items-center justify-center p-1">
+                <img src="https://i.postimg.cc/tJc325Zv/copa-open.png" className="w-full h-auto max-h-[400px] md:max-h-[600px] object-contain opacity-90 group-hover:opacity-100 transition-transform duration-700 group-hover:scale-105" alt="Copa iTatame Open" />
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-8 duration-700 order-2 md:order-1">
           
           <div className="inline-flex items-center gap-2 bg-red-500/10 border border-red-500/30 text-red-400 w-fit px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest shadow-[0_0_15px_rgba(239,68,68,0.2)]">
             <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping absolute"></span>
@@ -122,7 +167,8 @@ export default function PPVLandingPage() {
             Transmissão Oficial Ao Vivo
           </div>
 
-          <h1 className="text-4xl md:text-5xl lg:text-6xl font-black text-white leading-[1.05] tracking-tight drop-shadow-xl mt-2">
+          {/* TÍTULO REDUZIDO DE 6XL PARA 5XL/4XL */}
+          <h1 className="text-3xl md:text-4xl lg:text-5xl font-black text-white leading-[1.05] tracking-tight drop-shadow-xl mt-2">
             COPA <br/>
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-blue-500 to-cyan-400 bg-[length:200%_auto] animate-gradient">
               iTATAME OPEN
@@ -132,77 +178,67 @@ export default function PPVLandingPage() {
           <div className="grid grid-cols-2 gap-3 mt-1 text-white">
              <div className="bg-white/5 border border-white/10 rounded-xl p-3 hover:bg-white/10 transition-colors duration-300 cursor-default group">
               <span className="text-zinc-500 text-[9px] font-bold uppercase tracking-widest block mb-0.5 group-hover:text-cyan-400 transition-colors">Data do Evento</span>
-              <span className="font-black text-base tracking-tight">15 de Agosto</span>
+              <span className="font-black text-sm md:text-base tracking-tight">15 de Agosto</span>
             </div>
             <div className="bg-white/5 border border-white/10 rounded-xl p-3 hover:bg-white/10 transition-colors duration-300 cursor-default group">
               <span className="text-zinc-500 text-[9px] font-bold uppercase tracking-widest block mb-0.5 group-hover:text-cyan-400 transition-colors">Sede Oficial</span>
-              <span className="font-black text-base tracking-tight">Campos de Júlio</span>
+              <span className="font-black text-sm md:text-base tracking-tight">Campos de Júlio</span>
             </div>
           </div>
 
-          <div className="bg-gradient-to-br from-[#1a1500] to-transparent border border-yellow-500/20 rounded-2xl p-5 md:p-6 mt-2 relative overflow-hidden group hover:border-yellow-500/40 transition-colors duration-500 max-w-sm">
+          {/* CARD DE PREÇO ENCOLHIDO NO DESKTOP */}
+          <div className="bg-gradient-to-br from-[#1a1500] to-transparent border border-yellow-500/20 rounded-2xl p-4 md:p-5 mt-2 relative overflow-hidden group hover:border-yellow-500/40 transition-colors duration-500 max-w-[280px]">
             <div className="absolute top-0 right-0 w-32 h-32 bg-yellow-500/10 blur-[40px] group-hover:bg-yellow-500/20 transition-colors duration-700"></div>
             
             <span className="text-yellow-500 text-[9px] font-black uppercase tracking-widest block mb-1">Acesso Virtual Completo</span>
-            <div className="text-4xl font-black text-white mb-5 drop-shadow-md">R$ 7,99</div>
+            <div className="text-3xl font-black text-white mb-4 drop-shadow-md">R$ 7,99</div>
             
-            <button onClick={() => setCheckoutAberto(true)} className="w-full cursor-pointer bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-400 hover:to-yellow-500 text-black font-black uppercase tracking-widest py-3.5 rounded-xl transition-all duration-300 shadow-[0_0_15px_rgba(234,179,8,0.3)] hover:shadow-[0_0_30px_rgba(234,179,8,0.4)] hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-2 text-xs">
+            <button onClick={() => setCheckoutAberto(true)} className="w-full cursor-pointer bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-400 hover:to-yellow-500 text-black font-black uppercase tracking-widest py-2.5 rounded-xl transition-all duration-300 shadow-[0_0_15px_rgba(234,179,8,0.3)] hover:shadow-[0_0_30px_rgba(234,179,8,0.4)] hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-2 text-[10px] md:text-[11px]">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 9h3.75M15 12h3.75M15 15h3.75M4.5 19.5h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5zm6-10.125a1.875 1.875 0 11-3.75 0 1.875 1.875 0 013.75 0zm1.294 6.336a6.721 6.721 0 01-3.17.789 6.721 6.721 0 01-3.168-.789 3.376 3.376 0 016.338 0z"></path></svg>
               Garantir Acesso
             </button>
           </div>
         </div>
 
-        {/* PÔSTER INTERATIVO (FORMATO QUADRADO COM A ARTE OFICIAL) */}
-        <div className="relative hidden md:block">
-          <div className="absolute inset-0 bg-gradient-to-tr from-cyan-500/10 to-blue-600/10 blur-[60px] rounded-full mix-blend-screen"></div>
-          <div className="relative bg-zinc-900/50 backdrop-blur-sm border border-white/10 p-2.5 rounded-[2rem] shadow-2xl rotate-2 hover:rotate-0 transition-all duration-700 hover:shadow-[0_0_40px_rgba(6,182,212,0.15)] group max-w-[340px] mx-auto">
-            <div className="w-full aspect-square bg-black rounded-[1.5rem] border border-white/5 overflow-hidden relative">
-                {/* 🔴 AQUI ESTÁ O LINK DO BANNER APLICADO */}
-                <img src="https://i.postimg.cc/tJc325Zv/copa-open.png" className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-transform duration-700 group-hover:scale-105" alt="Copa iTatame Open" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none"></div>
-            </div>
-          </div>
-        </div>
       </main>
 
       {/* CRONOGRAMA OFICIAL COMPACTO */}
-      <section className="bg-black/40 py-16 border-t border-white/5 relative z-10">
+      <section className="bg-black/40 py-12 md:py-16 border-t border-white/5 relative z-10">
         <div className="max-w-5xl mx-auto px-6">
-          <div className="flex items-center justify-center gap-6 mb-12">
+          <div className="flex items-center justify-center gap-4 md:gap-6 mb-8 md:mb-12">
             <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent to-white/10"></div>
-            <h2 className="text-white text-lg md:text-2xl font-black uppercase tracking-widest text-center">Cronograma de Transmissão</h2>
+            <h2 className="text-white text-base md:text-2xl font-black uppercase tracking-widest text-center">Cronograma de Transmissão</h2>
             <div className="h-[1px] flex-1 bg-gradient-to-l from-transparent to-white/10"></div>
           </div>
           
-          <div className="grid md:grid-cols-2 gap-6">
-            <div className="bg-[#0a0a0e] border border-white/5 rounded-2xl p-6 shadow-xl transition-all duration-500 hover:-translate-y-1 hover:border-cyan-500/30 hover:shadow-[0_10px_30px_-10px_rgba(6,182,212,0.2)] group cursor-default">
-              <div className="text-white font-black uppercase tracking-wider text-xs mb-6 flex items-center gap-3">
+          <div className="grid md:grid-cols-2 gap-4 md:gap-6">
+            <div className="bg-[#0a0a0e] border border-white/5 rounded-2xl p-5 md:p-6 shadow-xl transition-all duration-500 hover:-translate-y-1 hover:border-cyan-500/30 hover:shadow-[0_10px_30px_-10px_rgba(6,182,212,0.2)] group cursor-default">
+              <div className="text-white font-black uppercase tracking-wider text-[10px] md:text-xs mb-5 md:mb-6 flex items-center gap-3">
                 <span className="bg-cyan-500 w-2 h-6 rounded-full shadow-[0_0_10px_rgba(6,182,212,0.5)] group-hover:h-8 transition-all"></span> 
                 <div>
-                  <div className="text-zinc-500 text-[9px]">MANHÃ E TARDE</div>
+                  <div className="text-zinc-500 text-[8px] md:text-[9px]">MANHÃ E TARDE</div>
                   Categorias de Peso
                 </div>
               </div>
-              <ul className="space-y-4 text-xs text-zinc-400 font-medium">
-                <li className="flex gap-3 items-start"><span className="text-cyan-500 font-bold mt-0.5">•</span> <div><strong className="text-white block mb-0.5">09:00h - Categorias de Base</strong> Mirim ao Infanto-Juvenil</div></li>
-                <li className="flex gap-3 items-start"><span className="text-cyan-500 font-bold mt-0.5">•</span> <div><strong className="text-white block mb-0.5">11:30h - Juvenil e Master</strong> Disputas eliminatórias e finais</div></li>
-                <li className="flex gap-3 items-start"><span className="text-cyan-500 font-bold mt-0.5">•</span> <div><strong className="text-white block mb-0.5">14:00h - Adulto (Branca a Roxa)</strong> Chaves oficiais do peso</div></li>
+              <ul className="space-y-3 md:space-y-4 text-[11px] md:text-xs text-zinc-400 font-medium">
+                <li className="flex gap-2.5 items-start"><span className="text-cyan-500 font-bold mt-0.5">•</span> <div><strong className="text-white block mb-0.5">09:00h - Categorias de Base</strong> Mirim ao Infanto-Juvenil</div></li>
+                <li className="flex gap-2.5 items-start"><span className="text-cyan-500 font-bold mt-0.5">•</span> <div><strong className="text-white block mb-0.5">11:30h - Juvenil e Master</strong> Disputas eliminatórias e finais</div></li>
+                <li className="flex gap-2.5 items-start"><span className="text-cyan-500 font-bold mt-0.5">•</span> <div><strong className="text-white block mb-0.5">14:00h - Adulto (Branca a Roxa)</strong> Chaves oficiais do peso</div></li>
               </ul>
             </div>
 
-            <div className="bg-[#0a0a0e] border border-white/5 rounded-2xl p-6 shadow-xl transition-all duration-500 hover:-translate-y-1 hover:border-yellow-500/30 hover:shadow-[0_10px_30px_-10px_rgba(234,179,8,0.2)] group cursor-default">
-              <div className="text-white font-black uppercase tracking-wider text-xs mb-6 flex items-center gap-3">
+            <div className="bg-[#0a0a0e] border border-white/5 rounded-2xl p-5 md:p-6 shadow-xl transition-all duration-500 hover:-translate-y-1 hover:border-yellow-500/30 hover:shadow-[0_10px_30px_-10px_rgba(234,179,8,0.2)] group cursor-default">
+              <div className="text-white font-black uppercase tracking-wider text-[10px] md:text-xs mb-5 md:mb-6 flex items-center gap-3">
                 <span className="bg-yellow-500 w-2 h-6 rounded-full shadow-[0_0_10px_rgba(234,179,8,0.5)] group-hover:h-8 transition-all"></span> 
                 <div>
-                  <div className="text-zinc-500 text-[9px]">HORÁRIO NOBRE</div>
+                  <div className="text-zinc-500 text-[8px] md:text-[9px]">HORÁRIO NOBRE</div>
                   Elite & Absoluto
                 </div>
               </div>
-              <ul className="space-y-4 text-xs text-zinc-400 font-medium">
-                <li className="flex gap-3 items-start"><span className="text-yellow-500 font-bold mt-0.5">•</span> <div><strong className="text-white block mb-0.5">17:00h - Elite Adulto</strong> Eliminatórias Faixa Marrom e Preta</div></li>
-                <li className="flex gap-3 items-start"><span className="text-yellow-500 font-bold mt-0.5">•</span> <div><strong className="text-white block mb-0.5">19:00h - Disputa do Absoluto</strong> O choque dos melhores no tatame central</div></li>
-                <li className="flex gap-3 items-start"><span className="text-yellow-500 font-bold mt-0.5">•</span> <div><strong className="text-white block mb-0.5">21:30h - Cerimônia de Premiação</strong> Entrega de medalhas e encerramento</div></li>
+              <ul className="space-y-3 md:space-y-4 text-[11px] md:text-xs text-zinc-400 font-medium">
+                <li className="flex gap-2.5 items-start"><span className="text-yellow-500 font-bold mt-0.5">•</span> <div><strong className="text-white block mb-0.5">17:00h - Elite Adulto</strong> Eliminatórias Faixa Marrom e Preta</div></li>
+                <li className="flex gap-2.5 items-start"><span className="text-yellow-500 font-bold mt-0.5">•</span> <div><strong className="text-white block mb-0.5">19:00h - Disputa do Absoluto</strong> O choque dos melhores no tatame central</div></li>
+                <li className="flex gap-2.5 items-start"><span className="text-yellow-500 font-bold mt-0.5">•</span> <div><strong className="text-white block mb-0.5">21:30h - Cerimônia de Premiação</strong> Entrega de medalhas e encerramento</div></li>
               </ul>
             </div>
           </div>
@@ -210,22 +246,22 @@ export default function PPVLandingPage() {
       </section>
 
       {/* CTA FINAL COMPACTO */}
-      <section className="py-16 md:py-20 relative overflow-hidden flex flex-col items-center text-center px-6 z-10">
+      <section className="py-12 md:py-20 relative overflow-hidden flex flex-col items-center text-center px-6 z-10">
         <div className="absolute inset-0 bg-gradient-to-t from-yellow-500/10 to-transparent"></div>
-        <div className="relative z-10 max-w-3xl flex flex-col items-center">
-          <h2 className="text-3xl md:text-4xl font-black text-white mb-4 tracking-tight uppercase drop-shadow-lg leading-tight">
+        <div className="relative z-10 max-w-3xl flex flex-col items-center pb-20 md:pb-0">
+          <h2 className="text-2xl md:text-4xl font-black text-white mb-3 md:mb-4 tracking-tight uppercase drop-shadow-lg leading-tight">
             O Maior Evento <br/> <span className="text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-yellow-600">Em Qualquer Tela</span>
           </h2>
-          <p className="text-zinc-400 text-sm md:text-base mb-6 max-w-xl mx-auto font-medium">
+          <p className="text-zinc-400 text-xs md:text-base mb-6 max-w-xl mx-auto font-medium">
             Assista de onde estiver — celular, tablet, computador ou Smart TV — com qualidade premium e sem travamentos.
           </p>
 
-          <div className="flex items-center justify-center gap-2 text-red-500/80 mb-8 text-[9px] font-black uppercase tracking-widest">
+          <div className="flex items-center justify-center gap-1.5 md:gap-2 text-red-500/80 mb-6 md:mb-8 text-[8px] md:text-[9px] font-black uppercase tracking-widest text-left md:text-center">
             <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
             <p>Acesso pessoal e intransferível. O compartilhamento bloqueia a transmissão.</p>
           </div>
           
-          <button onClick={() => setCheckoutAberto(true)} className="w-full md:w-auto cursor-pointer bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-400 hover:to-yellow-500 text-black font-black uppercase tracking-widest text-sm md:text-base px-10 py-4 rounded-xl transition-all duration-300 shadow-[0_0_20px_rgba(234,179,8,0.3)] hover:shadow-[0_0_40px_rgba(234,179,8,0.5)] hover:-translate-y-1 active:scale-95 group">
+          <button onClick={() => setCheckoutAberto(true)} className="hidden md:block w-full md:w-auto cursor-pointer bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-400 hover:to-yellow-500 text-black font-black uppercase tracking-widest text-sm md:text-base px-10 py-4 rounded-xl transition-all duration-300 shadow-[0_0_20px_rgba(234,179,8,0.3)] hover:shadow-[0_0_40px_rgba(234,179,8,0.5)] hover:-translate-y-1 active:scale-95 group">
             Comprar Acesso Agora
           </button>
         </div>
@@ -239,7 +275,7 @@ export default function PPVLandingPage() {
       </div>
 
       {/* ========================================== */}
-      {/* MODAL DE CHECKOUT ENXUTO                   */}
+      {/* MODAL DE CHECKOUT ENXUTO                     */}
       {/* ========================================== */}
       {checkoutAberto && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
@@ -273,6 +309,7 @@ export default function PPVLandingPage() {
                     </div>
                   </div>
                   
+                  {/* AVISO DE NÃO COMPARTILHAMENTO RECUPERADO AQUI */}
                   <div className="relative z-10 bg-red-500/10 border border-red-500/20 text-red-400 text-[8px] px-2 py-1.5 mt-2.5 rounded-md animate-pulse flex items-center gap-1.5 font-bold uppercase">
                     <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
                     <p className="leading-none tracking-wider mt-0.5">Não compartilhe o link, sob pena de derrubar.</p>
@@ -346,13 +383,27 @@ export default function PPVLandingPage() {
                   </button>
                 )}
 
-                <div className="flex items-center justify-center gap-1.5">
-                  <div className="relative flex h-2.5 w-2.5">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-yellow-500"></span>
+                {/* NOVO: AVISO E CONFIRMAÇÃO DINÂMICA DE PAGAMENTO */}
+                {pagamentoAprovado ? (
+                  <div className="flex items-center justify-center gap-1.5 mt-2 bg-green-500/10 border border-green-500/20 py-2 rounded-lg animate-pulse">
+                    <div className="w-2.5 h-2.5 bg-green-500 rounded-full shadow-[0_0_10px_rgba(34,197,94,0.5)]"></div>
+                    <span className="text-[10px] text-green-400 font-black uppercase tracking-widest">Pagamento Aprovado! Redirecionando...</span>
                   </div>
-                  <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest">Aguardando pagamento...</span>
-                </div>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-center gap-1.5 mt-2">
+                      <div className="relative flex h-2.5 w-2.5">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-yellow-500"></span>
+                      </div>
+                      <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest">Aguardando pagamento...</span>
+                    </div>
+                    <p className="text-zinc-500 text-[9px] font-bold uppercase tracking-widest text-center mt-4 border-t border-white/5 pt-3">
+                      Assim que aprovado, enviaremos o link para:<br/> <span className="text-white mt-0.5 block lowercase normal-case">{email}</span>
+                    </p>
+                  </>
+                )}
+                
               </div>
             )}
           </div>

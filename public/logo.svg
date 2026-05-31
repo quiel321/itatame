@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 120">
+  <!-- Pílulas (Símbolo iT) -->
+  <g transform="skewX(-15)">
+    <rect x="30" y="25" width="24" height="50" rx="12" fill="#dc2626"/>
+    <rect x="62" y="25" width="24" height="50" rx="12" fill="#ffffff"/>
+  </g>
+  
+  <!-- Texto Principal: iTATAME -->
+  <text x="100" y="75" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-style="italic" font-size="64">
+    <tspan fill="#dc2626">i</tspan><tspan fill="#ffffff">TATAME</tspan>
+  </text>
+  
+  <!-- Subtítulo: SISTEMA DE CAMPEONATOS -->
+  <text x="95" y="105" font-family="system-ui, -apple-system, sans-serif" font-weight="bold" font-size="15" fill="#a1a1aa" letter-spacing="6.5">SISTEMA DE CAMPEONATOS</text>
+</svg>

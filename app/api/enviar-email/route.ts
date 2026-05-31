@@ -3,7 +3,8 @@ import nodemailer from 'nodemailer';
 
 export async function POST(request: Request) {
   try {
-    const { email, nome, token } = await request.json();
+    // 1. Recebendo os dados dinâmicos
+    const { email, nome, token, eventoNome, dataEvento, dataExpiracao } = await request.json();
 
     const transporter = nodemailer.createTransport({
       host: 'smtp.gmail.com',
@@ -14,6 +15,20 @@ export async function POST(request: Request) {
         pass: process.env.SENHA_EMAIL,
       },
     });
+
+    // 2. Calculando 48 horas automaticamente caso não venha na requisição
+    let expiracaoFinal = dataExpiracao;
+    if (!expiracaoFinal) {
+      const dataHoje = new Date();
+      dataHoje.setHours(dataHoje.getHours() + 48); // Adiciona 48 horas
+      
+      // Formata para o padrão Brasileiro (DD/MM/YYYY HH:MM)
+      expiracaoFinal = dataHoje.toLocaleString('pt-BR', { 
+        timeZone: 'America/Sao_Paulo',
+        day: '2-digit', month: '2-digit', year: 'numeric',
+        hour: '2-digit', minute: '2-digit'
+      }) + 'h';
+    }
 
     // TEMPLATE INSPIRADO NO CONCORRENTE (VERSÃO iTATAME PREMIUM)
     const htmlTemplate = `
@@ -39,7 +54,7 @@ export async function POST(request: Request) {
                       Seu acesso está liberado!
                     </h1>
                     <p style="color: #a1a1aa; font-size: 14px; margin: 0;">
-                      1º Campeonato de Jiu-Jitsu Oficial
+                      ${eventoNome || 'Transmissão Oficial iTATAME'}
                     </p>
                   </td>
                 </tr>
@@ -76,13 +91,16 @@ export async function POST(request: Request) {
                           <table width="100%" cellpadding="0" cellspacing="0">
                             <tr>
                               <td style="color: #a1a1aa; font-size: 13px; padding-bottom: 10px;">Data do evento</td>
-                              <td align="right" style="color: #ffffff; font-size: 13px; font-weight: bold; padding-bottom: 10px;">15 e 16/08/2026</td>
+                              <td align="right" style="color: #ffffff; font-size: 13px; font-weight: bold; padding-bottom: 10px;">${dataEvento || 'Verifique no site oficial'}</td>
                             </tr>
                             <tr>
                               <td style="color: #a1a1aa; font-size: 13px;">Acesso válido até</td>
-                              <td align="right" style="color: #ffffff; font-size: 13px; font-weight: bold;">16/08/2026 às 23:59</td>
+                              <td align="right" style="color: #ffffff; font-size: 13px; font-weight: bold;">${expiracaoFinal}</td>
                             </tr>
                           </table>
+                          <p style="color: #52525b; font-size: 11px; margin: 15px 0 0 0; border-top: 1px solid #27272a; padding-top: 10px;">
+                            * O seu link expira em 48 horas contadas a partir da emissão deste e-mail, cobrindo integralmente o período do evento.
+                          </p>
                         </td>
                       </tr>
                     </table>
@@ -142,7 +160,7 @@ export async function POST(request: Request) {
     await transporter.sendMail({
       from: '"iTATAME Transmissão" <suporteitatame@gmail.com>', 
       to: email,
-      subject: '🎟️ Seu Acesso está Liberado! - iTATAME',
+      subject: `🎟️ Seu Acesso está Liberado! - ${eventoNome || 'iTATAME'}`,
       html: htmlTemplate,
     });
 
