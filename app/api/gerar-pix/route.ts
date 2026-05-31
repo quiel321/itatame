@@ -14,7 +14,7 @@ export async function POST(request: Request) {
     // 2. Solicita a criação do Pix
     const resposta = await payment.create({
       body: {
-        transaction_amount: 0.01, // Valor do seu PPV
+        transaction_amount: 7.99, // Valor do seu PPV
         description: 'Acesso PPV - iTATAME (Ao Vivo)',
         payment_method_id: 'pix',
         external_reference: tokenOriginal, // Guarda o nosso token (tk_...) para identificarmos depois

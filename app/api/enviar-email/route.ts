@@ -60,7 +60,7 @@ export async function POST(request: Request) {
                     <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 35px;">
                       <tr>
                         <td align="center">
-                          <a href="http://localhost:3000/ppv/assistir?token=${token}" style="display: inline-block; background-color: #eab308; color: #000000; text-decoration: none; font-weight: 900; padding: 16px 32px; border-radius: 8px; font-size: 16px; box-shadow: 0 4px 15px rgba(234, 179, 8, 0.2);">
+                          <a href="https://itatame.com.br/ppv/assistir?token=${token}" style="display: inline-block; background-color: #eab308; color: #000000; text-decoration: none; font-weight: 900; padding: 16px 32px; border-radius: 8px; font-size: 16px; box-shadow: 0 4px 15px rgba(234, 179, 8, 0.2);">
                             ▶ Assistir à transmissão agora
                           </a>
                         </td>
@@ -93,8 +93,8 @@ export async function POST(request: Request) {
                           <p style="color: #ffffff; font-size: 12px; font-weight: bold; margin: 0 0 10px 0;">
                             Seu link de acesso (salve este e-mail):
                           </p>
-                          <a href="http://localhost:3000/ppv/assistir?token=${token}" style="display: block; color: #3b82f6; text-decoration: underline; font-size: 13px; word-break: break-all;">
-                            http://localhost:3000/ppv/assistir?token=${token}
+                          <a href="https://itatame.com.br/ppv/assistir?token=${token}" style="display: block; color: #3b82f6; text-decoration: underline; font-size: 13px; word-break: break-all;">
+                            https://itatame.com.br/ppv/assistir?token=${token}
                           </a>
                         </td>
                       </tr>
