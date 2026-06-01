@@ -36,16 +36,109 @@ export default function PlacarDigital() {
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   // ==========================================
-  // OCULTAR A BARRA DE NAVEGAÇÃO GLOBAL
+  // ESTADOS: ARRASTE E ZOOM (APENAS MOBILE)
+  // ==========================================
+  const [isMobile, setIsMobile] = useState(false);
+  const [clockPos, setClockPos] = useState({ x: 0, y: 0 });
+  const [clockScale, setClockScale] = useState(1);
+  
+  const dragRef = useRef({ startX: 0, startY: 0, isDragging: false });
+  const pinchRef = useRef({ startDist: 0, startScale: 1 });
+  
+  // Ref para monitorar se a tela girou
+  const orientationRef = useRef(true); 
+
+  // ==========================================
+  // OCULTAR A BARRA DE NAVEGAÇÃO GLOBAL & DETECTAR MOBILE
   // ==========================================
   useEffect(() => {
     document.body.classList.add('ocultar-nav-global');
     document.documentElement.classList.add('ocultar-nav-global');
+
+    const handleResize = () => {
+      // Aumentado para 1024 para cobrir celulares modernos deitados
+      const mobile = window.innerWidth <= 1024;
+      setIsMobile(mobile);
+
+      const currentPortrait = window.innerHeight > window.innerWidth;
+
+      // Só reajusta a posição e o zoom se o celular girar ou abrir a tela pela primeira vez
+      if (mobile && currentPortrait !== orientationRef.current) {
+        orientationRef.current = currentPortrait;
+        if (currentPortrait) {
+          setClockScale(0.55); // Vertical: Mantido como estava
+          setClockPos({ x: 0, y: 0 });
+        } else {
+          setClockScale(0.35); // Horizontal: Bem menor para não tampar a tela
+          setClockPos({ x: 0, y: -45 }); // Horizontal: Subiu um pouco
+        }
+      }
+    };
+
+    // Força a validação na primeira carga da página
+    if (window.innerWidth <= 1024) {
+      const isPort = window.innerHeight > window.innerWidth;
+      orientationRef.current = isPort;
+      setIsMobile(true);
+      if (isPort) {
+        setClockScale(0.55);
+        setClockPos({ x: 0, y: 0 });
+      } else {
+        setClockScale(0.35);
+        setClockPos({ x: 0, y: -45 });
+      }
+    }
+
+    window.addEventListener("resize", handleResize);
+
     return () => {
       document.body.classList.remove('ocultar-nav-global');
       document.documentElement.classList.remove('ocultar-nav-global');
+      window.removeEventListener("resize", handleResize);
     };
-  }, []);
+  }, []); // Array VAZIO! Assim a lógica não conflita quando o usuário der zoom manual
+
+  // ==========================================
+  // LÓGICA DE TOUCH (ARRASTAR E ZOOM)
+  // ==========================================
+  const onTouchStart = (e: React.TouchEvent) => {
+    if (!isMobile) return;
+    if (e.touches.length === 1) {
+      dragRef.current = {
+        startX: e.touches[0].clientX - clockPos.x,
+        startY: e.touches[0].clientY - clockPos.y,
+        isDragging: true
+      };
+    } else if (e.touches.length === 2) {
+      dragRef.current.isDragging = false;
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      pinchRef.current = { startDist: dist, startScale: clockScale };
+    }
+  };
+
+  const onTouchMove = (e: React.TouchEvent) => {
+    if (!isMobile) return;
+    if (e.touches.length === 1 && dragRef.current.isDragging) {
+      setClockPos({
+        x: e.touches[0].clientX - dragRef.current.startX,
+        y: e.touches[0].clientY - dragRef.current.startY
+      });
+    } else if (e.touches.length === 2) {
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      const newScale = pinchRef.current.startScale * (dist / pinchRef.current.startDist);
+      setClockScale(Math.min(Math.max(newScale, 0.3), 1.2)); // Limita o Zoom entre 30% e 120%
+    }
+  };
+
+  const onTouchEnd = () => {
+    dragRef.current.isDragging = false;
+  };
 
   // ==========================================
   // MOTOR DE ÁUDIO DE ESTÁDIO
@@ -105,7 +198,6 @@ export default function PlacarDigital() {
       tocarSom('fim');
       setTimerAtivo(false);
 
-      // CÁLCULO AUTOMÁTICO DO VENCEDOR (Regras do Jiu-Jitsu)
       let calcVencedor: "azul" | "vermelho" | "empate" = "empate";
       if (pontosAzul > pontosVermelho) calcVencedor = "azul";
       else if (pontosVermelho > pontosAzul) calcVencedor = "vermelho";
@@ -115,7 +207,6 @@ export default function PlacarDigital() {
       else if (punicoesVermelho < punicoesAzul) calcVencedor = "vermelho";
       
       setVencedor(calcVencedor);
-
       setTimeout(() => setShowResumo(true), 3500); 
     }
   }, [tempoRestante, timerAtivo, pontosAzul, pontosVermelho, vantagensAzul, vantagensVermelho, punicoesAzul, punicoesVermelho]);
@@ -184,16 +275,70 @@ export default function PlacarDigital() {
         .ocultar-nav-global header:not(.header-placar),
         .ocultar-nav-global nav { display: none !important; }
         .ocultar-nav-global body > div, .ocultar-nav-global body > main, .ocultar-nav-global #__next { padding-top: 0 !important; margin-top: 0 !important; height: 100vh; overflow: hidden; }
+
+        /* ========================================== */
+        /* CSS EXCLUSIVO MOBILE VERTICAL (PORTRAIT)   */
+        /* (REMOVIDO A CLASSE .clock-island DAQUI)    */
+        /* ========================================== */
+        @media screen and (max-width: 768px) and (orientation: portrait) {
+          .placar-wrapper { flex-direction: column !important; }
+          .placar-side { width: 100% !important; height: 50% !important; border: none !important; padding: 1rem !important; }
+          .placar-side-azul { border-bottom: 3px solid #000 !important; }
+          .placar-side-verm { border-top: 3px solid #000 !important; }
+          
+          .nome-container { padding: 0 !important; text-align: center !important; margin: 0 !important; }
+          .atleta-nome { font-size: 2.5rem !important; text-align: center !important; }
+          
+          .pontos-container { align-items: center !important; }
+          .pontos-gigantes { font-size: 7.5rem !important; }
+          
+          .botoes-grid { gap: 0.5rem !important; }
+          .botoes-grid button { padding: 0.4rem !important; }
+          .botoes-grid span:first-child { font-size: 1.5rem !important; }
+          
+          .vantagens-punicoes { gap: 0.5rem !important; }
+          .vantagens-punicoes > div { padding: 0.5rem !important; }
+          .vantagens-punicoes span.text-5xl { font-size: 2.5rem !important; }
+          .vantagens-punicoes button { width: 2rem !important; height: 2rem !important; font-size: 1.5rem !important; }
+          
+          .vencedor-overlay { transform: scale(0.6) !important; padding: 1rem 2rem !important; }
+          .resumo-modal { transform: scale(0.7) !important; padding: 1.5rem !important; width: 95% !important; }
+          .resumo-grid { grid-template-columns: 1fr !important; gap: 1rem !important; }
+        }
+
+        /* ========================================== */
+        /* CSS EXCLUSIVO MOBILE HORIZONTAL (LANDSCAPE)*/
+        /* (REMOVIDO A CLASSE .clock-island DAQUI)    */
+        /* ========================================== */
+        @media screen and (max-height: 500px) and (orientation: landscape) {
+          .placar-side { padding: 0.5rem 1rem !important; }
+          .nome-container { padding-right: 5% !important; padding-left: 5% !important; }
+          .atleta-nome { font-size: 2.2rem !important; }
+          .pontos-gigantes { font-size: 6.5rem !important; }
+          
+          .botoes-grid { gap: 0.25rem !important; }
+          .botoes-grid button { padding: 0.25rem !important; }
+          .botoes-grid span:first-child { font-size: 1.2rem !important; }
+          
+          .vantagens-punicoes { gap: 0.5rem !important; }
+          .vantagens-punicoes > div { padding: 0.25rem !important; }
+          .vantagens-punicoes span.text-5xl { font-size: 2rem !important; }
+          .vantagens-punicoes button { width: 1.8rem !important; height: 1.8rem !important; font-size: 1.2rem !important; }
+          
+          .modal-config { transform: scale(0.7) !important; }
+          .vencedor-overlay { transform: scale(0.5) !important; }
+          .resumo-modal { transform: scale(0.65) !important; }
+        }
       `}} />
 
-      <div ref={placarRef} className="bg-black h-screen w-screen flex flex-row font-sans select-none text-white relative overflow-hidden">
+      <div ref={placarRef} className="placar-wrapper bg-black h-screen w-screen flex flex-row font-sans select-none text-white relative overflow-hidden">
 
         {/* ========================================== */}
         {/* MODAL DE CONFIGURAÇÃO                      */}
         {/* ========================================== */}
         {configOpen && (
           <div className="absolute inset-0 bg-black/90 backdrop-blur-md z-[100] flex items-center justify-center p-4">
-            <div className="bg-[#111] border border-zinc-800 p-8 rounded-3xl w-full max-w-md shadow-2xl">
+            <div className="modal-config bg-[#111] border border-zinc-800 p-8 rounded-3xl w-full max-w-md shadow-2xl">
               <div className="flex items-center justify-center gap-2 mb-8">
                 <span className="text-white font-black text-2xl italic tracking-tighter"><span className="text-red-600">i</span>TATAME</span>
                 <span className="text-zinc-400 text-xs font-bold uppercase tracking-widest bg-zinc-800 px-2 py-1 rounded">Scoreboard</span>
@@ -235,10 +380,25 @@ export default function PlacarDigital() {
         )}
 
         {/* ========================================== */}
-        {/* ILHA DO CRONÔMETRO                         */}
+        {/* ILHA DO CRONÔMETRO (DRAG & DROP NO MOBILE) */}
         {/* ========================================== */}
-        <div className="absolute top-[42%] left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 flex flex-col items-center">
-          <div className="bg-[#09090b]/95 backdrop-blur-xl px-6 py-4 md:px-10 md:py-6 rounded-[2rem] border border-zinc-800 shadow-[0_20px_60px_rgba(0,0,0,0.9)] flex flex-col items-center transition-all duration-700">
+        <div 
+          className="clock-island absolute z-[60] flex flex-col items-center"
+          style={isMobile ? {
+            left: '50%',
+            top: '42%',
+            transform: `translate(calc(-50% + ${clockPos.x}px), calc(-50% + ${clockPos.y}px)) scale(${clockScale})`,
+            touchAction: 'none' // Impede a tela de rolar enquanto o usuário arrasta
+          } : {
+            left: '50%',
+            top: '42%',
+            transform: 'translate(-50%, -50%)'
+          }}
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
+        >
+          <div className="bg-[#09090b]/95 backdrop-blur-xl px-6 py-4 md:px-10 md:py-6 rounded-[2rem] border border-zinc-800 shadow-[0_20px_60px_rgba(0,0,0,0.9)] flex flex-col items-center">
             
             <span className={`text-[5rem] md:text-[6rem] lg:text-[7rem] leading-none font-black font-mono tracking-tighter drop-shadow-[0_0_25px_rgba(255,215,0,0.6)] text-[#FFD700] ${tempoRestante <= 60 && tempoRestante > 0 ? 'animate-pulse' : ''}`}>
               {formatarTempo(tempoRestante)}
@@ -280,33 +440,30 @@ export default function PlacarDigital() {
         {/* ========================================== */}
         {/* LADO AZUL                                  */}
         {/* ========================================== */}
-        <div className={`w-1/2 h-full bg-[#05142b] border-r-[2px] border-black flex flex-col pt-6 md:pt-10 px-6 md:px-8 pb-6 relative z-10 transition-all duration-1000 ${vencedor === 'vermelho' ? 'opacity-20 grayscale' : vencedor === 'azul' ? 'brightness-125' : ''}`}>
+        <div className={`placar-side placar-side-azul w-1/2 h-full bg-[#05142b] border-r-[2px] border-black flex flex-col pt-6 md:pt-10 px-6 md:px-8 pb-6 relative z-10 transition-all duration-1000 ${vencedor === 'vermelho' ? 'opacity-20 grayscale' : vencedor === 'azul' ? 'brightness-125' : ''}`}>
           
           {vencedor === 'azul' && (
-            <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
+            <div className="vencedor-overlay absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
               <div className="bg-black/90 px-8 py-4 md:px-12 md:py-6 rounded-[3rem] border-4 border-blue-500 shadow-[0_0_100px_rgba(59,130,246,0.8)] -rotate-12 animate-pulse">
                 <span className="text-blue-400 font-black text-5xl md:text-7xl lg:text-[7rem] uppercase tracking-tighter drop-shadow-[0_0_20px_rgba(59,130,246,1)]">🏆 Venceu</span>
               </div>
             </div>
           )}
 
-          {/* ADICIONADO shrink-0, pt-2 e leading-normal PARA IMPEDIR O CORTE */}
-          <div className="w-full text-left pr-4 md:pr-8 shrink-0 pt-2">
-            <h2 title={atletaAzul || "ATLETA AZUL"} className="text-3xl md:text-5xl lg:text-[3.8rem] xl:text-[3.77rem] leading-normal pb-2 font-black uppercase text-white truncate drop-shadow-md w-full block">
+          <div className="nome-container w-full text-left pr-4 md:pr-8 shrink-0 pt-2">
+            <h2 title={atletaAzul || "ATLETA AZUL"} className="atleta-nome text-3xl md:text-5xl lg:text-[3.8rem] xl:text-[3.77rem] leading-normal pb-2 font-black uppercase text-white truncate drop-shadow-md w-full block">
               {atletaAzul || "ATLETA AZUL"}
             </h2>
           </div>
           
-          {/* ADICIONADO min-h-[0] para organizar a flexbox interna do número */}
-          <div className="flex-1 flex items-center justify-center w-full min-h-[0]">
-            <span className="text-[10rem] md:text-[14rem] lg:text-[15rem] font-black text-white leading-none tracking-tighter drop-shadow-lg">
+          <div className="pontos-container flex-1 flex items-center justify-center w-full min-h-[0]">
+            <span className="pontos-gigantes text-[10rem] md:text-[14rem] lg:text-[15rem] font-black text-white leading-none tracking-tighter drop-shadow-lg">
               {pontosAzul}
             </span>
           </div>
 
-          {/* ADICIONADO shrink-0 PARA O PAINEL DE CONTROLES */}
           <div className="flex flex-col gap-4 md:gap-6 w-full max-w-[600px] mx-auto mt-4 shrink-0">
-            <div className="grid grid-cols-4 gap-3 md:gap-4">
+            <div className="botoes-grid grid grid-cols-4 gap-3 md:gap-4">
               <button onClick={() => updatePontos("azul", "pontos", 2, "quedas")} className="cursor-pointer bg-blue-600 hover:bg-blue-500 rounded-xl p-2 md:p-3 flex flex-col items-center justify-center transition-colors active:scale-95 text-white shadow-lg w-full h-full">
                 <span className="text-2xl md:text-3xl font-black pointer-events-none">+2</span>
                 <span className="text-[7px] md:text-[9px] uppercase font-bold mt-1 text-center leading-tight w-full pointer-events-none">Queda / Rasp<br/>Joelho na Barriga</span>
@@ -325,7 +482,7 @@ export default function PlacarDigital() {
               </button>
             </div>
 
-            <div className="flex justify-between gap-4 md:gap-6">
+            <div className="vantagens-punicoes flex justify-between gap-4 md:gap-6">
               <div className="flex-1 bg-black/40 rounded-2xl p-4 flex flex-col items-center border border-white/5 shadow-inner">
                 <span className="text-yellow-500 text-[10px] md:text-xs font-bold uppercase tracking-widest mb-2 pointer-events-none">Vantagens</span>
                 <div className="flex items-center gap-4 md:gap-6 w-full justify-center">
@@ -349,31 +506,30 @@ export default function PlacarDigital() {
         {/* ========================================== */}
         {/* LADO VERMELHO                              */}
         {/* ========================================== */}
-        <div className={`w-1/2 h-full bg-[#2f0404] border-l border-black flex flex-col pt-6 md:pt-10 px-6 md:px-8 pb-6 relative z-10 transition-all duration-1000 ${vencedor === 'azul' ? 'opacity-20 grayscale' : vencedor === 'vermelho' ? 'brightness-125' : ''}`}>
+        <div className={`placar-side placar-side-verm w-1/2 h-full bg-[#2f0404] border-l border-black flex flex-col pt-6 md:pt-10 px-6 md:px-8 pb-6 relative z-10 transition-all duration-1000 ${vencedor === 'azul' ? 'opacity-20 grayscale' : vencedor === 'vermelho' ? 'brightness-125' : ''}`}>
           
           {vencedor === 'vermelho' && (
-            <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
+            <div className="vencedor-overlay absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
               <div className="bg-black/90 px-8 py-4 md:px-12 md:py-6 rounded-[3rem] border-4 border-red-500 shadow-[0_0_100px_rgba(239,68,68,0.8)] -rotate-12 animate-pulse">
                 <span className="text-red-500 font-black text-5xl md:text-7xl lg:text-[7rem] uppercase tracking-tighter drop-shadow-[0_0_20px_rgba(239,68,68,1)]">🏆 Venceu</span>
               </div>
             </div>
           )}
 
-          {/* ADICIONADO shrink-0, pt-2 e leading-normal PARA IMPEDIR O CORTE */}
-          <div className="w-full text-right pl-4 md:pl-8 shrink-0 pt-2">
-            <h2 title={atletaVermelho || "ATLETA VERMELHO"} className="text-3xl md:text-5xl lg:text-[3.8rem] xl:text-[3.77rem] leading-normal pb-2 font-black uppercase text-white truncate drop-shadow-md w-full block">
+          <div className="nome-container w-full text-right pl-4 md:pl-8 shrink-0 pt-2">
+            <h2 title={atletaVermelho || "ATLETA VERMELHO"} className="atleta-nome text-3xl md:text-5xl lg:text-[3.8rem] xl:text-[3.77rem] leading-normal pb-2 font-black uppercase text-white truncate drop-shadow-md w-full block">
               {atletaVermelho || "ATLETA VERMELHO"}
             </h2>
           </div>
           
-          <div className="flex-1 flex items-center justify-center w-full min-h-[0]">
-            <span className="text-[10rem] md:text-[14rem] lg:text-[15rem] font-black text-white leading-none tracking-tighter drop-shadow-lg">
+          <div className="pontos-container flex-1 flex items-center justify-center w-full min-h-[0]">
+            <span className="pontos-gigantes text-[10rem] md:text-[14rem] lg:text-[15rem] font-black text-white leading-none tracking-tighter drop-shadow-lg">
               {pontosVermelho}
             </span>
           </div>
 
           <div className="flex flex-col gap-4 md:gap-6 w-full max-w-[600px] mx-auto mt-4 shrink-0">
-            <div className="grid grid-cols-4 gap-3 md:gap-4">
+            <div className="botoes-grid grid grid-cols-4 gap-3 md:gap-4">
               <button onClick={() => updatePontos("vermelho", "pontos", 2, "quedas")} className="cursor-pointer bg-red-600 hover:bg-red-500 rounded-xl p-2 md:p-3 flex flex-col items-center justify-center transition-colors active:scale-95 text-white shadow-lg w-full h-full">
                 <span className="text-2xl md:text-3xl font-black pointer-events-none">+2</span>
                 <span className="text-[7px] md:text-[9px] uppercase font-bold mt-1 text-center leading-tight w-full pointer-events-none">Queda / Rasp<br/>Joelho na Barriga</span>
@@ -392,7 +548,7 @@ export default function PlacarDigital() {
               </button>
             </div>
 
-            <div className="flex justify-between gap-4 md:gap-6">
+            <div className="vantagens-punicoes flex justify-between gap-4 md:gap-6">
               <div className="flex-1 bg-black/40 rounded-2xl p-4 flex flex-col items-center border border-white/5 shadow-inner">
                 <span className="text-yellow-500 text-[10px] md:text-xs font-bold uppercase tracking-widest mb-2 pointer-events-none">Vantagens</span>
                 <div className="flex items-center gap-4 md:gap-6 w-full justify-center">
@@ -418,15 +574,15 @@ export default function PlacarDigital() {
         {/* ========================================== */}
         {showResumo && (
           <div className="absolute inset-0 bg-black/80 backdrop-blur-md z-[100] flex items-center justify-center p-4">
-            <div className="bg-[#0c1220] border border-white/10 rounded-3xl p-8 w-full max-w-4xl shadow-[0_0_80px_rgba(0,0,0,0.8)] animate-in slide-in-from-bottom-10 duration-500">
+            <div className="resumo-modal bg-[#0c1220] border border-white/10 rounded-3xl p-8 w-full max-w-4xl shadow-[0_0_80px_rgba(0,0,0,0.8)] animate-in slide-in-from-bottom-10 duration-500">
               <div className="text-center mb-8">
                 <h2 className="text-4xl font-black text-white uppercase tracking-tighter">Fim de Combate</h2>
                 <p className="text-zinc-500 font-bold uppercase tracking-widest text-sm mt-1">Estatísticas Oficiais</p>
               </div>
 
-              <div className="grid grid-cols-2 gap-8">
-                {/* Resumo Azul - Borda destaca se foi campeão */}
-                <div className={`bg-[#05142b]/80 border ${vencedor === 'azul' ? 'border-yellow-500 shadow-[0_0_30px_rgba(234,179,8,0.3)]' : 'border-blue-500/30'} rounded-2xl p-6 relative overflow-hidden transition-all`}>
+              <div className="resumo-grid grid grid-cols-2 gap-8">
+                {/* Resumo Azul */}
+                <div className={`resumo-card bg-[#05142b]/80 border ${vencedor === 'azul' ? 'border-yellow-500 shadow-[0_0_30px_rgba(234,179,8,0.3)]' : 'border-blue-500/30'} rounded-2xl p-6 relative overflow-hidden transition-all`}>
                   <div className="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>
                   <h3 className="text-xl font-black text-white uppercase truncate mb-4">{vencedor === 'azul' && "🏆 "} {atletaAzul || "ATLETA AZUL"}</h3>
                   <div className="text-6xl font-black text-blue-500 mb-6 drop-shadow-md">{pontosAzul} <span className="text-lg text-zinc-500 tracking-widest uppercase">Pts</span></div>
@@ -439,8 +595,8 @@ export default function PlacarDigital() {
                   </ul>
                 </div>
 
-                {/* Resumo Vermelho - Borda destaca se foi campeão */}
-                <div className={`bg-[#2f0404]/80 border ${vencedor === 'vermelho' ? 'border-yellow-500 shadow-[0_0_30px_rgba(234,179,8,0.3)]' : 'border-red-500/30'} rounded-2xl p-6 relative overflow-hidden transition-all`}>
+                {/* Resumo Vermelho */}
+                <div className={`resumo-card bg-[#2f0404]/80 border ${vencedor === 'vermelho' ? 'border-yellow-500 shadow-[0_0_30px_rgba(234,179,8,0.3)]' : 'border-red-500/30'} rounded-2xl p-6 relative overflow-hidden transition-all`}>
                   <div className="absolute top-0 left-0 w-1 h-full bg-red-500"></div>
                   <h3 className="text-xl font-black text-white uppercase truncate mb-4">{vencedor === 'vermelho' && "🏆 "} {atletaVermelho || "ATLETA VERMELHO"}</h3>
                   <div className="text-6xl font-black text-red-500 mb-6 drop-shadow-md">{pontosVermelho} <span className="text-lg text-zinc-500 tracking-widest uppercase">Pts</span></div>
