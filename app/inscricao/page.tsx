@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, Suspense } from "react";
-import { supabase } from "../lib/supabase";
+import { supabase } from "../lib/supabase"; // Ajuste o caminho se necessário (ex: "@/app/lib/supabase")
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -14,7 +14,7 @@ function FormularioInscricao() {
   const [eventoNome, setEventoNome] = useState("");
   const [loading, setLoading] = useState(true);
 
-  // Estados do Atleta
+  // Estados do Atleta (Puxados do BD)
   const [nome, setNome] = useState("");
   const [equipe, setEquipe] = useState("");
   const [professor, setProfessor] = useState("");
@@ -22,7 +22,7 @@ function FormularioInscricao() {
   const [modalidade, setModalidade] = useState("");
   const [pesoReal, setPesoReal] = useState("");
   const [sexo, setSexo] = useState("Masculino");
-  const [fotoUrl, setFotoUrl] = useState(""); // NOVO: Estado para a foto
+  const [fotoUrl, setFotoUrl] = useState(""); 
   
   // Estados do Formulário
   const [categoria, setCategoria] = useState("");
@@ -40,6 +40,9 @@ function FormularioInscricao() {
   const [inscricaoFeita, setInscricaoFeita] = useState(false);
   const [erro, setErro] = useState("");
   const [processando, setProcessando] = useState(false);
+
+  // Trava de segurança para dados incompletos
+  const perfilIncompleto = !nome || !equipe || !faixa;
 
   function calcularCategoria(peso: number) {
     if (peso <= 64.5) return "Pluma (Até 64.500 kg)";
@@ -75,7 +78,7 @@ function FormularioInscricao() {
         setSexo(atleta.sexo || "Masculino"); 
         setCategoria(calcularCategoria(Number(atleta.peso)));
         setModalidade(atleta.modalidade || "");
-        setFotoUrl(atleta.foto_url || ""); // NOVO: Puxando do banco
+        setFotoUrl(atleta.foto_url || ""); 
       }
       
       setLoading(false);
@@ -100,6 +103,12 @@ function FormularioInscricao() {
     setProcessando(true);
     setErro("");
     
+    if (perfilIncompleto) {
+      setErro("Seu perfil está incompleto! Atualize seu Nome e Equipe antes de prosseguir.");
+      setProcessando(false);
+      return;
+    }
+
     if (!termoAceito) {
       setErro("Você precisa aceitar os termos do evento.");
       setProcessando(false);
@@ -135,7 +144,7 @@ function FormularioInscricao() {
       }]);
 
     if (error) { 
-      setErro(error.message); 
+      setErro("Erro ao registrar: " + error.message); 
       setProcessando(false);
       return; 
     }
@@ -145,6 +154,7 @@ function FormularioInscricao() {
     setProcessando(false);
   }
 
+  // Lógica de preços de exemplo (idealmente, isso viria do banco no futuro)
   const precos = {
     peso: 90.00,
     absoluto: 90.00,
@@ -156,6 +166,7 @@ function FormularioInscricao() {
   if (loading) {
     return (
       <div className="min-h-[70vh] flex items-center justify-center text-zinc-500 font-bold uppercase tracking-widest text-[10px]">
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-red-500 mr-3"></div>
         Preparando credencial...
       </div>
     );
@@ -166,8 +177,8 @@ function FormularioInscricao() {
       <div className="max-w-xl mx-auto mt-20 p-8 bg-[#0a0a0e] border border-green-500/30 rounded-2xl text-center shadow-[0_0_40px_rgba(34,197,94,0.1)]">
         <div className="w-16 h-16 bg-green-500/10 border border-green-500/20 text-green-500 rounded-full flex items-center justify-center mx-auto mb-5 text-3xl">✓</div>
         <h2 className="text-2xl font-black text-white mb-3">Inscrição Confirmada!</h2>
-        <p className="text-zinc-400 text-xs mb-8 font-medium">Dados enviados. Realize o pagamento para garantir seu nome nas chaves.</p>
-        <Link href={`/pagamento`} className="inline-block bg-red-600 hover:bg-red-500 text-white font-black uppercase tracking-widest text-xs px-8 py-3.5 rounded-xl shadow-[0_0_20px_rgba(239,68,68,0.3)] transition-all">
+        <p className="text-zinc-400 text-xs mb-8 font-medium">Dados enviados com sucesso para a organização. Realize o pagamento para garantir seu nome nas chaves.</p>
+        <Link href={`/pagamento`} className="cursor-pointer inline-block bg-red-600 hover:bg-red-500 text-white font-black uppercase tracking-widest text-xs px-8 py-3.5 rounded-xl shadow-[0_0_20px_rgba(239,68,68,0.3)] transition-all">
           Ir para Pagamento
         </Link>
       </div>
@@ -191,19 +202,29 @@ function FormularioInscricao() {
         {/* COLUNA ESQUERDA: Dados e Formulário */}
         <div className="lg:col-span-2 space-y-5">
           
-          {/* PASSO 1: DADOS CADASTRAIS (ATUALIZADO COM FOTO) */}
-          <section className="bg-[#0a0a0e] border border-white/5 rounded-2xl p-5 md:p-6 shadow-xl relative overflow-hidden">
-            <div className="absolute top-0 left-0 w-1 h-full bg-red-600"></div>
+          {/* AVISO DE PERFIL INCOMPLETO (Trava de Segurança) */}
+          {perfilIncompleto && (
+            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4 flex items-start gap-3">
+              <svg className="w-5 h-5 text-yellow-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+              <div>
+                <h4 className="text-yellow-500 font-bold text-xs uppercase tracking-widest mb-1">Perfil Incompleto</h4>
+                <p className="text-yellow-200/70 text-[10px] md:text-xs">Faltam dados obrigatórios no seu cadastro (Nome, Faixa ou Equipe). <Link href="/perfil" className="underline font-bold text-yellow-400 cursor-pointer hover:text-yellow-300">Clique aqui para Editar o Perfil</Link> antes de se inscrever.</p>
+              </div>
+            </div>
+          )}
+
+          {/* PASSO 1: DADOS CADASTRAIS */}
+          <section className={`bg-[#0a0a0e] border ${perfilIncompleto ? 'border-yellow-500/30' : 'border-white/5'} rounded-2xl p-5 md:p-6 shadow-xl relative overflow-hidden transition-colors`}>
+            <div className={`absolute top-0 left-0 w-1 h-full ${perfilIncompleto ? 'bg-yellow-500' : 'bg-red-600'}`}></div>
             
             <div className="flex justify-between items-center mb-5">
               <h2 className="text-xs font-black text-white uppercase tracking-widest flex items-center gap-2">
-                <span className="bg-red-500 text-white w-4 h-4 rounded-full flex items-center justify-center text-[8px]">1</span>
+                <span className={`${perfilIncompleto ? 'bg-yellow-500' : 'bg-red-500'} text-white w-4 h-4 rounded-full flex items-center justify-center text-[8px] transition-colors`}>1</span>
                 Credencial do Atleta
               </h2>
-              <Link href="/perfil" className="text-[9px] font-bold uppercase tracking-widest text-zinc-500 hover:text-red-500 transition-colors underline decoration-white/20 underline-offset-4">Editar</Link>
+              <Link href="/perfil" className="cursor-pointer text-[9px] font-bold uppercase tracking-widest text-zinc-500 hover:text-red-500 transition-colors underline decoration-white/20 underline-offset-4">Editar</Link>
             </div>
             
-            {/* CONTAINER FLEX: FOTO + GRADE DE DADOS */}
             <div className="flex flex-col sm:flex-row gap-5 items-center sm:items-start bg-black/40 p-4 md:p-5 rounded-xl border border-white/5">
               
               {/* ÁREA DA FOTO */}
@@ -212,7 +233,7 @@ function FormularioInscricao() {
                   <img 
                     src={fotoUrl} 
                     alt={`Foto de ${nome}`} 
-                    className="w-24 h-24 sm:w-28 sm:h-28 rounded-full object-cover border-2 border-white/10 shadow-lg"
+                    className="w-24 h-24 sm:w-28 sm:h-28 rounded-full object-cover border-2 border-white/10 shadow-lg pointer-events-none"
                   />
                 ) : (
                   <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-zinc-900 border-2 border-white/10 flex items-center justify-center text-zinc-600 shadow-lg">
@@ -225,11 +246,11 @@ function FormularioInscricao() {
               <div className="flex-1 w-full grid grid-cols-2 md:grid-cols-3 gap-y-4 gap-x-4">
                 <div className="col-span-2 md:col-span-1">
                   <p className="text-[8px] text-zinc-500 font-bold uppercase tracking-widest mb-0.5">Nome</p>
-                  <p className="text-white font-bold text-xs truncate">{nome || "Não informado"}</p>
+                  <p className={`font-bold text-xs truncate ${nome ? 'text-white' : 'text-red-500'}`}>{nome || "Faltando Nome"}</p>
                 </div>
-                <div>
+                <div className="col-span-2 md:col-span-1">
                   <p className="text-[8px] text-zinc-500 font-bold uppercase tracking-widest mb-0.5">Equipe</p>
-                  <p className="text-white font-bold text-xs truncate">{equipe || "Sem equipe"}</p>
+                  <p className={`font-bold text-xs truncate ${equipe ? 'text-white' : 'text-red-500'}`}>{equipe || "Faltando Equipe"}</p>
                 </div>
                 <div>
                   <p className="text-[8px] text-zinc-500 font-bold uppercase tracking-widest mb-0.5">Professor</p>
@@ -237,7 +258,7 @@ function FormularioInscricao() {
                 </div>
                 <div>
                   <p className="text-[8px] text-zinc-500 font-bold uppercase tracking-widest mb-0.5">Faixa</p>
-                  <p className="text-white font-bold text-xs">{faixa || "Branca"}</p>
+                  <p className={`font-bold text-xs ${faixa ? 'text-white' : 'text-red-500'}`}>{faixa || "Faltando"}</p>
                 </div>
                 <div>
                   <p className="text-[8px] text-zinc-500 font-bold uppercase tracking-widest mb-0.5">Peso Oficial</p>
@@ -260,12 +281,12 @@ function FormularioInscricao() {
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
               <div>
-                <label className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest block mb-1.5">Sua Idade</label>
-                <input type="number" placeholder="Ex: 28" value={idade} onChange={(e) => setIdade(e.target.value)} className="w-full bg-black border border-white/10 focus:border-red-500/50 outline-none rounded-lg px-3 py-2.5 text-white text-xs transition-colors" />
+                <label className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest block mb-1.5 cursor-text">Sua Idade</label>
+                <input type="number" placeholder="Ex: 28" value={idade} onChange={(e) => setIdade(e.target.value)} className="w-full bg-black border border-white/10 focus:border-red-500/50 outline-none rounded-lg px-3 py-2.5 text-white text-xs transition-colors cursor-text" />
               </div>
               <div>
-                <label className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest block mb-1.5">Sexo Competitivo</label>
-                <select value={sexo} onChange={(e) => setSexo(e.target.value)} className="w-full bg-black border border-white/10 focus:border-red-500/50 outline-none rounded-lg px-3 py-2.5 text-white text-xs transition-colors appearance-none">
+                <label className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest block mb-1.5 cursor-pointer">Sexo Competitivo</label>
+                <select value={sexo} onChange={(e) => setSexo(e.target.value)} className="w-full bg-black border border-white/10 focus:border-red-500/50 outline-none rounded-lg px-3 py-2.5 text-white text-xs transition-colors appearance-none cursor-pointer">
                   <option value="Masculino">Masculino</option>
                   <option value="Feminino">Feminino</option>
                 </select>
@@ -273,8 +294,8 @@ function FormularioInscricao() {
             </div>
             {tipoInscricao !== "absoluto" && (
               <div>
-                <label className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest block mb-1.5">Categoria de Peso Oficial</label>
-                <select value={categoria} onChange={(e) => setCategoria(e.target.value)} className="w-full bg-black border border-white/10 focus:border-red-500/50 outline-none rounded-lg px-3 py-2.5 text-white text-xs transition-colors appearance-none">
+                <label className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest block mb-1.5 cursor-pointer">Categoria de Peso Oficial</label>
+                <select value={categoria} onChange={(e) => setCategoria(e.target.value)} className="w-full bg-black border border-white/10 focus:border-red-500/50 outline-none rounded-lg px-3 py-2.5 text-white text-xs transition-colors appearance-none cursor-pointer">
                   <option value="">Selecione a categoria exata...</option>
                   <option value="Pluma (Até 64.500 kg)">Pluma (Até 64.500 kg)</option>
                   <option value="Leve (Até 72.500 kg)">Leve (Até 72.500 kg)</option>
@@ -290,18 +311,18 @@ function FormularioInscricao() {
           <section className="bg-[#0a0a0e] border border-white/5 rounded-2xl p-5 md:p-6 shadow-xl">
             <h2 className="text-xs font-black text-white uppercase tracking-widest flex items-center gap-2 mb-5">
               <span className="bg-red-500 text-white w-4 h-4 rounded-full flex items-center justify-center text-[8px]">3</span>
-              Pacote
+              Escolha seu Pacote
             </h2>
             <div className="space-y-2.5">
               <label className={`block relative p-3 md:p-4 rounded-xl border cursor-pointer transition-all ${tipoInscricao === 'peso' ? 'border-red-500 bg-red-500/5' : 'border-white/5 bg-black hover:border-white/20'}`}>
-                <input type="radio" name="tipoInscricao" value="peso" checked={tipoInscricao === 'peso'} onChange={() => setTipoInscricao('peso')} className="absolute opacity-0 w-0 h-0" />
+                <input type="radio" name="tipoInscricao" value="peso" checked={tipoInscricao === 'peso'} onChange={() => setTipoInscricao('peso')} className="absolute opacity-0 w-0 h-0 cursor-pointer" />
                 <div className="flex justify-between items-center">
                   <div className="flex items-center gap-3">
                     <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${tipoInscricao === 'peso' ? 'border-red-500' : 'border-zinc-600'}`}>
                       {tipoInscricao === 'peso' && <div className="w-2 h-2 bg-red-500 rounded-full"></div>}
                     </div>
                     <div>
-                      <h3 className={`font-bold text-xs ${tipoInscricao === 'peso' ? 'text-white' : 'text-zinc-400'}`}>Categoria de Peso</h3>
+                      <h3 className={`font-bold text-xs ${tipoInscricao === 'peso' ? 'text-white' : 'text-zinc-400'}`}>Apenas Categoria de Peso</h3>
                     </div>
                   </div>
                   <span className={`font-black text-sm ${tipoInscricao === 'peso' ? 'text-red-400' : 'text-zinc-500'}`}>R$ 90</span>
@@ -309,7 +330,7 @@ function FormularioInscricao() {
               </label>
 
               <label className={`block relative p-3 md:p-4 rounded-xl border cursor-pointer transition-all ${tipoInscricao === 'absoluto' ? 'border-red-500 bg-red-500/5' : 'border-white/5 bg-black hover:border-white/20'}`}>
-                <input type="radio" name="tipoInscricao" value="absoluto" checked={tipoInscricao === 'absoluto'} onChange={() => setTipoInscricao('absoluto')} className="absolute opacity-0 w-0 h-0" />
+                <input type="radio" name="tipoInscricao" value="absoluto" checked={tipoInscricao === 'absoluto'} onChange={() => setTipoInscricao('absoluto')} className="absolute opacity-0 w-0 h-0 cursor-pointer" />
                 <div className="flex justify-between items-center">
                   <div className="flex items-center gap-3">
                     <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${tipoInscricao === 'absoluto' ? 'border-red-500' : 'border-zinc-600'}`}>
@@ -324,7 +345,7 @@ function FormularioInscricao() {
               </label>
 
               <label className={`block relative p-3 md:p-4 rounded-xl border cursor-pointer transition-all ${tipoInscricao === 'ambos' ? 'border-red-500 bg-red-500/5' : 'border-white/5 bg-black hover:border-white/20'}`}>
-                <input type="radio" name="tipoInscricao" value="ambos" checked={tipoInscricao === 'ambos'} onChange={() => setTipoInscricao('ambos')} className="absolute opacity-0 w-0 h-0" />
+                <input type="radio" name="tipoInscricao" value="ambos" checked={tipoInscricao === 'ambos'} onChange={() => setTipoInscricao('ambos')} className="absolute opacity-0 w-0 h-0 cursor-pointer" />
                 <div className="flex justify-between items-center">
                   <div className="flex items-center gap-3">
                     <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${tipoInscricao === 'ambos' ? 'border-red-500' : 'border-zinc-600'}`}>
@@ -333,7 +354,7 @@ function FormularioInscricao() {
                     <div>
                       <div className="flex items-center gap-2">
                         <h3 className={`font-bold text-xs ${tipoInscricao === 'ambos' ? 'text-white' : 'text-zinc-400'}`}>Peso + Absoluto</h3>
-                        <span className="hidden sm:inline-block bg-amber-500/20 text-amber-500 text-[8px] font-black uppercase px-2 py-0.5 rounded">Recomendado</span>
+                        <span className="hidden sm:inline-block bg-amber-500/20 text-amber-500 text-[8px] font-black uppercase px-2 py-0.5 rounded pointer-events-none">Recomendado</span>
                       </div>
                     </div>
                   </div>
@@ -349,7 +370,7 @@ function FormularioInscricao() {
               <span className="bg-red-500 text-white w-4 h-4 rounded-full flex items-center justify-center text-[8px]">4</span>
               Termos de Aceite
             </h2>
-            <div className="bg-black/50 border border-white/5 p-4 rounded-xl text-[10px] text-zinc-400 space-y-2 mb-4 h-24 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-zinc-700">
+            <div className="bg-black/50 border border-white/5 p-4 rounded-xl text-[10px] text-zinc-400 space-y-2 mb-4 h-24 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-zinc-700 pointer-events-none">
               <p>• Declaro estar em perfeitas condições físicas e de saúde para participar deste evento.</p>
               <p>• Estou ciente de que a modalidade é um esporte de contato e assumo os riscos inerentes.</p>
               <p>• Autorizo o uso da minha imagem (fotos e vídeos) para fins de divulgação do evento e da plataforma iTATAME.</p>
@@ -358,7 +379,7 @@ function FormularioInscricao() {
             </div>
             <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border border-white/5 bg-black hover:bg-white/5 transition-colors">
               <input type="checkbox" checked={termoAceito} onChange={(e) => setTermoAceito(e.target.checked)} className="mt-0.5 w-4 h-4 accent-red-600 rounded cursor-pointer" />
-              <span className="text-xs text-white font-bold leading-tight mt-0.5">Declaro que li e concordo com os termos de responsabilidade e o edital do evento.</span>
+              <span className="text-xs text-white font-bold leading-tight mt-0.5 cursor-pointer">Declaro que li e concordo com os termos de responsabilidade e o edital do evento.</span>
             </label>
           </section>
 
@@ -394,45 +415,45 @@ function FormularioInscricao() {
 
             {/* SEÇÃO DO CUPOM */}
             <div className="border-t border-white/10 pt-4 mb-5">
-              <label className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest block mb-2">Possui Cupom?</label>
+              <label className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest block mb-2 cursor-text">Possui Cupom?</label>
               <div className="flex gap-2">
                 <input 
                   type="text" 
                   value={cupom} 
                   onChange={(e) => setCupom(e.target.value.toUpperCase())} 
                   placeholder="DIGITE O CÓDIGO" 
-                  className="w-full bg-black border border-white/10 outline-none rounded-lg px-3 py-2.5 text-white text-xs uppercase" 
+                  className="w-full bg-black border border-white/10 outline-none rounded-lg px-3 py-2.5 text-white text-xs uppercase cursor-text" 
                 />
                 <button 
                   onClick={aplicarCupom} 
-                  className="bg-white/10 hover:bg-white/20 text-white text-[9px] font-bold uppercase tracking-widest px-4 rounded-lg transition-colors"
+                  className="cursor-pointer bg-white/10 hover:bg-white/20 text-white text-[9px] font-bold uppercase tracking-widest px-4 rounded-lg transition-colors"
                 >
                   Aplicar
                 </button>
               </div>
               {cupomMensagem && (
-                <p className={`text-[10px] mt-2 font-bold ${desconto > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                <p className={`text-[10px] mt-2 font-bold pointer-events-none ${desconto > 0 ? 'text-green-400' : 'text-red-400'}`}>
                   {cupomMensagem}
                 </p>
               )}
             </div>
 
             <div className="border-t border-white/10 pt-4 mb-6 flex justify-between items-end">
-              <span className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest">Total</span>
+              <span className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest">Total a Pagar</span>
               <span className="text-2xl font-black text-red-500">R$ {valorTotal.toFixed(2).replace('.', ',')}</span>
             </div>
 
-            {erro && <div className="mb-4 bg-red-500/10 border border-red-500/20 text-red-400 text-[10px] rounded-lg p-3 text-center font-bold">❌ {erro}</div>}
+            {erro && <div className="mb-4 bg-red-500/10 border border-red-500/20 text-red-400 text-[10px] rounded-lg p-3 text-center font-bold pointer-events-none">❌ {erro}</div>}
 
             <button 
-              disabled={processando || (tipoInscricao !== 'absoluto' && !categoria) || !termoAceito}
-              className="w-full bg-red-600 hover:bg-red-500 text-white font-black uppercase tracking-widest text-[11px] py-4 rounded-xl shadow-[0_0_15px_rgba(239,68,68,0.3)] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              disabled={processando || perfilIncompleto || (tipoInscricao !== 'absoluto' && !categoria) || !termoAceito}
+              className="cursor-pointer w-full bg-red-600 hover:bg-red-500 text-white font-black uppercase tracking-widest text-[11px] py-4 rounded-xl shadow-[0_0_15px_rgba(239,68,68,0.3)] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               onClick={finalizarInscricao}
             >
               {processando ? "Processando..." : "Confirmar Inscrição"}
             </button>
 
-            <div className="mt-5 flex flex-col items-center justify-center gap-1 opacity-50">
+            <div className="mt-5 flex flex-col items-center justify-center gap-1 opacity-50 pointer-events-none">
               <div className="flex items-center gap-1.5">
                 <svg className="w-3 h-3 text-zinc-400" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
                 <span className="text-[8px] font-bold uppercase tracking-widest text-zinc-400">Ambiente 100% Seguro</span>
@@ -451,6 +472,7 @@ export default function PageInscricao() {
     <main className="min-h-screen bg-[#050505]">
       <Suspense fallback={
         <div className="min-h-screen flex items-center justify-center text-zinc-500 font-bold uppercase tracking-widest text-[10px]">
+          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-red-500 mr-3"></div>
           Carregando módulo...
         </div>
       }>

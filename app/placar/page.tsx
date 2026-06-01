@@ -269,6 +269,18 @@ export default function PlacarDigital() {
     }
   };
 
+  // ==========================================
+  // DECLARAR VENCEDOR POR FINALIZAÇÃO / W.O.
+  // ==========================================
+  const declararFinalizacao = (lado: "azul" | "vermelho") => {
+    if (vencedor || showResumo) return; 
+    
+    tocarSom('fim');
+    setTimerAtivo(false);
+    setVencedor(lado);
+    setTimeout(() => setShowResumo(true), 3500);
+  };
+
   return (
     <>
       <style dangerouslySetInnerHTML={{__html: `
@@ -278,7 +290,6 @@ export default function PlacarDigital() {
 
         /* ========================================== */
         /* CSS EXCLUSIVO MOBILE VERTICAL (PORTRAIT)   */
-        /* (REMOVIDO A CLASSE .clock-island DAQUI)    */
         /* ========================================== */
         @media screen and (max-width: 768px) and (orientation: portrait) {
           .placar-wrapper { flex-direction: column !important; }
@@ -308,7 +319,6 @@ export default function PlacarDigital() {
 
         /* ========================================== */
         /* CSS EXCLUSIVO MOBILE HORIZONTAL (LANDSCAPE)*/
-        /* (REMOVIDO A CLASSE .clock-island DAQUI)    */
         /* ========================================== */
         @media screen and (max-height: 500px) and (orientation: landscape) {
           .placar-side { padding: 0.5rem 1rem !important; }
@@ -380,7 +390,7 @@ export default function PlacarDigital() {
         )}
 
         {/* ========================================== */}
-        {/* ILHA DO CRONÔMETRO (DRAG & DROP NO MOBILE) */}
+        {/* ILHA DO CRONÔMETRO                         */}
         {/* ========================================== */}
         <div 
           className="clock-island absolute z-[60] flex flex-col items-center"
@@ -388,7 +398,7 @@ export default function PlacarDigital() {
             left: '50%',
             top: '42%',
             transform: `translate(calc(-50% + ${clockPos.x}px), calc(-50% + ${clockPos.y}px)) scale(${clockScale})`,
-            touchAction: 'none' // Impede a tela de rolar enquanto o usuário arrasta
+            touchAction: 'none'
           } : {
             left: '50%',
             top: '42%',
@@ -400,7 +410,8 @@ export default function PlacarDigital() {
         >
           <div className="bg-[#09090b]/95 backdrop-blur-xl px-6 py-4 md:px-10 md:py-6 rounded-[2rem] border border-zinc-800 shadow-[0_20px_60px_rgba(0,0,0,0.9)] flex flex-col items-center">
             
-            <span className={`text-[5rem] md:text-[6rem] lg:text-[7rem] leading-none font-black font-mono tracking-tighter drop-shadow-[0_0_25px_rgba(255,215,0,0.6)] text-[#FFD700] ${tempoRestante <= 60 && tempoRestante > 0 ? 'animate-pulse' : ''}`}>
+            {/* AQUI ESTÁ A ALTERAÇÃO: TAMANHO DA FONTE DO RELÓGIO AUMENTADA */}
+            <span className={`text-[6rem] md:text-[8rem] lg:text-[9.5rem] leading-none font-black font-mono tracking-tighter drop-shadow-[0_0_25px_rgba(255,215,0,0.6)] text-[#FFD700] ${tempoRestante <= 60 && tempoRestante > 0 ? 'animate-pulse' : ''}`}>
               {formatarTempo(tempoRestante)}
             </span>
             
@@ -442,6 +453,15 @@ export default function PlacarDigital() {
         {/* ========================================== */}
         <div className={`placar-side placar-side-azul w-1/2 h-full bg-[#05142b] border-r-[2px] border-black flex flex-col pt-6 md:pt-10 px-6 md:px-8 pb-6 relative z-10 transition-all duration-1000 ${vencedor === 'vermelho' ? 'opacity-20 grayscale' : vencedor === 'azul' ? 'brightness-125' : ''}`}>
           
+          {/* BOTÃO DE FINALIZAÇÃO / W.O. - AZUL (REDONDO E CENTRALIZADO) */}
+          <button 
+            onClick={() => declararFinalizacao("azul")}
+            className="absolute top-1/2 -translate-y-1/2 left-2 md:left-6 z-50 bg-black/60 border border-white/30 text-white font-bold uppercase w-16 h-16 md:w-20 md:h-20 rounded-full flex flex-col items-center justify-center opacity-40 hover:opacity-100 hover:border-blue-500 hover:scale-110 transition-all duration-300 cursor-pointer shadow-[0_0_15px_rgba(0,0,0,0.5)]"
+          >
+            <span className="text-[8px] md:text-[10px] leading-tight">Finalizar</span>
+            <span className="text-[10px] md:text-[13px] leading-tight text-blue-400 mt-0.5">W.O.</span>
+          </button>
+
           {vencedor === 'azul' && (
             <div className="vencedor-overlay absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
               <div className="bg-black/90 px-8 py-4 md:px-12 md:py-6 rounded-[3rem] border-4 border-blue-500 shadow-[0_0_100px_rgba(59,130,246,0.8)] -rotate-12 animate-pulse">
@@ -450,8 +470,8 @@ export default function PlacarDigital() {
             </div>
           )}
 
-          <div className="nome-container w-full text-left pr-4 md:pr-8 shrink-0 pt-2">
-            <h2 title={atletaAzul || "ATLETA AZUL"} className="atleta-nome text-3xl md:text-5xl lg:text-[3.8rem] xl:text-[3.77rem] leading-normal pb-2 font-black uppercase text-white truncate drop-shadow-md w-full block">
+          <div className="nome-container w-full text-center px-4 md:pl-8 md:pr-[20%] shrink-0 pt-2">
+            <h2 title={atletaAzul || "ATLETA AZUL"} className="atleta-nome text-4xl md:text-6xl lg:text-[4.5rem] xl:text-[5.0rem] leading-none pb-2 font-black uppercase text-white truncate drop-shadow-md w-full block">
               {atletaAzul || "ATLETA AZUL"}
             </h2>
           </div>
@@ -508,6 +528,15 @@ export default function PlacarDigital() {
         {/* ========================================== */}
         <div className={`placar-side placar-side-verm w-1/2 h-full bg-[#2f0404] border-l border-black flex flex-col pt-6 md:pt-10 px-6 md:px-8 pb-6 relative z-10 transition-all duration-1000 ${vencedor === 'azul' ? 'opacity-20 grayscale' : vencedor === 'vermelho' ? 'brightness-125' : ''}`}>
           
+          {/* BOTÃO DE FINALIZAÇÃO / W.O. - VERMELHO (REDONDO E CENTRALIZADO) */}
+          <button 
+            onClick={() => declararFinalizacao("vermelho")}
+            className="absolute top-1/2 -translate-y-1/2 right-2 md:right-6 z-50 bg-black/60 border border-white/30 text-white font-bold uppercase w-16 h-16 md:w-20 md:h-20 rounded-full flex flex-col items-center justify-center opacity-40 hover:opacity-100 hover:border-red-500 hover:scale-110 transition-all duration-300 cursor-pointer shadow-[0_0_15px_rgba(0,0,0,0.5)]"
+          >
+            <span className="text-[8px] md:text-[10px] leading-tight">Finalizar</span>
+            <span className="text-[10px] md:text-[13px] leading-tight text-red-400 mt-0.5">W.O.</span>
+          </button>
+
           {vencedor === 'vermelho' && (
             <div className="vencedor-overlay absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
               <div className="bg-black/90 px-8 py-4 md:px-12 md:py-6 rounded-[3rem] border-4 border-red-500 shadow-[0_0_100px_rgba(239,68,68,0.8)] -rotate-12 animate-pulse">
@@ -516,8 +545,8 @@ export default function PlacarDigital() {
             </div>
           )}
 
-          <div className="nome-container w-full text-right pl-4 md:pl-8 shrink-0 pt-2">
-            <h2 title={atletaVermelho || "ATLETA VERMELHO"} className="atleta-nome text-3xl md:text-5xl lg:text-[3.8rem] xl:text-[3.77rem] leading-normal pb-2 font-black uppercase text-white truncate drop-shadow-md w-full block">
+          <div className="nome-container w-full text-center px-4 md:pr-8 md:pl-[20%] shrink-0 pt-2">
+            <h2 title={atletaVermelho || "ATLETA VERMELHO"} className="atleta-nome text-4xl md:text-6xl lg:text-[4.5rem] xl:text-[5.0rem] leading-none pb-2 font-black uppercase text-white truncate drop-shadow-md w-full block">
               {atletaVermelho || "ATLETA VERMELHO"}
             </h2>
           </div>
