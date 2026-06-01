@@ -68,9 +68,9 @@ export default function Home() {
       </section>
 
       {/* ÁREA DE BUSCA E EVENTOS */}
-      <section className="flex-1 max-w-7xl w-full mx-auto px-6 pb-20 -mt-8 relative z-20">
+      <section className="flex-1 max-w-7xl w-full mx-auto px-6 pb-12 -mt-8 relative z-20">
         
-        {/* BARRA DE PESQUISA (Desceu e formou uma "ponte" entre o banner e os eventos) */}
+        {/* BARRA DE PESQUISA */}
         <div className="w-full max-w-3xl mx-auto bg-[#0f0f14]/90 backdrop-blur-xl border border-white/10 p-1.5 md:p-2 rounded-2xl md:rounded-full shadow-2xl shadow-black flex flex-col md:flex-row gap-2 mb-12">
           <div className="flex-1 flex items-center px-4 bg-black/60 rounded-xl md:rounded-full border border-white/5 focus-within:border-red-500/50 transition-colors">
             <svg className="w-4 h-4 text-zinc-500 mr-2 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
@@ -93,7 +93,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* HEADER DOS EVENTOS + BOTÃO PPV DISCRETO */}
+        {/* HEADER DOS EVENTOS */}
         <div className="flex flex-col md:flex-row md:items-end justify-between mb-6 border-b border-white/5 pb-4 gap-4">
           <div>
             <h2 className="text-xl md:text-2xl font-black text-white uppercase tracking-wide">Eventos em Destaque</h2>
@@ -163,6 +163,52 @@ export default function Home() {
           })}
         </div>
       </section>
+
+      {/* BANNER PLACAR DIGITAL - GROWTH HACK */}
+      <section className="max-w-7xl w-full mx-auto px-6 pb-24 relative z-20 mt-10">
+        <div className="relative bg-gradient-to-br from-[#0a0a0e] to-[#050505] border border-yellow-500/30 rounded-[2rem] p-8 md:p-12 overflow-hidden flex flex-col md:flex-row items-center justify-between gap-10 shadow-2xl">
+          
+          {/* Efeito de brilho no fundo */}
+          <div className="absolute top-0 right-0 w-64 h-64 bg-yellow-500/10 blur-[80px] rounded-full pointer-events-none"></div>
+          <div className="absolute bottom-0 left-0 w-64 h-64 bg-yellow-500/5 blur-[80px] rounded-full pointer-events-none"></div>
+
+          <div className="relative z-10 max-w-2xl text-center md:text-left flex flex-col items-center md:items-start">
+            <span className="text-yellow-500 font-bold uppercase tracking-widest text-[10px] md:text-xs mb-3 block border border-yellow-500/30 bg-yellow-500/10 px-3 py-1 rounded-md">
+              Para Professores e Academias
+            </span>
+            <h2 className="text-3xl md:text-5xl font-black text-white mb-4 leading-tight">
+              Eleve o nível do seu <br className="hidden md:block"/>
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-yellow-600">Treino de Competição</span>
+            </h2>
+            <p className="text-zinc-400 text-sm md:text-base leading-relaxed mb-8 max-w-lg">
+              Simule o ambiente real de campeonato na sua academia. Use o nosso Placar Digital IBJJF de forma 100% gratuita. Funciona na TV do seu tatame, notebook ou tablet.
+            </p>
+            <Link href="/placar" className="inline-flex items-center justify-center gap-3 bg-yellow-500 hover:bg-yellow-400 text-black font-black uppercase tracking-widest px-8 py-4 rounded-xl transition-transform active:scale-95 shadow-[0_0_20px_rgba(234,179,8,0.3)]">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+              Abrir Placar Gratuito
+            </Link>
+          </div>
+
+          {/* Mockup Minimalista do Placar na lateral (só aparece em telas grandes) */}
+          <div className="relative z-10 hidden lg:flex flex-col items-center justify-center bg-[#050505] border border-zinc-800 rounded-2xl p-8 shadow-2xl transform rotate-3 hover:rotate-0 transition-transform duration-500 w-[350px] shrink-0">
+            <div className="flex w-full justify-between mb-4 border-b border-zinc-800 pb-4">
+               <div className="w-1/2 flex flex-col items-center border-r border-zinc-800">
+                  <span className="text-blue-500 text-5xl font-black">2</span>
+                  <span className="text-blue-500/50 text-[10px] font-bold uppercase mt-1">Pontos</span>
+               </div>
+               <div className="w-1/2 flex flex-col items-center">
+                  <span className="text-red-500 text-5xl font-black">0</span>
+                  <span className="text-red-500/50 text-[10px] font-bold uppercase mt-1">Pontos</span>
+               </div>
+            </div>
+            <div className="text-yellow-500 font-mono text-5xl font-black tracking-tighter drop-shadow-[0_0_15px_rgba(234,179,8,0.5)] bg-zinc-900 px-6 py-2 rounded-xl border border-zinc-800">
+              05:00
+            </div>
+          </div>
+          
+        </div>
+      </section>
+
     </main>
   );
 }

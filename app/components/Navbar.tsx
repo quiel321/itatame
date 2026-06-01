@@ -48,6 +48,12 @@ export default function Navbar() {
           <nav className="hidden md:flex gap-6 text-zinc-400 font-medium text-xs tracking-wide items-center">
             <Link href="/" className="hover:text-white transition">Início</Link>
             
+            {/* NOVO BOTÃO: PLACAR DIGITAL (DESKTOP) */}
+            <Link href="/placar" className="flex items-center gap-1.5 text-yellow-500 hover:text-yellow-400 transition font-bold bg-yellow-500/10 px-3 py-1.5 rounded-full border border-yellow-500/20">
+              <span className="text-sm">⏱️</span>
+              Placar Grátis
+            </Link>
+
             <Link href="/ranking" className="flex items-center gap-1.5 text-amber-500 hover:text-amber-400 transition font-bold">
               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
               Ranking
@@ -92,6 +98,13 @@ export default function Navbar() {
             <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
             <span className="text-[10px] font-medium">Buscar</span>
           </Link>
+          
+          {/* NOVO BOTÃO: PLACAR DIGITAL (MOBILE) */}
+          <Link href="/placar" className="flex flex-col items-center justify-center w-16 gap-0.5 text-yellow-600 hover:text-yellow-400 transition-colors">
+            <span className="text-xl leading-none">⏱️</span>
+            <span className="text-[10px] font-bold">Placar grátis</span>
+          </Link>
+
           <Link href={linkConta} className="flex flex-col items-center justify-center w-16 gap-1 text-zinc-500 hover:text-white transition-colors">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
             <span className="text-[10px] font-medium">Perfil</span>
