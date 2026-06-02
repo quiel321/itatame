@@ -256,8 +256,117 @@ export default function AdminPage() {
   const totalPagos = inscricoes.filter(i => i.pagamento_ok).length;
   const totalPendentes = totalInscritos - totalPagos;
 
-  const exportarCSV = () => { alert("Exportar CSV em construção"); }
-  const exportarPDF = () => { alert("Exportar PDF em construção"); }
+  // ==========================================
+  // EXPORTAÇÃO PARA PDF E CSV
+  // ==========================================
+  const exportarCSV = () => {
+    if (inscricoesFiltradas.length === 0) {
+      alert("Nenhuma inscrição para exportar com os filtros atuais.");
+      return;
+    }
+
+    const headers = ["Atleta", "Equipe", "Faixa", "Categoria", "Peso", "Status Pagamento", "Status Pesagem"];
+    
+    const csvRows = inscricoesFiltradas.map(insc => [
+      `"${insc.atleta || insc.nome || 'N/I'}"`,
+      `"${insc.equipe || 'Sem Equipe'}"`,
+      `"${insc.faixa || '-'}"`,
+      `"${insc.categoria || '-'}"`,
+      `"${insc.peso ? insc.peso + 'kg' : 'Absoluto'}"`,
+      `"${insc.pagamento_ok ? 'PAGO' : 'PENDENTE'}"`,
+      `"${insc.pesagem_ok ? 'OK' : 'PENDENTE'}"`
+    ].join(","));
+
+    const csvContent = ["\uFEFF" + headers.join(","), ...csvRows].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `Inscricoes_${eventoSelecionado === 'todos' ? 'Geral' : eventoSelecionado}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
+  const exportarPDF = () => {
+    if (inscricoesFiltradas.length === 0) {
+      alert("Nenhuma inscrição para exportar com os filtros atuais.");
+      return;
+    }
+
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+
+    const nomeEventoAtual = eventoSelecionado === "todos" 
+      ? "Relatório Geral de Eventos" 
+      : eventos.find(e => e.id.toString() === eventoSelecionado)?.nome || "Relatório de Inscrições";
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(16);
+    doc.text(nomeEventoAtual, 14, 45); // Começa abaixo do cabeçalho
+    
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Total de inscrições filtradas: ${inscricoesFiltradas.length}`, 14, 52);
+
+    const tableColumn = ["Atleta", "Equipe", "Faixa", "Categoria", "Peso", "Pagamento"];
+    const tableRows: any[] = [];
+
+    inscricoesFiltradas.forEach(insc => {
+      tableRows.push([
+        insc.atleta || insc.nome || "N/I",
+        insc.equipe || "Sem Equipe",
+        insc.faixa || "-",
+        insc.categoria || "-",
+        insc.peso ? `${insc.peso}kg` : "Abs.",
+        insc.pagamento_ok ? "PAGO" : "PENDENTE"
+      ]);
+    });
+
+    autoTable(doc, {
+      head: [tableColumn],
+      body: tableRows,
+      startY: 56,
+      theme: 'grid',
+      styles: { fontSize: 8, cellPadding: 3, valign: 'middle' },
+      headStyles: { fillColor: [20, 20, 20], textColor: [255, 255, 255], fontStyle: 'bold' },
+      margin: { top: 40 } // Previne sobreposição ao quebrar página
+    });
+
+    // ========================================================
+    // DESENHAR O CABEÇALHO PREMIUM NO PDF
+    // ========================================================
+    const pageCount = (doc.internal as any).getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      
+      doc.setFillColor(15, 15, 18); 
+      doc.rect(0, 0, pageWidth, 35, 'F');
+      
+      doc.setFont("helvetica", "bolditalic");
+      doc.setFontSize(22);
+      doc.setTextColor(239, 68, 68); // Vermelho
+      doc.text("// i", 14, 22);
+      doc.setTextColor(255, 255, 255); // Branco
+      doc.text("TATAME", 26, 22);
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.text("RELATÓRIO DE INSCRIÇÕES", pageWidth - 14, 16, { align: "right" });
+      
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.setTextColor(200, 200, 200);
+      doc.text(organizadorNome.toUpperCase(), pageWidth - 14, 23, { align: "right" });
+
+      doc.setFontSize(8);
+      doc.setTextColor(150, 150, 150);
+      const dataHora = `${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}`;
+      doc.text(`Exportado em: ${dataHora}  |  Página ${i} de ${pageCount}`, pageWidth - 14, 29, { align: "right" });
+    }
+
+    doc.save(`Inscricoes_${eventoSelecionado === 'todos' ? 'Geral' : eventoSelecionado}.pdf`);
+  }
 
   return (
     <main className="min-h-screen bg-[#050505] text-white p-4 md:p-8 relative overflow-hidden font-sans">

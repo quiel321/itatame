@@ -190,37 +190,46 @@ export default function LoginOrganizadorPage() {
   const whatsappLink = `https://wa.me/${whatsappNumber}?text=${whatsappMessage}`;
 
   return (
-    <main className="min-h-[calc(100vh-80px)] bg-[#050505] flex items-center justify-center p-4 md:p-8 relative overflow-hidden font-sans">
+    <main className="min-h-screen bg-[#050505] flex justify-center p-4 py-8 md:p-8 relative overflow-x-hidden font-sans">
       
       {/* EFEITOS DE LUZ NO FUNDO */}
       <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-yellow-600/5 blur-[120px] rounded-full pointer-events-none"></div>
       <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-red-600/5 blur-[100px] rounded-full pointer-events-none"></div>
 
-      <div className="w-full max-w-[850px] flex flex-col md:flex-row bg-[#0a0a0e]/90 backdrop-blur-2xl border border-white/5 rounded-2xl overflow-hidden shadow-[0_0_80px_rgba(0,0,0,0.9)] relative z-10">
+      {/* ADICIONADO 'my-auto' PARA O CARD FICAR CENTRALIZADO NO PC, MAS FLUIR NO MOBILE */}
+      <div className="w-full max-w-[850px] my-auto flex flex-col md:flex-row bg-[#0a0a0e]/90 backdrop-blur-2xl border border-white/5 rounded-2xl overflow-hidden shadow-[0_0_80px_rgba(0,0,0,0.9)] relative z-10">
         
-        {/* LADO ESQUERDO: O MANIFESTO */}
-        <div className="hidden md:flex flex-col justify-between w-1/2 p-8 lg:p-10 relative overflow-hidden bg-gradient-to-br from-[#0a0a0e] to-black border-r border-white/5">
+        {/* LADO ESQUERDO: O MANIFESTO (AGORA VISÍVEL NO MOBILE!) */}
+        <div className="flex flex-col justify-center md:justify-between w-full md:w-1/2 p-6 md:p-8 lg:p-10 relative overflow-hidden bg-gradient-to-br from-[#0a0a0e] to-black border-b md:border-b-0 md:border-r border-white/5">
           <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-5 pointer-events-none"></div>
           
-          <div className="relative z-10">
-            <h1 className="text-white font-black text-2xl italic tracking-tighter mb-1 cursor-default">
-              <span className="text-red-600">i</span>TATAME
-            </h1>
-            <span className="text-yellow-600 text-[8px] font-black uppercase tracking-widest block border border-yellow-600/30 bg-yellow-600/10 px-2 py-1 rounded w-max cursor-default">
-              Network Partners
-            </span>
+          <div className="relative z-10 flex items-center justify-between md:items-start md:flex-col gap-4">
+            <div>
+              <h1 className="text-white font-black text-2xl md:text-3xl italic tracking-tighter mb-1 cursor-default leading-none">
+                <span className="text-red-600">i</span>TATAME
+              </h1>
+              <span className="text-yellow-600 text-[8px] font-black uppercase tracking-widest block border border-yellow-600/30 bg-yellow-600/10 px-2 py-1 rounded w-max cursor-default">
+                Network Partners
+              </span>
+            </div>
+
+            {/* SELO DE SEGURANÇA COMPACTO PARA O MOBILE */}
+            <div className="md:hidden flex items-center gap-1.5 bg-white/5 border border-white/10 px-2.5 py-1.5 rounded-lg">
+               <svg className="w-3.5 h-3.5 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+               <span className="text-[8px] uppercase tracking-widest font-bold text-zinc-400 mt-0.5">Ambiente Seguro</span>
+            </div>
           </div>
 
-          <div className="relative z-10 mt-8 cursor-default">
-            <h2 className="text-3xl lg:text-4xl font-black text-white leading-[1.1] mb-3 tracking-tight">
-              O controlo absoluto do seu <span className="text-transparent bg-clip-text bg-gradient-to-r from-yellow-500 to-yellow-700">evento.</span>
+          <div className="relative z-10 mt-5 md:mt-8 cursor-default">
+            <h2 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-black text-white leading-[1.1] mb-2 md:mb-3 tracking-tight">
+              O controle absoluto do seu <span className="text-transparent bg-clip-text bg-gradient-to-r from-yellow-500 to-yellow-700">evento.</span>
             </h2>
-            <p className="text-zinc-500 text-[11px] leading-relaxed max-w-sm font-medium">
+            <p className="text-zinc-400 md:text-zinc-500 text-[10px] md:text-[11px] leading-relaxed max-w-sm font-medium">
               Acesso exclusivo à central de comando. Gira chaves, pesagem, cronogramas e inscrições em tempo real com a tecnologia líder do mercado.
             </p>
           </div>
 
-          <div className="relative z-10 mt-10 cursor-default">
+          <div className="hidden md:flex relative z-10 mt-10 cursor-default">
              <p className="text-zinc-600 text-[9px] uppercase font-bold tracking-widest flex items-center gap-2">
                <svg className="w-3.5 h-3.5 text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
                Ambiente Seguro Criptografado
@@ -232,13 +241,13 @@ export default function LoginOrganizadorPage() {
         <div className="w-full md:w-1/2 p-6 sm:p-8 lg:p-10 flex flex-col justify-center bg-black/60 relative">
           
           {mostrarPendencia ? (
-            <div className="flex flex-col items-center justify-center text-center animate-in zoom-in-95 duration-500">
+            <div className="flex flex-col items-center justify-center text-center animate-in zoom-in-95 duration-500 py-6 md:py-0">
               <div className="w-20 h-20 bg-yellow-500/10 border-2 border-yellow-500/30 rounded-full flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(234,179,8,0.2)]">
                 <svg className="w-10 h-10 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
               </div>
               <h3 className="text-xl md:text-2xl font-black text-white tracking-tight mb-2">Conta Sob Análise</h3>
               <p className="text-zinc-400 text-xs md:text-sm leading-relaxed mb-8 max-w-sm">
-                Tudo certo com o seu registro! O seu perfil de Organizador está em análise. A equipe iTatame entrará em contato o mais rápido possível para concluir a sua homologação. Fique à vontade para nos adiantar um 'Olá' no WhatsApp!
+                O seu cadastro foi recebido com sucesso e já está em análise! A nossa equipe do iTatame entrará em contato o mais rápido possível para validar os seus dados e liberar o acesso. Se quiser agilizar o processo, chame-nos no WhatsApp abaixo.
               </p>
               
               <a 
@@ -382,6 +391,7 @@ export default function LoginOrganizadorPage() {
                 </form>
               )}
 
+              {/* ROTA DE FUGA */}
               <div className="mt-8 pt-4 border-t border-white/5 text-center">
                 <p className="text-zinc-600 text-[9px] font-bold uppercase tracking-widest cursor-default">
                   Você é um atleta competidor?

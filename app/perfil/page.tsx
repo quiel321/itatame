@@ -156,8 +156,8 @@ export default function PerfilPage() {
           let inscricoesAlunos: any[] = [];
           
           if (alunosIds.length > 0) {
-            // AQUI FOI ADICIONADO O 'pesagem_ok' NA BUSCA PARA PODERMOS EXIBIR NA TELA!
-            const { data: inscData } = await supabase.from("inscricoes").select(`id, user_id, categoria, pagamento_ok, pesagem_ok, eventos (nome, data_evento)`).in("user_id", alunosIds);
+            // AQUI ESTÁ A CORREÇÃO: ADICIONAMOS O 'evento_id' NA BUSCA PARA PODER CRUZAR OS DADOS
+            const { data: inscData } = await supabase.from("inscricoes").select(`id, evento_id, user_id, categoria, pagamento_ok, pesagem_ok, eventos (nome, data_evento)`).in("user_id", alunosIds);
             if (inscData) inscricoesAlunos = inscData;
           }
 
@@ -171,25 +171,20 @@ export default function PerfilPage() {
         }
 
         // =========================================================================
-        // 🟢 LÓGICA DE VOUCHERS BLINDADA - BUSCA PELO NOME E EQUIPE DO PROFESSOR
+        // 🟢 LÓGICA DE VOUCHERS BLINDADA
         // =========================================================================
-        
-        // 1. O organizador salva o voucher com 'professor_nome' e 'equipe_nome'.
-        // Buscamos exatamente por esses valores para garantir que ninguém mais acesse.
         const { data: vData } = await supabase
           .from("vouchers")
           .select("*")
           .eq("professor_nome", perfilData.nome)
-          .eq("equipe_nome", perfilData.equipe); // BLINDADO AQUI
+          .eq("equipe_nome", perfilData.equipe); 
           
         if (vData && vData.length > 0) {
           setMeusVouchers(vData);
           
-          // 2. Extrai os IDs dos campeonatos ligados APENAS a esses vouchers confirmados
           const eventoIds = [...new Set(vData.map(v => v.evento_id))].filter(Boolean);
           
           if (eventoIds.length > 0) {
-            // 3. Busca no banco de eventos APENAS os campeonatos cujos IDs bateram com o passo 2
             const { data: evtData } = await supabase
               .from("eventos")
               .select("id, nome")
@@ -203,7 +198,6 @@ export default function PerfilPage() {
           setMeusVouchers([]);
           setEventosAbertos([]);
         }
-        // =========================================================================
       }
 
       if (userRole === "atleta" && perfilData.professor) {
@@ -339,23 +333,33 @@ export default function PerfilPage() {
         const aluno = minhaEquipe.find(a => a.user_id === uid);
         const idade = aluno.nascimento ? calcularIdade(aluno.nascimento) : "?";
         const classeIdade = (typeof idade === "number" && idade < 18) ? "Juvenil" : "Adulto";
+        
+        // Verifica se o atleta já tem uma inscrição pendente para ATUALIZÁ-LA em vez de duplicar
+        const inscricaoExistente = aluno.inscricoes?.find((i: any) => i.evento_id?.toString() === eventoLote.toString());
+
         return {
+          ...(inscricaoExistente ? { id: inscricaoExistente.id } : {}), // Se existir, manda o ID para atualizar (upsert)
           user_id: uid,
           evento_id: eventoLote,
+          atleta: aluno.nome,
+          equipe: equipe,
+          faixa: aluno.faixa,
+          peso: aluno.peso,
           categoria: `${classeIdade} - ${aluno.faixa || 'S/ Faixa'} - ${aluno.peso ? aluno.peso+'kg' : 'Absoluto'}`,
           pagamento_ok: true,
           pesagem_ok: false
         };
       });
 
-      const { error: insError } = await supabase.from("inscricoes").insert(inscricoesParaSalvar);
+      // Alterado de .insert para .upsert para evitar quebra de banco e evitar duplicações
+      const { error: insError } = await supabase.from("inscricoes").upsert(inscricoesParaSalvar);
       if (insError) throw insError;
 
       const novaQtdUsada = voucherAtual.quantidade_usada + alunosLote.length;
       const { error: vError } = await supabase.from("vouchers").update({ quantidade_usada: novaQtdUsada }).eq("id", voucherAtual.id);
       if (vError) throw vError;
 
-      alert("Mágica Concluída! Alunos inscritos e cortesias debitadas com sucesso!");
+      alert("Sucesso! Alunos inscritos e cortesias debitadas.");
       setAlunosLote([]); 
       window.location.reload(); 
     } catch (err: any) {
@@ -803,7 +807,7 @@ export default function PerfilPage() {
                         <svg className="w-5 h-5 text-cyan-500 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
                         Família / Dependentes
                       </h3>
-                      <p className="text-zinc-400 text-xs mt-1">Gerencie os perfis de filhos e menores sob sua responsibility.</p>
+                      <p className="text-zinc-400 text-xs mt-1">Gerencie os perfis de filhos e menores sob sua responsabilidade.</p>
                     </div>
                     <button 
                       onClick={() => setFormDependente({ nome: "", cpf: "", nascimento: "", professor: "", equipe: "", academia: "", faixa: "", peso: "", modalidade: "", professorPersonalizado: false })} 
@@ -964,7 +968,8 @@ export default function PerfilPage() {
                         {!insc.pagamento_ok ? (
                           <button className="cursor-pointer w-full sm:w-auto md:w-full bg-red-600 hover:bg-red-500 text-white px-4 py-2.5 sm:py-2 rounded-xl font-bold transition-colors text-xs text-center shadow-lg">Realizar Pagamento</button>
                         ) : (
-                          <button onClick={() => window.location.href = `/evento/${insc.evento_id}/chaves`} className="cursor-pointer w-full sm:w-auto md:w-full bg-white/10 hover:bg-white/20 border border-white/10 text-white px-4 py-2.5 sm:py-2 rounded-xl font-bold transition-colors text-xs text-center flex items-center justify-center gap-1.5">
+                          // AQUI ESTÁ A ALTERAÇÃO PARA A ROTA PÚBLICA!
+                          <button onClick={() => window.location.href = `/evento/${insc.evento_id}/publico`} className="cursor-pointer w-full sm:w-auto md:w-full bg-white/10 hover:bg-white/20 border border-white/10 text-white px-4 py-2.5 sm:py-2 rounded-xl font-bold transition-colors text-xs text-center flex items-center justify-center gap-1.5">
                             <svg className="w-3.5 h-3.5 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
                             Ver Minha Chave
                           </button>
@@ -1116,38 +1121,37 @@ export default function PerfilPage() {
                     <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider pl-1 cursor-default">2. Selecione os Alunos ({alunosLote.length} / {cortesiasDisponiveis})</label>
                   </div>
                   
-                  {minhaEquipe.length === 0 ? (
-                    <p className="text-zinc-500 text-sm text-center py-6 cursor-default">Você ainda não tem alunos cadastrados na sua equipe.</p>
+                  {minhaEquipe.filter(aluno => !aluno.inscricoes?.some((i: any) => i.evento_id?.toString() === eventoLote.toString() && i.pagamento_ok === true)).length === 0 ? (
+                    <p className="text-zinc-500 text-sm text-center py-6 cursor-default">Não há alunos elegíveis para receber cortesia neste evento (Todos já estão pagos ou você não possui alunos).</p>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-8">
-                      {minhaEquipe.map(aluno => {
-                        const jaInscrito = aluno.inscricoes?.some((i: any) => i.evento_id === eventoLote);
-                        const isSelected = alunosLote.includes(aluno.user_id);
-                        const disabled = jaInscrito || (!isSelected && alunosLote.length >= cortesiasDisponiveis);
+                      {minhaEquipe
+                        .filter(aluno => !aluno.inscricoes?.some((i: any) => i.evento_id?.toString() === eventoLote.toString() && i.pagamento_ok === true))
+                        .map(aluno => {
+                          const isSelected = alunosLote.includes(aluno.user_id);
+                          const disabled = !isSelected && alunosLote.length >= cortesiasDisponiveis;
 
-                        return (
-                          <div 
-                            key={aluno.user_id} 
-                            onClick={() => !disabled && toggleAlunoLote(aluno.user_id)}
-                            className={`p-3 rounded-xl border flex items-center justify-between transition-all ${jaInscrito ? 'bg-black/20 border-white/5 opacity-50 cursor-not-allowed' : disabled ? 'bg-black/40 border-white/5 opacity-70 cursor-not-allowed' : isSelected ? 'bg-yellow-500/10 border-yellow-500/50 cursor-pointer shadow-[0_0_10px_rgba(234,179,8,0.1)]' : 'bg-black/40 border-white/10 cursor-pointer hover:border-yellow-500/30'}`}
-                          >
-                            <div className="flex items-center gap-3 truncate">
-                              <div className="w-8 h-8 bg-zinc-800 rounded-full overflow-hidden shrink-0 border border-zinc-700">
-                                {aluno.foto_url ? <img src={aluno.foto_url} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-zinc-500 text-[10px] font-black">{aluno.nome?.charAt(0)}</div>}
+                          return (
+                            <div 
+                              key={aluno.user_id} 
+                              onClick={() => !disabled && toggleAlunoLote(aluno.user_id)}
+                              className={`p-3 rounded-xl border flex items-center justify-between transition-all ${disabled ? 'bg-black/40 border-white/5 opacity-70 cursor-not-allowed' : isSelected ? 'bg-yellow-500/10 border-yellow-500/50 cursor-pointer shadow-[0_0_10px_rgba(234,179,8,0.1)]' : 'bg-black/40 border-white/10 cursor-pointer hover:border-yellow-500/30'}`}
+                            >
+                              <div className="flex items-center gap-3 truncate">
+                                <div className="w-8 h-8 bg-zinc-800 rounded-full overflow-hidden shrink-0 border border-zinc-700">
+                                  {aluno.foto_url ? <img src={aluno.foto_url} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-zinc-500 text-[10px] font-black">{aluno.nome?.charAt(0)}</div>}
+                                </div>
+                                <div className="truncate">
+                                  <h5 className="text-white font-bold text-xs truncate">{aluno.nome}</h5>
+                                  <span className="text-zinc-500 text-[8px] font-bold uppercase tracking-widest">{aluno.faixa || 'S/ Faixa'} - {aluno.peso ? aluno.peso+'kg' : 'S/ Peso'}</span>
+                                </div>
                               </div>
-                              <div className="truncate">
-                                <h5 className="text-white font-bold text-xs truncate">{aluno.nome}</h5>
-                                <span className={`text-[8px] font-bold uppercase tracking-widest ${jaInscrito ? 'text-green-500' : 'text-zinc-500'}`}>{jaInscrito ? 'Já Inscrito no Evento' : `${aluno.faixa || 'S/ Faixa'} - ${aluno.peso ? aluno.peso+'kg' : 'S/ Peso'}`}</span>
-                              </div>
-                            </div>
-                            
-                            {!jaInscrito && (
+                              
                               <div className={`w-5 h-5 rounded border shrink-0 flex items-center justify-center transition-colors ${isSelected ? 'bg-yellow-500 border-yellow-500 text-black' : 'border-zinc-600'}`}>
                                 {isSelected && <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"></path></svg>}
                               </div>
-                            )}
-                          </div>
-                        );
+                            </div>
+                          );
                       })}
                     </div>
                   )}

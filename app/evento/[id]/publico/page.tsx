@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { useParams } from "next/navigation"
 import { supabase } from "@/app/lib/supabase"
+import Link from "next/link"
 
 // 1. Componente Atleta (VISÃO PÚBLICO: COM FOTO, LAYOUT AJUSTADO E SEM CLIQUES)
 function Atleta({ nome, equipe, numero, foto, reverso = false, centralizado = false, ocultarLinha = false, larguraClass = "w-[96px] md:w-[180px]", campeao = false }: any) {
@@ -30,7 +31,7 @@ function Atleta({ nome, equipe, numero, foto, reverso = false, centralizado = fa
 
   return (
     <div className={`relative h-[60px] flex-shrink-0 ${larguraClass}`}>
-      {/* A BOLINHA DA FOTO (Oculta na final para não quebrar a centralização) */}
+      {/* A BOLINHA DA FOTO */}
       {!centralizado && (
         <div className={`hidden md:flex absolute top-[14px] w-[32px] h-[32px] rounded-full bg-zinc-900 border border-zinc-700 overflow-hidden items-center justify-center z-10 ${reverso ? 'right-0' : 'left-0'}`}>
           {foto && !isBye ? (
@@ -67,9 +68,26 @@ export default function ChavesPublicoPage() {
   const [categoriaSelecionada, setCategoriaSelecionada] = useState("")
   const [lutas, setLutas] = useState<any[]>([])
   const [abaAtual, setAbaAtual] = useState(1) 
-  
-  // ESTADO PARA ARMAZENAR OS ATLETAS E FAZER A BUSCA INTELIGENTE DE FOTO
   const [atletasDB, setAtletasDB] = useState<any[]>([])
+  
+  // AVISO DE PENDÊNCIA (NÃO BLOQUEIA A TELA)
+  const [temPendencia, setTemPendencia] = useState(false)
+
+  async function verificarPagamento() {
+    const { data: authData } = await supabase.auth.getUser();
+    if (!authData?.user) return; // Visitante anónimo pode ver tudo normalmente
+
+    const { data: inscricoes } = await supabase
+      .from("inscricoes")
+      .select("pagamento_ok")
+      .eq("evento_id", params.id)
+      .eq("user_id", authData.user.id);
+
+    if (inscricoes && inscricoes.length > 0) {
+      const devePagar = inscricoes.some(insc => insc.pagamento_ok === false);
+      setTemPendencia(devePagar);
+    }
+  }
 
   async function carregarCategorias() {
     const { data } = await supabase.from("chaves").select("categoria, faixa").eq("evento_id", params.id)
@@ -79,7 +97,6 @@ export default function ChavesPublicoPage() {
     }
   }
 
-  // BUSCA OS ATLETAS UMA VEZ SÓ
   async function carregarFotos() {
     const { data } = await supabase.from('atletas').select('nome, foto_url');
     if (data) setAtletasDB(data);
@@ -93,6 +110,7 @@ export default function ChavesPublicoPage() {
   }
 
   useEffect(() => { 
+    verificarPagamento();
     carregarCategorias();
     carregarFotos();
   }, [])
@@ -130,7 +148,6 @@ export default function ChavesPublicoPage() {
     return String(nome);
   }
 
-  // BUSCA INTELIGENTE DE FOTO
   const buscarFoto = (nomeLimpo: string) => {
     if (!nomeLimpo || nomeLimpo === "") return null;
     const upper = nomeLimpo.toUpperCase();
@@ -196,7 +213,6 @@ export default function ChavesPublicoPage() {
     }
   }
 
-  // IDENTIFICADOR DE FASE (PARA O MOBILE)
   const getNomeDaFase = (luta: any, todasLutas: any[]) => {
     if (String(luta.id_visual) === "999") return "FINAL - DISPUTA DO OURO";
     if (String(luta.proxima_luta) === "999") return "SEMIFINAL";
@@ -225,6 +241,28 @@ export default function ChavesPublicoPage() {
     <main className="min-h-screen bg-black p-0 md:p-6">
       <div className="w-full max-w-[1400px] mx-auto pt-6 md:pt-0">
         
+        {/* ======================================================== */}
+        {/* BANNER DE AVISO: SÓ APARECE SE TIVER PENDÊNCIA           */}
+        {/* ======================================================== */}
+        {temPendencia && (
+          <div className="mx-4 md:mx-0 mb-6 bg-red-500/10 border border-red-500/30 rounded-2xl p-4 md:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-[0_0_20px_rgba(239,68,68,0.15)] animate-in slide-in-from-top-4">
+            <div className="flex items-start gap-3">
+              <div className="bg-red-500/20 p-2 rounded-full mt-1 shrink-0">
+                <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+              </div>
+              <div>
+                <h4 className="text-red-500 font-black uppercase tracking-widest text-xs mb-1">Aviso: Inscrição Pendente</h4>
+                <p className="text-red-200/80 text-[10px] md:text-xs leading-relaxed max-w-2xl">
+                  Identificamos que o seu pagamento ainda não foi confirmado. O algoritmo de chaves oficial exclui automaticamente atletas inadimplentes. Se você não encontrar o seu nome, regularize a sua inscrição.
+                </p>
+              </div>
+            </div>
+            <Link href="/perfil" className="shrink-0 w-full md:w-auto text-center bg-red-600 hover:bg-red-500 text-white font-black uppercase tracking-widest px-6 py-3 rounded-xl transition-all shadow-lg text-[10px] md:text-xs">
+              Regularizar Agora
+            </Link>
+          </div>
+        )}
+
         <div className="flex flex-col md:flex-row justify-between items-center mb-6 md:mb-10 px-4 md:px-0">
           <h1 className="text-white text-3xl md:text-5xl font-black">Chaveamento Oficial</h1>
           <button 
