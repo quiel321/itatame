@@ -38,13 +38,8 @@ export default function EventoDetalhesPage() {
     carregarDados();
   }, [params.id]);
 
-  if (loading) {
-    return <div className="min-h-screen bg-[#050505] flex items-center justify-center text-zinc-500 font-bold uppercase tracking-widest text-xs">Carregando evento...</div>;
-  }
-
-  if (!evento) {
-    return <div className="min-h-screen bg-[#050505] flex items-center justify-center text-white font-bold text-sm">Evento não encontrado.</div>;
-  }
+  if (loading) return <div className="min-h-screen bg-[#050505] flex items-center justify-center text-zinc-500 font-bold uppercase tracking-widest text-xs">Carregando evento...</div>;
+  if (!evento) return <div className="min-h-screen bg-[#050505] flex items-center justify-center text-white font-bold text-sm">Evento não encontrado.</div>;
 
   const formatarData = (dataStr: string) => {
     if (!dataStr) return "A definir";
@@ -52,12 +47,24 @@ export default function EventoDetalhesPage() {
     return `${dia}/${mes}/${ano}`;
   };
 
+  const formatarDataHora = (dataISO: string) => {
+    if (!dataISO) return "A definir";
+    const data = new Date(dataISO);
+    return data.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(',', ' às');
+  };
+
   const totalInscritos = inscricoes.length;
+
+  // 🔥 MOTOR DE LOTES: Descobre qual lote está valendo agora
+  const agora = new Date();
+  let loteAtivo = 0;
+  if (evento.lote1_data_fim && agora <= new Date(evento.lote1_data_fim)) loteAtivo = 1;
+  else if (evento.lote2_data_fim && agora <= new Date(evento.lote2_data_fim)) loteAtivo = 2;
+  else if (evento.lote3_data_fim && agora <= new Date(evento.lote3_data_fim)) loteAtivo = 3;
+  else loteAtivo = 4; // Todos os lotes encerrados
 
   return (
     <main className="min-h-screen bg-[#050505] flex flex-col pb-20">
-      
-      {/* BACKGROUND ATMOSFÉRICO */}
       <div className="absolute top-0 left-0 w-full h-[300px] md:h-[400px] z-0 overflow-hidden pointer-events-none">
         <img src={evento.banner_url || "/arena.png"} alt="Background" className="w-full h-full object-cover opacity-10 blur-sm scale-110" />
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#050505]/80 to-[#050505]"></div>
@@ -65,17 +72,10 @@ export default function EventoDetalhesPage() {
 
       <div className="max-w-7xl mx-auto px-3 md:px-6 w-full relative z-10 pt-6 md:pt-16">
         
-        {/* ========================================= */}
         {/* CABEÇALHO DO EVENTO */}
-        {/* ========================================= */}
         <div className="bg-[#0a0a0e] border border-white/10 rounded-[20px] md:rounded-[24px] p-4 md:p-8 shadow-2xl flex flex-col md:flex-row gap-4 md:gap-8 mb-6 md:mb-8">
-          
           <div className="w-full md:w-[300px] shrink-0 rounded-xl overflow-hidden shadow-2xl border border-white/5 relative bg-[#050505] flex items-center justify-center">
-            <img 
-              src={evento.banner_url || "/arena.png"} 
-              alt={evento.nome} 
-              className="w-full h-auto max-h-[250px] md:max-h-[400px] object-contain rounded-lg" 
-            />
+            <img src={evento.banner_url || "/arena.png"} alt={evento.nome} className="w-full h-auto max-h-[250px] md:max-h-[400px] object-contain rounded-lg" />
             <div className={`absolute top-2 right-2 md:top-3 md:right-3 text-white text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md shadow-lg ${evento.status === 'ENCERRADO' ? 'bg-zinc-600' : evento.status === 'EM BREVE' ? 'bg-cyan-600' : 'bg-red-600'}`}>
               {evento.status || "ABERTO"}
             </div>
@@ -88,7 +88,7 @@ export default function EventoDetalhesPage() {
                   {evento.descricao || "Evento Esportivo"}
                 </span>
                 <span className="text-red-500 font-bold text-[10px] md:text-xs flex items-center gap-1">
-                  🔥 {totalInscritos} / {evento.limite_atletas || 500} vagas
+                  🔥 {totalInscritos} / {evento.limite_vagas || 500} vagas
                 </span>
               </div>
               
@@ -136,7 +136,6 @@ export default function EventoDetalhesPage() {
                 Chaves e Resultados
               </Link>
               
-              {/* O BOTÃO DE REGULAMENTO AGORA SÓ APARECE SE TIVER LINK CADASTRADO */}
               {evento.regulamento_url && (
                 <a href={evento.regulamento_url} target="_blank" rel="noopener noreferrer" className="text-zinc-400 hover:text-white font-bold uppercase tracking-widest text-[10px] md:text-xs px-3 py-2.5 md:px-4 md:py-3.5 transition-all flex items-center justify-center gap-1.5 w-full md:w-auto">
                   <svg className="w-3.5 h-3.5 md:w-4 md:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
@@ -147,11 +146,8 @@ export default function EventoDetalhesPage() {
           </div>
         </div>
 
-        {/* ========================================= */}
         {/* CORPO DA PÁGINA (Abas + Datas Importantes) */}
-        {/* ========================================= */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
-          
           <div className="lg:col-span-2 space-y-4 md:space-y-8">
             <div className="flex overflow-x-auto scrollbar-hide border-b border-white/10 pb-px gap-1 md:gap-2">
               <button onClick={() => setAbaAtiva("sobre")} className={`whitespace-nowrap px-3 py-2 md:px-4 md:py-3 text-[10px] md:text-[11px] font-black uppercase tracking-widest transition-colors ${abaAtiva === "sobre" ? "text-red-500 border-b-2 border-red-500" : "text-zinc-500 hover:text-white"}`}>Sobre o Evento</button>
@@ -164,26 +160,64 @@ export default function EventoDetalhesPage() {
               {abaAtiva === "sobre" && (
                 <div className="animate-in fade-in duration-500 text-zinc-400 text-xs md:text-sm leading-relaxed space-y-3 md:space-y-4 font-medium">
                   <h3 className="text-base md:text-lg font-black text-white mb-1 md:mb-2 uppercase tracking-wide">Apresentação</h3>
-                  {/* Puxa o texto customizado do BD. whitespace-pre-wrap faz o CSS respeitar os Enters/Quebras de linha */}
                   <div className="whitespace-pre-wrap">
-                    {evento.sobre_evento || `Este evento consolidou-se como um dos principais palcos do ${evento.descricao || "esporte"} no estado. Buscamos um evento de alta qualidade, com infraestrutura de excelência e profissionalismo em todos os detalhes.`}
+                    {evento.sobre_evento || `Este evento consolidou-se como um dos principais palcos do ${evento.descricao || "esporte"}.`}
                   </div>
-                  
-                  {evento.premiacao && (
-                    <div className="mt-4 md:mt-6 p-3 md:p-4 bg-white/5 border border-white/10 rounded-xl text-[11px] md:text-xs">
-                      <strong className="text-white block mb-1">Resumo da Premiação:</strong>
-                      {evento.premiacao}
-                    </div>
-                  )}
                 </div>
               )}
 
               {abaAtiva === "valores" && (
                 <div className="animate-in fade-in duration-500 text-zinc-400 text-xs md:text-sm leading-relaxed font-medium">
-                  <h3 className="text-base md:text-lg font-black text-white mb-3 md:mb-4 uppercase tracking-wide">Informações de Lotes</h3>
-                  <div className="whitespace-pre-wrap">
-                    {evento.valores_lotes || "Valores e prazos de lote serão divulgados em breve pela organização."}
+                  <h3 className="text-base md:text-lg font-black text-white mb-4 uppercase tracking-wide border-l-2 border-red-500 pl-2">Lotes de Inscrição</h3>
+                  
+                  {/* LISTAGEM DINÂMICA DE LOTES */}
+                  <div className="space-y-3 mb-6">
+                    {evento.lote1_valor > 0 && (
+                      <div className={`p-4 rounded-xl border flex justify-between items-center transition-all ${loteAtivo === 1 ? 'bg-red-500/10 border-red-500/50 text-white shadow-[0_0_15px_rgba(239,68,68,0.1)]' : 'bg-[#050505] border-white/5 text-zinc-500 opacity-60'}`}>
+                        <div>
+                          <h4 className="font-black uppercase tracking-widest text-xs md:text-sm">1º Lote (Promocional)</h4>
+                          <p className="text-[10px] md:text-xs mt-1">Válido até: {formatarDataHora(evento.lote1_data_fim)}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-black text-lg">R$ {Number(evento.lote1_valor).toFixed(2).replace('.', ',')}</p>
+                          {loteAtivo === 1 && <span className="text-[9px] bg-red-500 text-white px-2 py-0.5 rounded uppercase font-bold tracking-widest inline-block mt-1">Lote Vigente</span>}
+                        </div>
+                      </div>
+                    )}
+
+                    {evento.lote2_valor > 0 && (
+                      <div className={`p-4 rounded-xl border flex justify-between items-center transition-all ${loteAtivo === 2 ? 'bg-red-500/10 border-red-500/50 text-white shadow-[0_0_15px_rgba(239,68,68,0.1)]' : 'bg-[#050505] border-white/5 text-zinc-500 opacity-60'}`}>
+                        <div>
+                          <h4 className="font-black uppercase tracking-widest text-xs md:text-sm">2º Lote</h4>
+                          <p className="text-[10px] md:text-xs mt-1">Válido até: {formatarDataHora(evento.lote2_data_fim)}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-black text-lg">R$ {Number(evento.lote2_valor).toFixed(2).replace('.', ',')}</p>
+                          {loteAtivo === 2 && <span className="text-[9px] bg-red-500 text-white px-2 py-0.5 rounded uppercase font-bold tracking-widest inline-block mt-1">Lote Vigente</span>}
+                        </div>
+                      </div>
+                    )}
+
+                    {evento.lote3_valor > 0 && (
+                      <div className={`p-4 rounded-xl border flex justify-between items-center transition-all ${loteAtivo === 3 ? 'bg-red-500/10 border-red-500/50 text-white shadow-[0_0_15px_rgba(239,68,68,0.1)]' : 'bg-[#050505] border-white/5 text-zinc-500 opacity-60'}`}>
+                        <div>
+                          <h4 className="font-black uppercase tracking-widest text-xs md:text-sm">3º Lote (Final)</h4>
+                          <p className="text-[10px] md:text-xs mt-1">Válido até: {formatarDataHora(evento.lote3_data_fim)}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-black text-lg">R$ {Number(evento.lote3_valor).toFixed(2).replace('.', ',')}</p>
+                          {loteAtivo === 3 && <span className="text-[9px] bg-red-500 text-white px-2 py-0.5 rounded uppercase font-bold tracking-widest inline-block mt-1">Lote Vigente</span>}
+                        </div>
+                      </div>
+                    )}
                   </div>
+
+                  {evento.valores_lotes && (
+                    <div className="bg-white/5 p-4 rounded-xl border border-white/10 mt-4">
+                      <h4 className="text-white font-bold text-[10px] uppercase mb-2 tracking-widest">Informações Adicionais / Modalidades</h4>
+                      <div className="whitespace-pre-wrap text-xs">{evento.valores_lotes}</div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -191,11 +225,10 @@ export default function EventoDetalhesPage() {
                 <div className="animate-in fade-in duration-500 text-zinc-400 text-xs md:text-sm leading-relaxed font-medium">
                   <h3 className="text-base md:text-lg font-black text-white mb-3 md:mb-4 uppercase tracking-wide">Regras / Pesagem / Informações</h3>
                   <div className="whitespace-pre-wrap">
-                    {evento.regras_pesagem || "Regras de pesagem e diretrizes de competição seguirão o livro de regras da modalidade oficial. Em caso de dúvidas, consulte o regulamento (caso disponibilizado) ou entre em contato com a organização."}
+                    {evento.regras_pesagem || "Regras de pesagem e diretrizes de competição seguirão o livro de regras da modalidade oficial."}
                   </div>
                 </div>
               )}
-
             </div>
 
             {/* LISTA DE ATLETAS */}
@@ -203,7 +236,6 @@ export default function EventoDetalhesPage() {
               <div className="flex items-center justify-between mb-3 md:mb-4">
                 <h2 className="text-lg md:text-xl font-black text-white uppercase tracking-wide">Inscritos Recentes</h2>
               </div>
-
               {inscricoes.length === 0 ? (
                 <div className="bg-[#0a0a0e] border border-dashed border-white/10 rounded-xl md:rounded-2xl p-6 md:p-10 text-center">
                   <div className="text-xl md:text-2xl mb-2">🥋</div>
@@ -234,13 +266,11 @@ export default function EventoDetalhesPage() {
                 </div>
               )}
             </div>
-
           </div>
 
-          {/* COLUNA DIREITA */}
+          {/* COLUNA DIREITA: CHECKLIST DINÂMICO */}
           <div className="lg:col-span-1">
             <div className="sticky top-20 md:top-24 bg-[#0a0a0e] border border-red-500/30 rounded-xl md:rounded-2xl p-4 md:p-6 shadow-[0_0_20px_rgba(239,68,68,0.1)] relative overflow-hidden mt-2 md:mt-0">
-              
               <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-600 to-red-400 animate-pulse"></div>
               <div className="absolute -top-10 -right-10 md:-top-20 md:-right-20 w-32 h-32 md:w-40 md:h-40 bg-red-600/10 blur-[40px] md:blur-[50px] rounded-full animate-pulse"></div>
 
@@ -252,28 +282,27 @@ export default function EventoDetalhesPage() {
               <div className="space-y-4 md:space-y-5 relative z-10">
                 <div className="border-l-2 border-red-500 pl-3 md:pl-4">
                   <span className="text-red-400 text-[9px] md:text-[10px] font-black uppercase tracking-widest block mb-0.5">Prazo de Inscrições</span>
-                  <p className="text-white text-[11px] md:text-xs font-medium">Não deixe para a última hora.</p>
+                  <p className="text-white text-[11px] md:text-xs font-medium">Até {formatarDataHora(evento.data_fim_inscricoes)}</p>
                   <p className="text-zinc-500 text-[9px] md:text-[10px] mt-0.5">Vagas podem esgotar antes da data.</p>
                 </div>
-
                 <div className="border-l-2 border-zinc-700 pl-3 md:pl-4">
-                  <span className="text-zinc-400 text-[9px] md:text-[10px] font-black uppercase tracking-widest block mb-0.5">Pagamento (Pix)</span>
-                  <p className="text-white text-[11px] md:text-xs font-medium">Conferência Automática</p>
-                  <p className="text-zinc-500 text-[9px] md:text-[10px] mt-0.5">Seu nome entra na lista assim que pago.</p>
+                  <span className="text-zinc-400 text-[9px] md:text-[10px] font-black uppercase tracking-widest block mb-0.5">Vencimento (Pix/Boleto)</span>
+                  <p className="text-white text-[11px] md:text-xs font-medium">Até {formatarDataHora(evento.data_fim_pagamento)}</p>
+                  <p className="text-zinc-500 text-[9px] md:text-[10px] mt-0.5">Pagamento pendente não garante vaga.</p>
                 </div>
-
                 <div className="border-l-2 border-zinc-700 pl-3 md:pl-4">
                   <span className="text-zinc-400 text-[9px] md:text-[10px] font-black uppercase tracking-widest block mb-0.5">Checagem de Chaves</span>
-                  <p className="text-white text-[11px] md:text-xs font-medium">Dias antes do Evento</p>
-                  <p className="text-zinc-500 text-[9px] md:text-[10px] mt-0.5">Fique atento às redes da organização.</p>
+                  <p className="text-white text-[11px] md:text-xs font-medium">{evento.data_inicio_checagem ? `Abre: ${formatarDataHora(evento.data_inicio_checagem)}` : 'Em breve'}</p>
+                  <p className="text-zinc-500 text-[9px] md:text-[10px] mt-0.5">{evento.data_fim_checagem ? `Fecha: ${formatarDataHora(evento.data_fim_checagem)}` : 'Fique atento ao prazo.'}</p>
+                </div>
+                <div className="border-l-2 border-zinc-700 pl-3 md:pl-4">
+                  <span className="text-zinc-400 text-[9px] md:text-[10px] font-black uppercase tracking-widest block mb-0.5">Divulgação das Chaves</span>
+                  <p className="text-white text-[11px] md:text-xs font-medium">{formatarDataHora(evento.data_divulgacao_chaves)}</p>
                 </div>
               </div>
-
             </div>
           </div>
-
         </div>
-
       </div>
     </main>
   );

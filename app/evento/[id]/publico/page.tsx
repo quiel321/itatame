@@ -5,50 +5,34 @@ import { useParams } from "next/navigation"
 import { supabase } from "@/app/lib/supabase"
 import Link from "next/link"
 
-// 1. Componente Atleta (VISÃO PÚBLICO: COM FOTO, LAYOUT AJUSTADO E SEM CLIQUES)
 function Atleta({ nome, equipe, numero, foto, reverso = false, centralizado = false, ocultarLinha = false, larguraClass = "w-[96px] md:w-[180px]", campeao = false }: any) {
   const isBye = !nome || ["BYE", "TBD"].includes(nome.toString().trim().toUpperCase());
   const nomeExibicao = isBye ? "" : nome;
   const equipeExibicao = isBye ? "" : equipe;
 
-  // LAYOUT EXCLUSIVO DO CAMPEÃO (Enquadrado e proporcional)
   if (campeao) {
     return (
       <div className="relative flex flex-col items-center justify-center gap-1.5 w-full py-1 md:py-2">
         <div className="w-[46px] h-[46px] md:w-[60px] md:h-[60px] rounded-full border-[2px] border-yellow-500 overflow-hidden flex items-center justify-center bg-black shrink-0 shadow-[0_0_15px_rgba(234,179,8,0.4)]">
-          {foto && !isBye ? (
-            <img src={foto} alt={nomeExibicao} className="w-full h-full object-cover" />
-          ) : (
-            <svg className="w-6 h-6 md:w-8 md:h-8 text-yellow-600" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
-          )}
+          {foto && !isBye ? <img src={foto} alt={nomeExibicao} className="w-full h-full object-cover" /> : <svg className="w-6 h-6 md:w-8 md:h-8 text-yellow-600" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>}
         </div>
-        <span className="text-yellow-500 text-[11px] md:text-[13px] font-black uppercase text-center w-full drop-shadow-[0_0_10px_rgba(234,179,8,0.5)] truncate px-1">
-          {nomeExibicao || "A DEFINIR"}
-        </span>
+        <span className="text-yellow-500 text-[11px] md:text-[13px] font-black uppercase text-center w-full drop-shadow-[0_0_10px_rgba(234,179,8,0.5)] truncate px-1">{nomeExibicao || "A DEFINIR"}</span>
       </div>
     )
   }
 
   return (
     <div className={`relative h-[60px] flex-shrink-0 ${larguraClass}`}>
-      {/* A BOLINHA DA FOTO */}
       {!centralizado && (
         <div className={`hidden md:flex absolute top-[14px] w-[32px] h-[32px] rounded-full bg-zinc-900 border border-zinc-700 overflow-hidden items-center justify-center z-10 ${reverso ? 'right-0' : 'left-0'}`}>
-          {foto && !isBye ? (
-            <img src={foto} className="w-full h-full object-cover" />
-          ) : (
-            <svg className="w-4 h-4 text-zinc-600" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
-          )}
+          {foto && !isBye ? <img src={foto} className="w-full h-full object-cover" /> : <svg className="w-4 h-4 text-zinc-600" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>}
         </div>
       )}
-
       <div className={`absolute top-[6px] flex items-center ${centralizado ? 'justify-center left-0 right-0' : reverso ? 'left-0 right-0 md:left-0 md:right-[44px] flex-row-reverse' : 'left-0 right-0 md:left-[44px] md:right-0 flex-row'}`}>
         {numero && <span className={`text-zinc-500 text-[9px] md:text-[10px] font-bold ${reverso ? 'ml-1' : 'mr-1'}`}>{numero}</span>}
         <span className={`text-[#57d8ff] text-[10px] md:text-[12px] font-medium truncate flex-1 ${centralizado ? 'text-center' : reverso ? 'text-right' : 'text-left'}`}>{nomeExibicao}</span>
       </div>
-      
       {!ocultarLinha && <div className={`absolute top-[30px] border-t border-zinc-500 ${centralizado ? 'left-0 right-0' : reverso ? 'left-0 right-0 md:left-auto md:right-[44px]' : 'left-0 right-0 md:right-auto md:left-[44px]'}`} />}
-      
       <div className={`absolute top-[34px] flex items-center ${centralizado ? 'justify-center left-0 right-0' : reverso ? 'left-0 right-0 md:left-0 md:right-[44px] flex-row-reverse' : 'left-0 right-0 md:left-[44px] md:right-0 flex-row'}`}>
         <span className={`text-zinc-500 text-[8px] md:text-[9px] uppercase truncate flex-1 ${centralizado ? 'text-center' : reverso ? 'text-right' : 'text-left'}`}>{equipeExibicao}</span>
       </div>
@@ -63,6 +47,9 @@ function ConectorGrande({ reverso = false }: any) { return ( <div className="rel
 export default function ChavesPublicoPage() {
   const params = useParams()
   
+  // 🔥 BLINDAGEM DO ID DO EVENTO (Aceita params.id ou params.eventoId)
+  const idEvento = params.id as string || params.eventoId as string;
+  
   const [tipoCategoria, setTipoCategoria] = useState("peso")
   const [categoriasMenu, setCategoriasMenu] = useState<string[]>([])
   const [categoriaSelecionada, setCategoriaSelecionada] = useState("")
@@ -70,27 +57,21 @@ export default function ChavesPublicoPage() {
   const [abaAtual, setAbaAtual] = useState(1) 
   const [atletasDB, setAtletasDB] = useState<any[]>([])
   
-  // AVISO DE PENDÊNCIA (NÃO BLOQUEIA A TELA)
   const [temPendencia, setTemPendencia] = useState(false)
 
   async function verificarPagamento() {
+    if (!idEvento) return;
     const { data: authData } = await supabase.auth.getUser();
-    if (!authData?.user) return; // Visitante anónimo pode ver tudo normalmente
-
-    const { data: inscricoes } = await supabase
-      .from("inscricoes")
-      .select("pagamento_ok")
-      .eq("evento_id", params.id)
-      .eq("user_id", authData.user.id);
-
+    if (!authData?.user) return; 
+    const { data: inscricoes } = await supabase.from("inscricoes").select("pagamento_ok").eq("evento_id", idEvento).eq("user_id", authData.user.id);
     if (inscricoes && inscricoes.length > 0) {
-      const devePagar = inscricoes.some(insc => insc.pagamento_ok === false);
-      setTemPendencia(devePagar);
+      setTemPendencia(inscricoes.some(insc => insc.pagamento_ok === false));
     }
   }
 
   async function carregarCategorias() {
-    const { data } = await supabase.from("chaves").select("categoria, faixa").eq("evento_id", params.id)
+    if (!idEvento) return;
+    const { data } = await supabase.from("chaves").select("categoria, faixa").eq("evento_id", idEvento)
     if (data) {
       const unicas = Array.from(new Set(data.map(d => `${d.categoria}__${d.faixa}`)))
       setCategoriasMenu(unicas)
@@ -98,14 +79,14 @@ export default function ChavesPublicoPage() {
   }
 
   async function carregarFotos() {
-    const { data } = await supabase.from('atletas').select('nome, foto_url');
+    const { data } = await supabase.from('atletas').select('id, nome, foto_url');
     if (data) setAtletasDB(data);
   }
 
   async function carregarChaves() {
-    if (!categoriaSelecionada) return
+    if (!categoriaSelecionada || !idEvento) return
     const [cat, fx] = categoriaSelecionada.split("__")
-    const { data } = await supabase.from("chaves").select("*").eq("evento_id", params.id).eq("categoria", cat).eq("faixa", fx)
+    const { data } = await supabase.from("chaves").select("*").eq("evento_id", idEvento).eq("categoria", cat).eq("faixa", fx)
     setLutas(data || [])
   }
 
@@ -115,11 +96,23 @@ export default function ChavesPublicoPage() {
     carregarFotos();
   }, [])
 
-  useEffect(() => { carregarChaves() }, [categoriaSelecionada])
+  useEffect(() => { 
+    carregarChaves() 
 
+    const subscription = supabase
+      .channel('public-chaves-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chaves' }, payload => {
+        carregarChaves();
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(subscription); }
+  }, [categoriaSelecionada])
+
+  // 🔥 Filtro de Categoria
   const categoriasFiltradas = categoriasMenu.filter((cat) => {
-    const isAbsoluto = cat.toLowerCase().includes("absoluto")
-    return tipoCategoria === "peso" ? !isAbsoluto : isAbsoluto
+    const isAbsoluto = cat.toLowerCase().includes("absoluto");
+    return tipoCategoria === "peso" ? !isAbsoluto : isAbsoluto;
   })
 
   useEffect(() => {
@@ -148,13 +141,9 @@ export default function ChavesPublicoPage() {
     return String(nome);
   }
 
-  const buscarFoto = (nomeLimpo: string) => {
-    if (!nomeLimpo || nomeLimpo === "") return null;
-    const upper = nomeLimpo.toUpperCase();
-    let match = atletasDB.find(a => a.nome && a.nome.toUpperCase() === upper && a.foto_url);
-    if (!match) {
-        match = atletasDB.find(a => a.nome && a.nome.toUpperCase().includes(upper) && a.foto_url);
-    }
+  const buscarFotoPorId = (idNumerico: number | null) => {
+    if (!idNumerico) return null;
+    const match = atletasDB.find(a => a.id === idNumerico);
     return match ? match.foto_url : null;
   }
 
@@ -162,55 +151,36 @@ export default function ChavesPublicoPage() {
     const idLutaVisual = getFase1VisualId(posicaoColuna, lado);
     const luta = lutas.find(l => String(l.id_visual) === String(idLutaVisual));
     if (!luta) return { nome: "", equipe: "", numero: "", foto: null };
-
     const nomeBruto = slot === 1 ? luta.atleta_1 : luta.atleta_2;
+    const idBruto = slot === 1 ? luta.atleta_1_id : luta.atleta_2_id;
     const nomeLimpo = limparNome(nomeBruto);
-
-    return {
-      numero: slot === 1 ? luta.numero_1 : luta.numero_2,
-      nome: nomeLimpo,
-      equipe: nomeLimpo === "" ? "" : (slot === 1 ? luta.equipe_1 : luta.equipe_2),
-      foto: buscarFoto(nomeLimpo)
-    }
+    return { numero: slot === 1 ? luta.numero_1 : luta.numero_2, nome: nomeLimpo, equipe: nomeLimpo === "" ? "" : (slot === 1 ? luta.equipe_1 : luta.equipe_2), foto: buscarFotoPorId(idBruto) }
   }
 
   const getAtletaDoMeio = (idBase: number, multiplicador: number, slotDelta: number, slot: number) => {
     const idLutaVisual = idBase + (abaAtual - 1) * multiplicador + slotDelta;
     const luta = lutas.find(l => String(l.id_visual) === String(idLutaVisual));
     if (!luta) return { nome: "", equipe: "", foto: null };
-
     const nomeBruto = slot === 1 ? luta.atleta_1 : luta.atleta_2;
+    const idBruto = slot === 1 ? luta.atleta_1_id : luta.atleta_2_id;
     const nomeLimpo = limparNome(nomeBruto);
-    
-    return {
-      nome: nomeLimpo,
-      equipe: nomeLimpo === "" ? "" : (slot === 1 ? luta.equipe_1 : luta.equipe_2),
-      foto: buscarFoto(nomeLimpo)
-    }
+    return { nome: nomeLimpo, equipe: nomeLimpo === "" ? "" : (slot === 1 ? luta.equipe_1 : luta.equipe_2), foto: buscarFotoPorId(idBruto) }
   }
 
   const getAtletaDaFinal = (slot: number) => {
     const luta = lutas.find(l => String(l.id_visual) === "999");
     if (!luta) return { nome: "", equipe: "", foto: null };
-
     const nomeBruto = slot === 1 ? luta.atleta_1 : luta.atleta_2;
+    const idBruto = slot === 1 ? luta.atleta_1_id : luta.atleta_2_id;
     const nomeLimpo = limparNome(nomeBruto);
-    
-    return {
-      nome: nomeLimpo,
-      equipe: nomeLimpo === "" ? "" : (slot === 1 ? luta.equipe_1 : luta.equipe_2),
-      foto: buscarFoto(nomeLimpo)
-    }
+    return { nome: nomeLimpo, equipe: nomeLimpo === "" ? "" : (slot === 1 ? luta.equipe_1 : luta.equipe_2), foto: buscarFotoPorId(idBruto) }
   }
 
   const getCampeao = () => {
     const lutaFinal = lutas.find(l => String(l.id_visual) === "999");
     const campeao = limparNome(lutaFinal?.vencedor || null);
-    return {
-      nome: campeao,
-      equipe: "",
-      foto: buscarFoto(campeao)
-    }
+    const idCampeao = lutaFinal?.vencedor_id || null;
+    return { nome: campeao, equipe: "", foto: buscarFotoPorId(idCampeao) }
   }
 
   const getNomeDaFase = (luta: any, todasLutas: any[]) => {
@@ -225,14 +195,11 @@ export default function ChavesPublicoPage() {
     return "FASE ELIMINATÓRIA";
   }
 
-  const lutasMobile = [...lutas]
-    .filter(luta => {
-      const a1 = limparNome(luta.atleta_1);
-      const a2 = limparNome(luta.atleta_2);
+  const lutasMobile = [...lutas].filter(luta => {
+      const a1 = limparNome(luta.atleta_1); const a2 = limparNome(luta.atleta_2);
       if ((!a1 || a1 === "BYE") && (!a2 || a2 === "BYE")) return false;
       return true;
-    })
-    .sort((a, b) => (parseInt(a.id_visual) || 0) - (parseInt(b.id_visual) || 0));
+  }).sort((a, b) => (parseInt(a.id_visual) || 0) - (parseInt(b.id_visual) || 0));
 
   const campeaoData = getCampeao();
   const temCampeao = campeaoData.nome && campeaoData.nome !== "";
@@ -241,9 +208,6 @@ export default function ChavesPublicoPage() {
     <main className="min-h-screen bg-black p-0 md:p-6">
       <div className="w-full max-w-[1400px] mx-auto pt-6 md:pt-0">
         
-        {/* ======================================================== */}
-        {/* BANNER DE AVISO: SÓ APARECE SE TIVER PENDÊNCIA           */}
-        {/* ======================================================== */}
         {temPendencia && (
           <div className="mx-4 md:mx-0 mb-6 bg-red-500/10 border border-red-500/30 rounded-2xl p-4 md:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-[0_0_20px_rgba(239,68,68,0.15)] animate-in slide-in-from-top-4">
             <div className="flex items-start gap-3">
@@ -257,7 +221,7 @@ export default function ChavesPublicoPage() {
                 </p>
               </div>
             </div>
-            <Link href="/perfil" className="shrink-0 w-full md:w-auto text-center bg-red-600 hover:bg-red-500 text-white font-black uppercase tracking-widest px-6 py-3 rounded-xl transition-all shadow-lg text-[10px] md:text-xs">
+            <Link href="/pagamento" className="shrink-0 w-full md:w-auto text-center bg-red-600 hover:bg-red-500 text-white font-black uppercase tracking-widest px-6 py-3 rounded-xl transition-all shadow-lg text-[10px] md:text-xs">
               Regularizar Agora
             </Link>
           </div>
@@ -265,12 +229,6 @@ export default function ChavesPublicoPage() {
 
         <div className="flex flex-col md:flex-row justify-between items-center mb-6 md:mb-10 px-4 md:px-0">
           <h1 className="text-white text-3xl md:text-5xl font-black">Chaveamento Oficial</h1>
-          <button 
-            onClick={() => { carregarCategorias(); carregarChaves(); carregarFotos(); }}
-            className="mt-4 md:mt-0 px-6 py-3 rounded-xl font-bold transition-all border bg-zinc-900 border-zinc-700 text-zinc-400 hover:text-white flex items-center gap-2 text-sm md:text-base"
-          >
-            🔄 Atualizar Resultados
-          </button>
         </div>
 
         <div className="bg-[#050816] md:border border-white/10 md:rounded-3xl p-4 md:p-6 mb-4 mx-4 md:mx-0 flex flex-col md:flex-row gap-4 items-end shadow-lg">
@@ -286,8 +244,10 @@ export default function ChavesPublicoPage() {
             <select value={categoriaSelecionada} onChange={(e) => setCategoriaSelecionada(e.target.value)} className="w-full bg-black/50 border border-zinc-700 text-white rounded-lg p-3 outline-none focus:border-[#57d8ff]">
               {categoriasFiltradas.length === 0 && <option value="">Nenhuma chave nesta modalidade...</option>}
               {categoriasFiltradas.map((cat) => {
-                const [nomeCategoria, faixa] = cat.split("__")
-                return <option key={cat} value={cat}>{nomeCategoria} - Faixa {faixa}</option>
+                const [nomeCategoria, faixa] = cat.split("__");
+                // Formata o nome para leitura limpa
+                const catFormatada = nomeCategoria.replace("-", "").trim(); 
+                return <option key={cat} value={cat}>{catFormatada} • Faixa {faixa}</option>
               })}
             </select>
           </div>
@@ -303,14 +263,10 @@ export default function ChavesPublicoPage() {
           </div>
         )}
 
-        {/* ======================================================= */}
-        {/* MODO DESKTOP: ÁRVORE CLÁSSICA                           */}
-        {/* ======================================================= */}
         <div className="hidden md:flex bg-[#050816] md:border md:border-white/10 md:rounded-3xl py-6 md:p-10 w-full overflow-x-auto min-w-0 flex-col items-center scrollbar-hide relative shadow-2xl">
           {totalAbas > 1 && <p className="text-zinc-500 font-bold mb-4 uppercase tracking-widest text-sm absolute top-4 left-4">Chave {abaAtual}/{totalAbas}</p>}
 
           <div className="flex w-max md:w-full justify-center px-2 md:px-0 opacity-90 transition-all pt-6 md:pt-0 pb-8">
-            {/* LADO ESQUERDO */}
             <div className="flex">
               <div className="flex flex-col gap-[20px]">
                 <Atleta {...getAtletaDaPrimeiraFase(1, 1, "esquerda")} />
@@ -338,18 +294,14 @@ export default function ChavesPublicoPage() {
               <div className="flex flex-col pt-[150px]"><ConectorGrande /></div>
             </div>
 
-            {/* CENTRO (FINAL E CAMPEÃO ALINHADOS) */}
             <div className="flex flex-col w-[140px] md:w-[220px] relative items-center mx-4">
               <div className="absolute top-[310px] left-[-10px] right-[-10px] border-t border-zinc-500 z-0" />
-              
-              {/* CAIXA DA LUTA FINAL */}
               <div className="absolute top-[260px] flex flex-col gap-[10px] bg-[#050816] px-2 py-4 border border-zinc-800 rounded-xl z-10 shadow-2xl w-full">
                 <span className="text-red-600 font-black text-[10px] md:text-[11px] uppercase text-center mb-1 tracking-widest">Luta Final</span>
                 <Atleta {...getAtletaDaFinal(1)} larguraClass="w-full" centralizado />
                 <Atleta {...getAtletaDaFinal(2)} larguraClass="w-full" centralizado />
               </div>
 
-              {/* CAIXA DO CAMPEÃO */}
               <div className="absolute top-[75px] md:top-[80px] flex flex-col items-center z-10 w-full">
                 <span className="text-yellow-500 font-black text-[12px] md:text-lg mb-2 drop-shadow-[0_0_15px_rgba(234,179,8,0.4)] tracking-widest">🏆 CAMPEÃO</span>
                 <div className="bg-gradient-to-t from-yellow-500/10 to-black/80 border border-yellow-500/50 rounded-xl py-2 px-2 shadow-[0_0_20px_rgba(234,179,8,0.2)] w-full flex flex-col items-center">
@@ -358,7 +310,6 @@ export default function ChavesPublicoPage() {
               </div>
             </div>
 
-            {/* LADO DIREITO */}
             <div className="flex">
               <div className="flex flex-col pt-[150px]"><ConectorGrande reverso /></div>
               <div className="flex flex-col gap-[260px] pt-[120px]">
@@ -388,20 +339,12 @@ export default function ChavesPublicoPage() {
           </div>
         </div>
 
-        {/* ======================================================= */}
-        {/* MODO MOBILE: CARDS VERTICAIS E CLEAN                    */}
-        {/* ======================================================= */}
         <div className="flex md:hidden flex-col w-full px-4 mb-20 mt-4">
-          
           {temCampeao && (
             <div className="bg-gradient-to-t from-yellow-600/20 to-[#0c1220] border border-yellow-500/30 rounded-2xl p-6 flex flex-col items-center justify-center shadow-[0_0_20px_rgba(234,179,8,0.15)] mb-6 animate-in fade-in zoom-in duration-500">
               <span className="text-yellow-500 font-black text-sm mb-3 tracking-widest drop-shadow-[0_0_10px_rgba(234,179,8,0.5)]">🏆 CAMPEÃO OFICIAL</span>
               <div className="w-16 h-16 rounded-full border-[3px] border-yellow-500 overflow-hidden bg-black flex items-center justify-center shadow-[0_0_15px_rgba(234,179,8,0.3)] mb-3 shrink-0">
-                {campeaoData.foto ? (
-                  <img src={campeaoData.foto} className="w-full h-full object-cover" />
-                ) : (
-                  <span className="text-2xl text-yellow-500 font-black">{campeaoData.nome.charAt(0)}</span>
-                )}
+                {campeaoData.foto ? <img src={campeaoData.foto} className="w-full h-full object-cover" /> : <span className="text-2xl text-yellow-500 font-black">{campeaoData.nome.charAt(0)}</span>}
               </div>
               <h2 className="text-white text-lg font-black uppercase tracking-tight text-center">{campeaoData.nome}</h2>
             </div>
@@ -414,21 +357,18 @@ export default function ChavesPublicoPage() {
               {lutasMobile.map(luta => {
                 const a1 = limparNome(luta.atleta_1);
                 const a2 = limparNome(luta.atleta_2);
-                const foto1 = buscarFoto(a1);
-                const foto2 = buscarFoto(a2);
+                
+                const foto1 = buscarFotoPorId(luta.atleta_1_id);
+                const foto2 = buscarFotoPorId(luta.atleta_2_id);
 
                 return (
                   <div key={luta.id} className="bg-[#0c1220] border border-[#57d8ff]/20 rounded-xl flex flex-col shadow-md relative overflow-hidden">
-                    
                     <div className="bg-[#57d8ff]/10 border-b border-[#57d8ff]/20 py-1.5 px-3 flex justify-between items-center">
-                      <span className="text-[9px] font-black text-[#57d8ff] uppercase tracking-widest">
-                        {getNomeDaFase(luta, lutas)} • #{luta.id_visual}
-                      </span>
+                      <span className="text-[9px] font-black text-[#57d8ff] uppercase tracking-widest">{getNomeDaFase(luta, lutas)} • #{luta.id_visual}</span>
                       {luta.vencedor && <span className="text-[8px] bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded font-bold uppercase border border-green-500/30">Finalizada</span>}
                     </div>
 
                     <div className="p-3 flex flex-col gap-1.5">
-                      
                       <div className={`flex justify-between items-center p-2 rounded-lg border transition-colors ${luta.vencedor && luta.vencedor === a1 ? 'bg-green-500/10 border-green-500/40' : 'bg-black/40 border-white/5'}`}>
                         <div className="flex items-center gap-2.5">
                           <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center text-xs font-black text-zinc-400 border border-zinc-600 overflow-hidden shrink-0">
@@ -459,7 +399,6 @@ export default function ChavesPublicoPage() {
                         </div>
                         {luta.vencedor === a2 && <svg className="w-5 h-5 text-green-500 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/></svg>}
                       </div>
-
                     </div>
                   </div>
                 )

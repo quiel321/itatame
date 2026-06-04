@@ -1,20 +1,29 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { supabase } from "../../../lib/supabase";
 
-export default function PlacarDigital() {
+export default function PlacarMesarioDB() {
+  const params = useParams();
+  const router = useRouter();
+  const matchId = params.id as string;
+
+  // ESTADOS DO BANCO DE DADOS
+  const [lutaAtual, setLutaAtual] = useState<any>(null);
+  const [todasLutasCategoria, setTodasLutasCategoria] = useState<any[]>([]);
+  const [loadingDB, setLoadingDB] = useState(true);
+
   // CONFIGURAÇÕES DA LUTA
   const [configOpen, setConfigOpen] = useState(true);
   const [showResumo, setShowResumo] = useState(false);
-  
-  const [atletaAzul, setAtletaAzul] = useState("");
-  const [atletaVermelho, setAtletaVermelho] = useState("");
   const [tempoMinutos, setTempoMinutos] = useState(5);
 
   // ESTADOS DO PLACAR
-  const [tempoRestante, setTempoRestante] = useState(tempoMinutos * 60);
+  const [tempoRestante, setTempoRestante] = useState(0);
   const [timerAtivo, setTimerAtivo] = useState(false);
 
+  // Atleta 1 = AZUL | Atleta 2 = VERMELHO
   const [pontosAzul, setPontosAzul] = useState(0);
   const [vantagensAzul, setVantagensAzul] = useState(0);
   const [punicoesAzul, setPunicoesAzul] = useState(0);
@@ -23,10 +32,8 @@ export default function PlacarDigital() {
   const [vantagensVermelho, setVantagensVermelho] = useState(0);
   const [punicoesVermelho, setPunicoesVermelho] = useState(0);
 
-  // ESTADO: VENCEDOR DA LUTA
   const [vencedor, setVencedor] = useState<"azul" | "vermelho" | "empate" | null>(null);
 
-  // ESTATÍSTICAS PARA O RESUMO FINAL
   const [stats, setStats] = useState({
     azul: { quedas: 0, passagens: 0, montadas: 0 },
     vermelho: { quedas: 0, passagens: 0, montadas: 0 }
@@ -35,86 +42,200 @@ export default function PlacarDigital() {
   const placarRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-  // ==========================================
-  // ESTADOS: ARRASTE E ZOOM (APENAS MOBILE)
-  // ==========================================
+  // ESTADOS MOBILE
   const [isMobile, setIsMobile] = useState(false);
   const [clockPos, setClockPos] = useState({ x: 0, y: 0 });
   const [clockScale, setClockScale] = useState(1);
-  
   const dragRef = useRef({ startX: 0, startY: 0, isDragging: false });
   const pinchRef = useRef({ startDist: 0, startScale: 1 });
-  
-  // Ref para monitorar se a tela girou
   const orientationRef = useRef(true); 
 
   // ==========================================
-  // OCULTAR A BARRA DE NAVEGAÇÃO GLOBAL & DETECTAR MOBILE
+  // 1. CARREGAMENTO DO BANCO DE DADOS
   // ==========================================
   useEffect(() => {
-    document.body.classList.add('ocultar-nav-global');
-    document.documentElement.classList.add('ocultar-nav-global');
+    async function carregarLuta() {
+      if (!matchId) return;
+      
+      const { data: luta, error } = await supabase
+        .from("chaves")
+        .select("*")
+        .eq("id", matchId)
+        .single();
 
-    const handleResize = () => {
-      // Aumentado para 1024 para cobrir celulares modernos deitados
-      const mobile = window.innerWidth <= 1024;
-      setIsMobile(mobile);
+      if (error || !luta) {
+        alert("Luta não encontrada!");
+        router.push("/staff/painel"); 
+        return;
+      }
 
-      const currentPortrait = window.innerHeight > window.innerWidth;
+      setLutaAtual(luta);
+      
+      if (luta.pontuacao_atleta_1) {
+        setPontosAzul(luta.pontuacao_atleta_1.pontos || 0);
+        setVantagensAzul(luta.pontuacao_atleta_1.vantagens || 0);
+        setPunicoesAzul(luta.pontuacao_atleta_1.punicoes || 0);
+      }
+      if (luta.pontuacao_atleta_2) {
+        setPontosVermelho(luta.pontuacao_atleta_2.pontos || 0);
+        setVantagensVermelho(luta.pontuacao_atleta_2.vantagens || 0);
+        setPunicoesVermelho(luta.pontuacao_atleta_2.punicoes || 0);
+      }
 
-      // Só reajusta a posição e o zoom se o celular girar ou abrir a tela pela primeira vez
-      if (mobile && currentPortrait !== orientationRef.current) {
-        orientationRef.current = currentPortrait;
-        if (currentPortrait) {
-          setClockScale(0.55); // Vertical: Mantido como estava
-          setClockPos({ x: 0, y: 0 });
-        } else {
-          setClockScale(0.35); // Horizontal: Bem menor para não tampar a tela
-          setClockPos({ x: 0, y: -45 }); // Horizontal: Subiu um pouco
-        }
+      const { data: todas } = await supabase
+        .from("chaves")
+        .select("*")
+        .eq("evento_id", luta.evento_id)
+        .eq("categoria", luta.categoria)
+        .eq("faixa", luta.faixa);
+        
+      if (todas) setTodasLutasCategoria(todas);
+      setLoadingDB(false);
+    }
+    
+    carregarLuta();
+  }, [matchId, router]);
+
+  // ==========================================
+  // 2. ATUALIZAÇÃO NO SUPABASE (PLACAR AO VIVO)
+  // ==========================================
+  const salvarPontuacaoDB = async (lado: "azul" | "vermelho", pts: number, vts: number, pun: number) => {
+    if (!lutaAtual) return;
+    const campo = lado === "azul" ? "pontuacao_atleta_1" : "pontuacao_atleta_2";
+    const payload = { pontos: pts, vantagens: vts, punicoes: pun };
+    
+    await supabase.from("chaves").update({ [campo]: payload }).eq("id", matchId);
+  };
+
+  const updatePontos = (lado: "azul" | "vermelho", tipo: "pontos" | "vantagens" | "punicoes", valor: number, acao: "quedas" | "passagens" | "montadas" | null = null) => {
+    if (lado === "azul") {
+      let nP = pontosAzul, nV = vantagensAzul, nPun = punicoesAzul;
+      if (tipo === "pontos") { nP = Math.max(0, nP + valor); setPontosAzul(nP); if (acao && valor > 0) setStats(s => ({ ...s, azul: { ...s.azul, [acao]: s.azul[acao] + 1 } })); }
+      if (tipo === "vantagens") { nV = Math.max(0, nV + valor); setVantagensAzul(nV); }
+      if (tipo === "punicoes") { nPun = Math.max(0, nPun + valor); setPunicoesAzul(nPun); }
+      salvarPontuacaoDB("azul", nP, nV, nPun);
+    } else {
+      let nP = pontosVermelho, nV = vantagensVermelho, nPun = punicoesVermelho;
+      if (tipo === "pontos") { nP = Math.max(0, nP + valor); setPontosVermelho(nP); if (acao && valor > 0) setStats(s => ({ ...s, vermelho: { ...s.vermelho, [acao]: s.vermelho[acao] + 1 } })); }
+      if (tipo === "vantagens") { nV = Math.max(0, nV + valor); setVantagensVermelho(nV); }
+      if (tipo === "punicoes") { nPun = Math.max(0, nPun + valor); setPunicoesVermelho(nPun); }
+      salvarPontuacaoDB("vermelho", nP, nV, nPun);
+    }
+  };
+
+  // ==========================================
+  // 3. ENCERRAMENTO E AVANÇO NA CHAVE
+  // ==========================================
+  const limparNome = (nome: string | null) => {
+    if (!nome) return "";
+    const strLimpa = String(nome).trim().toUpperCase();
+    if (strLimpa === "BYE" || strLimpa === "TBD") return "";
+    return String(nome);
+  };
+
+  const processarFimDeLuta = async (vencedorLado: "azul" | "vermelho" | "empate", metodo: string) => {
+    if (!lutaAtual || vencedorLado === "empate") return;
+
+    const nomeVencedor = vencedorLado === "azul" ? lutaAtual.atleta_1 : lutaAtual.atleta_2;
+    const equipeVencedor = vencedorLado === "azul" ? lutaAtual.equipe_1 : lutaAtual.equipe_2;
+    // 🔥 NOVO: Pegando os IDs
+    const idVencedor = vencedorLado === "azul" ? lutaAtual.atleta_1_id : lutaAtual.atleta_2_id;
+    const idPerdedor = vencedorLado === "azul" ? lutaAtual.atleta_2_id : lutaAtual.atleta_1_id;
+
+    await supabase.from("chaves").update({ 
+      vencedor: nomeVencedor,
+      vencedor_id: idVencedor, // 🔥 Gravando o ID
+      status_luta: "concluida",
+      metodo_vitoria: metodo,
+      finalizada_em: new Date().toISOString()
+    }).eq("id", matchId);
+
+    const ganhouPorWO = metodo === "wo";
+    const isFinal = !lutaAtual.proxima_luta || String(lutaAtual.id_visual) === "999";
+    const isSemifinal = String(lutaAtual.proxima_luta) === "999";
+
+    // 🔥 NOVA FUNÇÃO DE ESTATÍSTICA (AGORA COM ID NUMÉRICO!)
+    const updateEstatistica = async (idAtletaNum: number, coluna: string, incremento: number) => {
+      if (!idAtletaNum) return;
+      const { data } = await supabase.from("atletas").select(`id, ${coluna}`).eq("id", idAtletaNum).single();
+      if (data) {
+        const valorAtual = (data as any)[coluna] || 0;
+        await supabase.from("atletas").update({ [coluna]: Math.max(0, valorAtual + incremento) }).eq("id", idAtletaNum);
       }
     };
 
-    // Força a validação na primeira carga da página
+    if (ganhouPorWO && idVencedor) await updateEstatistica(idVencedor, "vitorias_wo", 1);
+    
+    if (isFinal) {
+      if (idVencedor) await updateEstatistica(idVencedor, "ouro", 1); 
+      if (idPerdedor) await updateEstatistica(idPerdedor, "prata", 1); 
+    }
+
+    if (isSemifinal) {
+      if (idPerdedor) await updateEstatistica(idPerdedor, "bronze", 1); 
+    }
+
+    if (lutaAtual.proxima_luta) {
+      const proximaLuta = todasLutasCategoria.find(l => String(l.id_visual) === String(lutaAtual.proxima_luta));
+      if (proximaLuta) {
+        const isImpar = Number(lutaAtual.id_visual) % 2 !== 0;
+        const updateData = isImpar 
+          // 🔥 Levando os IDs
+          ? { atleta_1: nomeVencedor, equipe_1: equipeVencedor, atleta_1_id: idVencedor, tatame: lutaAtual.tatame } 
+          : { atleta_2: nomeVencedor, equipe_2: equipeVencedor, atleta_2_id: idVencedor, tatame: lutaAtual.tatame };
+        
+        await supabase.from("chaves").update(updateData).eq("id", proximaLuta.id);
+      }
+    }
+  };
+
+  const declararFinalizacao = async (lado: "azul" | "vermelho") => {
+    if (vencedor || showResumo) return; 
+    tocarSom('fim');
+    setTimerAtivo(false);
+    setVencedor(lado);
+    setTimeout(() => setShowResumo(true), 3500);
+    await processarFimDeLuta(lado, "finalizacao");
+  };
+
+  useEffect(() => {
+    document.body.classList.add('ocultar-nav-global');
+    document.documentElement.classList.add('ocultar-nav-global');
+    const handleResize = () => {
+      const mobile = window.innerWidth <= 1024;
+      setIsMobile(mobile);
+      const currentPortrait = window.innerHeight > window.innerWidth;
+      if (mobile && currentPortrait !== orientationRef.current) {
+        orientationRef.current = currentPortrait;
+        if (currentPortrait) {
+          setClockScale(0.55); setClockPos({ x: 0, y: 0 });
+        } else {
+          setClockScale(0.35); setClockPos({ x: 0, y: -45 });
+        }
+      }
+    };
     if (window.innerWidth <= 1024) {
       const isPort = window.innerHeight > window.innerWidth;
       orientationRef.current = isPort;
       setIsMobile(true);
-      if (isPort) {
-        setClockScale(0.55);
-        setClockPos({ x: 0, y: 0 });
-      } else {
-        setClockScale(0.35);
-        setClockPos({ x: 0, y: -45 });
-      }
+      if (isPort) { setClockScale(0.55); setClockPos({ x: 0, y: 0 }); } 
+      else { setClockScale(0.35); setClockPos({ x: 0, y: -45 }); }
     }
-
     window.addEventListener("resize", handleResize);
-
     return () => {
       document.body.classList.remove('ocultar-nav-global');
       document.documentElement.classList.remove('ocultar-nav-global');
       window.removeEventListener("resize", handleResize);
     };
-  }, []); // Array VAZIO! Assim a lógica não conflita quando o usuário der zoom manual
+  }, []);
 
-  // ==========================================
-  // LÓGICA DE TOUCH (ARRASTAR E ZOOM)
-  // ==========================================
   const onTouchStart = (e: React.TouchEvent) => {
     if (!isMobile) return;
     if (e.touches.length === 1) {
-      dragRef.current = {
-        startX: e.touches[0].clientX - clockPos.x,
-        startY: e.touches[0].clientY - clockPos.y,
-        isDragging: true
-      };
+      dragRef.current = { startX: e.touches[0].clientX - clockPos.x, startY: e.touches[0].clientY - clockPos.y, isDragging: true };
     } else if (e.touches.length === 2) {
       dragRef.current.isDragging = false;
-      const dist = Math.hypot(
-        e.touches[0].clientX - e.touches[1].clientX,
-        e.touches[0].clientY - e.touches[1].clientY
-      );
+      const dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
       pinchRef.current = { startDist: dist, startScale: clockScale };
     }
   };
@@ -122,98 +243,75 @@ export default function PlacarDigital() {
   const onTouchMove = (e: React.TouchEvent) => {
     if (!isMobile) return;
     if (e.touches.length === 1 && dragRef.current.isDragging) {
-      setClockPos({
-        x: e.touches[0].clientX - dragRef.current.startX,
-        y: e.touches[0].clientY - dragRef.current.startY
-      });
+      setClockPos({ x: e.touches[0].clientX - dragRef.current.startX, y: e.touches[0].clientY - dragRef.current.startY });
     } else if (e.touches.length === 2) {
-      const dist = Math.hypot(
-        e.touches[0].clientX - e.touches[1].clientX,
-        e.touches[0].clientY - e.touches[1].clientY
-      );
+      const dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
       const newScale = pinchRef.current.startScale * (dist / pinchRef.current.startDist);
-      setClockScale(Math.min(Math.max(newScale, 0.3), 1.2)); // Limita o Zoom entre 30% e 120%
+      setClockScale(Math.min(Math.max(newScale, 0.3), 1.2)); 
     }
   };
 
-  const onTouchEnd = () => {
-    dragRef.current.isDragging = false;
-  };
+  const onTouchEnd = () => dragRef.current.isDragging = false;
 
-  // ==========================================
-  // MOTOR DE ÁUDIO DE ESTÁDIO
-  // ==========================================
   const tocarSom = (tipo: 'inicio' | 'fim' | 'pause') => {
     try {
       const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
       const ctx = new AudioContext();
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
-      
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      
+      osc.connect(gain); gain.connect(ctx.destination);
       if (tipo === 'inicio') {
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(1000, ctx.currentTime);
-        gain.gain.setValueAtTime(0.5, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.3);
+        osc.type = 'sine'; osc.frequency.setValueAtTime(1000, ctx.currentTime);
+        gain.gain.setValueAtTime(0.5, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+        osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.3);
       } else if (tipo === 'pause') {
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(400, ctx.currentTime);
-        gain.gain.setValueAtTime(0.2, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.1);
+        osc.type = 'triangle'; osc.frequency.setValueAtTime(400, ctx.currentTime);
+        gain.gain.setValueAtTime(0.2, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
+        osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.1);
       } else if (tipo === 'fim') {
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(180, ctx.currentTime);
-        gain.gain.setValueAtTime(0.8, ctx.currentTime);
-        gain.gain.linearRampToValueAtTime(0.01, ctx.currentTime + 3.0);
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 3.0);
+        osc.type = 'sawtooth'; osc.frequency.setValueAtTime(180, ctx.currentTime);
+        gain.gain.setValueAtTime(0.8, ctx.currentTime); gain.gain.linearRampToValueAtTime(0.01, ctx.currentTime + 3.0);
+        osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 3.0);
       }
-    } catch (error) {
-      console.log("Áudio não suportado", error);
-    }
+    } catch (error) { console.log("Áudio não suportado", error); }
   };
 
-  // ==========================================
-  // LÓGICA DO CRONÔMETRO E FIM DE LUTA
-  // ==========================================
   useEffect(() => {
     let intervalo: NodeJS.Timeout;
     if (timerAtivo && tempoRestante > 0) {
-      intervalo = setInterval(() => {
-        setTempoRestante((prev) => prev - 1);
-      }, 1000);
+      intervalo = setInterval(() => setTempoRestante((prev) => prev - 1), 1000);
     }
     return () => clearInterval(intervalo);
   }, [timerAtivo, tempoRestante]);
 
   useEffect(() => {
-    if (tempoRestante === 0 && timerAtivo) {
-      tocarSom('fim');
-      setTimerAtivo(false);
+    const finalizarPorPontos = async () => {
+      if (tempoRestante === 0 && timerAtivo) {
+        tocarSom('fim');
+        setTimerAtivo(false);
 
-      let calcVencedor: "azul" | "vermelho" | "empate" = "empate";
-      if (pontosAzul > pontosVermelho) calcVencedor = "azul";
-      else if (pontosVermelho > pontosAzul) calcVencedor = "vermelho";
-      else if (vantagensAzul > vantagensVermelho) calcVencedor = "azul";
-      else if (vantagensVermelho > vantagensAzul) calcVencedor = "vermelho";
-      else if (punicoesAzul < punicoesVermelho) calcVencedor = "azul";
-      else if (punicoesVermelho < punicoesAzul) calcVencedor = "vermelho";
-      
-      setVencedor(calcVencedor);
-      setTimeout(() => setShowResumo(true), 3500); 
-    }
-  }, [tempoRestante, timerAtivo, pontosAzul, pontosVermelho, vantagensAzul, vantagensVermelho, punicoesAzul, punicoesVermelho]);
+        let calcVencedor: "azul" | "vermelho" | "empate" = "empate";
+        if (pontosAzul > pontosVermelho) calcVencedor = "azul";
+        else if (pontosVermelho > pontosAzul) calcVencedor = "vermelho";
+        else if (vantagensAzul > vantagensVermelho) calcVencedor = "azul";
+        else if (vantagensVermelho > vantagensAzul) calcVencedor = "vermelho";
+        else if (punicoesAzul < punicoesVermelho) calcVencedor = "azul";
+        else if (punicoesVermelho < punicoesAzul) calcVencedor = "vermelho";
+        
+        setVencedor(calcVencedor);
+        setTimeout(() => setShowResumo(true), 3500); 
+        await processarFimDeLuta(calcVencedor, "pontos");
+      }
+    };
+    finalizarPorPontos();
+  }, [tempoRestante, timerAtivo]);
 
-  const toggleTimer = () => {
+  const toggleTimer = async () => {
     if (!timerAtivo && tempoRestante > 0) {
       tocarSom('inicio');
+      if (tempoRestante === tempoMinutos * 60) {
+        await supabase.from("chaves").update({ status_luta: "em_andamento", iniciada_em: new Date().toISOString() }).eq("id", matchId);
+      }
     } else if (timerAtivo) {
       tocarSom('pause');
     }
@@ -229,13 +327,6 @@ export default function PlacarDigital() {
   const iniciarLuta = () => {
     setTempoRestante(tempoMinutos * 60);
     setTimerAtivo(false);
-    setPontosAzul(0); setVantagensAzul(0); setPunicoesAzul(0);
-    setPontosVermelho(0); setVantagensVermelho(0); setPunicoesVermelho(0);
-    setVencedor(null); 
-    setStats({
-      azul: { quedas: 0, passagens: 0, montadas: 0 },
-      vermelho: { quedas: 0, passagens: 0, montadas: 0 }
-    });
     setConfigOpen(false);
     setShowResumo(false);
     tocarSom('pause');
@@ -251,35 +342,12 @@ export default function PlacarDigital() {
     }
   };
 
-  const updatePontos = (lado: "azul" | "vermelho", tipo: "pontos" | "vantagens" | "punicoes", valor: number, acao: "quedas" | "passagens" | "montadas" | null = null) => {
-    if (lado === "azul") {
-      if (tipo === "pontos") {
-        setPontosAzul(p => Math.max(0, p + valor));
-        if (acao && valor > 0) setStats(s => ({ ...s, azul: { ...s.azul, [acao]: s.azul[acao] + 1 } }));
-      }
-      if (tipo === "vantagens") setVantagensAzul(p => Math.max(0, p + valor));
-      if (tipo === "punicoes") setPunicoesAzul(p => Math.max(0, p + valor));
-    } else {
-      if (tipo === "pontos") {
-        setPontosVermelho(p => Math.max(0, p + valor));
-        if (acao && valor > 0) setStats(s => ({ ...s, vermelho: { ...s.vermelho, [acao]: s.vermelho[acao] + 1 } }));
-      }
-      if (tipo === "vantagens") setVantagensVermelho(p => Math.max(0, p + valor));
-      if (tipo === "punicoes") setPunicoesVermelho(p => Math.max(0, p + valor));
-    }
-  };
+  if (loadingDB) {
+    return <div className="h-screen bg-black flex items-center justify-center text-white text-xl font-bold animate-pulse">Carregando Luta do Banco de Dados...</div>;
+  }
 
-  // ==========================================
-  // DECLARAR VENCEDOR POR FINALIZAÇÃO / W.O.
-  // ==========================================
-  const declararFinalizacao = (lado: "azul" | "vermelho") => {
-    if (vencedor || showResumo) return; 
-    
-    tocarSom('fim');
-    setTimerAtivo(false);
-    setVencedor(lado);
-    setTimeout(() => setShowResumo(true), 3500);
-  };
+  const atletaAzul = lutaAtual?.atleta_1 || "TBD";
+  const atletaVermelho = lutaAtual?.atleta_2 || "TBD";
 
   return (
     <>
@@ -288,53 +356,39 @@ export default function PlacarDigital() {
         .ocultar-nav-global nav { display: none !important; }
         .ocultar-nav-global body > div, .ocultar-nav-global body > main, .ocultar-nav-global #__next { padding-top: 0 !important; margin-top: 0 !important; height: 100vh; overflow: hidden; }
 
-        /* ========================================== */
-        /* CSS EXCLUSIVO MOBILE VERTICAL (PORTRAIT)   */
-        /* ========================================== */
         @media screen and (max-width: 768px) and (orientation: portrait) {
           .placar-wrapper { flex-direction: column !important; }
           .placar-side { width: 100% !important; height: 50% !important; border: none !important; padding: 1rem !important; }
           .placar-side-azul { border-bottom: 3px solid #000 !important; }
           .placar-side-verm { border-top: 3px solid #000 !important; }
-          
           .nome-container { padding: 0 !important; text-align: center !important; margin: 0 !important; }
           .atleta-nome { font-size: 2.5rem !important; text-align: center !important; }
-          
           .pontos-container { align-items: center !important; }
           .pontos-gigantes { font-size: 7.5rem !important; }
-          
           .botoes-grid { gap: 0.5rem !important; }
           .botoes-grid button { padding: 0.4rem !important; }
           .botoes-grid span:first-child { font-size: 1.5rem !important; }
-          
           .vantagens-punicoes { gap: 0.5rem !important; }
           .vantagens-punicoes > div { padding: 0.5rem !important; }
           .vantagens-punicoes span.text-5xl { font-size: 2.5rem !important; }
           .vantagens-punicoes button { width: 2rem !important; height: 2rem !important; font-size: 1.5rem !important; }
-          
           .vencedor-overlay { transform: scale(0.6) !important; padding: 1rem 2rem !important; }
           .resumo-modal { transform: scale(0.7) !important; padding: 1.5rem !important; width: 95% !important; }
           .resumo-grid { grid-template-columns: 1fr !important; gap: 1rem !important; }
         }
 
-        /* ========================================== */
-        /* CSS EXCLUSIVO MOBILE HORIZONTAL (LANDSCAPE)*/
-        /* ========================================== */
         @media screen and (max-height: 500px) and (orientation: landscape) {
           .placar-side { padding: 0.5rem 1rem !important; }
           .nome-container { padding-right: 5% !important; padding-left: 5% !important; }
           .atleta-nome { font-size: 2.2rem !important; }
           .pontos-gigantes { font-size: 6.5rem !important; }
-          
           .botoes-grid { gap: 0.25rem !important; }
           .botoes-grid button { padding: 0.25rem !important; }
           .botoes-grid span:first-child { font-size: 1.2rem !important; }
-          
           .vantagens-punicoes { gap: 0.5rem !important; }
           .vantagens-punicoes > div { padding: 0.25rem !important; }
           .vantagens-punicoes span.text-5xl { font-size: 2rem !important; }
           .vantagens-punicoes button { width: 1.8rem !important; height: 1.8rem !important; font-size: 1.2rem !important; }
-          
           .modal-config { transform: scale(0.7) !important; }
           .vencedor-overlay { transform: scale(0.5) !important; }
           .resumo-modal { transform: scale(0.65) !important; }
@@ -343,37 +397,21 @@ export default function PlacarDigital() {
 
       <div ref={placarRef} className="placar-wrapper bg-black h-screen w-screen flex flex-row font-sans select-none text-white relative overflow-hidden">
 
-        {/* ========================================== */}
-        {/* MODAL DE CONFIGURAÇÃO                      */}
-        {/* ========================================== */}
         {configOpen && (
           <div className="absolute inset-0 bg-black/90 backdrop-blur-md z-[100] flex items-center justify-center p-4">
             <div className="modal-config bg-[#111] border border-zinc-800 p-8 rounded-3xl w-full max-w-md shadow-2xl">
-              <div className="flex items-center justify-center gap-2 mb-8">
+              <div className="flex items-center justify-center gap-2 mb-6">
                 <span className="text-white font-black text-2xl italic tracking-tighter"><span className="text-red-600">i</span>TATAME</span>
-                <span className="text-zinc-400 text-xs font-bold uppercase tracking-widest bg-zinc-800 px-2 py-1 rounded">Scoreboard</span>
+                <span className="text-zinc-400 text-xs font-bold uppercase tracking-widest bg-zinc-800 px-2 py-1 rounded">Scoreboard Lincado</span>
               </div>
+              
+              <div className="bg-black/50 p-4 rounded-xl border border-white/5 mb-6 text-center">
+                <p className="text-blue-400 font-bold uppercase">{atletaAzul}</p>
+                <p className="text-zinc-500 text-xs font-black my-1">VS</p>
+                <p className="text-red-500 font-bold uppercase">{atletaVermelho}</p>
+              </div>
+
               <div className="space-y-5">
-                <div>
-                  <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-1 pl-1">Lutador Azul</label>
-                  <input 
-                    type="text" 
-                    placeholder="Nome do Atleta Azul..."
-                    value={atletaAzul} 
-                    onChange={(e) => setAtletaAzul(e.target.value)} 
-                    className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-3 text-white font-bold outline-none focus:border-blue-500 transition-colors placeholder:text-zinc-600" 
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-red-400 uppercase tracking-widest mb-1 pl-1">Lutador Vermelho</label>
-                  <input 
-                    type="text" 
-                    placeholder="Nome do Atleta Vermelho..."
-                    value={atletaVermelho} 
-                    onChange={(e) => setAtletaVermelho(e.target.value)} 
-                    className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-3 text-white font-bold outline-none focus:border-red-500 transition-colors placeholder:text-zinc-600" 
-                  />
-                </div>
                 <div>
                   <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1 pl-1">Tempo de Luta</label>
                   <div className="flex items-center gap-4">
@@ -381,85 +419,44 @@ export default function PlacarDigital() {
                     <span className="text-lg font-black text-white w-12 text-center bg-zinc-800 py-1 rounded-md">{tempoMinutos}m</span>
                   </div>
                 </div>
-                <button onClick={iniciarLuta} className="cursor-pointer w-full bg-white hover:bg-zinc-200 text-black font-black uppercase tracking-widest py-3.5 rounded-lg transition-colors mt-4">
+                <button onClick={iniciarLuta} className="cursor-pointer w-full bg-white hover:bg-zinc-200 text-black font-black uppercase tracking-widest py-3.5 rounded-lg transition-colors mt-4 shadow-xl">
                   Iniciar Combate
+                </button>
+                <button onClick={() => router.push('/staff/painel')} className="cursor-pointer w-full bg-transparent text-zinc-500 py-2 text-xs font-bold uppercase tracking-widest hover:text-white transition-colors">
+                  Cancelar e Voltar
                 </button>
               </div>
             </div>
           </div>
         )}
 
-        {/* ========================================== */}
-        {/* ILHA DO CRONÔMETRO                         */}
-        {/* ========================================== */}
-        <div 
-          className="clock-island absolute z-[60] flex flex-col items-center"
-          style={isMobile ? {
-            left: '50%',
-            top: '42%',
-            transform: `translate(calc(-50% + ${clockPos.x}px), calc(-50% + ${clockPos.y}px)) scale(${clockScale})`,
-            touchAction: 'none'
-          } : {
-            left: '50%',
-            top: '42%',
-            transform: 'translate(-50%, -50%)'
-          }}
-          onTouchStart={onTouchStart}
-          onTouchMove={onTouchMove}
-          onTouchEnd={onTouchEnd}
-        >
-          {/* 🔥 ILHA REDUZIDA LIGEIRAMENTE NO PADDING PARA NÃO ATRAPALHAR OS NÚMEROS DO PLACAR */}
-          <div className="bg-[#09090b]/95 backdrop-blur-xl px-5 py-3 md:px-8 md:py-5 rounded-[2rem] border border-zinc-800 shadow-[0_20px_60px_rgba(0,0,0,0.9)] flex flex-col items-center">
-            
-            {/* FONTE REDUZIDA DO RELÓGIO */}
-            <span className={`text-[5rem] md:text-[6.5rem] lg:text-[7.5rem] leading-none font-black font-mono tracking-tighter drop-shadow-[0_0_25px_rgba(255,215,0,0.6)] text-[#FFD700] ${tempoRestante <= 60 && tempoRestante > 0 ? 'animate-pulse' : ''}`}>
+        <div className="clock-island absolute z-[60] flex flex-col items-center" style={isMobile ? { left: '50%', top: '42%', transform: `translate(calc(-50% + ${clockPos.x}px), calc(-50% + ${clockPos.y}px)) scale(${clockScale})`, touchAction: 'none'} : { left: '50%', top: '42%', transform: 'translate(-50%, -50%)' }} onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
+          <div className="bg-[#09090b]/95 backdrop-blur-xl px-6 py-4 md:px-10 md:py-6 rounded-[2rem] border border-zinc-800 shadow-[0_20px_60px_rgba(0,0,0,0.9)] flex flex-col items-center">
+            {/* O TEXTO DO RELÓGIO FOI LEVEMENTE REDUZIDO AQUI */}
+            <span className={`text-[5.5rem] md:text-[7.5rem] lg:text-[8.5rem] leading-none font-black font-mono tracking-tighter drop-shadow-[0_0_25px_rgba(255,215,0,0.6)] text-[#FFD700] ${tempoRestante <= 60 && tempoRestante > 0 ? 'animate-pulse' : ''}`}>
               {formatarTempo(tempoRestante)}
             </span>
-            
-            <div className="flex gap-2 md:gap-4 mt-2 md:mt-3 w-full justify-center">
-              <button onClick={toggleTimer} className={`cursor-pointer flex-1 py-2 md:py-2.5 rounded-xl flex items-center justify-center font-black text-sm md:text-lg uppercase tracking-widest transition-transform active:scale-95 shadow-lg ${timerAtivo ? 'bg-yellow-500 text-black hover:bg-yellow-400' : 'bg-green-500 text-black hover:bg-green-400'}`}>
+            <div className="flex gap-2 md:gap-4 mt-2 md:mt-4 w-full justify-center">
+              <button onClick={toggleTimer} className={`cursor-pointer flex-1 py-2.5 md:py-3 rounded-xl flex items-center justify-center font-black text-sm md:text-lg uppercase tracking-widest transition-transform active:scale-95 shadow-lg ${timerAtivo ? 'bg-yellow-500 text-black hover:bg-yellow-400' : 'bg-green-500 text-black hover:bg-green-400'}`}>
                 {timerAtivo ? 'PAUSAR' : 'INICIAR'}
               </button>
-              <button onClick={() => setTempoRestante(tempoMinutos * 60)} className="cursor-pointer w-10 h-10 md:w-12 md:h-12 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white flex items-center justify-center transition-transform active:scale-95 shadow-lg border border-zinc-600">
-                <svg className="w-4 h-4 md:w-5 md:h-5 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+              <button onClick={() => setTempoRestante(tempoMinutos * 60)} className="cursor-pointer w-12 h-12 md:w-14 md:h-14 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white flex items-center justify-center transition-transform active:scale-95 shadow-lg border border-zinc-600">
+                <svg className="w-5 h-5 md:w-6 md:h-6 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
               </button>
-              <button onClick={() => setConfigOpen(true)} className="cursor-pointer w-10 h-10 md:w-12 md:h-12 rounded-xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-transform active:scale-95 border border-white/10">
-                <svg className="w-4 h-4 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
+              <button onClick={() => setConfigOpen(true)} className="cursor-pointer w-12 h-12 md:w-14 md:h-14 rounded-xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-transform active:scale-95 border border-white/10">
+                <svg className="w-5 h-5 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
               </button>
-              <button onClick={toggleFullscreen} className="cursor-pointer w-10 h-10 md:w-12 md:h-12 rounded-xl bg-white/5 hover:bg-white/10 text-white flex items-center justify-center transition-transform active:scale-95 border border-white/5">
-                <svg className="w-4 h-4 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                  {isFullscreen ? (
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25" />
-                  ) : (
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
-                  )}
-                </svg>
+              <button onClick={toggleFullscreen} className="cursor-pointer w-12 h-12 md:w-14 md:h-14 rounded-xl bg-white/5 hover:bg-white/10 text-white flex items-center justify-center transition-transform active:scale-95 border border-white/5">
+                <svg className="w-5 h-5 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">{isFullscreen ? (<path strokeLinecap="round" strokeLinejoin="round" d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25" />) : (<path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />)}</svg>
               </button>
             </div>
-
-            <div className="mt-3 opacity-60">
-              <span className="text-white font-black text-[10px] md:text-xs italic tracking-widest pointer-events-none">
-                <span className="text-red-600">i</span>TATAME
-              </span>
-            </div>
-            
           </div>
         </div>
 
-        {/* ========================================== */}
-        {/* LADO AZUL                                  */}
-        {/* ========================================== */}
+        {/* LADO AZUL */}
         <div className={`placar-side placar-side-azul w-1/2 h-full bg-[#05142b] border-r-[2px] border-black flex flex-col pt-6 md:pt-10 px-6 md:px-8 pb-6 relative z-10 transition-all duration-1000 ${vencedor === 'vermelho' ? 'opacity-20 grayscale' : vencedor === 'azul' ? 'brightness-125' : ''}`}>
-          
-          <button 
-            onClick={() => declararFinalizacao("azul")}
-            className="absolute top-1/2 -translate-y-1/2 left-2 md:left-6 z-50 bg-black/60 border border-white/30 text-white font-bold uppercase w-16 h-16 md:w-20 md:h-20 rounded-full flex flex-col items-center justify-center opacity-40 hover:opacity-100 hover:border-blue-500 hover:scale-110 transition-all duration-300 cursor-pointer shadow-[0_0_15px_rgba(0,0,0,0.5)]"
-          >
-            <span className="text-[8px] md:text-[10px] leading-tight">Finalizar</span>
-            <span className="text-[10px] md:text-[13px] leading-tight text-blue-400 mt-0.5">W.O.</span>
+          <button onClick={() => declararFinalizacao("azul")} className="absolute top-1/2 -translate-y-1/2 left-2 md:left-6 z-50 bg-black/60 border border-white/30 text-white font-bold uppercase w-16 h-16 md:w-20 md:h-20 rounded-full flex flex-col items-center justify-center opacity-40 hover:opacity-100 hover:border-blue-500 hover:scale-110 transition-all duration-300 cursor-pointer shadow-[0_0_15px_rgba(0,0,0,0.5)]">
+            <span className="text-[8px] md:text-[10px] leading-tight">Finalizar</span><span className="text-[10px] md:text-[13px] leading-tight text-blue-400 mt-0.5">W.O.</span>
           </button>
 
           {vencedor === 'azul' && (
@@ -470,18 +467,13 @@ export default function PlacarDigital() {
             </div>
           )}
 
-          {/* 🔥 ESPAÇAMENTO AJUSTADO PARA O NOME NÃO ABREVIAR TÃO CEDO */}
-          <div className="nome-container w-full text-center px-2 md:pl-2 md:pr-12 shrink-0 pt-2">
-            <h2 title={atletaAzul || "ATLETA AZUL"} className="atleta-nome text-3xl md:text-5xl lg:text-6xl leading-none pb-2 font-black uppercase text-white truncate drop-shadow-md w-full block">
-              {atletaAzul || "ATLETA AZUL"}
-            </h2>
+          <div className="nome-container w-full text-center px-4 md:pl-8 md:pr-[20%] shrink-0 pt-2 flex flex-col items-center">
+            <h2 className="atleta-nome text-4xl md:text-6xl lg:text-[4.5rem] xl:text-[5.0rem] leading-none pb-1 font-black uppercase text-white truncate drop-shadow-md w-full block">{atletaAzul}</h2>
+            <span className="text-blue-400 text-xs md:text-sm font-bold uppercase tracking-widest truncate max-w-full">{lutaAtual?.equipe_1}</span>
           </div>
           
-          <div className="pontos-container flex-1 flex items-center justify-center w-full min-h-[0]">
-            {/* 🔥 FONTES DO PLACAR SÃO DINÂMICAS: DIMINUEM SE PASSAR DE 9 PONTOS PARA NÃO ENCOSTAR NO RELÓGIO */}
-            <span className={`pontos-gigantes font-black text-white leading-none tracking-tighter drop-shadow-lg transition-all ${pontosAzul > 9 ? 'text-[8rem] md:text-[11rem] lg:text-[12rem]' : 'text-[10rem] md:text-[14rem] lg:text-[15rem]'}`}>
-              {pontosAzul}
-            </span>
+          <div className="pontos-container flex-1 flex items-center justify-center w-full min-h-[0] md:pr-12 lg:pr-20">
+            <span className="pontos-gigantes text-[9rem] md:text-[12rem] lg:text-[13rem] font-black text-white leading-none tracking-tighter drop-shadow-lg">{pontosAzul}</span>
           </div>
 
           <div className="flex flex-col gap-4 md:gap-6 w-full max-w-[600px] mx-auto mt-4 shrink-0">
@@ -503,7 +495,6 @@ export default function PlacarDigital() {
                 <span className="text-[7px] md:text-[9px] uppercase font-bold mt-1 text-center leading-tight text-zinc-400 w-full pointer-events-none">Retirar<br/>Ponto</span>
               </button>
             </div>
-
             <div className="vantagens-punicoes flex justify-between gap-4 md:gap-6">
               <div className="flex-1 bg-black/40 rounded-2xl p-4 flex flex-col items-center border border-white/5 shadow-inner">
                 <span className="text-yellow-500 text-[10px] md:text-xs font-bold uppercase tracking-widest mb-2 pointer-events-none">Vantagens</span>
@@ -525,17 +516,10 @@ export default function PlacarDigital() {
           </div>
         </div>
 
-        {/* ========================================== */}
-        {/* LADO VERMELHO                              */}
-        {/* ========================================== */}
+        {/* LADO VERMELHO */}
         <div className={`placar-side placar-side-verm w-1/2 h-full bg-[#2f0404] border-l border-black flex flex-col pt-6 md:pt-10 px-6 md:px-8 pb-6 relative z-10 transition-all duration-1000 ${vencedor === 'azul' ? 'opacity-20 grayscale' : vencedor === 'vermelho' ? 'brightness-125' : ''}`}>
-          
-          <button 
-            onClick={() => declararFinalizacao("vermelho")}
-            className="absolute top-1/2 -translate-y-1/2 right-2 md:right-6 z-50 bg-black/60 border border-white/30 text-white font-bold uppercase w-16 h-16 md:w-20 md:h-20 rounded-full flex flex-col items-center justify-center opacity-40 hover:opacity-100 hover:border-red-500 hover:scale-110 transition-all duration-300 cursor-pointer shadow-[0_0_15px_rgba(0,0,0,0.5)]"
-          >
-            <span className="text-[8px] md:text-[10px] leading-tight">Finalizar</span>
-            <span className="text-[10px] md:text-[13px] leading-tight text-red-400 mt-0.5">W.O.</span>
+          <button onClick={() => declararFinalizacao("vermelho")} className="absolute top-1/2 -translate-y-1/2 right-2 md:right-6 z-50 bg-black/60 border border-white/30 text-white font-bold uppercase w-16 h-16 md:w-20 md:h-20 rounded-full flex flex-col items-center justify-center opacity-40 hover:opacity-100 hover:border-red-500 hover:scale-110 transition-all duration-300 cursor-pointer shadow-[0_0_15px_rgba(0,0,0,0.5)]">
+            <span className="text-[8px] md:text-[10px] leading-tight">Finalizar</span><span className="text-[10px] md:text-[13px] leading-tight text-red-400 mt-0.5">W.O.</span>
           </button>
 
           {vencedor === 'vermelho' && (
@@ -546,18 +530,13 @@ export default function PlacarDigital() {
             </div>
           )}
 
-          {/* 🔥 ESPAÇAMENTO AJUSTADO PARA O NOME NÃO ABREVIAR TÃO CEDO */}
-          <div className="nome-container w-full text-center px-2 md:pr-2 md:pl-12 shrink-0 pt-2">
-            <h2 title={atletaVermelho || "ATLETA VERMELHO"} className="atleta-nome text-3xl md:text-5xl lg:text-6xl leading-none pb-2 font-black uppercase text-white truncate drop-shadow-md w-full block">
-              {atletaVermelho || "ATLETA VERMELHO"}
-            </h2>
+          <div className="nome-container w-full text-center px-4 md:pr-8 md:pl-[20%] shrink-0 pt-2 flex flex-col items-center">
+            <h2 className="atleta-nome text-4xl md:text-6xl lg:text-[4.5rem] xl:text-[5.0rem] leading-none pb-1 font-black uppercase text-white truncate drop-shadow-md w-full block">{atletaVermelho}</h2>
+            <span className="text-red-400 text-xs md:text-sm font-bold uppercase tracking-widest truncate max-w-full">{lutaAtual?.equipe_2}</span>
           </div>
           
-          <div className="pontos-container flex-1 flex items-center justify-center w-full min-h-[0]">
-            {/* 🔥 FONTES DO PLACAR SÃO DINÂMICAS: DIMINUEM SE PASSAR DE 9 PONTOS PARA NÃO ENCOSTAR NO RELÓGIO */}
-            <span className={`pontos-gigantes font-black text-white leading-none tracking-tighter drop-shadow-lg transition-all ${pontosVermelho > 9 ? 'text-[8rem] md:text-[11rem] lg:text-[12rem]' : 'text-[10rem] md:text-[14rem] lg:text-[15rem]'}`}>
-              {pontosVermelho}
-            </span>
+          <div className="pontos-container flex-1 flex items-center justify-center w-full min-h-[0] md:pl-12 lg:pl-20">
+            <span className="pontos-gigantes text-[9rem] md:text-[12rem] lg:text-[13rem] font-black text-white leading-none tracking-tighter drop-shadow-lg">{pontosVermelho}</span>
           </div>
 
           <div className="flex flex-col gap-4 md:gap-6 w-full max-w-[600px] mx-auto mt-4 shrink-0">
@@ -579,7 +558,6 @@ export default function PlacarDigital() {
                 <span className="text-[7px] md:text-[9px] uppercase font-bold mt-1 text-center leading-tight text-zinc-400 w-full pointer-events-none">Retirar<br/>Ponto</span>
               </button>
             </div>
-
             <div className="vantagens-punicoes flex justify-between gap-4 md:gap-6">
               <div className="flex-1 bg-black/40 rounded-2xl p-4 flex flex-col items-center border border-white/5 shadow-inner">
                 <span className="text-yellow-500 text-[10px] md:text-xs font-bold uppercase tracking-widest mb-2 pointer-events-none">Vantagens</span>
@@ -601,49 +579,40 @@ export default function PlacarDigital() {
           </div>
         </div>
 
-        {/* ========================================== */}
-        {/* MODAL DE RESUMO (FIM DE LUTA)              */}
-        {/* ========================================== */}
+        {/* MODAL DE RESUMO */}
         {showResumo && (
           <div className="absolute inset-0 bg-black/80 backdrop-blur-md z-[100] flex items-center justify-center p-4">
             <div className="resumo-modal bg-[#0c1220] border border-white/10 rounded-3xl p-8 w-full max-w-4xl shadow-[0_0_80px_rgba(0,0,0,0.8)] animate-in slide-in-from-bottom-10 duration-500">
               <div className="text-center mb-8">
                 <h2 className="text-4xl font-black text-white uppercase tracking-tighter">Fim de Combate</h2>
-                <p className="text-zinc-500 font-bold uppercase tracking-widest text-sm mt-1">Estatísticas Oficiais</p>
+                <p className="text-green-500 font-bold uppercase tracking-widest text-sm mt-1">✔ Resultados Salvos no Banco Oficial</p>
               </div>
 
               <div className="resumo-grid grid grid-cols-2 gap-8">
-                {/* Resumo Azul */}
                 <div className={`resumo-card bg-[#05142b]/80 border ${vencedor === 'azul' ? 'border-yellow-500 shadow-[0_0_30px_rgba(234,179,8,0.3)]' : 'border-blue-500/30'} rounded-2xl p-6 relative overflow-hidden transition-all`}>
                   <div className="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>
-                  <h3 className="text-xl font-black text-white uppercase truncate mb-4">{vencedor === 'azul' && "🏆 "} {atletaAzul || "ATLETA AZUL"}</h3>
+                  <h3 className="text-xl font-black text-white uppercase truncate mb-4">{vencedor === 'azul' && "🏆 "} {atletaAzul}</h3>
                   <div className="text-6xl font-black text-blue-500 mb-6 drop-shadow-md">{pontosAzul} <span className="text-lg text-zinc-500 tracking-widest uppercase">Pts</span></div>
                   <ul className="space-y-3">
                     <li className="flex justify-between items-center text-sm font-bold"><span className="text-zinc-400">Montadas / Costas:</span> <span className="text-white bg-blue-600 px-2 py-0.5 rounded">{stats.azul.montadas}</span></li>
-                    <li className="flex justify-between items-center text-sm font-bold"><span className="text-zinc-400">Passagens de Guarda:</span> <span className="text-white bg-blue-600 px-2 py-0.5 rounded">{stats.azul.passagens}</span></li>
-                    <li className="flex justify-between items-center text-sm font-bold"><span className="text-zinc-400">Quedas / Rasp / Joelho:</span> <span className="text-white bg-blue-600 px-2 py-0.5 rounded">{stats.azul.quedas}</span></li>
-                    <li className="flex justify-between items-center text-sm font-bold pt-3 border-t border-white/10"><span className="text-yellow-500">Vantagens:</span> <span className="text-yellow-500">{vantagensAzul}</span></li>
-                    <li className="flex justify-between items-center text-sm font-bold"><span className="text-red-500">Punições:</span> <span className="text-red-500">{punicoesAzul}</span></li>
+                    <li className="flex justify-between items-center text-sm font-bold"><span className="text-zinc-400">Passagens:</span> <span className="text-white bg-blue-600 px-2 py-0.5 rounded">{stats.azul.passagens}</span></li>
+                    <li className="flex justify-between items-center text-sm font-bold"><span className="text-zinc-400">Quedas / Rasp:</span> <span className="text-white bg-blue-600 px-2 py-0.5 rounded">{stats.azul.quedas}</span></li>
                   </ul>
                 </div>
-
-                {/* Resumo Vermelho */}
                 <div className={`resumo-card bg-[#2f0404]/80 border ${vencedor === 'vermelho' ? 'border-yellow-500 shadow-[0_0_30px_rgba(234,179,8,0.3)]' : 'border-red-500/30'} rounded-2xl p-6 relative overflow-hidden transition-all`}>
                   <div className="absolute top-0 left-0 w-1 h-full bg-red-500"></div>
-                  <h3 className="text-xl font-black text-white uppercase truncate mb-4">{vencedor === 'vermelho' && "🏆 "} {atletaVermelho || "ATLETA VERMELHO"}</h3>
+                  <h3 className="text-xl font-black text-white uppercase truncate mb-4">{vencedor === 'vermelho' && "🏆 "} {atletaVermelho}</h3>
                   <div className="text-6xl font-black text-red-500 mb-6 drop-shadow-md">{pontosVermelho} <span className="text-lg text-zinc-500 tracking-widest uppercase">Pts</span></div>
                   <ul className="space-y-3">
                     <li className="flex justify-between items-center text-sm font-bold"><span className="text-zinc-400">Montadas / Costas:</span> <span className="text-white bg-red-600 px-2 py-0.5 rounded">{stats.vermelho.montadas}</span></li>
-                    <li className="flex justify-between items-center text-sm font-bold"><span className="text-zinc-400">Passagens de Guarda:</span> <span className="text-white bg-red-600 px-2 py-0.5 rounded">{stats.vermelho.passagens}</span></li>
-                    <li className="flex justify-between items-center text-sm font-bold"><span className="text-zinc-400">Quedas / Rasp / Joelho:</span> <span className="text-white bg-red-600 px-2 py-0.5 rounded">{stats.vermelho.quedas}</span></li>
-                    <li className="flex justify-between items-center text-sm font-bold pt-3 border-t border-white/10"><span className="text-yellow-500">Vantagens:</span> <span className="text-yellow-500">{vantagensVermelho}</span></li>
-                    <li className="flex justify-between items-center text-sm font-bold"><span className="text-red-500">Punições:</span> <span className="text-red-500">{punicoesVermelho}</span></li>
+                    <li className="flex justify-between items-center text-sm font-bold"><span className="text-zinc-400">Passagens:</span> <span className="text-white bg-red-600 px-2 py-0.5 rounded">{stats.vermelho.passagens}</span></li>
+                    <li className="flex justify-between items-center text-sm font-bold"><span className="text-zinc-400">Quedas / Rasp:</span> <span className="text-white bg-red-600 px-2 py-0.5 rounded">{stats.vermelho.quedas}</span></li>
                   </ul>
                 </div>
               </div>
 
-              <button onClick={() => { setShowResumo(false); setConfigOpen(true); }} className="cursor-pointer w-full mt-8 bg-white hover:bg-zinc-200 text-black py-4 rounded-xl font-black uppercase tracking-widest transition-colors shadow-xl">
-                Preparar Próxima Luta
+              <button onClick={() => router.push('/staff/painel')} className="cursor-pointer w-full mt-8 bg-white hover:bg-zinc-200 text-black py-4 rounded-xl font-black uppercase tracking-widest transition-colors shadow-xl">
+                Voltar para o Chaveamento
               </button>
             </div>
           </div>

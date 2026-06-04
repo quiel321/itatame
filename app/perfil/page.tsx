@@ -5,6 +5,8 @@ import { supabase } from "../lib/supabase";
 import imageCompression from 'browser-image-compression';
 
 export default function PerfilPage() {
+  const [perfilId, setPerfilId] = useState<number | null>(null);
+
   const [fotoUrl, setFotoUrl] = useState("");
   const [uploadingFoto, setUploadingFoto] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -13,11 +15,9 @@ export default function PerfilPage() {
   const [mensagem, setMensagem] = useState("");
   const [erro, setErro] = useState("");
 
-  // CONTROLE DE ABAS
   const [abaAtiva, setAbaAtiva] = useState("resumo");
   const [filtroInscricao, setFiltroInscricao] = useState("Todas");
 
-  // ESTADOS DO PERFIL TITULAR
   const [userId, setUserId] = useState("");
   const [role, setRole] = useState("atleta");
   const [nome, setNome] = useState("");
@@ -32,28 +32,18 @@ export default function PerfilPage() {
   const [cidade, setCidade] = useState("");
   const [faixa, setFaixa] = useState("");
   const [modalidade, setModalidade] = useState("");
+  const [sexo, setSexo] = useState(""); 
 
-  // ESTADOS DE ESTATÍSTICAS E DADOS
   const [stats, setStats] = useState({ eventos: 0, ouros: 0, pratas: 0, bronzes: 0, wo: 0 });
   const [minhasInscricoes, setMinhasInscricoes] = useState<any[]>([]);
   const [minhaEquipe, setMinhaEquipe] = useState<any[]>([]); 
   
-  // ESTADOS DE DEPENDENTES (FILHOS)
   const [dependentes, setDependentes] = useState<any[]>([]);
   const [formDependente, setFormDependente] = useState<any>(null);
 
-  // PADRONIZAÇÃO DE PROFESSORES
   const [professoresDisponiveis, setProfessoresDisponiveis] = useState<any[]>([]);
   const [professorPersonalizado, setProfessorPersonalizado] = useState(false);
 
-  // ESTADOS: INSCRIÇÃO EM LOTE E VOUCHERS
-  const [eventosAbertos, setEventosAbertos] = useState<any[]>([]);
-  const [meusVouchers, setMeusVouchers] = useState<any[]>([]);
-  const [eventoLote, setEventoLote] = useState("");
-  const [alunosLote, setAlunosLote] = useState<string[]>([]);
-  const [processandoLote, setProcessandoLote] = useState(false);
-
-  // FUNÇÕES AUXILIARES
   const formatarCpf = (value: string) => {
     if (!value) return "";
     return value.replace(/\D/g, "").replace(/(\d{3})(\d)/, "$1.$2").replace(/(\d{3})(\d)/, "$1.$2").replace(/(\d{3})(\d{1,2})$/, "$1-$2").substring(0, 14);
@@ -98,6 +88,17 @@ export default function PerfilPage() {
     setUserId(authData.user.id);
     setEmail(authData.user.email || "");
 
+    const { data: perfilData } = await supabase.from("atletas").select("*").eq("user_id", authData.user.id).maybeSingle();
+    const { data: orgData } = await supabase.from("organizadores").select("id").eq("user_id", authData.user.id).maybeSingle();
+
+    const userRole = perfilData?.role || authData.user.user_metadata?.role || "atleta";
+    setRole(userRole);
+
+    if (orgData && userRole !== "super-admin") {
+      window.location.href = "/admin";
+      return;
+    }
+
     const { data: profsData } = await supabase.from("atletas").select("nome, equipe, academia, modalidade").eq("role", "professor").neq("nome", ""); 
     if (profsData) setProfessoresDisponiveis(profsData);
 
@@ -121,12 +122,8 @@ export default function PerfilPage() {
       totalEventosParticipados = eventosUnicos.size;
     }
 
-    const { data: perfilData } = await supabase.from("atletas").select("*").eq("user_id", authData.user.id).single();
-
-    const userRole = perfilData?.role || authData.user.user_metadata?.role || "atleta";
-    setRole(userRole);
-
     if (perfilData) {
+      setPerfilId(perfilData.id); 
       setNome(perfilData.nome || "");
       setFotoUrl(perfilData.foto_url || "");
       setCpf(perfilData.cpf || authData.user.user_metadata?.cpf || "");
@@ -139,6 +136,7 @@ export default function PerfilPage() {
       setCidade(perfilData.cidade || "");
       setFaixa(perfilData.faixa || "");
       setModalidade(perfilData.modalidade || "");
+      setSexo(perfilData.sexo || "");
 
       setStats({
         eventos: totalEventosParticipados,
@@ -148,15 +146,22 @@ export default function PerfilPage() {
         wo: perfilData.vitorias_wo || 0,
       });
 
-      if ((userRole === "professor" || userRole === "super-admin") && perfilData.equipe) {
-        const { data: alunosData } = await supabase.from("atletas").select("id, user_id, nome, faixa, peso, nascimento, foto_url, ouro, prata, bronze").eq("equipe", perfilData.equipe).neq("user_id", authData.user.id); 
+      if (userRole === "professor" || userRole === "super-admin") {
+        let query = supabase.from("atletas").select("id, user_id, nome, faixa, peso, nascimento, foto_url, ouro, prata, bronze, professor, equipe").neq("user_id", authData.user.id);
+        
+        if (userRole === "professor" && perfilData.nome) {
+          query = query.eq("professor", perfilData.nome); 
+        } else if (userRole === "super-admin" && perfilData.equipe) {
+          query = query.eq("equipe", perfilData.equipe);
+        }
+
+        const { data: alunosData } = await query;
         
         if (alunosData && alunosData.length > 0) {
           const alunosIds = alunosData.map(a => a.user_id).filter(id => id);
           let inscricoesAlunos: any[] = [];
           
           if (alunosIds.length > 0) {
-            // AQUI ESTÁ A CORREÇÃO: ADICIONAMOS O 'evento_id' NA BUSCA PARA PODER CRUZAR OS DADOS
             const { data: inscData } = await supabase.from("inscricoes").select(`id, evento_id, user_id, categoria, pagamento_ok, pesagem_ok, eventos (nome, data_evento)`).in("user_id", alunosIds);
             if (inscData) inscricoesAlunos = inscData;
           }
@@ -169,35 +174,6 @@ export default function PerfilPage() {
         } else {
           setMinhaEquipe([]);
         }
-
-        // =========================================================================
-        // 🟢 LÓGICA DE VOUCHERS BLINDADA
-        // =========================================================================
-        const { data: vData } = await supabase
-          .from("vouchers")
-          .select("*")
-          .eq("professor_nome", perfilData.nome)
-          .eq("equipe_nome", perfilData.equipe); 
-          
-        if (vData && vData.length > 0) {
-          setMeusVouchers(vData);
-          
-          const eventoIds = [...new Set(vData.map(v => v.evento_id))].filter(Boolean);
-          
-          if (eventoIds.length > 0) {
-            const { data: evtData } = await supabase
-              .from("eventos")
-              .select("id, nome")
-              .in("id", eventoIds);
-              
-            if (evtData) setEventosAbertos(evtData);
-          } else {
-            setEventosAbertos([]);
-          }
-        } else {
-          setMeusVouchers([]);
-          setEventosAbertos([]);
-        }
       }
 
       if (userRole === "atleta" && perfilData.professor) {
@@ -205,11 +181,21 @@ export default function PerfilPage() {
         if (!profExisteNaLista) setProfessorPersonalizado(true);
       }
 
-      if (!perfilData.nome || (!perfilData.cpf && !authData.user.user_metadata?.cpf)) {
+      if (userRole !== "super-admin" && (!perfilData.nome || (!perfilData.cpf && !authData.user.user_metadata?.cpf))) {
+        setAbaAtiva("editar");
+      } else {
+        setAbaAtiva("resumo");
+      }
+
+    } else {
+      setNome(authData.user.user_metadata?.full_name || authData.user.user_metadata?.name || "");
+      setCpf(authData.user.user_metadata?.cpf || "");
+      
+      if (userRole === "super-admin") {
+        setAbaAtiva("resumo");
+      } else {
         setAbaAtiva("editar");
       }
-    } else {
-      setAbaAtiva("editar");
     }
 
     setLoading(false);
@@ -253,17 +239,35 @@ export default function PerfilPage() {
     setSalvando(true); setMensagem(""); setErro("");
     if (!nome || !cpf) { setErro("Nome e CPF são obrigatórios."); setSalvando(false); return; }
 
-    const perfilAtualizado = { 
-      user_id: userId, email, nome, cpf, telefone, equipe, academia, professor, cidade, faixa, modalidade, role,
-      nascimento: nascimento ? nascimento : null, peso: peso ? peso : null 
+    const perfilAtualizado: any = { 
+      user_id: userId, 
+      email, 
+      nome, 
+      cpf, 
+      telefone, 
+      equipe, 
+      academia, 
+      professor, 
+      cidade, 
+      faixa, 
+      modalidade, 
+      role, 
+      sexo,
+      nascimento: nascimento ? nascimento : null, 
+      peso: peso ? peso : null,
+      foto_url: fotoUrl 
     };
 
-    const { error } = await supabase.from("atletas").upsert(perfilAtualizado, { onConflict: "user_id" });
+    if (perfilId) {
+      perfilAtualizado.id = perfilId;
+    }
+
+    const { error } = await supabase.from("atletas").upsert(perfilAtualizado);
 
     if (error) {
       setErro(error.message.includes("duplicate key") ? "Este CPF já está em uso." : "Erro ao salvar: " + error.message);
     } else {
-      setMensagem("Dados do titular atualizados!");
+      setMensagem("Dados atualizados com sucesso!");
       setTimeout(() => { setMensagem(""); setAbaAtiva("resumo"); }, 2000);
     }
     setSalvando(false);
@@ -271,8 +275,8 @@ export default function PerfilPage() {
 
   async function salvarDependente() {
     setSalvando(true); setMensagem(""); setErro("");
-    if (!formDependente.nome || !formDependente.nascimento) { 
-      setErro("Nome e Data de Nascimento do dependente são obrigatórios."); 
+    if (!formDependente.nome || !formDependente.nascimento || !formDependente.sexo) { 
+      setErro("Nome, Sexo e Data de Nascimento do dependente são obrigatórios."); 
       setSalvando(false); return; 
     }
 
@@ -286,6 +290,7 @@ export default function PerfilPage() {
       nome: formDependente.nome,
       cpf: formDependente.cpf || null,
       nascimento: formDependente.nascimento,
+      sexo: formDependente.sexo, 
       equipe: formDependente.equipe,
       academia: formDependente.academia,
       professor: formDependente.professor,
@@ -305,68 +310,6 @@ export default function PerfilPage() {
       setTimeout(() => { setMensagem(""); setFormDependente(null); }, 1500);
     }
     setSalvando(false);
-  }
-
-  const voucherAtual = meusVouchers.find(v => v.evento_id === eventoLote);
-  const cortesiasDisponiveis = voucherAtual ? (voucherAtual.quantidade_total - voucherAtual.quantidade_usada) : 0;
-
-  const toggleAlunoLote = (uid: string) => {
-    if (alunosLote.includes(uid)) {
-      setAlunosLote(alunosLote.filter(id => id !== uid));
-    } else {
-      if (alunosLote.length >= cortesiasDisponiveis) {
-        alert(`Você só tem ${cortesiasDisponiveis} cortesia(s) disponível(is) para este evento!`);
-        return;
-      }
-      setAlunosLote([...alunosLote, uid]);
-    }
-  };
-
-  async function inscreverEmLote() {
-    if (!eventoLote) return alert("Selecione um evento primeiro.");
-    if (alunosLote.length === 0) return alert("Selecione pelo menos um aluno.");
-    if (!voucherAtual) return alert("Nenhum voucher encontrado para este evento.");
-    
-    setProcessandoLote(true);
-    try {
-      const inscricoesParaSalvar = alunosLote.map(uid => {
-        const aluno = minhaEquipe.find(a => a.user_id === uid);
-        const idade = aluno.nascimento ? calcularIdade(aluno.nascimento) : "?";
-        const classeIdade = (typeof idade === "number" && idade < 18) ? "Juvenil" : "Adulto";
-        
-        // Verifica se o atleta já tem uma inscrição pendente para ATUALIZÁ-LA em vez de duplicar
-        const inscricaoExistente = aluno.inscricoes?.find((i: any) => i.evento_id?.toString() === eventoLote.toString());
-
-        return {
-          ...(inscricaoExistente ? { id: inscricaoExistente.id } : {}), // Se existir, manda o ID para atualizar (upsert)
-          user_id: uid,
-          evento_id: eventoLote,
-          atleta: aluno.nome,
-          equipe: equipe,
-          faixa: aluno.faixa,
-          peso: aluno.peso,
-          categoria: `${classeIdade} - ${aluno.faixa || 'S/ Faixa'} - ${aluno.peso ? aluno.peso+'kg' : 'Absoluto'}`,
-          pagamento_ok: true,
-          pesagem_ok: false
-        };
-      });
-
-      // Alterado de .insert para .upsert para evitar quebra de banco e evitar duplicações
-      const { error: insError } = await supabase.from("inscricoes").upsert(inscricoesParaSalvar);
-      if (insError) throw insError;
-
-      const novaQtdUsada = voucherAtual.quantidade_usada + alunosLote.length;
-      const { error: vError } = await supabase.from("vouchers").update({ quantidade_usada: novaQtdUsada }).eq("id", voucherAtual.id);
-      if (vError) throw vError;
-
-      alert("Sucesso! Alunos inscritos e cortesias debitadas.");
-      setAlunosLote([]); 
-      window.location.reload(); 
-    } catch (err: any) {
-       alert("Erro ao processar as inscrições em lote: " + err.message);
-    } finally {
-       setProcessandoLote(false);
-    }
   }
 
   async function apagarConta() {
@@ -401,15 +344,22 @@ export default function PerfilPage() {
           const convertedBlob = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.8 });
           file = new File([Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob], file.name.replace(/\.[^/.]+$/, ".jpg"), { type: "image/jpeg" });
         } catch (err) {
-          alert("Não foi possível processar a foto HEIC."); setUploadingFoto(false); return;
+          alert("Não foi possível processar a foto."); setUploadingFoto(false); return;
         }
       }
 
       if (file.size > 10 * 1024 * 1024) { alert("Foto muito grande."); setUploadingFoto(false); return; }
-      file = await imageCompression(file, { maxSizeMB: 1, maxWidthOrHeight: 800, useWebWorker: true });
+      
+      const options = { 
+        maxSizeMB: 0.2, 
+        maxWidthOrHeight: 500, 
+        useWebWorker: true,
+        fileType: "image/webp" 
+      };
+      const compressedFile = await imageCompression(file, options);
 
-      const fileName = `${userId}-${Math.random()}.${file.name.split('.').pop() || 'jpeg'}`;
-      const { error: uploadError } = await supabase.storage.from('avatars').upload(fileName, file);
+      const fileName = `avatar-${userId}-${Date.now()}.webp`;
+      const { error: uploadError } = await supabase.storage.from('avatars').upload(fileName, compressedFile);
       if (uploadError) throw uploadError;
 
       const { data: publicUrlData } = supabase.storage.from('avatars').getPublicUrl(fileName);
@@ -444,7 +394,7 @@ export default function PerfilPage() {
     return dep ? dep.nome : "Desconhecido";
   };
 
-  if (loading) return <div className="p-10 text-center text-zinc-500 mt-20">A carregar perfil...</div>;
+  if (loading) return <div className="p-10 text-center text-zinc-500 mt-20 uppercase font-bold text-xs tracking-widest">A carregar perfil...</div>;
 
   return (
     <div className="w-full max-w-[100vw] overflow-x-hidden px-3 sm:px-4 md:px-6 pt-6 md:pt-10 pb-8">
@@ -454,7 +404,7 @@ export default function PerfilPage() {
         <div className={`bg-[#0a0a0e] border ${role === 'professor' ? 'border-yellow-500/30' : 'border-white/5'} rounded-3xl p-4 md:p-5 flex flex-col items-center shadow-xl h-fit relative md:sticky md:top-24 z-10 w-full`}>
           
           {role === 'professor' && (
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-yellow-400 text-black text-[10px] font-black uppercase tracking-widest px-3.4 py-1.5 rounded-full shadow-[0_0_20px_rgba(234,179,8,0.4)] pointer-events-none">
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-yellow-400 text-black text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full shadow-[0_0_20px_rgba(234,179,8,0.4)] pointer-events-none">
               Perfil Mestre
             </div>
           )}
@@ -466,7 +416,7 @@ export default function PerfilPage() {
               ) : fotoUrl ? (
                 <img src={fotoUrl} alt="Foto de Perfil" className="w-full h-full object-cover" />
               ) : (
-                nome ? nome.charAt(0).toUpperCase() : "?"
+                <div className="w-full h-full flex items-center justify-center text-zinc-500 text-xs font-black">{nome ? nome.charAt(0).toUpperCase() : "?"}</div>
               )}
               <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                 <span className="text-[9px] text-white font-bold uppercase tracking-widest pointer-events-none">Trocar</span>
@@ -495,9 +445,6 @@ export default function PerfilPage() {
                 <button onClick={() => setAbaAtiva("equipe")} className={`cursor-pointer w-full py-2.5 px-4 rounded-xl text-[11px] font-bold text-left transition-colors flex justify-between items-center ${abaAtiva === "equipe" ? "bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 shadow-sm" : "text-zinc-500 hover:text-yellow-500 hover:bg-yellow-500/5"}`}>
                   <span className="flex items-center gap-3"><svg className="w-3.5 h-3.5 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg> Lista de Alunos</span>
                   <span className="bg-zinc-800 text-zinc-400 text-[9px] px-1.5 py-0.5 rounded-full pointer-events-none">{totalAlunos}</span>
-                </button>
-                <button onClick={() => setAbaAtiva("lote")} className={`cursor-pointer w-full py-2.5 px-4 rounded-xl text-[11px] font-bold text-left transition-colors flex items-center gap-3 ${abaAtiva === "lote" ? "bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 shadow-sm" : "text-zinc-500 hover:text-yellow-500 hover:bg-yellow-500/5"}`}>
-                  <svg className="w-3.5 h-3.5 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg> Inscrições em Lote
                 </button>
               </>
             ) : (
@@ -530,7 +477,7 @@ export default function PerfilPage() {
         {/* ========================================== */}
         {/* CONTEÚDO PRINCIPAL                         */}
         {/* ========================================== */}
-        <div className={`bg-[#0a0a0e] border ${role === 'professor' && (abaAtiva === 'equipe' || abaAtiva === 'lote' || abaAtiva === 'resumo') ? 'border-yellow-500/20' : 'border-white/5'} rounded-3xl p-4 md:p-6 shadow-xl min-h-[500px] w-full transition-colors duration-500`}>
+        <div className={`bg-[#0a0a0e] border ${role === 'professor' && (abaAtiva === 'equipe' || abaAtiva === 'resumo') ? 'border-yellow-500/20' : 'border-white/5'} rounded-3xl p-4 md:p-6 shadow-xl min-h-[500px] w-full transition-colors duration-500`}>
           
           {/* 🟢 ABA 1: RESUMO DA CARREIRA E DASHBOARD */}
           {abaAtiva === "resumo" && (
@@ -625,6 +572,10 @@ export default function PerfilPage() {
                         <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest block mb-0.5">Modalidade</span>
                         <span className="text-sm md:text-base text-white font-black uppercase tracking-tight">{modalidade || "--"}</span>
                       </div>
+                      <div>
+                        <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest block mb-0.5">Sexo</span>
+                        <span className="text-sm md:text-base text-white font-black uppercase tracking-tight">{sexo || "--"}</span>
+                      </div>
                     </div>
                     <div className="bg-black/50 border border-white/5 rounded-xl p-3 flex items-center justify-between cursor-default">
                       <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest block mb-0.5">Sua Faixa de Mestre</span>
@@ -660,6 +611,10 @@ export default function PerfilPage() {
                       <div>
                         <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest block mb-0.5">Peso Base</span>
                         <span className="text-sm md:text-base text-white font-black uppercase tracking-tight">{peso ? `${peso} KG` : "--"}</span>
+                      </div>
+                      <div>
+                        <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest block mb-0.5">Sexo</span>
+                        <span className="text-sm md:text-base text-white font-black uppercase tracking-tight">{sexo || "--"}</span>
                       </div>
                     </div>
                     <div className="bg-black/50 border border-white/5 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-default">
@@ -706,7 +661,7 @@ export default function PerfilPage() {
                         <option value="Vermelha" className="bg-[#0a0a0e] text-white">Vermelha</option>
                       </select>
                     </div>
-                    <div className="md:col-span-2">
+                    <div>
                       <label className="block text-[10px] font-bold text-yellow-500 uppercase tracking-wider mb-1 pl-1 cursor-default">Sua Modalidade Principal</label>
                       <select value={modalidade} onChange={(e) => setModalidade(e.target.value)} className="cursor-pointer w-full bg-black/50 border border-white/5 outline-none rounded-xl px-3 py-2 text-xs text-white transition-colors appearance-none focus:border-yellow-500">
                         <option value="" className="bg-[#0a0a0e] text-white">Selecione...</option>
@@ -717,10 +672,26 @@ export default function PerfilPage() {
                         <option value="MMA" className="bg-[#0a0a0e] text-white">MMA</option>
                       </select>
                     </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 pl-1 cursor-default">Sexo</label>
+                      <select value={sexo} onChange={(e) => setSexo(e.target.value)} className="cursor-pointer w-full bg-black/50 border border-white/5 focus:border-yellow-500/50 outline-none rounded-xl px-3 py-2 text-xs text-white transition-colors appearance-none">
+                        <option value="" className="bg-[#0a0a0e] text-white">Selecione...</option>
+                        <option value="Masculino" className="bg-[#0a0a0e] text-white">Masculino</option>
+                        <option value="Feminino" className="bg-[#0a0a0e] text-white">Feminino</option>
+                      </select>
+                    </div>
                   </>
                 ) : (
                   <>
                     <div><label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 pl-1 cursor-default">Data de Nascimento</label><input type="date" value={nascimento} onChange={(e) => setNascimento(e.target.value)} className="cursor-pointer w-full bg-black/50 border border-white/5 focus:border-cyan-500/50 outline-none rounded-xl px-3 py-2 text-xs text-white transition-colors [&::-webkit-calendar-picker-indicator]:invert" /></div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 pl-1 cursor-default">Sexo</label>
+                      <select value={sexo} onChange={(e) => setSexo(e.target.value)} className="cursor-pointer w-full bg-black/50 border border-white/5 focus:border-cyan-500/50 outline-none rounded-xl px-3 py-2 text-xs text-white transition-colors appearance-none">
+                        <option value="" className="bg-[#0a0a0e] text-white">Selecione...</option>
+                        <option value="Masculino" className="bg-[#0a0a0e] text-white">Masculino</option>
+                        <option value="Feminino" className="bg-[#0a0a0e] text-white">Feminino</option>
+                      </select>
+                    </div>
                     <div className="md:col-span-2">
                       <label className="block text-[10px] font-bold text-cyan-500 uppercase tracking-wider mb-1 pl-1 cursor-default">Selecione seu Professor Responsável</label>
                       <select value={professorPersonalizado ? "OUTRO" : professor} onChange={(e) => handleProfessorChange(e, false)} className="cursor-pointer w-full bg-cyan-900/10 border border-cyan-500/30 focus:border-cyan-500 outline-none rounded-xl px-3 py-3 text-xs text-white transition-colors appearance-none">
@@ -810,7 +781,7 @@ export default function PerfilPage() {
                       <p className="text-zinc-400 text-xs mt-1">Gerencie os perfis de filhos e menores sob sua responsabilidade.</p>
                     </div>
                     <button 
-                      onClick={() => setFormDependente({ nome: "", cpf: "", nascimento: "", professor: "", equipe: "", academia: "", faixa: "", peso: "", modalidade: "", professorPersonalizado: false })} 
+                      onClick={() => setFormDependente({ nome: "", cpf: "", nascimento: "", sexo: "", professor: "", equipe: "", academia: "", faixa: "", peso: "", modalidade: "", professorPersonalizado: false })} 
                       className="cursor-pointer bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest shadow-[0_0_15px_rgba(6,182,212,0.2)] shrink-0"
                     >
                       + Adicionar Dependente
@@ -834,7 +805,7 @@ export default function PerfilPage() {
                               <h4 className="text-white font-bold text-sm truncate">{dep.nome}</h4>
                               <div className="flex items-center gap-2 mt-1">
                                 <span className={`text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${getCorFaixa(dep.faixa)}`}>{dep.faixa || "S/ Faixa"}</span>
-                                <span className="text-zinc-400 text-[10px] font-bold">{dep.nascimento ? `${calcularIdade(dep.nascimento)} Anos` : ""} • {dep.peso ? `${dep.peso}kg` : ""}</span>
+                                <span className="text-zinc-400 text-[10px] font-bold">{dep.nascimento ? `${calcularIdade(dep.nascimento)} Anos` : ""} • {dep.peso ? `${dep.peso}kg` : ""} • {dep.sexo ? dep.sexo : "S/ Sexo"}</span>
                               </div>
                             </div>
                           </div>
@@ -861,6 +832,15 @@ export default function PerfilPage() {
                     <div><label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 pl-1 cursor-default">CPF (Opcional p/ menor)</label><input type="text" value={formDependente.cpf || ""} onChange={(e) => setFormDependente({...formDependente, cpf: formatarCpf(e.target.value)})} className="cursor-text w-full bg-black/50 border border-white/5 focus:border-cyan-500/50 outline-none rounded-xl px-3 py-2 text-xs text-white transition-colors" /></div>
                     <div><label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 pl-1 cursor-default">Data de Nascimento *</label><input type="date" value={formDependente.nascimento || ""} onChange={(e) => setFormDependente({...formDependente, nascimento: e.target.value})} className="cursor-pointer w-full bg-black/50 border border-white/5 focus:border-cyan-500/50 outline-none rounded-xl px-3 py-2 text-xs text-white transition-colors [&::-webkit-calendar-picker-indicator]:invert" /></div>
                     
+                    <div>
+                      <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 pl-1 cursor-default">Sexo *</label>
+                      <select value={formDependente.sexo || ""} onChange={(e) => setFormDependente({...formDependente, sexo: e.target.value})} className="cursor-pointer w-full bg-black/50 border border-white/5 focus:border-cyan-500/50 outline-none rounded-xl px-3 py-2 text-xs text-white transition-colors appearance-none">
+                        <option value="" className="bg-[#0a0a0e] text-white">Selecione...</option>
+                        <option value="Masculino" className="bg-[#0a0a0e] text-white">Masculino</option>
+                        <option value="Feminino" className="bg-[#0a0a0e] text-white">Feminino</option>
+                      </select>
+                    </div>
+
                     <div className="md:col-span-2 mt-2">
                       <label className="block text-[10px] font-bold text-cyan-500 uppercase tracking-wider mb-1 pl-1 cursor-default">Professor da Criança</label>
                       <select value={formDependente.professorPersonalizado ? "OUTRO" : (formDependente.professor || "")} onChange={(e) => handleProfessorChange(e, true)} className="cursor-pointer w-full bg-cyan-900/10 border border-cyan-500/30 focus:border-cyan-500 outline-none rounded-xl px-3 py-3 text-xs text-white transition-colors appearance-none">
@@ -932,21 +912,26 @@ export default function PerfilPage() {
                 </div>
               </div>
 
-              <div className="space-y-3 w-full">
+              <div className="space-y-4 w-full">
                 {inscricoesFiltradas.length === 0 ? (
-                  <div className="text-center py-16 bg-black/30 rounded-2xl border border-dashed border-white/10 w-full"><p className="text-zinc-500 font-medium text-sm">Nenhuma inscrição encontrada.</p></div>
+                  <div className="text-center py-16 bg-black/30 rounded-2xl border border-dashed border-white/10 w-full">
+                    <span className="text-4xl block mb-3 opacity-50 pointer-events-none">🥋</span>
+                    <p className="text-zinc-400 font-medium text-sm">Você ainda não tem inscrições registradas.</p>
+                    <button onClick={() => window.location.href = "/"} className="cursor-pointer mt-5 px-6 py-3 bg-red-600 hover:bg-red-500 text-white text-[10px] font-black rounded-xl transition-colors uppercase tracking-widest shadow-lg">Ver Calendário de Eventos</button>
+                  </div>
                 ) : (
                   inscricoesFiltradas.map((insc) => (
-                    <div key={insc.id} className="bg-black/40 border border-white/5 rounded-2xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 hover:border-white/10 transition-colors w-full">
-                      <div className="w-full md:w-auto overflow-hidden">
-                        <div className="flex flex-wrap items-center gap-2 mb-2 w-full">
+                    <div key={insc.id} className={`bg-black/40 border rounded-2xl p-4 md:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-5 transition-all shadow-lg ${insc.pagamento_ok ? 'border-green-500/20 hover:border-green-500/40' : 'border-red-500/20 hover:border-red-500/40'}`}>
+                      
+                      <div className="w-full md:w-auto overflow-hidden flex-1">
+                        <div className="flex flex-wrap items-center gap-2 mb-3 w-full">
                           
-                          <span className="bg-white/10 border border-white/20 text-white text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded flex items-center gap-1 cursor-default">
+                          <span className="bg-white/10 border border-white/20 text-white text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded flex items-center gap-1 cursor-default">
                             <svg className="w-3 h-3 text-cyan-400 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
                             {getNomeInscrito(insc.user_id)}
                           </span>
 
-                          <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded flex items-center gap-1 border cursor-default ${insc.pagamento_ok ? "bg-green-500/10 text-green-400 border-green-500/30" : "bg-red-500/10 text-red-400 border-red-500/30"}`}>
+                          <span className={`text-[9px] font-black uppercase tracking-wider px-2.5 py-1 rounded flex items-center gap-1 border cursor-default ${insc.pagamento_ok ? "bg-green-500/10 text-green-400 border-green-500/30" : "bg-red-500/10 text-red-400 border-red-500/30"}`}>
                             {insc.pagamento_ok ? (
                               <><svg className="w-3 h-3 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg> Pago</>
                             ) : (
@@ -954,28 +939,48 @@ export default function PerfilPage() {
                             )}
                           </span>
                           
-                          <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded flex items-center gap-1 border cursor-default ${insc.pesagem_ok ? "bg-blue-500/10 text-blue-400 border-blue-500/30" : "bg-zinc-500/10 text-zinc-400 border-zinc-500/30"}`}>
+                          <span className={`text-[9px] font-black uppercase tracking-wider px-2.5 py-1 rounded flex items-center gap-1 border cursor-default ${insc.pesagem_ok ? "bg-blue-500/10 text-blue-400 border-blue-500/30" : "bg-zinc-800 text-zinc-400 border-zinc-700"}`}>
                             {insc.pesagem_ok ? "Peso OK" : "Pesagem Pendente"}
                           </span>
 
-                          <span className="text-zinc-500 text-[10px] font-bold ml-auto md:ml-2 whitespace-nowrap cursor-default">{insc.eventos?.data_evento ? formatarData(insc.eventos.data_evento) : "Data a definir"}</span>
+                          <span className="text-zinc-500 text-[10px] font-bold ml-auto md:ml-2 whitespace-nowrap cursor-default">
+                            {insc.eventos?.data_evento ? formatarData(insc.eventos.data_evento) : "Data a definir"}
+                          </span>
                         </div>
-                        <h4 className="text-base font-black text-white leading-tight truncate w-full cursor-default">{insc.eventos?.nome || "Campeonato não identificado"}</h4>
-                        <p className="text-zinc-400 text-xs mt-0.5 truncate w-full cursor-default">Categoria: <strong className="text-white">{insc.categoria}</strong></p>
+                        
+                        <h4 className="text-base md:text-lg font-black text-white leading-tight truncate w-full cursor-default mb-1.5">{insc.eventos?.nome || "Campeonato não identificado"}</h4>
+                        
+                        <div className="flex items-center gap-2 mt-2">
+                          <span className="bg-black border border-white/5 text-zinc-300 text-[10px] font-bold px-3 py-1.5 rounded-md">Categoria: <strong className="text-white">{insc.categoria}</strong></span>
+                        </div>
                       </div>
 
-                      <div className="w-full md:w-auto flex flex-col sm:flex-row md:flex-col gap-1.5 shrink-0">
+                      <div className="w-full md:w-auto flex flex-col gap-2.5 shrink-0 md:min-w-[220px]">
                         {!insc.pagamento_ok ? (
-                          <button className="cursor-pointer w-full sm:w-auto md:w-full bg-red-600 hover:bg-red-500 text-white px-4 py-2.5 sm:py-2 rounded-xl font-bold transition-colors text-xs text-center shadow-lg">Realizar Pagamento</button>
+                          <>
+                            {/* BOTÃO DE PAGAMENTO SE PENDENTE */}
+                            <button onClick={() => window.location.href = "/pagamento"} className="cursor-pointer w-full bg-red-600 hover:bg-red-500 text-white px-4 py-3.5 rounded-xl font-black uppercase tracking-widest transition-colors text-[10px] text-center shadow-[0_0_15px_rgba(239,68,68,0.2)] flex items-center justify-center gap-2">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
+                              Fazer Pagamento
+                            </button>
+                          </>
                         ) : (
-                          // AQUI ESTÁ A ALTERAÇÃO PARA A ROTA PÚBLICA!
-                          <button onClick={() => window.location.href = `/evento/${insc.evento_id}/publico`} className="cursor-pointer w-full sm:w-auto md:w-full bg-white/10 hover:bg-white/20 border border-white/10 text-white px-4 py-2.5 sm:py-2 rounded-xl font-bold transition-colors text-xs text-center flex items-center justify-center gap-1.5">
-                            <svg className="w-3.5 h-3.5 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
-                            Ver Minha Chave
-                          </button>
+                          <>
+                            {/* 🔥 AQUI ESTÁ A CORREÇÃO DO BOTÃO "VER PASSAPORTE" */}
+                            <button onClick={() => window.location.href = `/ingresso/${insc.evento_id}/${insc.user_id}`} className="cursor-pointer w-full bg-green-600 hover:bg-green-500 text-white px-4 py-3.5 rounded-xl font-black uppercase tracking-widest transition-colors text-[10px] text-center shadow-[0_0_15px_rgba(22,163,74,0.2)] flex items-center justify-center gap-2">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm14 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
+                              Ver Passaporte (QR)
+                            </button>
+                            
+                            {/* BOTÃO DA CHAVE MENOR */}
+                            <button onClick={() => window.location.href = `/evento/${insc.evento_id}/publico`} className="cursor-pointer w-full bg-white/5 hover:bg-white/10 border border-white/10 text-white px-4 py-2.5 rounded-xl font-bold uppercase tracking-widest transition-colors text-[9px] text-center flex items-center justify-center gap-1.5">
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                              Checar Chave
+                            </button>
+                          </>
                         )}
-                        <button className="cursor-pointer w-full sm:w-auto md:w-full text-zinc-500 hover:text-white px-4 py-2 sm:py-1.5 rounded-lg font-medium transition-colors text-[10px] uppercase tracking-wider text-center border border-transparent hover:border-white/5">Ver Detalhes</button>
                       </div>
+
                     </div>
                   ))
                 )}
@@ -1058,124 +1063,6 @@ export default function PerfilPage() {
 
                     </div>
                   ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* 🔥 ABA 5: INSCRIÇÃO EM LOTE (EXCLUSIVO PROFESSOR) */}
-          {abaAtiva === "lote" && role === "professor" && (
-            <div className="animate-in fade-in slide-in-from-right-4 duration-500 w-full">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-3">
-                <div>
-                  <h3 className="text-xl font-black text-white flex items-center gap-2">
-                    <svg className="w-6 h-6 text-yellow-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
-                    Inscrições em Lote (Cortesias)
-                  </h3>
-                  <p className="text-zinc-400 text-xs mt-1">Utilize vouchers liberados pela organização para matricular seus alunos.</p>
-                </div>
-              </div>
-
-              {/* SELEÇÃO DO EVENTO */}
-              <div className="mb-6">
-                <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-2 pl-1 cursor-default">1. Selecione o Evento Aberto</label>
-                <select value={eventoLote} onChange={(e) => { setEventoLote(e.target.value); setAlunosLote([]); }} className="cursor-pointer w-full md:max-w-md bg-black/50 border border-white/10 focus:border-yellow-500 outline-none rounded-xl px-4 py-3 text-sm text-white transition-colors appearance-none">
-                  <option value="" className="bg-[#0a0a0e]">Selecione um campeonato...</option>
-                  {eventosAbertos.map(ev => (
-                    <option key={ev.id} value={ev.id} className="bg-[#0a0a0e]">{ev.nome}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* STATUS DO VOUCHER */}
-              {eventoLote && (
-                <div className="mb-8">
-                  {voucherAtual ? (
-                    <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-2xl p-5 flex flex-col md:flex-row items-center justify-between gap-4">
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-yellow-500/20 rounded-full flex items-center justify-center text-2xl cursor-default">🎟️</div>
-                        <div>
-                          <h4 className="text-yellow-500 font-black text-sm uppercase tracking-widest cursor-default">Cortesias Liberadas</h4>
-                          <p className="text-white text-xs mt-0.5 cursor-default">O organizador liberou {voucherAtual.quantidade_total} inscrições gratuitas para sua equipe.</p>
-                        </div>
-                      </div>
-                      <div className="text-center md:text-right shrink-0">
-                        <span className="text-3xl font-black text-white cursor-default">{cortesiasDisponiveis}</span>
-                        <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest block cursor-default">Restantes</span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="bg-black/30 border border-dashed border-white/10 rounded-2xl p-6 text-center">
-                      <span className="text-2xl mb-2 block opacity-50 cursor-default">🎫</span>
-                      <h4 className="text-zinc-300 font-bold text-sm mb-1 cursor-default">Nenhuma cortesia disponível</h4>
-                      <p className="text-zinc-500 text-xs cursor-default">O organizador deste evento ainda não liberou inscrições gratuitas para a equipe {equipe}. Entre em contato com a organização do campeonato.</p>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* SELEÇÃO DE ALUNOS */}
-              {eventoLote && voucherAtual && cortesiasDisponiveis > 0 && (
-                <div>
-                  <div className="flex items-center justify-between border-b border-white/5 pb-3 mb-4">
-                    <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider pl-1 cursor-default">2. Selecione os Alunos ({alunosLote.length} / {cortesiasDisponiveis})</label>
-                  </div>
-                  
-                  {minhaEquipe.filter(aluno => !aluno.inscricoes?.some((i: any) => i.evento_id?.toString() === eventoLote.toString() && i.pagamento_ok === true)).length === 0 ? (
-                    <p className="text-zinc-500 text-sm text-center py-6 cursor-default">Não há alunos elegíveis para receber cortesia neste evento (Todos já estão pagos ou você não possui alunos).</p>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-8">
-                      {minhaEquipe
-                        .filter(aluno => !aluno.inscricoes?.some((i: any) => i.evento_id?.toString() === eventoLote.toString() && i.pagamento_ok === true))
-                        .map(aluno => {
-                          const isSelected = alunosLote.includes(aluno.user_id);
-                          const disabled = !isSelected && alunosLote.length >= cortesiasDisponiveis;
-
-                          return (
-                            <div 
-                              key={aluno.user_id} 
-                              onClick={() => !disabled && toggleAlunoLote(aluno.user_id)}
-                              className={`p-3 rounded-xl border flex items-center justify-between transition-all ${disabled ? 'bg-black/40 border-white/5 opacity-70 cursor-not-allowed' : isSelected ? 'bg-yellow-500/10 border-yellow-500/50 cursor-pointer shadow-[0_0_10px_rgba(234,179,8,0.1)]' : 'bg-black/40 border-white/10 cursor-pointer hover:border-yellow-500/30'}`}
-                            >
-                              <div className="flex items-center gap-3 truncate">
-                                <div className="w-8 h-8 bg-zinc-800 rounded-full overflow-hidden shrink-0 border border-zinc-700">
-                                  {aluno.foto_url ? <img src={aluno.foto_url} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-zinc-500 text-[10px] font-black">{aluno.nome?.charAt(0)}</div>}
-                                </div>
-                                <div className="truncate">
-                                  <h5 className="text-white font-bold text-xs truncate">{aluno.nome}</h5>
-                                  <span className="text-zinc-500 text-[8px] font-bold uppercase tracking-widest">{aluno.faixa || 'S/ Faixa'} - {aluno.peso ? aluno.peso+'kg' : 'S/ Peso'}</span>
-                                </div>
-                              </div>
-                              
-                              <div className={`w-5 h-5 rounded border shrink-0 flex items-center justify-center transition-colors ${isSelected ? 'bg-yellow-500 border-yellow-500 text-black' : 'border-zinc-600'}`}>
-                                {isSelected && <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"></path></svg>}
-                              </div>
-                            </div>
-                          );
-                      })}
-                    </div>
-                  )}
-
-                  {/* BOTÃO DE CONFIRMAÇÃO */}
-                  {alunosLote.length > 0 && (
-                    <div className="sticky bottom-4 bg-[#0a0a0e]/90 backdrop-blur-md p-4 rounded-2xl border border-yellow-500/30 shadow-[0_0_30px_rgba(0,0,0,0.8)] animate-in slide-in-from-bottom-4 flex flex-col md:flex-row items-center justify-between gap-4">
-                      <div>
-                        <span className="text-white font-black text-sm block cursor-default">Pronto para confirmar?</span>
-                        <span className="text-yellow-500 text-[10px] font-bold uppercase tracking-widest cursor-default">{alunosLote.length} inscrições gratuitas serão processadas.</span>
-                      </div>
-                      <button 
-                        onClick={inscreverEmLote}
-                        disabled={processandoLote}
-                        className="cursor-pointer w-full md:w-auto bg-yellow-500 hover:bg-yellow-400 text-black font-black text-xs px-8 py-3 rounded-xl transition-all shadow-[0_0_15px_rgba(234,179,8,0.3)] flex items-center justify-center gap-2 disabled:opacity-50"
-                      >
-                        {processandoLote ? (
-                          <><svg className="w-4 h-4 animate-spin pointer-events-none" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Processando...</>
-                        ) : (
-                          <>Confirmar Inscrições <svg className="w-4 h-4 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg></>
-                        )}
-                      </button>
-                    </div>
-                  )}
                 </div>
               )}
             </div>

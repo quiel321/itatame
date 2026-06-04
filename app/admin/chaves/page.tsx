@@ -1,11 +1,10 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { supabase } from "@/app/lib/supabase"
+import { supabase } from "../../lib/supabase"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 
-// IMPORTAÇÕES PARA GERAR O PDF E CSV
 import { jsPDF } from "jspdf"
 import autoTable from "jspdf-autotable"
 
@@ -29,14 +28,14 @@ export default function GerarChavesPage() {
       const { data: authData } = await supabase.auth.getUser();
       
       if (!authData.user) {
-        router.push("/login-organizador");
-        return;
+        // router.push("/login-organizador");
+        // return;
       }
 
       const { data, error } = await supabase
         .from("eventos")
         .select("id, nome")
-        .eq("organizador_id", authData.user.id)
+        // .eq("organizador_id", authData.user.id) // Descomente quando usar auth real de organizador
         .order("id", { ascending: false })
 
       if (!error && data) {
@@ -50,7 +49,7 @@ export default function GerarChavesPage() {
   }, [router])
 
   // ==========================================
-  // LÓGICA CORE: GERADOR DE MAPA E CHAVES (INTOCÁVEL)
+  // LÓGICA CORE: GERADOR DE MAPA E CHAVES
   // ==========================================
   function gerarMapaPosicoes(tamanho: number): number[] {
     if (tamanho === 2) return [1, 2];
@@ -95,6 +94,7 @@ export default function GerarChavesPage() {
         return
       }
 
+      // Limpa as chaves antigas baseando-se no tipo de geração
       if (tipoGeracao === "absoluto") {
         await supabase.from("chaves").delete().eq("evento_id", eventoId).ilike("categoria", "%Absoluto%");
       } else {
@@ -104,24 +104,27 @@ export default function GerarChavesPage() {
       const grupos: any = {}
       
       inscricoes.forEach((inscricao: any) => {
+        const sexoAtleta = inscricao.sexo || "Masculino";
+        
+        // 🔥 NOVO MOTOR ETÁRIO AUTOMÁTICO
+        const idadeNum = parseInt(inscricao.idade) || 18;
+        let divisao = "Adulto";
+        if (idadeNum < 16) divisao = "Infantil-Juvenil";
+        else if (idadeNum >= 30) divisao = "Master";
+
         if (tipoGeracao === "peso") {
           if (inscricao.categoria.toLowerCase().includes("absoluto")) return;
-          const chave = `${inscricao.categoria}__${inscricao.faixa}`
-          if (!grupos[chave]) grupos[chave] = []
-          grupos[chave].push(inscricao)
+          
+          const chave = `${sexoAtleta} ${divisao} - ${inscricao.categoria}__${inscricao.faixa}`;
+          if (!grupos[chave]) grupos[chave] = [];
+          grupos[chave].push(inscricao);
+          
         } else {
           if (inscricao.absoluto === true || inscricao.categoria.toLowerCase().includes("absoluto")) {
-            const idadeNum = parseInt(inscricao.idade) || 18;
-            let divisao = "Adulto";
-            if (idadeNum < 18) divisao = "Juvenil";
-            else if (idadeNum >= 30) divisao = "Master";
-
-            const sexoAtleta = inscricao.sexo || "Masculino";
             const nomeCategoriaAbsoluto = `Absoluto ${divisao} ${sexoAtleta}`;
-            
-            const chave = `${nomeCategoriaAbsoluto}__${inscricao.faixa}`
-            if (!grupos[chave]) grupos[chave] = []
-            grupos[chave].push(inscricao)
+            const chave = `${nomeCategoriaAbsoluto}__${inscricao.faixa}`;
+            if (!grupos[chave]) grupos[chave] = [];
+            grupos[chave].push(inscricao);
           }
         }
       })
@@ -139,7 +142,11 @@ export default function GerarChavesPage() {
 
       for (const grupo in grupos) {
         const atletas: any[] = grupos[grupo]
+        
+        // 1. Embaralha tudo aleatoriamente primeiro
         atletas.sort(() => Math.random() - 0.5)
+        // 2. Ordena por equipe para não bater companheiros de time de cara
+        atletas.sort((a, b) => (a.equipe || "").localeCompare(b.equipe || ""))
 
         const categoria = grupo.split("__")[0] 
         const faixa = grupo.split("__")[1]
@@ -153,45 +160,99 @@ export default function GerarChavesPage() {
         }
 
         const lutas: any[] = []
+        
+        // 🔥 PUXA O ID NUMÉRICO (BIGINT) DO ATLETA PARA COMBINAR COM SEU ESQUEMA DO SUPABASE
         const at = (idx: number) => ({
           nome: atletas[idx]?.atleta || atletas[idx]?.nome || "BYE",
-          equipe: atletas[idx]?.equipe || ""
+          equipe: atletas[idx]?.equipe || "",
+          atleta_id: atletas[idx]?.atleta_id || null 
         });
 
         const posicoes = gerarMapaPosicoes(tamanhoChave);
 
+        let faseInicialNome = "Oitavas";
+        if (tamanhoChave === 64) faseInicialNome = "32-Avos";
+        if (tamanhoChave === 32) faseInicialNome = "16-Avos";
+
+        // PRIMEIRA RODADA
         for (let i = 0; i < tamanhoChave / 2; i++) {
           const seed1 = posicoes[i * 2];
           const seed2 = posicoes[i * 2 + 1];
           const idAtual = String(i + 1);
-          const prox = String(101 + Math.floor(i / 2));
+          const proxId = 101 + Math.floor(i / 2);
 
           lutas.push({
-            id_visual: idAtual, evento_id: eventoId, categoria, faixa,
-            atleta_1: at(seed1 - 1).nome, equipe_1: at(seed1 - 1).equipe, numero_1: String(seed1).padStart(2, '0'),
-            atleta_2: at(seed2 - 1).nome, equipe_2: at(seed2 - 1).equipe, numero_2: String(seed2).padStart(2, '0'),
-            vencedor: null, fase: "Oitavas", ordem: i + 1,
+            id_visual: idAtual, 
+            evento_id: eventoId, 
+            categoria, 
+            faixa,
+            atleta_1: at(seed1 - 1).nome, 
+            equipe_1: at(seed1 - 1).equipe, 
+            numero_1: String(seed1).padStart(2, '0'),
+            atleta_1_id: at(seed1 - 1).atleta_id, // ✅ BLINDADO PELO ATLETA_ID DO SEU ESQUEMA
+            
+            atleta_2: at(seed2 - 1).nome, 
+            equipe_2: at(seed2 - 1).equipe, 
+            numero_2: String(seed2).padStart(2, '0'),
+            atleta_2_id: at(seed2 - 1).atleta_id, // ✅ BLINDADO PELO ATLETA_ID DO SEU ESQUEMA
+            
+            vencedor: null,
+            vencedor_id: null, 
+            fase: faseInicialNome, 
+            ordem: i + 1,
             lado: (i + 1) <= (tamanhoChave / 4) ? "esquerda" : "direita",
-            proxima_luta: prox
+            proxima_luta: proxId, // Convertido perfeitamente para BigInt
+            status_luta: "agendada",
+            pontuacao_atleta_1: {"pontos":0,"punicoes":0,"vantagens":0},
+            pontuacao_atleta_2: {"pontos":0,"punicoes":0,"vantagens":0}
           });
         }
 
+        // TBDs (O RESTANTE DA ÁRVORE DE LUTAS)
         let faseAtual = tamanhoChave / 2;
         let idFase = 1;
+        
         while (faseAtual > 1) {
-          faseAtual /= 2;
+          faseAtual /= 2; 
+          
+          let nomeFase = "Fase";
+          if (faseAtual === 16) nomeFase = "16-Avos";
+          if (faseAtual === 8) nomeFase = "Oitavas";
+          if (faseAtual === 4) nomeFase = "Quartas";
+          if (faseAtual === 2) nomeFase = "Semifinal";
+          if (faseAtual === 1) nomeFase = "Final";
+
           for (let i = 0; i < faseAtual; i++) {
             const isFinal = faseAtual === 1;
             const idVis = isFinal ? "999" : String(idFase * 100 + i + 1);
-            const prox = isFinal ? null : (faseAtual === 2 ? "999" : String((idFase + 1) * 100 + Math.floor(i / 2) + 1));
+            
+            // 🔥 O BUG ESTAVA AQUI! Voltei com a regra que liga a Semifinal (2) na Final (999)
+            const prox = isFinal ? null : (faseAtual === 2 ? 999 : ((idFase + 1) * 100 + Math.floor(i / 2) + 1));
             
             lutas.push({
-              id_visual: idVis, evento_id: eventoId, categoria, faixa,
-              atleta_1: "TBD", equipe_1: "", numero_1: "",
-              atleta_2: "TBD", equipe_2: "", numero_2: "",
-              vencedor: null, fase: isFinal ? "Final" : "Fase", ordem: i + 1,
+              id_visual: idVis, 
+              evento_id: eventoId, 
+              categoria, 
+              faixa,
+              atleta_1: "TBD", 
+              equipe_1: "", 
+              numero_1: "", 
+              atleta_1_id: null,
+              
+              atleta_2: "TBD", 
+              equipe_2: "", 
+              numero_2: "", 
+              atleta_2_id: null,
+              
+              vencedor: null, 
+              vencedor_id: null,
+              fase: nomeFase,  
+              ordem: i + 1,
               lado: isFinal ? "centro" : (i + 1) <= (faseAtual / 2) ? "esquerda" : "direita",
-              proxima_luta: prox
+              proxima_luta: prox, // Agora as Semis avançam perfeitamente pra Final!
+              status_luta: "agendada",
+              pontuacao_atleta_1: {"pontos":0,"punicoes":0,"vantagens":0},
+              pontuacao_atleta_2: {"pontos":0,"punicoes":0,"vantagens":0}
             });
           }
           idFase++;
@@ -208,7 +269,7 @@ export default function GerarChavesPage() {
   }
 
   // ==========================================
-  // EXPORTAÇÃO PARA O MESÁRIO (CABEÇALHO PREMIUM)
+  // EXPORTAÇÃO (MANTIDA)
   // ==========================================
   const buscarChavesParaExportacao = async () => {
     if (!eventoId) {
@@ -217,13 +278,19 @@ export default function GerarChavesPage() {
     }
     
     setExportando(true);
-    const { data, error } = await supabase
-      .from("chaves")
-      .select("*")
-      .eq("evento_id", eventoId);
+    
+    let query = supabase.from("chaves").select("*").eq("evento_id", eventoId);
+    
+    if (tipoGeracao === "absoluto") {
+      query = query.ilike("categoria", "%Absoluto%");
+    } else {
+      query = query.not("categoria", "ilike", "%Absoluto%");
+    }
+
+    const { data, error } = await query;
 
     if (error || !data || data.length === 0) {
-      alert("Nenhuma chave encontrada! Você precisa GERAR O CHAVEAMENTO primeiro.");
+      alert(`Nenhuma chave de ${tipoGeracao === 'peso' ? 'Categoria de Peso' : 'Absoluto'} encontrada! Gere o chaveamento primeiro.`);
       setExportando(false);
       return null;
     }
@@ -245,6 +312,7 @@ export default function GerarChavesPage() {
     const doc = new jsPDF();
     const nomeEventoAtual = eventos.find(e => e.id.toString() === eventoId)?.nome || "Evento";
     const pageWidth = doc.internal.pageSize.getWidth();
+    const nomeArquivoCompl = tipoGeracao === 'peso' ? 'Categorias' : 'Absoluto';
 
     const grupos: any = {};
     lutas.forEach(l => {
@@ -253,7 +321,7 @@ export default function GerarChavesPage() {
       grupos[titulo].push(l);
     });
 
-    let yPos = 45; // Começa abaixo da margem do cabeçalho
+    let yPos = 45; 
 
     for (const [tituloGrupo, lutasGrupo] of Object.entries(grupos)) {
       if (yPos > 250) {
@@ -263,7 +331,7 @@ export default function GerarChavesPage() {
 
       doc.setFont("helvetica", "bold");
       doc.setFontSize(12);
-      doc.setTextColor(220, 38, 38); // Vermelho iTatame
+      doc.setTextColor(220, 38, 38); 
       doc.text(tituloGrupo.toUpperCase(), 14, yPos);
 
       const tableColumn = ["Luta #", "Fase", "Competidor 1 (Vermelho)", "Competidor 2 (Azul)", "Vencedor (Anotar)"];
@@ -299,49 +367,42 @@ export default function GerarChavesPage() {
           1: { cellWidth: 20 },
           4: { cellWidth: 40 } 
         },
-        margin: { top: 40 } // Previne que a tabela sobreponha o cabeçalho ao quebrar de página sozinha
+        margin: { top: 40 } 
       });
 
       yPos = (doc as any).lastAutoTable.finalY + 15;
     }
 
-    // ========================================================
-    // DESENHAR O CABEÇALHO PREMIUM EM TODAS AS PÁGINAS NO FINAL
-    // ========================================================
     const pageCount = (doc.internal as any).getNumberOfPages();
     for (let i = 1; i <= pageCount; i++) {
       doc.setPage(i);
       
-      // 1. Fundo Escuro do Header
       doc.setFillColor(15, 15, 18); 
       doc.rect(0, 0, pageWidth, 35, 'F');
       
-      // 2. Logo iTATAME (Vetorizado Textualmente)
       doc.setFont("helvetica", "bolditalic");
       doc.setFontSize(22);
-      doc.setTextColor(239, 68, 68); // Vermelho
+      doc.setTextColor(239, 68, 68); 
       doc.text("// i", 14, 22);
-      doc.setTextColor(255, 255, 255); // Branco
+      doc.setTextColor(255, 255, 255); 
       doc.text("TATAME", 26, 22);
 
-      // 3. Informações à direita
       doc.setFont("helvetica", "bold");
       doc.setFontSize(10);
-      doc.text("CRONOGRAMA DE LUTAS (MESÁRIO)", pageWidth - 14, 16, { align: "right" });
+      doc.text(`CRONOGRAMA DE LUTAS (${nomeArquivoCompl.toUpperCase()})`, pageWidth - 14, 16, { align: "right" });
       
       doc.setFont("helvetica", "normal");
       doc.setFontSize(10);
       doc.setTextColor(200, 200, 200);
       doc.text(nomeEventoAtual.toUpperCase(), pageWidth - 14, 23, { align: "right" });
 
-      // 4. Data e Paginação
       doc.setFontSize(8);
       doc.setTextColor(150, 150, 150);
       const dataHora = `${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}`;
       doc.text(`Exportado em: ${dataHora}  |  Página ${i} de ${pageCount}`, pageWidth - 14, 29, { align: "right" });
     }
 
-    doc.save(`chaveamento_mesario_${nomeEventoAtual.replace(/\s+/g, '_')}.pdf`);
+    doc.save(`chaveamento_${nomeArquivoCompl}_${nomeEventoAtual.replace(/\s+/g, '_')}.pdf`);
   }
 
   const exportarMesarioCSV = async () => {
@@ -369,7 +430,9 @@ export default function GerarChavesPage() {
     link.href = url;
     
     const nomeEventoAtual = eventos.find(e => e.id.toString() === eventoId)?.nome || "evento";
-    link.setAttribute("download", `chaveamento_mesario_${nomeEventoAtual.replace(/\s+/g, '_')}.csv`);
+    const nomeArquivoCompl = tipoGeracao === 'peso' ? 'Categorias' : 'Absoluto';
+    
+    link.setAttribute("download", `chaveamento_${nomeArquivoCompl}_${nomeEventoAtual.replace(/\s+/g, '_')}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -378,12 +441,10 @@ export default function GerarChavesPage() {
   return (
     <main className="bg-[#050505] text-white p-4 pt-12 pb-12 md:pt-20 md:min-h-screen relative overflow-x-hidden">
       
-      {/* LUZ DE FUNDO */}
       <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-red-600/10 blur-[100px] rounded-full pointer-events-none"></div>
 
       <div className="w-full max-w-xl mx-auto relative z-10">
         
-        {/* CABEÇALHO */}
         <div className="flex items-center gap-3 mb-6">
           <button onClick={() => router.back()} className="cursor-pointer p-2.5 bg-white/5 hover:bg-white/10 rounded-lg transition-colors text-zinc-400 hover:text-white border border-white/5 shrink-0">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
@@ -394,9 +455,6 @@ export default function GerarChavesPage() {
           </div>
         </div>
 
-        {/* ========================================================= */}
-        {/* BLOCO 1: ESCOLHA DO EVENTO E GERAÇÃO (AÇÃO DESTRUTIVA)    */}
-        {/* ========================================================= */}
         <div className="bg-[#0a0a0e]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-4 md:p-6 shadow-2xl mb-6">
           
           <div className="flex gap-2 mb-5">
@@ -417,7 +475,7 @@ export default function GerarChavesPage() {
                 {eventos.length === 0 && <option value="">Nenhum evento encontrado...</option>}
                 {eventos.map(ev => <option key={ev.id} value={ev.id.toString()}>{ev.nome}</option>)}
               </select>
-              <svg className="w-4 h-4 text-zinc-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+              <svg className="w-4 h-4 text-zinc-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7-7-7-7"></path></svg>
             </div>
           </div>
 
@@ -433,7 +491,6 @@ export default function GerarChavesPage() {
               </div>
             </label>
 
-            {/* AVISO FUNDIDO E CHAMATIVO (AÇÃO IRREVERSÍVEL + CRONOGRAMA) */}
             <div className="relative bg-[#2f0404] border border-red-500/50 rounded-xl p-4 md:p-5 shadow-[0_0_20px_rgba(239,68,68,0.15)] overflow-hidden">
               <div className="absolute inset-0 bg-red-500/5 animate-pulse pointer-events-none"></div>
               <div className="relative z-10 flex items-start gap-4">
@@ -461,9 +518,6 @@ export default function GerarChavesPage() {
           )}
         </div>
 
-        {/* ========================================================= */}
-        {/* BLOCO 2: ÁREA DO MESÁRIO (IMPRESSÃO DE CHAVES SEGURAS)    */}
-        {/* ========================================================= */}
         <div className="bg-gradient-to-b from-[#111116] to-black border border-white/5 rounded-2xl p-5 md:p-6 shadow-xl">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center shrink-0">

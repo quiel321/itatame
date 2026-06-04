@@ -1,25 +1,22 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { supabase } from "../lib/supabase";
+import { supabase } from "../lib/supabase"; 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import imageCompression from 'browser-image-compression';
-
-// IMPORTAÇÕES PARA GERAR O PDF E CSV
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
+import { ShieldCheck, Map, Trash2, Key, Users, CheckCircle, Copy, RefreshCw, Play, Edit3, Trophy, Search, ChevronDown } from "lucide-react";
 
 export default function AdminPage() {
   const router = useRouter();
   
-  // ESTADOS DO USUÁRIO E PERFIL
   const [currentUserId, setCurrentUserId] = useState("");
   const [organizadorNome, setOrganizadorNome] = useState("Organizador");
   const [fotoUrl, setFotoUrl] = useState("");
   const [isOrganizadorNativo, setIsOrganizadorNativo] = useState(false);
   
-  // ESTADOS DO MODAL DE PERFIL
   const [showPerfilModal, setShowPerfilModal] = useState(false);
   const [forceCompletion, setForceCompletion] = useState(false);
   const [savingPerfil, setSavingPerfil] = useState(false);
@@ -31,7 +28,6 @@ export default function AdminPage() {
   const [novaFoto, setNovaFoto] = useState<File | null>(null);
   const [novaFotoPreview, setNovaFotoPreview] = useState("");
 
-  // ESTADOS DO DASHBOARD DE EVENTOS
   const [eventos, setEventos] = useState<any[]>([]);
   const [eventoSelecionado, setEventoSelecionado] = useState<string>("todos");
   const [inscricoes, setInscricoes] = useState<any[]>([]);
@@ -42,7 +38,73 @@ export default function AdminPage() {
   const [editando, setEditando] = useState<any>(null);
 
   // ==========================================
-  // 1. CARREGAMENTO INICIAL DO USUÁRIO
+  // ESTADOS E FUNÇÕES DE GESTÃO DE STAFF
+  // ==========================================
+  const [showStaffModal, setShowStaffModal] = useState(false);
+  const [staffList, setStaffList] = useState<any[]>([]);
+  const [loadingStaff, setLoadingStaff] = useState(false);
+  const [novoStaff, setNovoStaff] = useState({ funcao: 'mesario', identificacao: '', pin_acesso: '' });
+
+  const abrirModalStaff = async () => {
+    if (!eventoSelecionado || eventoSelecionado === "todos") {
+      alert("⚠️ Por favor, selecione um campeonato específico no filtro abaixo para gerenciar os PINs da equipe.");
+      return;
+    }
+    setShowStaffModal(true);
+    setLoadingStaff(true);
+    
+    const { data, error } = await supabase
+      .from('staff_eventos')
+      .select('*')
+      .eq('evento_id', eventoSelecionado)
+      .order('criado_em', { ascending: false });
+
+    if (!error && data) setStaffList(data);
+    setLoadingStaff(false);
+  };
+
+  const gerarPinAleatorio = () => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let pin = '';
+    for (let i = 0; i < 6; i++) {
+      pin += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    setNovoStaff({ ...novoStaff, pin_acesso: pin });
+  };
+
+  const adicionarStaff = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!novoStaff.identificacao || !novoStaff.pin_acesso) return;
+
+    setLoadingStaff(true);
+    const pinLimpo = novoStaff.pin_acesso.trim().toUpperCase();
+
+    const { data, error } = await supabase.from('staff_eventos').insert([{
+      evento_id: eventoSelecionado,
+      funcao: novoStaff.funcao,
+      identificacao: novoStaff.identificacao,
+      pin_acesso: pinLimpo
+    }]).select().single();
+
+    if (error) {
+      if (error.code === '23505') alert("Este PIN de segurança já está sendo utilizado! Gere outro.");
+      else alert("Erro ao criar acesso: " + error.message);
+    } else if (data) {
+      setStaffList([data, ...staffList]);
+      setNovoStaff({ funcao: 'mesario', identificacao: '', pin_acesso: '' });
+    }
+    setLoadingStaff(false);
+  };
+
+  const excluirStaff = async (id: string) => {
+    if (!window.confirm("Revogar este acesso? O staff não poderá mais logar com este PIN.")) return;
+    await supabase.from('staff_eventos').delete().eq('id', id);
+    setStaffList(staffList.filter(s => s.id !== id));
+  };
+
+
+  // ==========================================
+  // CARREGAMENTO INICIAL DO USUÁRIO
   // ==========================================
   useEffect(() => {
     async function carregarDashboard() {
@@ -54,46 +116,31 @@ export default function AdminPage() {
       }
       setCurrentUserId(authData.user.id);
 
-      // PROCURAR O USUÁRIO NA TABELA NOVA (ORGANIZADORES)
-      const { data: orgData } = await supabase
-        .from("organizadores")
-        .select("*")
-        .eq("user_id", authData.user.id)
-        .maybeSingle();
+      const { data: orgData } = await supabase.from("organizadores").select("*").eq("user_id", authData.user.id).maybeSingle();
 
       if (orgData) {
         setIsOrganizadorNativo(true);
         setOrganizadorNome(orgData.nome.split(" ")[0]);
         if (orgData.foto_url) setFotoUrl(orgData.foto_url);
         
-        // Alimenta os dados do formulário de perfil
         setPerfilData({
-          nome: orgData.nome || "",
-          academia: orgData.academia || "",
-          telefone: orgData.telefone || "",
-          documento: orgData.documento || "",
-          cep: orgData.cep || "",
-          endereco: orgData.endereco || "",
-          cidade: orgData.cidade || "",
-          estado: orgData.estado || "",
+          nome: orgData.nome || "", academia: orgData.academia || "", telefone: orgData.telefone || "",
+          documento: orgData.documento || "", cep: orgData.cep || "", endereco: orgData.endereco || "",
+          cidade: orgData.cidade || "", estado: orgData.estado || "",
         });
 
-        // SE O PERFIL NÃO ESTIVER COMPLETO, FORÇA O POPUP!
         if (orgData.perfil_completo === false) {
           setForceCompletion(true);
           setShowPerfilModal(true);
         }
 
       } else {
-        // Fallback: Se for o Super Admin antigo da tabela Atletas testando o painel
         const { data: perfil } = await supabase.from("perfis").select("nome").eq("id", authData.user.id).maybeSingle();
         if (perfil?.nome) setOrganizadorNome(perfil.nome.split(" ")[0]);
-
         const { data: atleta } = await supabase.from("atletas").select("foto_url").eq("user_id", authData.user.id).maybeSingle();
         if (atleta?.foto_url) setFotoUrl(atleta.foto_url);
       }
 
-      // CARREGA OS EVENTOS DO ORGANIZADOR
       const { data: meusEventos, error } = await supabase
         .from("eventos")
         .select("id, nome")
@@ -111,9 +158,6 @@ export default function AdminPage() {
     carregarDashboard();
   }, [router]);
 
-  // ==========================================
-  // 2. CARREGAR INSCRIÇÕES QUANDO O EVENTO MUDA
-  // ==========================================
   useEffect(() => {
     async function carregarInscricoes() {
       if (eventos.length === 0) {
@@ -122,7 +166,9 @@ export default function AdminPage() {
         return;
       }
       setLoading(true);
-      let query = supabase.from("inscricoes").select("*").order("id", { ascending: false });
+      
+      // 🔥 BLINDAGEM DO JOIN: Buscando o nome do evento para não quebrar o layout!
+      let query = supabase.from("inscricoes").select("*, eventos(nome)").order("id", { ascending: false });
       
       if (eventoSelecionado === "todos") {
         const meusEventosIds = eventos.map(e => e.id);
@@ -136,14 +182,9 @@ export default function AdminPage() {
       setLoading(false);
     }
     
-    if (eventoSelecionado) {
-      carregarInscricoes();
-    }
+    if (eventoSelecionado) carregarInscricoes();
   }, [eventoSelecionado, eventos]);
 
-  // ==========================================
-  // 3. LÓGICA DE EDIÇÃO DO PERFIL E FOTO
-  // ==========================================
   async function handleNovaFoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -156,7 +197,6 @@ export default function AdminPage() {
         const finalBlob = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
         processedFile = new File([finalBlob], file.name.replace(/\.heic$/i, ".jpg"), { type: "image/jpeg" });
       }
-
       const options = { maxSizeMB: 0.5, maxWidthOrHeight: 800, useWebWorker: true };
       const compressedFile = await imageCompression(processedFile, options);
 
@@ -175,7 +215,6 @@ export default function AdminPage() {
     try {
       let fotoUrlFinal = fotoUrl;
 
-      // Se ele trocou a foto, fazemos o upload pro Supabase
       if (novaFoto && currentUserId) {
         const fileExt = novaFoto.name.split('.').pop();
         const fileName = `${currentUserId}-${Date.now()}.${fileExt}`;
@@ -188,26 +227,18 @@ export default function AdminPage() {
         fotoUrlFinal = publicUrlData.publicUrl;
       }
 
-      // Atualiza a tabela com todos os dados e marca como completo
       const { error: updateError } = await supabase
         .from("organizadores")
         .update({
-          nome: perfilData.nome,
-          academia: perfilData.academia,
-          telefone: perfilData.telefone,
-          documento: perfilData.documento,
-          cep: perfilData.cep,
-          endereco: perfilData.endereco,
-          cidade: perfilData.cidade,
-          estado: perfilData.estado,
-          foto_url: fotoUrlFinal,
-          perfil_completo: true // A MAGIA ACONTECE AQUI!
+          nome: perfilData.nome, academia: perfilData.academia, telefone: perfilData.telefone,
+          documento: perfilData.documento, cep: perfilData.cep, endereco: perfilData.endereco,
+          cidade: perfilData.cidade, estado: perfilData.estado, foto_url: fotoUrlFinal,
+          perfil_completo: true 
         })
         .eq("user_id", currentUserId);
 
       if (updateError) throw updateError;
 
-      // Atualiza a tela sem recarregar
       setFotoUrl(fotoUrlFinal);
       setOrganizadorNome(perfilData.nome.split(" ")[0]);
       setForceCompletion(false);
@@ -215,16 +246,12 @@ export default function AdminPage() {
       alert(forceCompletion ? "Cadastro finalizado com sucesso! Bem-vindo!" : "Perfil atualizado com sucesso!");
 
     } catch (err) {
-      console.error(err);
       alert("Erro ao salvar o perfil.");
     } finally {
       setSavingPerfil(false);
     }
   }
 
-  // ==========================================
-  // FUNÇÕES DA TABELA DE ATLETAS
-  // ==========================================
   async function toggleStatus(id: string, campo: string, valorAtual: boolean) {
     setLoadingId(id);
     const { error } = await supabase.from("inscricoes").update({ [campo]: !valorAtual }).eq("id", id);
@@ -245,6 +272,26 @@ export default function AdminPage() {
     setLoadingId(null);
   }
 
+  async function excluirInscricao(id: string, nomeAtleta: string) {
+    const confirmacao = window.confirm(`🚨 CUIDADO: Tem certeza que deseja excluir DEFINITIVAMENTE a inscrição de ${nomeAtleta || 'este atleta'}?`);
+    if (!confirmacao) return;
+
+    setLoadingId(id);
+    try {
+      const { error } = await supabase.from("inscricoes").delete().eq("id", id);
+      if (error) throw error;
+      setInscricoes(prev => prev.filter(inst => inst.id !== id));
+      alert("Inscrição excluída com sucesso.");
+    } catch (err: any) {
+      alert("Erro ao excluir: " + err.message);
+    } finally {
+      setLoadingId(null);
+    }
+  }
+
+  // ==========================================
+  // FILTRAGEM
+  // ==========================================
   const inscricoesFiltradas = inscricoes.filter((inst) => {
     const termo = busca.toLowerCase();
     const matchBusca = (inst.atleta && inst.atleta.toLowerCase().includes(termo)) || (inst.equipe && inst.equipe.toLowerCase().includes(termo));
@@ -252,360 +299,384 @@ export default function AdminPage() {
     return matchBusca && matchPagamento;
   });
 
+  // ==========================================
+  // MOTOR DE EXPORTAÇÃO (PDF E CSV)
+  // ==========================================
+  const exportarCSV = () => {
+    if (inscricoesFiltradas.length === 0) {
+      alert("Nenhuma inscrição encontrada para exportar.");
+      return;
+    }
+
+    // Cabecalhos do CSV
+    const headers = ["Atleta", "Equipe", "Categoria", "Faixa", "Peso", "Status Pagamento", "Peso Check-in", "Campeonato"];
+    
+    // Converte os dados para as linhas do CSV
+    const rows = inscricoesFiltradas.map(insc => [
+      `"${insc.atleta || 'N/A'}"`, // Aspas para não quebrar a virgula no excel
+      `"${insc.equipe || 'N/A'}"`,
+      `"${insc.categoria || 'N/A'}"`,
+      `"${insc.faixa || 'N/A'}"`,
+      `"${insc.peso ? insc.peso + ' KG' : 'Absoluto'}"`,
+      `"${insc.pagamento_ok ? 'PAGO' : 'PENDENTE'}"`,
+      `"${insc.pesagem_ok ? 'OK' : 'PENDENTE'}"`,
+      `"${insc.eventos?.nome || 'N/A'}"`
+    ]);
+
+    // Junta tudo (Cabecalhos + Linhas)
+    const csvContent = [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+    
+    // Cria o arquivo e força o download
+    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' }); // \uFEFF força o formato UTF-8 no Excel
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    
+    link.setAttribute("href", url);
+    link.setAttribute("download", `inscricoes_iTatame_${new Date().toISOString().slice(0,10)}.csv`);
+    link.style.visibility = 'hidden';
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const exportarPDF = () => {
+    if (inscricoesFiltradas.length === 0) {
+      alert("Nenhuma inscrição encontrada para exportar.");
+      return;
+    }
+
+    try {
+      // O jsPDF precisa estar instalado: npm install jspdf jspdf-autotable
+      const doc = new jsPDF("landscape"); // Landscape porque tem muita coluna
+
+      // Título do PDF
+      doc.setFontSize(22);
+      doc.setTextColor(220, 38, 38); // Vermelho do iTatame
+      doc.text("ITATAME - LISTA DE ATLETAS", 14, 20);
+
+      // Subtítulo descritivo
+      doc.setFontSize(10);
+      doc.setTextColor(100, 100, 100); // Cinza
+      const dataHoje = new Date().toLocaleDateString('pt-BR');
+      doc.text(`Relatório gerado em ${dataHoje}. Total de atletas: ${inscricoesFiltradas.length}`, 14, 28);
+
+      // Mapeamento dos dados para a tabela do PDF
+      const tableColumn = ["Atleta", "Equipe", "Categoria", "Faixa", "Peso", "Financeiro", "Pesagem"];
+      
+      // 🔥 A CORREÇÃO ESTÁ AQUI: Adicionamos ': any[]' para tipar o array
+      const tableRows: any[] = [];
+
+      inscricoesFiltradas.forEach(insc => {
+        const inscData = [
+          insc.atleta || "N/A",
+          insc.equipe || "N/A",
+          insc.categoria || "N/A",
+          insc.faixa || "N/A",
+          insc.peso ? `${insc.peso} KG` : "Abs.",
+          insc.pagamento_ok ? "PAGO" : "PENDENTE",
+          insc.pesagem_ok ? "OK" : "PEND."
+        ];
+        tableRows.push(inscData);
+      });
+
+      // Gera a tabela usando a extensão autotable
+      autoTable(doc, {
+        head: [tableColumn],
+        body: tableRows,
+        startY: 35,
+        theme: 'grid',
+        styles: { fontSize: 8, cellPadding: 3 },
+        headStyles: { fillColor: [20, 20, 20], textColor: [255, 255, 255], fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: [240, 240, 240] },
+        columnStyles: {
+          0: { cellWidth: 50 }, // Coluna do nome mais larga
+          1: { cellWidth: 40 }, // Coluna da equipe
+          5: { fontStyle: 'bold', halign: 'center' }, // Coluna Pagamento centralizada
+          6: { fontStyle: 'bold', halign: 'center' }  // Coluna Peso centralizada
+        }
+      });
+
+      // Salva o PDF no computador
+      doc.save(`relatorio_iTatame_${new Date().toISOString().slice(0,10)}.pdf`);
+
+    } catch (error) {
+      console.error("Erro ao gerar PDF:", error);
+      alert("Houve um erro ao gerar o PDF. Verifique se as bibliotecas 'jspdf' e 'jspdf-autotable' estão instaladas.");
+    }
+  };
+
   const totalInscritos = inscricoes.length;
   const totalPagos = inscricoes.filter(i => i.pagamento_ok).length;
   const totalPendentes = totalInscritos - totalPagos;
 
-  // ==========================================
-  // EXPORTAÇÃO PARA PDF E CSV
-  // ==========================================
-  const exportarCSV = () => {
-    if (inscricoesFiltradas.length === 0) {
-      alert("Nenhuma inscrição para exportar com os filtros atuais.");
-      return;
-    }
-
-    const headers = ["Atleta", "Equipe", "Faixa", "Categoria", "Peso", "Status Pagamento", "Status Pesagem"];
-    
-    const csvRows = inscricoesFiltradas.map(insc => [
-      `"${insc.atleta || insc.nome || 'N/I'}"`,
-      `"${insc.equipe || 'Sem Equipe'}"`,
-      `"${insc.faixa || '-'}"`,
-      `"${insc.categoria || '-'}"`,
-      `"${insc.peso ? insc.peso + 'kg' : 'Absoluto'}"`,
-      `"${insc.pagamento_ok ? 'PAGO' : 'PENDENTE'}"`,
-      `"${insc.pesagem_ok ? 'OK' : 'PENDENTE'}"`
-    ].join(","));
-
-    const csvContent = ["\uFEFF" + headers.join(","), ...csvRows].join("\n");
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", `Inscricoes_${eventoSelecionado === 'todos' ? 'Geral' : eventoSelecionado}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  }
-
-  const exportarPDF = () => {
-    if (inscricoesFiltradas.length === 0) {
-      alert("Nenhuma inscrição para exportar com os filtros atuais.");
-      return;
-    }
-
-    const doc = new jsPDF();
-    const pageWidth = doc.internal.pageSize.getWidth();
-
-    const nomeEventoAtual = eventoSelecionado === "todos" 
-      ? "Relatório Geral de Eventos" 
-      : eventos.find(e => e.id.toString() === eventoSelecionado)?.nome || "Relatório de Inscrições";
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(16);
-    doc.text(nomeEventoAtual, 14, 45); // Começa abaixo do cabeçalho
-    
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "normal");
-    doc.text(`Total de inscrições filtradas: ${inscricoesFiltradas.length}`, 14, 52);
-
-    const tableColumn = ["Atleta", "Equipe", "Faixa", "Categoria", "Peso", "Pagamento"];
-    const tableRows: any[] = [];
-
-    inscricoesFiltradas.forEach(insc => {
-      tableRows.push([
-        insc.atleta || insc.nome || "N/I",
-        insc.equipe || "Sem Equipe",
-        insc.faixa || "-",
-        insc.categoria || "-",
-        insc.peso ? `${insc.peso}kg` : "Abs.",
-        insc.pagamento_ok ? "PAGO" : "PENDENTE"
-      ]);
-    });
-
-    autoTable(doc, {
-      head: [tableColumn],
-      body: tableRows,
-      startY: 56,
-      theme: 'grid',
-      styles: { fontSize: 8, cellPadding: 3, valign: 'middle' },
-      headStyles: { fillColor: [20, 20, 20], textColor: [255, 255, 255], fontStyle: 'bold' },
-      margin: { top: 40 } // Previne sobreposição ao quebrar página
-    });
-
-    // ========================================================
-    // DESENHAR O CABEÇALHO PREMIUM NO PDF
-    // ========================================================
-    const pageCount = (doc.internal as any).getNumberOfPages();
-    for (let i = 1; i <= pageCount; i++) {
-      doc.setPage(i);
-      
-      doc.setFillColor(15, 15, 18); 
-      doc.rect(0, 0, pageWidth, 35, 'F');
-      
-      doc.setFont("helvetica", "bolditalic");
-      doc.setFontSize(22);
-      doc.setTextColor(239, 68, 68); // Vermelho
-      doc.text("// i", 14, 22);
-      doc.setTextColor(255, 255, 255); // Branco
-      doc.text("TATAME", 26, 22);
-
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(10);
-      doc.text("RELATÓRIO DE INSCRIÇÕES", pageWidth - 14, 16, { align: "right" });
-      
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(10);
-      doc.setTextColor(200, 200, 200);
-      doc.text(organizadorNome.toUpperCase(), pageWidth - 14, 23, { align: "right" });
-
-      doc.setFontSize(8);
-      doc.setTextColor(150, 150, 150);
-      const dataHora = `${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}`;
-      doc.text(`Exportado em: ${dataHora}  |  Página ${i} de ${pageCount}`, pageWidth - 14, 29, { align: "right" });
-    }
-
-    doc.save(`Inscricoes_${eventoSelecionado === 'todos' ? 'Geral' : eventoSelecionado}.pdf`);
-  }
-
   return (
-    <main className="min-h-screen bg-[#050505] text-white p-4 md:p-8 relative overflow-hidden font-sans">
+    <main className="min-h-screen bg-[#050505] text-white p-4 md:p-8 relative overflow-hidden font-sans selection:bg-red-500/30">
       
+      {/* EFEITOS DE LUZ SUAVES */}
+      <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-red-600/5 blur-[150px] rounded-full pointer-events-none"></div>
+      <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-red-900/5 blur-[150px] rounded-full pointer-events-none"></div>
+
       <div className="max-w-7xl mx-auto relative z-10">
         
-        {/* HEADER DE BOAS VINDAS VIP C/ FOTO */}
+        {/* HEADER VIP C/ FOTO */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 pb-6 border-b border-white/10">
           <div className="flex items-center gap-4 md:gap-5">
-            {/* AVATAR DO ORGANIZADOR */}
             <div className="shrink-0 relative group">
               {fotoUrl ? (
                 <img src={fotoUrl} alt="Perfil Organizador" className="w-16 h-16 md:w-20 md:h-20 rounded-full object-cover border-2 border-red-500/50 shadow-[0_0_20px_rgba(239,68,68,0.3)]" />
               ) : (
                 <div className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-zinc-900 border-2 border-white/10 flex items-center justify-center text-zinc-600 shadow-lg">
-                  <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                  <Users className="w-8 h-8" />
                 </div>
               )}
             </div>
             
             <div>
-              <span className="text-yellow-500 text-[9px] md:text-[10px] font-black uppercase tracking-widest bg-yellow-500/10 border border-yellow-500/20 px-2.5 py-1 rounded-md mb-2 inline-block">
+              <span className="text-yellow-500 text-[9px] md:text-[10px] font-black uppercase tracking-widest bg-yellow-500/10 border border-yellow-500/20 px-2.5 py-1 rounded-md mb-2 inline-block shadow-inner">
                 Área Exclusiva
               </span>
               <h1 className="text-2xl md:text-4xl font-black text-white tracking-tight">Olá, {organizadorNome}</h1>
-              <p className="text-zinc-500 text-[10px] md:text-sm mt-1">Este é o seu centro de comando operacional.</p>
+              <p className="text-zinc-500 text-[10px] md:text-sm mt-1 font-medium">Seu centro de comando operacional e visão geral.</p>
             </div>
           </div>
           
           <div className="flex items-center gap-3 mt-4 md:mt-0 flex-wrap">
             {isOrganizadorNativo && (
-              <button onClick={() => setShowPerfilModal(true)} className="cursor-pointer bg-black hover:bg-white/5 border border-white/10 text-zinc-400 hover:text-white text-[9px] md:text-[10px] font-bold uppercase tracking-widest px-3.5 py-2.5 rounded-lg transition-colors flex items-center gap-1.5 shadow-lg">
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+              <button onClick={() => setShowPerfilModal(true)} className="cursor-pointer bg-white/5 hover:bg-white/10 border border-white/10 text-white text-[9px] md:text-[10px] font-bold uppercase tracking-widest px-4 py-2.5 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm">
                 Editar perfil
               </button>
             )}
 
-            <button onClick={() => supabase.auth.signOut().then(() => router.push('/'))} className="cursor-pointer bg-[#0e0e12] border border-white/5 hover:bg-white/5 text-zinc-400 hover:text-white text-[9px] md:text-[10px] font-bold uppercase tracking-widest px-3.5 py-2.5 rounded-lg transition-colors flex items-center gap-1.5">
+            <button onClick={() => supabase.auth.signOut().then(() => router.push('/'))} className="cursor-pointer bg-red-950/30 hover:bg-red-900/50 border border-red-900/50 text-red-500 text-[9px] md:text-[10px] font-bold uppercase tracking-widest px-4 py-2.5 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm">
               Sair do Sistema
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
             </button>
           </div>
         </div>
 
-        {/* ========================================================= */}
-        {/* DASHBOARD DE EVENTOS (OCULTO SE FORÇANDO COMPLETAR PERFIL) */}
-        {/* ========================================================= */}
+        {/* DASHBOARD PRINCIPAL */}
         {!forceCompletion && (
           <div className={showPerfilModal ? "opacity-30 blur-sm pointer-events-none transition-all duration-300" : "transition-all duration-300"}>
             
-            {/* AÇÕES RÁPIDAS SÓLIDAS */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10">
-              <Link href="/admin/novo-evento" className="group cursor-pointer bg-[#0e0e12] border border-white/5 hover:border-white/20 rounded-2xl p-5 transition-all flex items-center gap-4 shadow-lg">
-                <div className="w-12 h-12 bg-black text-red-500 border border-white/5 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-red-600 group-hover:border-red-500 group-hover:text-white transition-all">
+            {/* AÇÕES RÁPIDAS DINÂMICAS */}
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4 mb-10">
+              
+              <Link href="/admin/novo-evento" className="group cursor-pointer bg-black/40 border border-white/5 hover:border-white/20 rounded-2xl p-4 md:p-5 transition-all flex flex-col xl:flex-row xl:items-center gap-3 md:gap-4 shadow-xl hover:-translate-y-1">
+                <div className="w-10 h-10 md:w-12 md:h-12 bg-black text-red-500 border border-white/5 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-red-600 group-hover:border-red-500 group-hover:text-white transition-all shadow-inner">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"></path></svg>
                 </div>
                 <div>
-                  <h3 className="text-sm md:text-base font-black text-white transition-colors">Lançar Novo Evento</h3>
-                  <p className="text-zinc-500 text-[10px] md:text-xs font-medium mt-0.5">Criar campeonato do zero.</p>
+                  <h3 className="text-xs md:text-sm font-black text-white transition-colors leading-tight">Novo Evento</h3>
+                  <p className="text-zinc-500 text-[9px] md:text-[10px] font-medium mt-1 hidden md:block">Criar campeonato.</p>
                 </div>
               </Link>
 
-              <Link href="/admin/chaves" className="group cursor-pointer bg-[#0e0e12] border border-white/5 hover:border-white/20 rounded-2xl p-5 transition-all flex items-center gap-4 shadow-lg">
-                <div className="w-12 h-12 bg-black text-yellow-500 border border-white/5 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-yellow-500 group-hover:border-yellow-500 group-hover:text-black transition-all">
+              <Link href="/admin/chaves" className="group cursor-pointer bg-black/40 border border-white/5 hover:border-white/20 rounded-2xl p-4 md:p-5 transition-all flex flex-col xl:flex-row xl:items-center gap-3 md:gap-4 shadow-xl hover:-translate-y-1">
+                <div className="w-10 h-10 md:w-12 md:h-12 bg-black text-yellow-500 border border-white/5 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-yellow-500 group-hover:border-yellow-500 group-hover:text-black transition-all shadow-inner">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
                 </div>
                 <div>
-                  <h3 className="text-sm md:text-base font-black text-white transition-colors">Gerador de Chaves</h3>
-                  <p className="text-zinc-500 text-[10px] md:text-xs font-medium mt-0.5">Sorteio de lutas automático.</p>
+                  <h3 className="text-xs md:text-sm font-black text-white transition-colors leading-tight">Chaveamento</h3>
+                  <p className="text-zinc-500 text-[9px] md:text-[10px] font-medium mt-1 hidden md:block">Sortear atletas.</p>
                 </div>
               </Link>
 
-              <Link href="/admin/vouchers" className="group cursor-pointer bg-[#0e0e12] border border-white/5 hover:border-white/20 rounded-2xl p-5 transition-all flex items-center gap-4 shadow-lg">
-                <div className="w-12 h-12 bg-black text-blue-400 border border-white/5 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-blue-500 group-hover:border-blue-500 group-hover:text-white transition-all">
+              <Link href="/admin/tatames" className="group cursor-pointer bg-black/40 border border-white/5 hover:border-white/20 rounded-2xl p-4 md:p-5 transition-all flex flex-col xl:flex-row xl:items-center gap-3 md:gap-4 shadow-xl hover:-translate-y-1">
+                <div className="w-10 h-10 md:w-12 md:h-12 bg-black text-emerald-500 border border-white/5 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-emerald-500 group-hover:border-emerald-500 group-hover:text-white transition-all shadow-inner">
+                  <Map className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-xs md:text-sm font-black text-white transition-colors leading-tight">Zonas de Luta</h3>
+                  <p className="text-zinc-500 text-[9px] md:text-[10px] font-medium mt-1 hidden md:block">Distribuir tatames.</p>
+                </div>
+              </Link>
+
+              <button onClick={abrirModalStaff} className="text-left group cursor-pointer bg-black/40 border border-white/5 hover:border-white/20 rounded-2xl p-4 md:p-5 transition-all flex flex-col xl:flex-row xl:items-center gap-3 md:gap-4 shadow-xl hover:-translate-y-1">
+                <div className="w-10 h-10 md:w-12 md:h-12 bg-black text-blue-400 border border-white/5 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-blue-500 group-hover:border-blue-500 group-hover:text-white transition-all shadow-inner">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-xs md:text-sm font-black text-white transition-colors leading-tight">Gestão de Equipe</h3>
+                  <p className="text-zinc-500 text-[9px] md:text-[10px] font-medium mt-1 hidden md:block">PINs de Segurança.</p>
+                </div>
+              </button>
+
+              <Link href="/admin/vouchers" className="col-span-2 sm:col-span-1 md:col-span-1 lg:col-span-1 group cursor-pointer bg-black/40 border border-white/5 hover:border-white/20 rounded-2xl p-4 md:p-5 transition-all flex flex-col xl:flex-row xl:items-center gap-3 md:gap-4 shadow-xl hover:-translate-y-1">
+                <div className="w-10 h-10 md:w-12 md:h-12 bg-black text-purple-400 border border-white/5 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-purple-500 group-hover:border-purple-500 group-hover:text-white transition-all shadow-inner">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"></path></svg>
                 </div>
                 <div>
-                  <h3 className="text-sm md:text-base font-black text-white transition-colors">Cortesias / Vouchers</h3>
-                  <p className="text-zinc-500 text-[10px] md:text-xs font-medium mt-0.5">Pacotes e vagas de equipes.</p>
+                  <h3 className="text-xs md:text-sm font-black text-white transition-colors leading-tight">Cortesias Livres</h3>
+                  <p className="text-zinc-500 text-[9px] md:text-[10px] font-medium mt-1 hidden md:block">Vouchers e Vagas.</p>
                 </div>
               </Link>
             </div>
 
-            {/* SESSÃO: GESTÃO DE ATLETAS E EVENTOS */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 border-b border-white/5 pb-4">
               <div className="flex items-center gap-3">
-                <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
-                <h2 className="text-xl font-black uppercase tracking-widest text-white">Gestão de Atletas</h2>
+                <Users className="w-5 h-5 text-red-500" />
+                <h2 className="text-xl font-black uppercase tracking-widest text-white">Gestão de Inscrições</h2>
               </div>
               <div className="flex gap-2 w-full md:w-auto">
-                <button onClick={exportarCSV} className="flex-1 md:flex-none justify-center cursor-pointer bg-white/5 hover:bg-white/10 border border-white/10 text-white text-[9px] md:text-[10px] font-bold uppercase tracking-widest px-4 py-2.5 rounded-lg transition-colors flex items-center gap-1.5 active:scale-95">
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                <button onClick={exportarCSV} className="flex-1 md:flex-none justify-center cursor-pointer bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300 hover:text-white text-[9px] md:text-[10px] font-bold uppercase tracking-widest px-4 py-2.5 rounded-lg transition-colors flex items-center gap-1.5 active:scale-95 shadow-sm">
                   Gerar CSV
                 </button>
-                <button onClick={exportarPDF} className="flex-1 md:flex-none justify-center cursor-pointer bg-red-600/10 hover:bg-red-600/20 border border-red-500/30 text-red-500 text-[9px] md:text-[10px] font-bold uppercase tracking-widest px-4 py-2.5 rounded-lg transition-colors flex items-center gap-1.5 active:scale-95">
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                <button onClick={exportarPDF} className="flex-1 md:flex-none justify-center cursor-pointer bg-red-600/10 hover:bg-red-600/20 border border-red-500/30 text-red-500 hover:text-red-400 text-[9px] md:text-[10px] font-bold uppercase tracking-widest px-4 py-2.5 rounded-lg transition-colors flex items-center gap-1.5 active:scale-95 shadow-sm">
                   Gerar PDF
                 </button>
               </div>
             </div>
 
-            {/* SELETOR DE EVENTO E BUSCA */}
-            <div className="bg-[#0e0e12] border border-white/5 rounded-xl p-3 md:p-4 mb-6 flex flex-col md:flex-row items-center gap-3 shadow-xl">
-              <label className="text-zinc-500 font-black uppercase tracking-widest text-[9px] md:text-[10px] shrink-0">Filtro de Campeonato:</label>
+            {/* SELETOR DE EVENTO E BUSCA BLENDADO */}
+            <div className="bg-black/40 border border-white/5 rounded-2xl p-3 md:p-4 mb-8 flex flex-col md:flex-row items-center gap-3 shadow-xl">
+              <label className="text-zinc-500 font-black uppercase tracking-widest text-[9px] md:text-[10px] shrink-0 pl-2">Filtrar Evento:</label>
+              
               <div className="relative w-full md:w-1/3 cursor-pointer">
-                <select value={eventoSelecionado} onChange={(e) => setEventoSelecionado(e.target.value)} className="cursor-pointer w-full bg-black border border-white/5 focus:border-red-500 outline-none rounded-lg px-3 py-3 text-white transition-all appearance-none font-bold text-xs md:text-sm" disabled={eventos.length === 0}>
+                <select value={eventoSelecionado} onChange={(e) => setEventoSelecionado(e.target.value)} className="cursor-pointer w-full bg-[#050505] border border-white/10 focus:border-red-500 outline-none rounded-xl px-4 py-3 text-white transition-all appearance-none font-bold text-xs shadow-inner" disabled={eventos.length === 0}>
                   {eventos.length === 0 && <option value="">Nenhum evento criado ainda...</option>}
                   {eventos.length > 0 && <option value="todos">Todos os seus eventos</option>}
                   {eventos.map(ev => <option key={ev.id} value={ev.id.toString()}>🏆 {ev.nome}</option>)}
                 </select>
-                <svg className="w-4 h-4 text-zinc-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                <ChevronDown className="w-4 h-4 text-zinc-500 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
               </div>
+
+              {eventoSelecionado && eventoSelecionado !== "todos" && (
+                <Link 
+                  href={`/admin/eventos/${eventoSelecionado}/editar`} 
+                  className="cursor-pointer w-full md:w-auto shrink-0 bg-red-600/10 hover:bg-red-600/20 border border-red-500/30 text-red-500 hover:text-red-400 text-[10px] font-bold uppercase tracking-widest px-4 py-3 rounded-xl transition-all flex items-center justify-center gap-2 active:scale-95 shadow-sm"
+                >
+                  <Edit3 size={14} /> Editar Regras e Banner
+                </Link>
+              )}
 
               {eventos.length > 0 && (
                 <>
                   <div className="flex-1 relative cursor-text w-full">
-                    <svg className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-                    <input type="text" placeholder="Buscar atleta ou equipe..." value={busca} onChange={(e) => setBusca(e.target.value)} className="w-full bg-black border border-white/5 rounded-lg pl-9 pr-3 py-3 outline-none focus:border-red-500 text-white transition-colors text-xs" />
+                    <Search className="w-4 h-4 text-zinc-500 absolute left-4 top-1/2 -translate-y-1/2" />
+                    <input type="text" placeholder="Buscar atleta ou academia..." value={busca} onChange={(e) => setBusca(e.target.value)} className="w-full bg-[#050505] border border-white/10 rounded-xl pl-11 pr-4 py-3 outline-none focus:border-red-500 text-white transition-colors text-xs placeholder:text-zinc-600 shadow-inner" />
                   </div>
                   <div className="w-full md:w-48 relative cursor-pointer">
-                    <select value={filtroPagamento} onChange={(e) => setFiltroPagamento(e.target.value)} className="cursor-pointer w-full bg-black border border-white/5 rounded-lg px-3 py-3 outline-none focus:border-red-500 text-white transition-colors appearance-none text-xs font-bold">
+                    <select value={filtroPagamento} onChange={(e) => setFiltroPagamento(e.target.value)} className="cursor-pointer w-full bg-[#050505] border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-red-500 text-zinc-300 transition-colors appearance-none text-xs font-bold shadow-inner">
                       <option value="todos">Todos os Status</option>
                       <option value="pagos">Somente Pagos</option>
                       <option value="pendentes">Somente Pendentes</option>
                     </select>
-                    <svg className="w-3.5 h-3.5 text-zinc-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                    <ChevronDown className="w-3.5 h-3.5 text-zinc-500 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
                   </div>
                 </>
               )}
             </div>
 
-            {/* DASHBOARD DE NÚMEROS SÓLIDOS */}
+            {/* NUMEROS SUAVES */}
             {eventos.length > 0 && (
               <div className="grid grid-cols-3 gap-3 md:gap-5 mb-8">
-                <div className="bg-[#0e0e12] border-t-4 border-t-zinc-600 border-x border-b border-white/5 rounded-2xl p-4 md:p-6 shadow-xl flex flex-col items-center justify-center text-center">
-                  <h3 className="text-zinc-500 font-bold uppercase text-[9px] md:text-[11px] tracking-widest mb-1.5">Inscritos</h3>
+                <div className="bg-black/40 border border-white/5 rounded-2xl p-4 md:p-6 shadow-xl flex flex-col items-center justify-center text-center backdrop-blur-sm">
+                  <h3 className="text-zinc-500 font-black uppercase text-[9px] md:text-[11px] tracking-widest mb-1.5">Total Inscritos</h3>
                   <p className="text-2xl md:text-4xl font-black text-white">{totalInscritos}</p>
                 </div>
-                <div className="bg-[#0e0e12] border-t-4 border-t-green-500 border-x border-b border-white/5 rounded-2xl p-4 md:p-6 shadow-xl flex flex-col items-center justify-center text-center">
-                  <h3 className="text-green-500 font-bold uppercase text-[9px] md:text-[11px] tracking-widest mb-1.5">Pagos</h3>
-                  <p className="text-2xl md:text-4xl font-black text-green-400">{totalPagos}</p>
+                <div className="bg-green-500/5 border border-green-500/10 rounded-2xl p-4 md:p-6 shadow-xl flex flex-col items-center justify-center text-center backdrop-blur-sm">
+                  <h3 className="text-green-500/80 font-black uppercase text-[9px] md:text-[11px] tracking-widest mb-1.5">Pagos Confirmados</h3>
+                  <p className="text-2xl md:text-4xl font-black text-green-500 drop-shadow-[0_0_15px_rgba(34,197,94,0.3)]">{totalPagos}</p>
                 </div>
-                <div className="bg-[#0e0e12] border-t-4 border-t-red-500 border-x border-b border-white/5 rounded-2xl p-4 md:p-6 shadow-xl flex flex-col items-center justify-center text-center">
-                  <h3 className="text-red-500 font-bold uppercase text-[9px] md:text-[11px] tracking-widest mb-1.5">Pendentes</h3>
-                  <p className="text-2xl md:text-4xl font-black text-red-500">{totalPendentes}</p>
+                <div className="bg-red-500/5 border border-red-500/10 rounded-2xl p-4 md:p-6 shadow-xl flex flex-col items-center justify-center text-center backdrop-blur-sm">
+                  <h3 className="text-red-500/80 font-black uppercase text-[9px] md:text-[11px] tracking-widest mb-1.5">Aguardando Pagamento</h3>
+                  <p className="text-2xl md:text-4xl font-black text-red-500 drop-shadow-[0_0_15px_rgba(239,68,68,0.3)]">{totalPendentes}</p>
                 </div>
               </div>
             )}
 
-            {/* EMPTY STATE - SEM EVENTOS */}
             {!loading && eventos.length === 0 && (
-              <div className="py-20 text-center flex flex-col items-center justify-center bg-[#0e0e12] border border-dashed border-white/10 rounded-3xl mt-4 shadow-xl">
+              <div className="py-20 text-center flex flex-col items-center justify-center bg-black/40 border border-dashed border-white/10 rounded-3xl mt-4 shadow-xl">
                 <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mb-4">
-                  <svg className="w-10 h-10 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                  <Trophy className="w-10 h-10 text-zinc-500" />
                 </div>
                 <h3 className="text-xl font-black text-white mb-2">Nenhum evento criado.</h3>
-                <p className="text-zinc-500 text-xs md:text-sm mb-6 max-w-md">Você ainda não organizou nenhum campeonato. Comece agora clicando no botão abaixo.</p>
-                <Link href="/admin/novo-evento" className="cursor-pointer bg-red-600 hover:bg-red-500 text-white text-xs font-black uppercase tracking-widest px-8 py-4 rounded-xl shadow-lg transition-all active:scale-95">
+                <p className="text-zinc-500 text-xs md:text-sm mb-6 max-w-md">Comece agora clicando no botão abaixo.</p>
+                <Link href="/admin/novo-evento" className="cursor-pointer bg-red-600 hover:bg-red-500 text-white text-xs font-black uppercase tracking-widest px-8 py-4 rounded-xl shadow-[0_0_20px_rgba(239,68,68,0.3)] transition-all active:scale-95">
                   Criar Meu Primeiro Evento
                 </Link>
               </div>
             )}
-            
+
             {/* ========================================================= */}
-            {/* GRID DINÂMICO DE CARDS DE ATLETAS (CLEAN DESIGN)          */}
+            {/* GRID DE ATLETAS (CLEAN DESIGN - SEM MEXER NO PESO)          */}
             {/* ========================================================= */}
             {eventos.length > 0 && !loading && (
               inscricoesFiltradas.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-5">
                   {inscricoesFiltradas.map((insc) => (
-                    <div key={insc.id} className="bg-[#0e0e12] border border-white/5 rounded-2xl p-5 flex flex-col justify-between hover:border-white/20 transition-all shadow-xl h-full relative overflow-hidden group">
+                    <div key={insc.id} className="bg-[#0a0a0e] border border-white/5 rounded-[20px] p-5 flex flex-col justify-between hover:border-white/10 transition-all shadow-xl h-full relative overflow-hidden group">
                       
-                      {/* BARRA DE STATUS NO TOPO */}
-                      <div className={`absolute top-0 left-0 w-full h-1.5 ${insc.pagamento_ok ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                      {/* BARRA SUPERIOR SUAVE */}
+                      <div className={`absolute top-0 left-0 w-full h-1 ${insc.pagamento_ok ? 'bg-green-500/80 shadow-[0_0_10px_rgba(34,197,94,0.5)]' : 'bg-red-500/80 shadow-[0_0_10px_rgba(239,68,68,0.5)]'}`}></div>
 
                       <div className="relative z-10 flex-1">
-                        {/* Evento e Status (Pills Sólidos) */}
-                        <div className="flex items-start justify-between gap-2 mb-4">
-                          <span className="bg-black text-zinc-400 text-[9px] font-bold uppercase tracking-widest px-2.5 py-1 rounded border border-white/5 truncate max-w-[120px]" title={insc.eventos?.nome}>
+                        
+                        <div className="flex items-start justify-between gap-2 mb-4 mt-1">
+                          <span className="text-zinc-500 text-[9px] font-bold uppercase tracking-widest truncate max-w-[120px]" title={insc.eventos?.nome}>
                             {insc.eventos?.nome || "Evento"}
                           </span>
-                          <div className="flex flex-col gap-1 items-end shrink-0">
-                            <span className={`text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded ${insc.pagamento_ok ? "bg-green-600 text-white" : "bg-red-600 text-white"}`}>
-                              {insc.pagamento_ok ? 'Pago' : 'Pendente'}
+                          
+                          <div className="flex gap-1.5 items-center shrink-0">
+                            <span className={`text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border ${insc.pagamento_ok ? "bg-green-500/10 text-green-500 border-green-500/20" : "bg-red-500/10 text-red-500 border-red-500/20"}`}>
+                              {insc.pagamento_ok ? '$$ Pago' : 'Pendente'}
                             </span>
-                            <span className={`text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded ${insc.pesagem_ok ? "bg-blue-600 text-white" : "bg-zinc-700 text-zinc-300"}`}>
+                            
+                            {/* PESO AGORA É APENAS VISUAL (NÃO CLICÁVEL) */}
+                            <span className={`text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border ${insc.pesagem_ok ? "bg-blue-500/10 text-blue-400 border-blue-500/20" : "bg-zinc-800 text-zinc-400 border-white/5"}`}>
                               {insc.pesagem_ok ? 'Peso OK' : 'S/ Peso'}
                             </span>
                           </div>
                         </div>
 
-                        {/* Nome e Equipe */}
-                        <h4 className="text-base md:text-lg font-black text-white uppercase tracking-tight line-clamp-1" title={insc.atleta}>{insc.atleta || "NOME NÃO INFORMADO"}</h4>
-                        <p className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest mt-1 line-clamp-1" title={insc.equipe}>{insc.equipe || "SEM EQUIPE"}</p>
+                        <h4 className="text-lg md:text-xl font-black text-white uppercase tracking-tight line-clamp-1" title={insc.atleta}>{insc.atleta || "NÃO INFORMADO"}</h4>
+                        <p className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest mt-0.5 line-clamp-1" title={insc.equipe}>{insc.equipe || "SEM EQUIPE"}</p>
                         
-                        {/* Detalhes (Faixa, Peso, Cat) */}
-                        <div className="flex flex-col gap-1.5 mt-4 mb-5">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-[10px] font-bold text-zinc-300 bg-black px-2.5 py-1.5 rounded-md border border-white/5">🥋 {insc.faixa || "?"}</span>
-                            <span className="text-[10px] font-bold text-zinc-300 bg-black px-2.5 py-1.5 rounded-md border border-white/5">⚖️ {insc.peso ? `${insc.peso} KG` : "Abs."}</span>
+                        <div className="flex flex-col gap-2 mt-4 mb-6">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-bold text-zinc-300 bg-black px-2.5 py-1.5 rounded-md border border-white/5 flex items-center gap-1"><span className="text-zinc-500">Faixa:</span> {insc.faixa || "?"}</span>
+                            <span className="text-[10px] font-bold text-zinc-300 bg-black px-2.5 py-1.5 rounded-md border border-white/5 flex items-center gap-1"><span className="text-zinc-500">Peso:</span> {insc.peso ? `${insc.peso} KG` : "Abs."}</span>
                           </div>
-                          <span className="text-[10px] font-bold text-zinc-400 bg-black border border-white/5 px-2.5 py-1.5 rounded-md truncate w-full" title={insc.categoria}>🏆 {insc.categoria}</span>
+                          <span className="text-[10px] font-bold text-yellow-500/90 bg-yellow-500/5 border border-yellow-500/10 px-2.5 py-1.5 rounded-md truncate w-full flex items-center gap-1.5" title={insc.categoria}>
+                            <Trophy size={12} /> {insc.categoria}
+                          </span>
                         </div>
                       </div>
 
-                      {/* Botões de Ação sem Neon */}
-                      <div className="relative z-10 flex flex-col gap-2 mt-auto">
+                      {/* RODAPÉ DE AÇÕES DISCRETO */}
+                      <div className="relative z-10 flex flex-col gap-2 mt-auto border-t border-white/5 pt-4">
+                        
+                        {/* PAGAMENTO (VERDE SE PENDENTE, DISCRETO SE OK) */}
+                        <button 
+                          onClick={() => toggleStatus(insc.id, 'pagamento_ok', insc.pagamento_ok)}
+                          disabled={loadingId === insc.id}
+                          className={`cursor-pointer w-full py-2.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border flex items-center justify-center active:scale-95 ${insc.pagamento_ok ? 'bg-transparent text-zinc-500 border-white/5 hover:text-white hover:bg-white/5' : 'bg-green-600/10 text-green-500 border-green-500/30 hover:bg-green-600/20'}`}
+                        >
+                          {loadingId === insc.id ? '...' : insc.pagamento_ok ? 'Desfazer Pagamento' : 'Aprovar Pagamento'}
+                        </button>
+                        
                         <div className="flex gap-2">
                           <button 
-                            onClick={() => toggleStatus(insc.id, 'pagamento_ok', insc.pagamento_ok)}
-                            disabled={loadingId === insc.id}
-                            className={`cursor-pointer flex-1 py-2.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border flex items-center justify-center active:scale-95 ${insc.pagamento_ok ? 'bg-black text-green-500 border-green-500/30 hover:bg-white/5' : 'bg-red-600 text-white border-red-600 hover:bg-red-500'}`}
+                            onClick={() => setEditando(insc)} 
+                            className="cursor-pointer flex-1 py-2 rounded-lg text-[9px] font-bold text-zinc-400 hover:text-white hover:bg-white/5 transition-colors uppercase tracking-widest active:scale-95 flex items-center justify-center gap-1.5 bg-transparent border border-transparent hover:border-white/10"
                           >
-                            {loadingId === insc.id ? '...' : insc.pagamento_ok ? 'Desfazer Pag.' : 'Aprovar $$'}
+                            <Edit3 size={12} /> Editar
                           </button>
-
                           <button 
-                            onClick={() => toggleStatus(insc.id, 'pesagem_ok', insc.pesagem_ok)}
-                            disabled={loadingId === insc.id}
-                            className={`cursor-pointer flex-1 py-2.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center justify-center active:scale-95 border ${insc.pesagem_ok ? 'bg-blue-600 text-white border-blue-600 hover:bg-blue-500' : 'bg-black text-zinc-400 border-white/10 hover:text-white hover:bg-white/5'}`}
+                            onClick={() => excluirInscricao(insc.id, insc.atleta || 'Atleta')} 
+                            disabled={loadingId === insc.id} 
+                            className="cursor-pointer flex-1 py-2 rounded-lg text-[9px] font-bold text-red-500/70 hover:text-red-500 hover:bg-red-500/10 transition-colors uppercase tracking-widest active:scale-95 flex items-center justify-center gap-1.5 bg-transparent border border-transparent hover:border-red-500/20 disabled:opacity-50"
                           >
-                            {loadingId === insc.id ? '...' : insc.pesagem_ok ? 'Peso OK' : 'Confirmar P.'}
+                            <Trash2 size={12} /> Excluir
                           </button>
                         </div>
-                        
-                        <button 
-                          onClick={() => setEditando(insc)}
-                          className="cursor-pointer w-full py-2.5 rounded-lg text-[9px] font-bold text-zinc-500 hover:text-white hover:bg-white/10 transition-colors uppercase tracking-widest active:scale-95 flex items-center justify-center gap-1.5 mt-1 bg-black border border-white/5"
-                        >
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
-                          Editar Inscrição
-                        </button>
                       </div>
 
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-10 bg-[#0e0e12] border border-white/5 rounded-2xl">
+                <div className="text-center py-10 bg-black/40 border border-white/5 rounded-2xl shadow-xl">
                   <p className="text-zinc-500 text-sm font-medium">Nenhum atleta encontrado com os filtros atuais.</p>
                 </div>
               )
@@ -616,8 +687,96 @@ export default function AdminPage() {
       </div>
 
       {/* ========================================================= */}
-      {/* MODAL DE EDIÇÃO DE ATLETA RÁPIDA                            */}
+      {/* MODAL MESTRE DE GESTÃO DE STAFF E PINs                     */}
       {/* ========================================================= */}
+      {showStaffModal && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm animate-in fade-in zoom-in duration-300">
+          <div className="bg-[#0e0e12] border border-white/10 rounded-3xl w-full max-w-3xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
+            
+            <div className="p-6 border-b border-white/5 flex justify-between items-center bg-black/50">
+              <div>
+                <h2 className="text-xl md:text-2xl font-black uppercase tracking-tight text-white flex items-center gap-2">
+                  <ShieldCheck className="text-red-500 w-6 h-6"/> Central Operacional
+                </h2>
+                <p className="text-zinc-400 text-xs mt-1">Crie as chaves de acesso (PINs) para a equipe deste evento.</p>
+              </div>
+              <button onClick={() => setShowStaffModal(false)} className="p-2 bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white rounded-xl transition-colors">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto flex-1 custom-scrollbar">
+              
+              <form onSubmit={adicionarStaff} className="bg-black/40 p-4 md:p-5 rounded-2xl border border-white/5 flex flex-col md:flex-row gap-4 items-end mb-8 shadow-inner">
+                <div className="w-full md:w-1/4">
+                  <label className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1.5 block pl-1">Acesso (Função)</label>
+                  <select required value={novoStaff.funcao} onChange={(e) => setNovoStaff({...novoStaff, funcao: e.target.value})} className="w-full bg-[#050505] border border-white/10 rounded-xl px-4 py-3 outline-none text-white text-xs font-bold appearance-none cursor-pointer">
+                    <option value="mesario">Mesário / Tatame</option>
+                    <option value="checkin">Recepção / Check-in</option>
+                  </select>
+                </div>
+
+                <div className="w-full md:w-1/3">
+                  <label className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1.5 block pl-1">Identificação na Tela</label>
+                  <input required type="text" placeholder="Ex: Tatame 1" value={novoStaff.identificacao} onChange={(e) => setNovoStaff({...novoStaff, identificacao: e.target.value})} className="w-full bg-[#050505] border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-red-500 text-white text-xs font-bold placeholder:text-zinc-700" />
+                </div>
+
+                <div className="w-full md:w-1/3">
+                  <label className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1.5 block pl-1">PIN Secreto</label>
+                  <div className="flex gap-2">
+                    <input required type="text" placeholder="TAT001" value={novoStaff.pin_acesso} onChange={(e) => setNovoStaff({...novoStaff, pin_acesso: e.target.value.toUpperCase()})} className="w-full bg-[#050505] border border-white/10 rounded-xl px-3 py-3 outline-none focus:border-red-500 text-white text-xs font-black uppercase tracking-widest placeholder:text-zinc-700" />
+                    <button type="button" onClick={gerarPinAleatorio} title="Gerar PIN Seguro" className="bg-white/5 hover:bg-white/10 text-zinc-400 px-3 rounded-xl border border-white/5 transition-colors cursor-pointer">
+                      <RefreshCw size={14} />
+                    </button>
+                  </div>
+                </div>
+
+                <button type="submit" disabled={loadingStaff} className="cursor-pointer w-full md:w-auto shrink-0 bg-red-600 hover:bg-red-500 text-white font-black uppercase tracking-widest px-6 py-3 rounded-xl transition-all shadow-lg text-[10px] md:text-xs">
+                  Criar Acesso
+                </button>
+              </form>
+
+              <h3 className="text-white font-black text-sm uppercase tracking-widest mb-4 border-l-2 border-red-500 pl-3">Credenciais Ativas</h3>
+              
+              {loadingStaff ? (
+                <div className="text-center py-10"><RefreshCw className="animate-spin text-zinc-500 mx-auto" /></div>
+              ) : staffList.length === 0 ? (
+                <div className="text-center py-10 bg-black/20 rounded-2xl border border-dashed border-white/5 text-zinc-500 text-xs font-bold uppercase tracking-widest">Nenhuma equipe cadastrada para este evento.</div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {staffList.map(staff => (
+                    <div key={staff.id} className="bg-black/60 border border-white/5 p-4 rounded-2xl flex items-center justify-between gap-2 group hover:border-white/20 transition-all">
+                      
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-inner ${staff.funcao === 'checkin' ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-blue-500/10 text-blue-500 border border-blue-500/20'}`}>
+                          {staff.funcao === 'checkin' ? <Users size={18} /> : <Play size={18} fill="currentColor" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="text-white font-black text-sm uppercase tracking-tight truncate w-full">{staff.identificacao}</h4>
+                          <span className="text-zinc-500 text-[9px] font-bold uppercase tracking-widest block truncate">{staff.funcao}</span>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-2 shrink-0">
+                        <div className="bg-[#050505] border border-zinc-800 px-2.5 py-1.5 rounded-lg text-yellow-500 font-mono text-xs font-black tracking-widest flex items-center gap-1.5 cursor-pointer hover:bg-white/5 transition-colors" title="Copiar PIN" onClick={() => {navigator.clipboard.writeText(staff.pin_acesso); alert('PIN Copiado!')}}>
+                          <Key size={12} className="text-zinc-600" /> {staff.pin_acesso}
+                        </div>
+                        <button onClick={() => excluirStaff(staff.id)} className="cursor-pointer text-zinc-600 hover:text-red-500 transition-colors p-2 bg-white/5 hover:bg-red-500/10 rounded-lg">
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+
+                    </div>
+                  ))}
+                </div>
+              )}
+
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE EDIÇÃO RÁPIDA */}
       {editando && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm animate-in fade-in">
           <div className="bg-[#0e0e12] border border-white/10 rounded-3xl w-full max-w-md p-6 shadow-2xl relative overflow-hidden">
@@ -655,130 +814,116 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* ========================================================= */}
-      {/* MODAL GIGANTE DE CONFIGURAÇÃO DE PERFIL / ONBOARDING      */}
-      {/* ========================================================= */}
+      {/* ========================================================================= */}
+      {/* MODAL DE PERFIL COMPACTADO (NOVO VISUAL)                                  */}
+      {/* ========================================================================= */}
       {showPerfilModal && (
-        <div className={`fixed inset-0 z-[200] flex items-center justify-center p-4 md:p-8 bg-black/95 backdrop-blur-md animate-in fade-in zoom-in duration-300 ${forceCompletion ? 'pointer-events-auto' : ''}`}>
-          
-          <div className="bg-[#0e0e12] border border-white/10 rounded-3xl w-full max-w-4xl shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
-
-            {/* Cabeçalho do Modal */}
-            <div className="p-6 md:p-8 border-b border-white/5 relative z-10 shrink-0 bg-black/50">
+        <div className={`fixed inset-0 z-[200] flex items-center justify-center p-3 md:p-6 bg-black/95 backdrop-blur-md animate-in fade-in zoom-in duration-300 ${forceCompletion ? 'pointer-events-auto' : ''}`}>
+          <div className="bg-[#0e0e12] border border-white/10 rounded-2xl md:rounded-3xl w-full max-w-4xl shadow-2xl relative overflow-hidden flex flex-col max-h-[95vh] md:max-h-[90vh]">
+            
+            {/* HEADER MAIS ENXUTO */}
+            <div className="p-4 md:p-6 border-b border-white/5 relative z-10 shrink-0 bg-black/50">
               {forceCompletion && (
-                <span className="inline-block bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 text-[9px] md:text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-md mb-3 animate-pulse">
+                <span className="inline-block bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 text-[9px] md:text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-md mb-2 animate-pulse">
                   Ação Obrigatória
                 </span>
               )}
-              <h2 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tight">
+              <h2 className="text-xl md:text-2xl font-black text-white uppercase tracking-tight">
                 {forceCompletion ? "Finalize o Seu Cadastro" : "Configurações do Perfil"}
               </h2>
-              <p className="text-zinc-500 text-xs md:text-sm mt-1">
-                {forceCompletion ? "Preencha os dados abaixo para liberar o acesso total ao seu painel operacional." : "Mantenha as informações da sua organização atualizadas."}
+              <p className="text-zinc-500 text-[10px] md:text-xs mt-1">
+                {forceCompletion ? "Preencha os dados abaixo para liberar o acesso total ao painel." : "Mantenha as informações da sua organização atualizadas."}
               </p>
-
-              {/* Botão de Fechar */}
               {!forceCompletion && (
-                <button onClick={() => setShowPerfilModal(false)} className="absolute top-6 right-6 p-2 bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white rounded-xl transition-colors cursor-pointer">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"></path></svg>
+                <button onClick={() => setShowPerfilModal(false)} className="absolute top-4 right-4 p-2 bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white rounded-lg transition-colors cursor-pointer">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"></path></svg>
                 </button>
               )}
             </div>
 
-            {/* Corpo do Formulário */}
-            <form onSubmit={salvarPerfil} className="p-6 md:p-8 overflow-y-auto flex-1 custom-scrollbar relative z-10 space-y-8">
+            {/* FORMULÁRIO COM ESPAÇAMENTOS E INPUTS REDUZIDOS */}
+            <form onSubmit={salvarPerfil} className="p-4 md:p-6 overflow-y-auto flex-1 custom-scrollbar relative z-10 space-y-5">
               
-              {/* SESSÃO 1: FOTO E IDENTIFICAÇÃO */}
+              {/* SESSÃO 1: IDENTIDADE */}
               <div>
-                <h3 className="text-white font-black text-sm uppercase tracking-widest flex items-center gap-2 mb-4 border-l-2 border-red-500 pl-3">
-                  1. Identidade Visual
-                </h3>
-                <div className="flex flex-col md:flex-row items-center md:items-start gap-6 bg-black/40 p-5 rounded-2xl border border-white/5">
+                <h3 className="text-white font-black text-xs md:text-sm uppercase tracking-widest flex items-center gap-2 mb-3 border-l-2 border-red-500 pl-3">1. Identidade Visual</h3>
+                <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 bg-black/40 p-4 rounded-xl border border-white/5">
                   <div className="shrink-0 flex flex-col items-center">
-                    <div 
-                      className="relative w-24 h-24 md:w-32 md:h-32 rounded-full border-2 border-dashed border-white/20 flex items-center justify-center bg-black hover:border-red-500/50 transition-colors cursor-pointer group overflow-hidden shadow-xl"
-                      onClick={() => fileInputRef.current?.click()}
-                    >
+                    <div className="relative w-20 h-20 md:w-24 md:h-24 rounded-full border-2 border-dashed border-white/20 flex items-center justify-center bg-black hover:border-red-500/50 transition-colors cursor-pointer group overflow-hidden shadow-xl" onClick={() => fileInputRef.current?.click()}>
                       {novaFotoPreview || fotoUrl ? (
                         <img src={novaFotoPreview || fotoUrl} alt="Preview" className="w-full h-full object-cover rounded-full" />
                       ) : (
-                        <svg className="w-10 h-10 text-zinc-600 group-hover:text-red-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                        <svg className="w-8 h-8 text-zinc-600 group-hover:text-red-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                       )}
                       <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                        <span className="text-white text-[10px] font-black uppercase tracking-widest text-center px-2">Trocar Foto</span>
+                        <span className="text-white text-[9px] font-black uppercase tracking-widest text-center px-2">Alterar</span>
                       </div>
                     </div>
                     <input type="file" accept="image/*, .heic" className="hidden" ref={fileInputRef} onChange={handleNovaFoto} />
                   </div>
-                  
-                  <div className="flex-1 space-y-4 w-full">
+                  <div className="flex-1 space-y-3 w-full">
                     <div>
-                      <label className="text-zinc-500 text-[10px] font-black uppercase tracking-widest block mb-1.5 ml-1">Nome do Gestor Responsável *</label>
-                      <input required value={perfilData.nome} onChange={(e) => setPerfilData({...perfilData, nome: e.target.value})} className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-red-500 text-white text-sm" placeholder="Ex: Alex Nunes" />
+                      <label className="text-zinc-500 text-[9px] md:text-[10px] font-black uppercase tracking-widest block mb-1 ml-1">Nome do Gestor Responsável *</label>
+                      <input required value={perfilData.nome} onChange={(e) => setPerfilData({...perfilData, nome: e.target.value})} className="w-full bg-black border border-white/10 rounded-lg px-3 py-2.5 outline-none focus:border-red-500 text-white text-xs md:text-sm" placeholder="Ex: Alex Nunes" />
                     </div>
                     <div>
-                      <label className="text-zinc-500 text-[10px] font-black uppercase tracking-widest block mb-1.5 ml-1">Nome da Organização / Evento *</label>
-                      <input required value={perfilData.academia} onChange={(e) => setPerfilData({...perfilData, academia: e.target.value})} className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-red-500 text-white text-sm" placeholder="Ex: Copa iTatame" />
+                      <label className="text-zinc-500 text-[9px] md:text-[10px] font-black uppercase tracking-widest block mb-1 ml-1">Nome da Organização / Evento *</label>
+                      <input required value={perfilData.academia} onChange={(e) => setPerfilData({...perfilData, academia: e.target.value})} className="w-full bg-black border border-white/10 rounded-lg px-3 py-2.5 outline-none focus:border-red-500 text-white text-xs md:text-sm" placeholder="Ex: Copa iTatame" />
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* SESSÃO 2: DOCUMENTAÇÃO E CONTATO */}
+              {/* SESSÃO 2: DOCUMENTAÇÃO */}
               <div>
-                <h3 className="text-white font-black text-sm uppercase tracking-widest flex items-center gap-2 mb-4 border-l-2 border-red-500 pl-3">
-                  2. Documentação Oficial
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-black/40 p-5 rounded-2xl border border-white/5">
+                <h3 className="text-white font-black text-xs md:text-sm uppercase tracking-widest flex items-center gap-2 mb-3 border-l-2 border-red-500 pl-3">2. Documentação Oficial</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-black/40 p-4 rounded-xl border border-white/5">
                   <div>
-                    <label className="text-zinc-500 text-[10px] font-black uppercase tracking-widest block mb-1.5 ml-1">CPF ou CNPJ (Repasses) *</label>
-                    <input required value={perfilData.documento} onChange={(e) => setPerfilData({...perfilData, documento: e.target.value})} className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-red-500 text-white text-sm" placeholder="000.000.000-00" />
+                    <label className="text-zinc-500 text-[9px] md:text-[10px] font-black uppercase tracking-widest block mb-1 ml-1">CPF ou CNPJ (Repasses) *</label>
+                    <input required value={perfilData.documento} onChange={(e) => setPerfilData({...perfilData, documento: e.target.value})} className="w-full bg-black border border-white/10 rounded-lg px-3 py-2.5 outline-none focus:border-red-500 text-white text-xs md:text-sm" placeholder="000.000.000-00" />
                   </div>
                   <div>
-                    <label className="text-zinc-500 text-[10px] font-black uppercase tracking-widest block mb-1.5 ml-1">WhatsApp de Suporte *</label>
-                    <input required value={perfilData.telefone} onChange={(e) => setPerfilData({...perfilData, telefone: e.target.value})} className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-red-500 text-white text-sm" placeholder="(00) 00000-0000" />
+                    <label className="text-zinc-500 text-[9px] md:text-[10px] font-black uppercase tracking-widest block mb-1 ml-1">WhatsApp de Suporte *</label>
+                    <input required value={perfilData.telefone} onChange={(e) => setPerfilData({...perfilData, telefone: e.target.value})} className="w-full bg-black border border-white/10 rounded-lg px-3 py-2.5 outline-none focus:border-red-500 text-white text-xs md:text-sm" placeholder="(00) 00000-0000" />
                   </div>
                 </div>
               </div>
 
               {/* SESSÃO 3: LOCALIZAÇÃO */}
               <div>
-                <h3 className="text-white font-black text-sm uppercase tracking-widest flex items-center gap-2 mb-4 border-l-2 border-red-500 pl-3">
-                  3. Localização Base
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-4 bg-black/40 p-5 rounded-2xl border border-white/5">
-                  <div className="md:col-span-3">
-                    <label className="text-zinc-500 text-[10px] font-black uppercase tracking-widest block mb-1.5 ml-1">CEP</label>
-                    <input value={perfilData.cep} onChange={(e) => setPerfilData({...perfilData, cep: e.target.value})} className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-red-500 text-white text-sm" placeholder="00000-000" />
+                <h3 className="text-white font-black text-xs md:text-sm uppercase tracking-widest flex items-center gap-2 mb-3 border-l-2 border-red-500 pl-3">3. Localização Base</h3>
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-3 bg-black/40 p-4 rounded-xl border border-white/5">
+                  <div className="md:col-span-4 lg:col-span-3">
+                    <label className="text-zinc-500 text-[9px] md:text-[10px] font-black uppercase tracking-widest block mb-1 ml-1">CEP</label>
+                    <input value={perfilData.cep} onChange={(e) => setPerfilData({...perfilData, cep: e.target.value})} className="w-full bg-black border border-white/10 rounded-lg px-3 py-2.5 outline-none focus:border-red-500 text-white text-xs md:text-sm" placeholder="00000-000" />
                   </div>
-                  <div className="md:col-span-9">
-                    <label className="text-zinc-500 text-[10px] font-black uppercase tracking-widest block mb-1.5 ml-1">Endereço Completo</label>
-                    <input value={perfilData.endereco} onChange={(e) => setPerfilData({...perfilData, endereco: e.target.value})} className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-red-500 text-white text-sm" placeholder="Rua, Número, Bairro" />
+                  <div className="md:col-span-8 lg:col-span-9">
+                    <label className="text-zinc-500 text-[9px] md:text-[10px] font-black uppercase tracking-widest block mb-1 ml-1">Endereço Completo</label>
+                    <input value={perfilData.endereco} onChange={(e) => setPerfilData({...perfilData, endereco: e.target.value})} className="w-full bg-black border border-white/10 rounded-lg px-3 py-2.5 outline-none focus:border-red-500 text-white text-xs md:text-sm" placeholder="Rua, Número, Bairro" />
                   </div>
                   <div className="md:col-span-8">
-                    <label className="text-zinc-500 text-[10px] font-black uppercase tracking-widest block mb-1.5 ml-1">Cidade</label>
-                    <input value={perfilData.cidade} onChange={(e) => setPerfilData({...perfilData, cidade: e.target.value})} className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-red-500 text-white text-sm" placeholder="Sua Cidade" />
+                    <label className="text-zinc-500 text-[9px] md:text-[10px] font-black uppercase tracking-widest block mb-1 ml-1">Cidade</label>
+                    <input value={perfilData.cidade} onChange={(e) => setPerfilData({...perfilData, cidade: e.target.value})} className="w-full bg-black border border-white/10 rounded-lg px-3 py-2.5 outline-none focus:border-red-500 text-white text-xs md:text-sm" placeholder="Sua Cidade" />
                   </div>
                   <div className="md:col-span-4">
-                    <label className="text-zinc-500 text-[10px] font-black uppercase tracking-widest block mb-1.5 ml-1">Estado (UF)</label>
-                    <input value={perfilData.estado} onChange={(e) => setPerfilData({...perfilData, estado: e.target.value})} className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-red-500 text-white text-sm" placeholder="Ex: SP" />
+                    <label className="text-zinc-500 text-[9px] md:text-[10px] font-black uppercase tracking-widest block mb-1 ml-1">Estado (UF)</label>
+                    <input value={perfilData.estado} onChange={(e) => setPerfilData({...perfilData, estado: e.target.value})} className="w-full bg-black border border-white/10 rounded-lg px-3 py-2.5 outline-none focus:border-red-500 text-white text-xs md:text-sm" placeholder="Ex: SP" />
                   </div>
                 </div>
               </div>
 
-              {/* BOTÃO SALVAR */}
-              <div className="pt-6 border-t border-white/5 sticky bottom-0 bg-[#0e0e12]/95 backdrop-blur-md pb-2 mt-8">
-                <button type="submit" disabled={savingPerfil} className="cursor-pointer w-full bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white font-black uppercase tracking-widest py-4 rounded-xl transition-all flex items-center justify-center gap-2 text-xs md:text-sm active:scale-95 shadow-lg">
+              {/* BOTÃO SUBMIT */}
+              <div className="pt-4 border-t border-white/5 sticky bottom-0 bg-[#0e0e12]/95 backdrop-blur-md pb-2 mt-4">
+                <button type="submit" disabled={savingPerfil} className="cursor-pointer w-full bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white font-black uppercase tracking-widest py-3 md:py-3.5 rounded-lg transition-all flex items-center justify-center gap-2 text-[10px] md:text-xs active:scale-95 shadow-lg">
                   {savingPerfil ? (
-                    <><svg className="w-5 h-5 animate-spin text-white" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Guardando no Cofre...</>
+                    <><svg className="w-4 h-4 animate-spin text-white" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Guardando...</>
                   ) : forceCompletion ? (
-                    <><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a2 2 0 11-4 0 2 2 0 014 0zM15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg> Concluir e Acessar Painel</>
+                    <><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a2 2 0 11-4 0 2 2 0 014 0zM15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg> Concluir e Acessar Painel</>
                   ) : (
                     "Salvar Atualizações"
                   )}
                 </button>
               </div>
-
             </form>
           </div>
         </div>
