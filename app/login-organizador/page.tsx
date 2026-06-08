@@ -139,7 +139,7 @@ export default function LoginOrganizadorPage() {
       });
 
       if (signUpError) throw signUpError;
-
+      
       if (signUpData?.user) {
         let fotoUrlFinal = "";
 
@@ -175,6 +175,21 @@ export default function LoginOrganizadorPage() {
         ]);
 
         if (dbError) throw dbError;
+
+        // 🔥 GATILHO DO E-MAIL DE BOAS-VINDAS (ORGANIZADOR) 🔥
+        try {
+          await fetch('/api/boas-vindas-org', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              email: email,
+              nome: nomeCompleto
+            }),
+          });
+        } catch (err) {
+          console.error("Erro ao enviar e-mail de boas-vindas do organizador", err);
+        }
+        // 🔥 FIM DO GATILHO 🔥
 
         setMostrarPendencia(true);
       }
@@ -305,6 +320,16 @@ export default function LoginOrganizadorPage() {
                     <div className="relative cursor-text">
                       <svg className="w-4 h-4 text-zinc-600 absolute left-3.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
                       <input type="password" required value={senha} onChange={(e) => setSenha(e.target.value)} placeholder="••••••••" className="w-full bg-[#050505] border border-white/10 rounded-lg pl-10 pr-3 py-2.5 outline-none focus:border-yellow-600 text-white transition-colors text-xs font-bold placeholder:text-zinc-700 shadow-inner" />
+                    </div>
+                    {/* 🔥 BOTÃO ESQUECI MINHA SENHA ADICIONADO AQUI 🔥 */}
+                    <div className="flex justify-end mt-2 animate-in fade-in">
+                      <button 
+                        type="button" 
+                        onClick={() => router.push('/recuperar-senha')} 
+                        className="text-[10px] font-bold text-zinc-500 hover:text-yellow-500 uppercase tracking-widest transition-colors cursor-pointer"
+                      >
+                        Esqueci minha senha
+                      </button>
                     </div>
                   </div>
 

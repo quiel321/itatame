@@ -14,7 +14,7 @@ export default function PlacarMesarioDB() {
   const [todasLutasCategoria, setTodasLutasCategoria] = useState<any[]>([]);
   const [loadingDB, setLoadingDB] = useState(true);
 
-  // CONFIGURAÇÕES DA LUTA
+  // CONFIGURAÃ‡Ã•ES DA LUTA
   const [configOpen, setConfigOpen] = useState(true);
   const [showResumo, setShowResumo] = useState(false);
   const [tempoMinutos, setTempoMinutos] = useState(5);
@@ -42,13 +42,19 @@ export default function PlacarMesarioDB() {
   const placarRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
+  // ðŸ›¡ï¸ ESTADOS DE SEGURANÃ‡A (CLIQUE TRIPLO)
+  const [clicksFinalizarAzul, setClicksFinalizarAzul] = useState(0);
+  const [clicksFinalizarVermelho, setClicksFinalizarVermelho] = useState(0);
+  const timeoutAzulRef = useRef<NodeJS.Timeout | null>(null);
+  const timeoutVermelhoRef = useRef<NodeJS.Timeout | null>(null);
+
   // ESTADOS MOBILE
   const [isMobile, setIsMobile] = useState(false);
   const [clockPos, setClockPos] = useState({ x: 0, y: 0 });
   const [clockScale, setClockScale] = useState(1);
   const dragRef = useRef({ startX: 0, startY: 0, isDragging: false });
   const pinchRef = useRef({ startDist: 0, startScale: 1 });
-  const orientationRef = useRef(true); 
+  const orientationRef = useRef(true);
 
   // ==========================================
   // 1. CARREGAMENTO DO BANCO DE DADOS
@@ -56,7 +62,7 @@ export default function PlacarMesarioDB() {
   useEffect(() => {
     async function carregarLuta() {
       if (!matchId) return;
-      
+
       const { data: luta, error } = await supabase
         .from("chaves")
         .select("*")
@@ -64,13 +70,13 @@ export default function PlacarMesarioDB() {
         .single();
 
       if (error || !luta) {
-        alert("Luta não encontrada!");
-        router.push("/staff/painel"); 
+        alert("Luta nÃ£o encontrada!");
+        router.push("/staff/painel");
         return;
       }
 
       setLutaAtual(luta);
-      
+
       if (luta.pontuacao_atleta_1) {
         setPontosAzul(luta.pontuacao_atleta_1.pontos || 0);
         setVantagensAzul(luta.pontuacao_atleta_1.vantagens || 0);
@@ -88,22 +94,22 @@ export default function PlacarMesarioDB() {
         .eq("evento_id", luta.evento_id)
         .eq("categoria", luta.categoria)
         .eq("faixa", luta.faixa);
-        
+
       if (todas) setTodasLutasCategoria(todas);
       setLoadingDB(false);
     }
-    
+
     carregarLuta();
   }, [matchId, router]);
 
   // ==========================================
-  // 2. ATUALIZAÇÃO NO SUPABASE (PLACAR AO VIVO)
+  // 2. ATUALIZAÃ‡ÃƒO NO SUPABASE (PLACAR AO VIVO)
   // ==========================================
   const salvarPontuacaoDB = async (lado: "azul" | "vermelho", pts: number, vts: number, pun: number) => {
     if (!lutaAtual) return;
     const campo = lado === "azul" ? "pontuacao_atleta_1" : "pontuacao_atleta_2";
     const payload = { pontos: pts, vantagens: vts, punicoes: pun };
-    
+
     await supabase.from("chaves").update({ [campo]: payload }).eq("id", matchId);
   };
 
@@ -124,7 +130,7 @@ export default function PlacarMesarioDB() {
   };
 
   // ==========================================
-  // 3. ENCERRAMENTO E AVANÇO NA CHAVE
+  // 3. ENCERRAMENTO E AVANÃ‡O NA CHAVE
   // ==========================================
   const limparNome = (nome: string | null) => {
     if (!nome) return "";
@@ -138,13 +144,12 @@ export default function PlacarMesarioDB() {
 
     const nomeVencedor = vencedorLado === "azul" ? lutaAtual.atleta_1 : lutaAtual.atleta_2;
     const equipeVencedor = vencedorLado === "azul" ? lutaAtual.equipe_1 : lutaAtual.equipe_2;
-    // 🔥 NOVO: Pegando os IDs
     const idVencedor = vencedorLado === "azul" ? lutaAtual.atleta_1_id : lutaAtual.atleta_2_id;
     const idPerdedor = vencedorLado === "azul" ? lutaAtual.atleta_2_id : lutaAtual.atleta_1_id;
 
-    await supabase.from("chaves").update({ 
+    await supabase.from("chaves").update({
       vencedor: nomeVencedor,
-      vencedor_id: idVencedor, // 🔥 Gravando o ID
+      vencedor_id: idVencedor,
       status_luta: "concluida",
       metodo_vitoria: metodo,
       finalizada_em: new Date().toISOString()
@@ -154,7 +159,6 @@ export default function PlacarMesarioDB() {
     const isFinal = !lutaAtual.proxima_luta || String(lutaAtual.id_visual) === "999";
     const isSemifinal = String(lutaAtual.proxima_luta) === "999";
 
-    // 🔥 NOVA FUNÇÃO DE ESTATÍSTICA (AGORA COM ID NUMÉRICO!)
     const updateEstatistica = async (idAtletaNum: number, coluna: string, incremento: number) => {
       if (!idAtletaNum) return;
       const { data } = await supabase.from("atletas").select(`id, ${coluna}`).eq("id", idAtletaNum).single();
@@ -165,32 +169,59 @@ export default function PlacarMesarioDB() {
     };
 
     if (ganhouPorWO && idVencedor) await updateEstatistica(idVencedor, "vitorias_wo", 1);
-    
+
     if (isFinal) {
-      if (idVencedor) await updateEstatistica(idVencedor, "ouro", 1); 
-      if (idPerdedor) await updateEstatistica(idPerdedor, "prata", 1); 
+      if (idVencedor) await updateEstatistica(idVencedor, "ouro", 1);
+      if (idPerdedor) await updateEstatistica(idPerdedor, "prata", 1);
     }
 
     if (isSemifinal) {
-      if (idPerdedor) await updateEstatistica(idPerdedor, "bronze", 1); 
+      if (idPerdedor) await updateEstatistica(idPerdedor, "bronze", 1);
     }
 
     if (lutaAtual.proxima_luta) {
       const proximaLuta = todasLutasCategoria.find(l => String(l.id_visual) === String(lutaAtual.proxima_luta));
       if (proximaLuta) {
         const isImpar = Number(lutaAtual.id_visual) % 2 !== 0;
-        const updateData = isImpar 
-          // 🔥 Levando os IDs
-          ? { atleta_1: nomeVencedor, equipe_1: equipeVencedor, atleta_1_id: idVencedor, tatame: lutaAtual.tatame } 
+        const updateData = isImpar
+          ? { atleta_1: nomeVencedor, equipe_1: equipeVencedor, atleta_1_id: idVencedor, tatame: lutaAtual.tatame }
           : { atleta_2: nomeVencedor, equipe_2: equipeVencedor, atleta_2_id: idVencedor, tatame: lutaAtual.tatame };
-        
+
         await supabase.from("chaves").update(updateData).eq("id", proximaLuta.id);
       }
     }
   };
 
+  // ðŸ›¡ï¸ NOVO: FUNÃ‡ÃƒO DO CLIQUE TRIPLO DE SEGURANÃ‡A
+  const handleFinalizarClick = (lado: "azul" | "vermelho") => {
+    if (vencedor || showResumo) return;
+
+    if (lado === "azul") {
+      const novosClicks = clicksFinalizarAzul + 1;
+      if (novosClicks >= 3) {
+        if (timeoutAzulRef.current) clearTimeout(timeoutAzulRef.current);
+        setClicksFinalizarAzul(0);
+        declararFinalizacao("azul");
+      } else {
+        setClicksFinalizarAzul(novosClicks);
+        if (timeoutAzulRef.current) clearTimeout(timeoutAzulRef.current);
+        timeoutAzulRef.current = setTimeout(() => setClicksFinalizarAzul(0), 3000); // Reseta apÃ³s 3 segundos
+      }
+    } else {
+      const novosClicks = clicksFinalizarVermelho + 1;
+      if (novosClicks >= 3) {
+        if (timeoutVermelhoRef.current) clearTimeout(timeoutVermelhoRef.current);
+        setClicksFinalizarVermelho(0);
+        declararFinalizacao("vermelho");
+      } else {
+        setClicksFinalizarVermelho(novosClicks);
+        if (timeoutVermelhoRef.current) clearTimeout(timeoutVermelhoRef.current);
+        timeoutVermelhoRef.current = setTimeout(() => setClicksFinalizarVermelho(0), 3000); // Reseta apÃ³s 3 segundos
+      }
+    }
+  };
+
   const declararFinalizacao = async (lado: "azul" | "vermelho") => {
-    if (vencedor || showResumo) return; 
     tocarSom('fim');
     setTimerAtivo(false);
     setVencedor(lado);
@@ -218,7 +249,7 @@ export default function PlacarMesarioDB() {
       const isPort = window.innerHeight > window.innerWidth;
       orientationRef.current = isPort;
       setIsMobile(true);
-      if (isPort) { setClockScale(0.55); setClockPos({ x: 0, y: 0 }); } 
+      if (isPort) { setClockScale(0.55); setClockPos({ x: 0, y: 0 }); }
       else { setClockScale(0.35); setClockPos({ x: 0, y: -45 }); }
     }
     window.addEventListener("resize", handleResize);
@@ -247,7 +278,7 @@ export default function PlacarMesarioDB() {
     } else if (e.touches.length === 2) {
       const dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
       const newScale = pinchRef.current.startScale * (dist / pinchRef.current.startDist);
-      setClockScale(Math.min(Math.max(newScale, 0.3), 1.2)); 
+      setClockScale(Math.min(Math.max(newScale, 0.3), 1.2));
     }
   };
 
@@ -273,7 +304,7 @@ export default function PlacarMesarioDB() {
         gain.gain.setValueAtTime(0.8, ctx.currentTime); gain.gain.linearRampToValueAtTime(0.01, ctx.currentTime + 3.0);
         osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 3.0);
       }
-    } catch (error) { console.log("Áudio não suportado", error); }
+    } catch (error) { console.log("Ãudio nÃ£o suportado", error); }
   };
 
   useEffect(() => {
@@ -297,9 +328,9 @@ export default function PlacarMesarioDB() {
         else if (vantagensVermelho > vantagensAzul) calcVencedor = "vermelho";
         else if (punicoesAzul < punicoesVermelho) calcVencedor = "azul";
         else if (punicoesVermelho < punicoesAzul) calcVencedor = "vermelho";
-        
+
         setVencedor(calcVencedor);
-        setTimeout(() => setShowResumo(true), 3500); 
+        setTimeout(() => setShowResumo(true), 3500);
         await processarFimDeLuta(calcVencedor, "pontos");
       }
     };
@@ -310,7 +341,11 @@ export default function PlacarMesarioDB() {
     if (!timerAtivo && tempoRestante > 0) {
       tocarSom('inicio');
       if (tempoRestante === tempoMinutos * 60) {
-        await supabase.from("chaves").update({ status_luta: "em_andamento", iniciada_em: new Date().toISOString() }).eq("id", matchId);
+        await supabase.from("chaves").update({
+          status_luta: "em_andamento",
+          iniciada_em: new Date().toISOString(),
+          duracao_segundos: tempoMinutos * 60
+        }).eq("id", matchId);
       }
     } else if (timerAtivo) {
       tocarSom('pause');
@@ -362,7 +397,7 @@ export default function PlacarMesarioDB() {
           .placar-side-azul { border-bottom: 3px solid #000 !important; }
           .placar-side-verm { border-top: 3px solid #000 !important; }
           .nome-container { padding: 0 !important; text-align: center !important; margin: 0 !important; }
-          .atleta-nome { font-size: 2.5rem !important; text-align: center !important; }
+          .atleta-nome { font-size: 2.0rem !important; text-align: center !important; }
           .pontos-container { align-items: center !important; }
           .pontos-gigantes { font-size: 7.5rem !important; }
           .botoes-grid { gap: 0.5rem !important; }
@@ -380,7 +415,7 @@ export default function PlacarMesarioDB() {
         @media screen and (max-height: 500px) and (orientation: landscape) {
           .placar-side { padding: 0.5rem 1rem !important; }
           .nome-container { padding-right: 5% !important; padding-left: 5% !important; }
-          .atleta-nome { font-size: 2.2rem !important; }
+          .atleta-nome { font-size: 1.8rem !important; }
           .pontos-gigantes { font-size: 6.5rem !important; }
           .botoes-grid { gap: 0.25rem !important; }
           .botoes-grid button { padding: 0.25rem !important; }
@@ -404,7 +439,7 @@ export default function PlacarMesarioDB() {
                 <span className="text-white font-black text-2xl italic tracking-tighter"><span className="text-red-600">i</span>TATAME</span>
                 <span className="text-zinc-400 text-xs font-bold uppercase tracking-widest bg-zinc-800 px-2 py-1 rounded">Scoreboard Lincado</span>
               </div>
-              
+
               <div className="bg-black/50 p-4 rounded-xl border border-white/5 mb-6 text-center">
                 <p className="text-blue-400 font-bold uppercase">{atletaAzul}</p>
                 <p className="text-zinc-500 text-xs font-black my-1">VS</p>
@@ -432,7 +467,6 @@ export default function PlacarMesarioDB() {
 
         <div className="clock-island absolute z-[60] flex flex-col items-center" style={isMobile ? { left: '50%', top: '42%', transform: `translate(calc(-50% + ${clockPos.x}px), calc(-50% + ${clockPos.y}px)) scale(${clockScale})`, touchAction: 'none'} : { left: '50%', top: '42%', transform: 'translate(-50%, -50%)' }} onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
           <div className="bg-[#09090b]/95 backdrop-blur-xl px-6 py-4 md:px-10 md:py-6 rounded-[2rem] border border-zinc-800 shadow-[0_20px_60px_rgba(0,0,0,0.9)] flex flex-col items-center">
-            {/* O TEXTO DO RELÓGIO FOI LEVEMENTE REDUZIDO AQUI */}
             <span className={`text-[5.5rem] md:text-[7.5rem] lg:text-[8.5rem] leading-none font-black font-mono tracking-tighter drop-shadow-[0_0_25px_rgba(255,215,0,0.6)] text-[#FFD700] ${tempoRestante <= 60 && tempoRestante > 0 ? 'animate-pulse' : ''}`}>
               {formatarTempo(tempoRestante)}
             </span>
@@ -455,23 +489,40 @@ export default function PlacarMesarioDB() {
 
         {/* LADO AZUL */}
         <div className={`placar-side placar-side-azul w-1/2 h-full bg-[#05142b] border-r-[2px] border-black flex flex-col pt-6 md:pt-10 px-6 md:px-8 pb-6 relative z-10 transition-all duration-1000 ${vencedor === 'vermelho' ? 'opacity-20 grayscale' : vencedor === 'azul' ? 'brightness-125' : ''}`}>
-          <button onClick={() => declararFinalizacao("azul")} className="absolute top-1/2 -translate-y-1/2 left-2 md:left-6 z-50 bg-black/60 border border-white/30 text-white font-bold uppercase w-16 h-16 md:w-20 md:h-20 rounded-full flex flex-col items-center justify-center opacity-40 hover:opacity-100 hover:border-blue-500 hover:scale-110 transition-all duration-300 cursor-pointer shadow-[0_0_15px_rgba(0,0,0,0.5)]">
-            <span className="text-[8px] md:text-[10px] leading-tight">Finalizar</span><span className="text-[10px] md:text-[13px] leading-tight text-blue-400 mt-0.5">W.O.</span>
+
+          {/* ðŸ›¡ï¸ BOTÃƒO DE FINALIZAR - CLIQUE TRIPLO (AZUL) */}
+          <button
+            onClick={() => handleFinalizarClick("azul")}
+            className={`absolute top-1/2 -translate-y-1/2 left-2 md:left-6 z-50 flex flex-col items-center justify-center text-center font-bold uppercase transition-all duration-300 cursor-pointer shadow-[0_0_15px_rgba(0,0,0,0.5)] px-2
+              ${clicksFinalizarAzul === 0 ? 'bg-black/60 border border-white/30 text-white w-16 h-16 md:w-20 md:h-20 rounded-full opacity-40 hover:opacity-100 hover:border-blue-500 hover:scale-110' : ''}
+              ${clicksFinalizarAzul === 1 ? 'bg-orange-600 border-2 border-orange-400 text-white w-32 md:w-40 h-16 md:h-20 rounded-2xl opacity-100 scale-110' : ''}
+              ${clicksFinalizarAzul === 2 ? 'bg-red-700 border-2 border-red-500 text-white w-32 md:w-40 h-16 md:h-20 rounded-2xl opacity-100 scale-110 animate-pulse shadow-[0_0_20px_rgba(220,38,38,0.8)]' : ''}
+            `}
+          >
+            {clicksFinalizarAzul === 0 && (
+              <><span className="text-[8px] md:text-[10px] leading-tight">Finalizar</span><span className="text-[10px] md:text-[13px] leading-tight text-blue-400 mt-0.5">Luta</span></>
+            )}
+            {clicksFinalizarAzul === 1 && (
+              <><span className="text-[8px] md:text-[10px] leading-tight">MAIS 2 CLIQUES</span><span className="text-[9px] md:text-[11px] leading-tight text-white mt-0.5">PARA CONFIRMAR</span></>
+            )}
+            {clicksFinalizarAzul === 2 && (
+              <><span className="text-[9px] md:text-[11px] leading-tight text-white">MAIS 1 CLIQUE PARA</span><span className="text-[10px] md:text-[13px] leading-tight text-red-200 mt-0.5 font-black">ENCERRAR AGORA!</span></>
+            )}
           </button>
 
           {vencedor === 'azul' && (
             <div className="vencedor-overlay absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
               <div className="bg-black/90 px-8 py-4 md:px-12 md:py-6 rounded-[3rem] border-4 border-blue-500 shadow-[0_0_100px_rgba(59,130,246,0.8)] -rotate-12 animate-pulse">
-                <span className="text-blue-400 font-black text-5xl md:text-7xl lg:text-[7rem] uppercase tracking-tighter drop-shadow-[0_0_20px_rgba(59,130,246,1)]">🏆 Venceu</span>
+                <span className="text-blue-400 font-black text-5xl md:text-7xl lg:text-[7rem] uppercase tracking-tighter drop-shadow-[0_0_20px_rgba(59,130,246,1)]">ðŸ† Venceu</span>
               </div>
             </div>
           )}
 
           <div className="nome-container w-full text-center px-4 md:pl-8 md:pr-[20%] shrink-0 pt-2 flex flex-col items-center">
-            <h2 className="atleta-nome text-4xl md:text-6xl lg:text-[4.5rem] xl:text-[5.0rem] leading-none pb-1 font-black uppercase text-white truncate drop-shadow-md w-full block">{atletaAzul}</h2>
-            <span className="text-blue-400 text-xs md:text-sm font-bold uppercase tracking-widest truncate max-w-full">{lutaAtual?.equipe_1}</span>
+            <h2 className="atleta-nome text-3xl md:text-4xl lg:text-[3rem] xl:text-[3.5rem] leading-none pb-1 font-black uppercase text-white truncate drop-shadow-md w-full block">{atletaAzul}</h2>
+            <span className="text-blue-400 text-[10px] md:text-xs font-bold uppercase tracking-widest truncate max-w-full">{lutaAtual?.equipe_1}</span>
           </div>
-          
+
           <div className="pontos-container flex-1 flex items-center justify-center w-full min-h-[0] md:pr-12 lg:pr-20">
             <span className="pontos-gigantes text-[9rem] md:text-[12rem] lg:text-[13rem] font-black text-white leading-none tracking-tighter drop-shadow-lg">{pontosAzul}</span>
           </div>
@@ -505,7 +556,7 @@ export default function PlacarMesarioDB() {
                 </div>
               </div>
               <div className="flex-1 bg-black/40 rounded-2xl p-4 flex flex-col items-center border border-white/5 shadow-inner">
-                <span className="text-red-500 text-[10px] md:text-xs font-bold uppercase tracking-widest mb-2 pointer-events-none">Punições</span>
+                <span className="text-red-500 text-[10px] md:text-xs font-bold uppercase tracking-widest mb-2 pointer-events-none">PuniÃ§Ãµes</span>
                 <div className="flex items-center gap-4 md:gap-6 w-full justify-center">
                   <button onClick={() => updatePontos("azul", "punicoes", -1)} className="cursor-pointer text-white/40 hover:text-white text-3xl md:text-4xl font-black transition-colors w-12 h-12 flex items-center justify-center rounded-full hover:bg-white/10 active:scale-95">-</button>
                   <span className="text-5xl md:text-6xl font-black text-red-500 pointer-events-none">{punicoesAzul}</span>
@@ -518,23 +569,40 @@ export default function PlacarMesarioDB() {
 
         {/* LADO VERMELHO */}
         <div className={`placar-side placar-side-verm w-1/2 h-full bg-[#2f0404] border-l border-black flex flex-col pt-6 md:pt-10 px-6 md:px-8 pb-6 relative z-10 transition-all duration-1000 ${vencedor === 'azul' ? 'opacity-20 grayscale' : vencedor === 'vermelho' ? 'brightness-125' : ''}`}>
-          <button onClick={() => declararFinalizacao("vermelho")} className="absolute top-1/2 -translate-y-1/2 right-2 md:right-6 z-50 bg-black/60 border border-white/30 text-white font-bold uppercase w-16 h-16 md:w-20 md:h-20 rounded-full flex flex-col items-center justify-center opacity-40 hover:opacity-100 hover:border-red-500 hover:scale-110 transition-all duration-300 cursor-pointer shadow-[0_0_15px_rgba(0,0,0,0.5)]">
-            <span className="text-[8px] md:text-[10px] leading-tight">Finalizar</span><span className="text-[10px] md:text-[13px] leading-tight text-red-400 mt-0.5">W.O.</span>
+
+          {/* ðŸ›¡ï¸ BOTÃƒO DE FINALIZAR - CLIQUE TRIPLO (VERMELHO) */}
+          <button
+            onClick={() => handleFinalizarClick("vermelho")}
+            className={`absolute top-1/2 -translate-y-1/2 right-2 md:right-6 z-50 flex flex-col items-center justify-center text-center font-bold uppercase transition-all duration-300 cursor-pointer shadow-[0_0_15px_rgba(0,0,0,0.5)] px-2
+              ${clicksFinalizarVermelho === 0 ? 'bg-black/60 border border-white/30 text-white w-16 h-16 md:w-20 md:h-20 rounded-full opacity-40 hover:opacity-100 hover:border-red-500 hover:scale-110' : ''}
+              ${clicksFinalizarVermelho === 1 ? 'bg-orange-600 border-2 border-orange-400 text-white w-32 md:w-40 h-16 md:h-20 rounded-2xl opacity-100 scale-110' : ''}
+              ${clicksFinalizarVermelho === 2 ? 'bg-red-700 border-2 border-red-500 text-white w-32 md:w-40 h-16 md:h-20 rounded-2xl opacity-100 scale-110 animate-pulse shadow-[0_0_20px_rgba(220,38,38,0.8)]' : ''}
+            `}
+          >
+            {clicksFinalizarVermelho === 0 && (
+              <><span className="text-[8px] md:text-[10px] leading-tight">Finalizar</span><span className="text-[10px] md:text-[13px] leading-tight text-red-400 mt-0.5">Luta</span></>
+            )}
+            {clicksFinalizarVermelho === 1 && (
+              <><span className="text-[8px] md:text-[10px] leading-tight">MAIS 2 CLIQUES</span><span className="text-[9px] md:text-[11px] leading-tight text-white mt-0.5">PARA CONFIRMAR</span></>
+            )}
+            {clicksFinalizarVermelho === 2 && (
+              <><span className="text-[9px] md:text-[11px] leading-tight text-white">MAIS 1 CLIQUE PARA</span><span className="text-[10px] md:text-[13px] leading-tight text-red-200 mt-0.5 font-black">ENCERRAR AGORA!</span></>
+            )}
           </button>
 
           {vencedor === 'vermelho' && (
             <div className="vencedor-overlay absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
               <div className="bg-black/90 px-8 py-4 md:px-12 md:py-6 rounded-[3rem] border-4 border-red-500 shadow-[0_0_100px_rgba(239,68,68,0.8)] -rotate-12 animate-pulse">
-                <span className="text-red-500 font-black text-5xl md:text-7xl lg:text-[7rem] uppercase tracking-tighter drop-shadow-[0_0_20px_rgba(239,68,68,1)]">🏆 Venceu</span>
+                <span className="text-red-500 font-black text-5xl md:text-7xl lg:text-[7rem] uppercase tracking-tighter drop-shadow-[0_0_20px_rgba(239,68,68,1)]">ðŸ† Venceu</span>
               </div>
             </div>
           )}
 
           <div className="nome-container w-full text-center px-4 md:pr-8 md:pl-[20%] shrink-0 pt-2 flex flex-col items-center">
-            <h2 className="atleta-nome text-4xl md:text-6xl lg:text-[4.5rem] xl:text-[5.0rem] leading-none pb-1 font-black uppercase text-white truncate drop-shadow-md w-full block">{atletaVermelho}</h2>
-            <span className="text-red-400 text-xs md:text-sm font-bold uppercase tracking-widest truncate max-w-full">{lutaAtual?.equipe_2}</span>
+            <h2 className="atleta-nome text-3xl md:text-4xl lg:text-[3rem] xl:text-[3.5rem] leading-none pb-1 font-black uppercase text-white truncate drop-shadow-md w-full block">{atletaVermelho}</h2>
+            <span className="text-red-400 text-[10px] md:text-xs font-bold uppercase tracking-widest truncate max-w-full">{lutaAtual?.equipe_2}</span>
           </div>
-          
+
           <div className="pontos-container flex-1 flex items-center justify-center w-full min-h-[0] md:pl-12 lg:pl-20">
             <span className="pontos-gigantes text-[9rem] md:text-[12rem] lg:text-[13rem] font-black text-white leading-none tracking-tighter drop-shadow-lg">{pontosVermelho}</span>
           </div>
@@ -568,7 +636,7 @@ export default function PlacarMesarioDB() {
                 </div>
               </div>
               <div className="flex-1 bg-black/40 rounded-2xl p-4 flex flex-col items-center border border-white/5 shadow-inner">
-                <span className="text-red-500 text-[10px] md:text-xs font-bold uppercase tracking-widest mb-2 pointer-events-none">Punições</span>
+                <span className="text-red-500 text-[10px] md:text-xs font-bold uppercase tracking-widest mb-2 pointer-events-none">PuniÃ§Ãµes</span>
                 <div className="flex items-center gap-4 md:gap-6 w-full justify-center">
                   <button onClick={() => updatePontos("vermelho", "punicoes", -1)} className="cursor-pointer text-white/40 hover:text-white text-3xl md:text-4xl font-black transition-colors w-12 h-12 flex items-center justify-center rounded-full hover:bg-white/10 active:scale-95">-</button>
                   <span className="text-5xl md:text-6xl font-black text-red-500 pointer-events-none">{punicoesVermelho}</span>
@@ -585,13 +653,13 @@ export default function PlacarMesarioDB() {
             <div className="resumo-modal bg-[#0c1220] border border-white/10 rounded-3xl p-8 w-full max-w-4xl shadow-[0_0_80px_rgba(0,0,0,0.8)] animate-in slide-in-from-bottom-10 duration-500">
               <div className="text-center mb-8">
                 <h2 className="text-4xl font-black text-white uppercase tracking-tighter">Fim de Combate</h2>
-                <p className="text-green-500 font-bold uppercase tracking-widest text-sm mt-1">✔ Resultados Salvos no Banco Oficial</p>
+                <p className="text-green-500 font-bold uppercase tracking-widest text-sm mt-1">âœ” Resultados Salvos no Banco Oficial</p>
               </div>
 
               <div className="resumo-grid grid grid-cols-2 gap-8">
                 <div className={`resumo-card bg-[#05142b]/80 border ${vencedor === 'azul' ? 'border-yellow-500 shadow-[0_0_30px_rgba(234,179,8,0.3)]' : 'border-blue-500/30'} rounded-2xl p-6 relative overflow-hidden transition-all`}>
                   <div className="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>
-                  <h3 className="text-xl font-black text-white uppercase truncate mb-4">{vencedor === 'azul' && "🏆 "} {atletaAzul}</h3>
+                  <h3 className="text-xl font-black text-white uppercase truncate mb-4">{vencedor === 'azul' && "ðŸ† "} {atletaAzul}</h3>
                   <div className="text-6xl font-black text-blue-500 mb-6 drop-shadow-md">{pontosAzul} <span className="text-lg text-zinc-500 tracking-widest uppercase">Pts</span></div>
                   <ul className="space-y-3">
                     <li className="flex justify-between items-center text-sm font-bold"><span className="text-zinc-400">Montadas / Costas:</span> <span className="text-white bg-blue-600 px-2 py-0.5 rounded">{stats.azul.montadas}</span></li>
@@ -601,7 +669,7 @@ export default function PlacarMesarioDB() {
                 </div>
                 <div className={`resumo-card bg-[#2f0404]/80 border ${vencedor === 'vermelho' ? 'border-yellow-500 shadow-[0_0_30px_rgba(234,179,8,0.3)]' : 'border-red-500/30'} rounded-2xl p-6 relative overflow-hidden transition-all`}>
                   <div className="absolute top-0 left-0 w-1 h-full bg-red-500"></div>
-                  <h3 className="text-xl font-black text-white uppercase truncate mb-4">{vencedor === 'vermelho' && "🏆 "} {atletaVermelho}</h3>
+                  <h3 className="text-xl font-black text-white uppercase truncate mb-4">{vencedor === 'vermelho' && "ðŸ† "} {atletaVermelho}</h3>
                   <div className="text-6xl font-black text-red-500 mb-6 drop-shadow-md">{pontosVermelho} <span className="text-lg text-zinc-500 tracking-widest uppercase">Pts</span></div>
                   <ul className="space-y-3">
                     <li className="flex justify-between items-center text-sm font-bold"><span className="text-zinc-400">Montadas / Costas:</span> <span className="text-white bg-red-600 px-2 py-0.5 rounded">{stats.vermelho.montadas}</span></li>

@@ -39,17 +39,18 @@ export default function CheckinOperador() {
   }, [router]);
 
   // =========================================================================
-  // LEITOR BLINDADO: Só aceita o QR Code criptografado do iTatame
+  // LEITOR BLINDADO: Só aceita o QR Code do Evento. Bloqueia a Carteirinha!
   // =========================================================================
   const handleScan = (detectedCodes: any[]) => {
     if (!detectedCodes || detectedCodes.length === 0) return;
     const textoLido = detectedCodes[0].rawValue;
     if (!textoLido) return;
 
-    // VERIFICAÇÃO ÚNICA E ESTRITA (Sem porta dos fundos)
+    // 1. LER O INGRESSO DO EVENTO (Padrão: ITATAME|EVENTO_ID|USER_ID)
     if (textoLido.includes('ITATAME|')) {
       const partes = textoLido.split('|');
-      if (partes.length === 3) {
+      // Importante: Passaporte do evento tem sempre 3 partes (exclui o DIGITAL)
+      if (partes.length === 3 && partes[1] !== 'DIGITAL') {
         const evId = partes[1];
         const usrId = partes[2];
         setScannedId('QR-VALIDADO');
@@ -58,12 +59,18 @@ export default function CheckinOperador() {
       }
     }
 
+    // 2. BLOQUEIO DA CARTEIRINHA DIGITAL (Evita fraude de Instagram)
+    if (textoLido.includes('/atleta/') || textoLido.includes('|DIGITAL|')) {
+      setErro('❌ QR Code da Carteira. Peça ao atleta para abrir "Minhas Inscrições" e apresentar o Passaporte (QR) deste evento específico!');
+      return;
+    }
+
     // SE CHEGOU AQUI, TENTARAM BURLAR OU LERAM OUTRA COISA
     setErro('❌ QR Code Inválido ou Falsificado. Acesso Negado.');
   };
 
   // =========================================================================
-  // BUSCA NO BANCO DE DADOS (100% amarrada aos UUIDs)
+  // BUSCA NO BANCO DE DADOS (100% amarrada aos UUIDs Evento + Usuário)
   // =========================================================================
   const fetchAtleta = async (eventoId: string, userId: string) => {
     setLoading(true);

@@ -8,8 +8,8 @@ import Link from 'next/link';
 
 export default function PainelMesario() {
   const router = useRouter();
-  const [sessao, setSessao] = useState<any>(null); 
-  
+  const [sessao, setSessao] = useState<any>(null);
+
   const [lutasOriginais, setLutasOriginais] = useState<any[]>([]);
   const [lutasExibidas, setLutasExibidas] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,12 +49,12 @@ export default function PainelMesario() {
 
   const isGhost = (nome: string | null) => {
     const clean = String(nome || "").trim().toUpperCase();
-    return clean === "" || clean === "BYE" || clean === "TBD";
+    return clean === "" || clean === "BYE" || clean === "TBD" || clean.includes("SEM OPONENTE");
   };
 
   const displayNome = (nome: string | null) => {
     const clean = String(nome || "").trim().toUpperCase();
-    if (clean === "BYE") return "SEM OPONENTE";
+    if (clean === "BYE" || clean.includes("SEM OPONENTE")) return "SEM OPONENTE";
     if (clean === "TBD" || clean === "") return "AGUARDANDO OPONENTE";
     return nome;
   };
@@ -62,7 +62,7 @@ export default function PainelMesario() {
   const isAtletaValido = (nome: string | null) => !isGhost(nome);
 
   const carregarPainel = useCallback(async (isSilent = false) => {
-    if (!sessao) return; 
+    if (!sessao) return;
     if (!isSilent) setLoading(true);
     setRefreshing(true);
 
@@ -75,9 +75,12 @@ export default function PainelMesario() {
 
     const isStrictGhost = (n: string | null) => {
       const c = String(n || "").trim().toUpperCase();
-      return c === "BYE" || c === "";
+      return c === "BYE" || c === "" || c.includes("SEM OPONENTE");
     };
 
+    // =========================================================================
+    // 🔥 EXORCISMO PARTE 1: ELIMINAR RAMOS MORTOS (BYE vs BYE)
+    // =========================================================================
     const deadBranches = todasAsLutasData.filter(l => l.status_luta !== 'concluida' && isStrictGhost(l.atleta_1) && isStrictGhost(l.atleta_2));
 
     if (deadBranches.length > 0) {
@@ -95,6 +98,70 @@ export default function PainelMesario() {
       return carregarPainel(isSilent);
     }
 
+    // =========================================================================
+    // 🤖 EXORCISMO PARTE 2: O ROBÔ AUTÔNOMO (Avançar "Atleta Real vs BYE")
+    // =========================================================================
+    const isWOGhost = (n: string | null) => {
+      const c = String(n || "").trim().toUpperCase();
+      return c === "BYE" || c.includes("SEM OPONENTE");
+    };
+
+    const lutasParaAvancoAutomatico = todasAsLutasData.filter(l => {
+      if (l.status_luta === 'concluida') return false;
+
+      const a1Real = l.atleta_1 && !isStrictGhost(l.atleta_1) && !String(l.atleta_1).toUpperCase().includes("TBD");
+      const a2Real = l.atleta_2 && !isStrictGhost(l.atleta_2) && !String(l.atleta_2).toUpperCase().includes("TBD");
+
+      const a1WO = isWOGhost(l.atleta_1);
+      const a2WO = isWOGhost(l.atleta_2);
+
+      // A luta só avança se tiver exatamente UM atleta real e UM fantasma
+      return (a1Real && a2WO) || (a2Real && a1WO);
+    });
+
+    if (lutasParaAvancoAutomatico.length > 0) {
+      for (const luta of lutasParaAvancoAutomatico) {
+        const a1Real = luta.atleta_1 && !isStrictGhost(luta.atleta_1) && !String(luta.atleta_1).toUpperCase().includes("TBD");
+        const vencedorOficial = a1Real ? luta.atleta_1 : luta.atleta_2;
+        const equipeVencedor = a1Real ? luta.equipe_1 : luta.equipe_2;
+        const vencedorId = a1Real ? luta.atleta_1_id : luta.atleta_2_id;
+
+        // 1. O Robô finaliza a luta fantasma
+        await supabase.from('chaves').update({
+          status_luta: 'concluida',
+          vencedor: vencedorOficial,
+          vencedor_id: vencedorId,
+          metodo_vitoria: 'wo',
+          finalizada_em: new Date().toISOString()
+        }).eq('id', luta.id);
+
+        // 2. O Robô atualiza as medalhas e status do Atleta
+        if (vencedorId) {
+          const { data: atletaData } = await supabase.from("atletas").select("vitorias_wo, ouro").eq("id", vencedorId).single();
+          if (atletaData) {
+            let updates: any = { vitorias_wo: Math.max(0, (atletaData.vitorias_wo || 0) + 1) };
+            const isFinal = !luta.proxima_luta || String(luta.id_visual) === "999";
+            if (isFinal) updates.ouro = Math.max(0, (atletaData.ouro || 0) + 1);
+            await supabase.from("atletas").update(updates).eq("id", vencedorId);
+          }
+        }
+
+        // 3. O Robô empurra o atleta para a próxima chave (ou coroa ele)
+        const isFinal = !luta.proxima_luta || String(luta.id_visual) === "999";
+        if (!isFinal && luta.proxima_luta) {
+          const proxIdBanco = todasAsLutasData.find(l => l.categoria === luta.categoria && l.faixa === luta.faixa && String(l.id_visual) === String(luta.proxima_luta));
+          if (proxIdBanco) {
+            const isImpar = Number(luta.id_visual) % 2 !== 0;
+            const updateData = isImpar ? { atleta_1: vencedorOficial, equipe_1: equipeVencedor, atleta_1_id: vencedorId, tatame: luta.tatame } : { atleta_2: vencedorOficial, equipe_2: equipeVencedor, atleta_2_id: vencedorId, tatame: luta.tatame };
+            await supabase.from('chaves').update(updateData).eq('id', proxIdBanco.id);
+          }
+        }
+      }
+      // O Robô volta a chamar o painel para processar a próxima fase limpa!
+      return carregarPainel(isSilent);
+    }
+    // =========================================================================
+
     const chavesSemTatame = todasAsLutasData.filter(l => !l.tatame && (isAtletaValido(l.atleta_1) || isAtletaValido(l.atleta_2)));
     if (chavesSemTatame.length > 0) {
       for (const semTatame of chavesSemTatame) {
@@ -110,7 +177,7 @@ export default function PainelMesario() {
     const lutasDoMeuTatame = todasAsLutasData.filter(l => l.tatame && l.tatame.trim().toUpperCase() === sessao.identificacao.trim().toUpperCase());
     const lutasAtuais = lutasDoMeuTatame.filter(l => ['agendada', 'em_andamento', 'concluida'].includes(l.status_luta));
 
-    // 🔥 BLINDAGEM MÁXIMA: Buscando e Cruzando pelo atleta_id e não pelo NOME
+    // Blindagem: busca pelo atleta_id, não pelo nome.
     const { data: inscricoesData } = await supabase.from('inscricoes').select('atleta_id, status_checkin').eq('evento_id', sessao.evento_id);
 
     const lutasComCheckin = lutasAtuais.map((luta: any) => {
@@ -122,9 +189,27 @@ export default function PainelMesario() {
       return { ...luta, checkin_1: getStatus(luta.atleta_1_id, luta.atleta_1), checkin_2: getStatus(luta.atleta_2_id, luta.atleta_2) };
     });
 
-    const lutasReais = lutasComCheckin.filter((l: any) => !(isGhost(l.atleta_1) && isGhost(l.atleta_2)));
+    // ?? O EXORCISMO VISUAL: Removemos as lutas que não têm dois atletas reais (Filtra BYE e SEM OPONENTE)
+    const lutasReais = lutasComCheckin.filter((l: any) => {
+      const a1Fantasma = isStrictGhost(l.atleta_1);
+      const a2Fantasma = isStrictGhost(l.atleta_2);
+
+      // 🧹 A MÁGICA NOVA: Se for Fantasma vs Fantasma, oculta completamente (até da aba Concluídas)
+      if (a1Fantasma && a2Fantasma) return false;
+
+      const isLutaFim = l.status_luta === 'concluida';
+      if(isLutaFim) return true;
+
+      const temAtleta1Valido = l.atleta_1 && !a1Fantasma;
+      const temAtleta2Valido = l.atleta_2 && !a2Fantasma;
+      const isAguardandoAdversario = l.atleta_1?.includes("TBD") || l.atleta_2?.includes("TBD");
+
+      // Mostrar se pelo menos UM for válido (para W.O.), ou se estiver aguardando (TBD)
+      return (temAtleta1Valido || temAtleta2Valido) || isAguardandoAdversario;
+    });
+
     setLutasOriginais(lutasReais);
-    
+
     if (!isSilent) setLoading(false);
     setRefreshing(false);
   }, [sessao]);
@@ -173,23 +258,89 @@ export default function PainelMesario() {
     }
   };
 
+  const enviarPushAtleta = async (atletaId: number | null, titulo: string, mensagem: string) => {
+    if (!atletaId) return;
+
+    const response = await fetch('/api/notificar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        atleta_id: atletaId,
+        titulo,
+        mensagem,
+        url: `/evento/${sessao.evento_id}/ao-vivo`
+      })
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => null);
+      throw new Error(data?.error || 'Erro ao enviar push.');
+    }
+  };
+
+  const calcularMinutosAteLuta = (luta: any, lutasAntes: number, agoraMs: number) => {
+    const horarioEstimado = luta.horario_estimado ? new Date(luta.horario_estimado).getTime() : 0;
+    const diffMinutos = horarioEstimado ? Math.ceil((horarioEstimado - agoraMs) / 60000) : 0;
+    const estimativaFila = Math.round(lutasAntes * 7);
+    return Math.max(5, diffMinutos, estimativaFila);
+  };
+
+  const atletasDaLuta = (luta: any) => [
+    { id: luta.atleta_1_id, nome: displayNome(luta.atleta_1) },
+    { id: luta.atleta_2_id, nome: displayNome(luta.atleta_2) }
+  ].filter((atleta) => atleta.id && isAtletaValido(atleta.nome));
+
+  const notificarAtletas = async (luta: any) => {
+  try {
+    const tatameAtual = luta.tatame || sessao.identificacao;
+    
+    // 1. AVISO DE "VOCÊ É A PRÓXIMA" (Quando o mesário chama)
+    for (const atleta of atletasDaLuta(luta)) {
+      await enviarPushAtleta(
+        atleta.id,
+        'TATAME: Sua luta começou!',
+        `${atleta.nome}, compareça agora ao ${tatameAtual}. Você é o próximo!`
+      );
+    }
+
+    // 2. AVISO DE "SE APROXIMANDO" (Fila de espera)
+    const lutasDoTatame = lutasOriginais
+      .filter((item) => item.id !== luta.id && item.status_luta === 'agendada' && item.tatame === tatameAtual)
+      .sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0))
+      .slice(0, 2); // Pega apenas os 2 próximos da fila
+
+    for (const [index, proximaLuta] of lutasDoTatame.entries()) {
+      const pos = index + 1; // 1 = Próxima, 2 = Depois da próxima
+      const msg = pos === 1 
+        ? "Prepare-se! Sua luta é a próxima após esta." 
+        : "Fique atento! Você é o segundo na fila.";
+
+      for (const atleta of atletasDaLuta(proximaLuta)) {
+        await enviarPushAtleta(atleta.id, 'Aviso de Luta', msg);
+      }
+    }
+  } catch (err) {
+    console.error(err);
+  }
+};
+
   const avancarFaseUnica = async (lutaAtual: any, vencedorOficial: string, equipeVencedor: string, vencedorId: number | null) => {
     if (!confirm(`Avançar [ ${vencedorOficial} ] de fase por ausência de oponente?`)) return;
     setRefreshing(true);
-    await supabase.from('chaves').update({ 
-      status_luta: 'concluida', 
-      vencedor: vencedorOficial, 
-      vencedor_id: vencedorId, 
-      metodo_vitoria: 'wo', 
-      finalizada_em: new Date().toISOString() 
+    await supabase.from('chaves').update({
+      status_luta: 'concluida',
+      vencedor: vencedorOficial,
+      vencedor_id: vencedorId,
+      metodo_vitoria: 'wo',
+      finalizada_em: new Date().toISOString()
     }).eq('id', lutaAtual.id);
-    
+
     if (vencedorId) await updateEstatistica(vencedorId, "vitorias_wo", 1);
-    
+
     const isFinal = !lutaAtual.proxima_luta || String(lutaAtual.id_visual) === "999";
     if (isFinal) {
-      if (vencedorId) await updateEstatistica(vencedorId, "ouro", 1); 
-      alert(`🏆 ${vencedorOficial} FOI DECLARADO CAMPEÃO!`);
+      if (vencedorId) await updateEstatistica(vencedorId, "ouro", 1);
+      alert(`?? ${vencedorOficial} FOI DECLARADO CAMPE?O!`);
     } else if (lutaAtual.proxima_luta) {
       const proxIdBanco = todasAsLutasDoEvento.find(l => l.evento_id === lutaAtual.evento_id && l.categoria === lutaAtual.categoria && l.faixa === lutaAtual.faixa && String(l.id_visual) === String(lutaAtual.proxima_luta));
       if (proxIdBanco) {
@@ -202,26 +353,26 @@ export default function PainelMesario() {
   };
 
   const coroarCampeaoDireto = async (lutaInicial: any, vencedorOficial: string, equipeVencedor: string, vencedorId: number | null) => {
-    if (!confirm(`🏆 ATENÇÃO!\nO atleta [ ${vencedorOficial} ] é o ÚNICO na chave inteira.\nDeseja varrer a chave e declarar CAMPEÃO DIRETO?`)) return;
+    if (!confirm(`?? ATEN??O!\nO atleta [ ${vencedorOficial} ] ? o ?NICO na chave inteira.\nDeseja varrer a chave e declarar CAMPE?O DIRETO?`)) return;
     setRefreshing(true);
     let atual = lutaInicial;
     while (atual) {
-      await supabase.from('chaves').update({ 
-        status_luta: 'concluida', 
-        vencedor: vencedorOficial, 
-        vencedor_id: vencedorId, 
-        metodo_vitoria: 'wo', 
-        finalizada_em: new Date().toISOString() 
+      await supabase.from('chaves').update({
+        status_luta: 'concluida',
+        vencedor: vencedorOficial,
+        vencedor_id: vencedorId,
+        metodo_vitoria: 'wo',
+        finalizada_em: new Date().toISOString()
       }).eq('id', atual.id);
-      
+
       const isFinal = !atual.proxima_luta || String(atual.id_visual) === "999";
       if (isFinal) {
         if (vencedorId) {
           await updateEstatistica(vencedorId, "vitorias_wo", 1);
-          await updateEstatistica(vencedorId, "ouro", 1); 
+          await updateEstatistica(vencedorId, "ouro", 1);
         }
-        alert(`🏆 ${vencedorOficial} COROADO CAMPEÃO!`);
-        break; 
+        alert(`?? ${vencedorOficial} COROADO CAMPE?O!`);
+        break;
       }
       if (atual.proxima_luta) {
         const prox = todasAsLutasDoEvento.find(l => l.evento_id === atual.evento_id && l.categoria === atual.categoria && l.faixa === atual.faixa && String(l.id_visual) === String(atual.proxima_luta));
@@ -229,7 +380,7 @@ export default function PainelMesario() {
           const isImpar = Number(atual.id_visual) % 2 !== 0;
           const updateData = isImpar ? { atleta_1: vencedorOficial, equipe_1: equipeVencedor, atleta_1_id: vencedorId, tatame: atual.tatame } : { atleta_2: vencedorOficial, equipe_2: equipeVencedor, atleta_2_id: vencedorId, tatame: atual.tatame };
           await supabase.from('chaves').update(updateData).eq('id', prox.id);
-          atual = { ...prox, ...updateData }; 
+          atual = { ...prox, ...updateData };
         } else { break; }
       } else { break; }
     }
@@ -257,7 +408,7 @@ export default function PainelMesario() {
     const cleanN2 = String(luta.atleta_2 || "").trim().toUpperCase();
     const temTbd = cleanN1 === "TBD" || cleanN2 === "TBD" || cleanN1 === "" || cleanN2 === "";
     if (temTbd) return 'aguardando';
-    const temBye = cleanN1 === "BYE" || cleanN2 === "BYE";
+    const temBye = cleanN1 === "BYE" || cleanN2 === "BYE" || cleanN1.includes("SEM OPONENTE") || cleanN2.includes("SEM OPONENTE");
     if (temBye) return 'wo';
     return 'prontas';
   };
@@ -279,11 +430,11 @@ export default function PainelMesario() {
     const equipeVencedor = atleta1Real ? luta.equipe_1 : luta.equipe_2;
     const vencedorId = atleta1Real ? luta.atleta_1_id : luta.atleta_2_id;
 
-    const temBye = (cleanN1 === "BYE" || cleanN2 === "BYE") && !(luta.status_luta === 'concluida');
+    const temBye = (cleanN1 === "BYE" || cleanN2 === "BYE" || cleanN1.includes("SEM OPONENTE") || cleanN2.includes("SEM OPONENTE")) && !(luta.status_luta === 'concluida');
     const isByeAvancavel = temBye && (atleta1Real || atleta2Real);
     const temTbd = (cleanN1 === "TBD" || cleanN2 === "TBD" || cleanN1 === "" || cleanN2 === "");
     const temReprovado = luta.checkin_1?.includes('desclassificado') || luta.checkin_2?.includes('desclassificado');
-    
+
     const checkinPendente = (luta.checkin_1 === 'pendente' || luta.checkin_2 === 'pendente');
     const lutaBloqueada = (!temBye && temTbd) || (!isByeAvancavel && checkinPendente);
 
@@ -331,8 +482,18 @@ export default function PainelMesario() {
           ) : temReprovado ? (
             <button onClick={() => router.push(`/staff/placar/${luta.id}`)} className="cursor-pointer w-full sm:w-[120px] bg-red-950 hover:bg-red-900 border border-red-500/50 text-red-400 py-2.5 rounded-lg font-black uppercase tracking-widest text-[9px] md:text-[10px] flex items-center justify-center gap-1.5 transition-colors"><XCircle size={14} /> W.O. Balança</button>
           ) : (
-            <button onClick={() => router.push(`/staff/placar/${luta.id}`)} disabled={lutaBloqueada} className={`cursor-pointer w-full sm:w-[120px] py-2.5 rounded-lg font-black uppercase tracking-widest text-[9px] md:text-[10px] flex items-center justify-center gap-1.5 transition-all active:scale-95 ${lutaBloqueada ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed border border-zinc-700' : 'bg-white text-black hover:bg-zinc-200'}`}>
-              {lutaBloqueada ? (checkinPendente ? '⚠ PENDENTE' : temTbd ? 'AGUARDANDO' : 'BLOQUEADO') : (<><Play size={14} fill="currentColor" /> {luta.status_luta === 'em_andamento' ? 'Retomar' : 'Placar'}</>)}
+            <button
+              onClick={() => {
+                // Ao clicar para abrir o placar, dispara o PUSH para os telemóveis
+                if (luta.status_luta !== 'em_andamento') {
+                  notificarAtletas(luta);
+                }
+                router.push(`/staff/placar/${luta.id}`);
+              }}
+              disabled={lutaBloqueada}
+              className={`cursor-pointer w-full sm:w-[120px] py-2.5 rounded-lg font-black uppercase tracking-widest text-[9px] md:text-[10px] flex items-center justify-center gap-1.5 transition-all active:scale-95 ${lutaBloqueada ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed border border-zinc-700' : 'bg-white text-black hover:bg-zinc-200 shadow-[0_0_15px_rgba(255,255,255,0.2)]'}`}
+            >
+              {lutaBloqueada ? (checkinPendente ? '⚠ PENDENTE' : temTbd ? 'AGUARDANDO' : 'BLOQUEADO') : (<><Play size={14} fill="currentColor" /> {luta.status_luta === 'em_andamento' ? 'Retomar' : 'Chamar Luta'}</>)}
             </button>
           )}
         </div>
@@ -340,7 +501,7 @@ export default function PainelMesario() {
     );
   };
 
-  if (!sessao) return null; 
+  if (!sessao) return null;
 
   return (
     <main className="min-h-screen bg-[#050505] text-white font-sans selection:bg-red-500/30 pb-20 relative">
@@ -411,11 +572,11 @@ export default function PainelMesario() {
           </div>
         ) : (
           <div className="space-y-10">
-            
+
             {lutasProntas.length > 0 && (
               <section>
                 <h3 className="text-white font-black text-sm uppercase tracking-widest mb-4 flex items-center gap-2 border-b border-white/10 pb-2">
-                  <span className="text-red-500">🔥</span> Prontas para o Tatame
+                  <CheckCircle size={14} className="text-red-500" /> Prontas para o Tatame
                 </h3>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 md:gap-4">
                   {lutasProntas.map(l => renderLutaCard(l, 'prontas'))}
@@ -426,7 +587,7 @@ export default function PainelMesario() {
             {lutasWO.length > 0 && (
               <section>
                 <h3 className="text-white font-black text-sm uppercase tracking-widest mb-4 flex items-center gap-2 border-b border-white/10 pb-2">
-                  <span className="text-yellow-500">⚡</span> Avanços Rápidos (W.O. / Sem Oponente)
+                  <AlertCircle size={14} className="text-yellow-500" /> Avanços Rápidos (W.O. / Sem Oponente)
                 </h3>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 md:gap-4">
                   {lutasWO.map(l => renderLutaCard(l, 'wo'))}
@@ -437,7 +598,7 @@ export default function PainelMesario() {
             {lutasAguardando.length > 0 && (
               <section>
                 <h3 className="text-zinc-500 font-black text-sm uppercase tracking-widest mb-4 flex items-center gap-2 border-b border-white/5 pb-2">
-                  <span className="text-zinc-600">⏳</span> Aguardando Chaveamento
+                  <Clock size={14} className="text-zinc-600" /> Aguardando Chaveamento
                 </h3>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 md:gap-4">
                   {lutasAguardando.map(l => renderLutaCard(l, 'aguardando'))}

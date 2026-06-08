@@ -2,11 +2,13 @@ import { Metadata } from "next";
 import { supabase } from "@/app/lib/supabase"; // Ajustado para o seu caminho correto
 
 // 1. Esta função roda no servidor apenas para ler o banco e criar a capa do link
-export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+
   const { data: evento } = await supabase
     .from("eventos")
     .select("nome, descricao, banner_url")
-    .eq("id", params.id)
+    .eq("id", id)
     .single();
 
   if (!evento) {
