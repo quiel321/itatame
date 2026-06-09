@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
+import { enviarEmailIngressoConfirmado } from "@/app/lib/email-ingresso";
 
 function getPaymentId(body: any) {
   return body?.data?.id || body?.resource?.split("/").pop() || body?.id || null;
@@ -38,10 +39,24 @@ export async function POST(request: Request) {
     }
 
     if (paymentData.status === "approved") {
+      const { data: inscricaoAtual } = await supabase
+        .from("inscricoes")
+        .select("pagamento_ok")
+        .eq("id", inscricaoId)
+        .maybeSingle();
+
       await supabase
         .from("inscricoes")
         .update({ pagamento_ok: true })
         .eq("id", inscricaoId);
+
+      if (!inscricaoAtual?.pagamento_ok) {
+        await enviarEmailIngressoConfirmado({
+          inscricaoId,
+          emailFallback: paymentData?.payer?.email,
+          paymentId,
+        });
+      }
     }
 
     return NextResponse.json({ success: true });

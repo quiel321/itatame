@@ -116,9 +116,18 @@ export default function PagamentoPage() {
                   if (!response.ok) throw new Error(data.error || "Pagamento recusado.");
 
                   if (data.status === "approved") {
-                    setCheckoutMensagem("Pagamento aprovado! Sua inscrição foi confirmada.");
+                    setCheckoutMensagem("Pagamento aprovado! Redirecionando para seu passaporte...");
                     await carregarInscricoes();
                     setAbaAtiva("pagas");
+
+                    window.setTimeout(() => {
+                      const destinoPassaporte = inscricaoSelecionada?.evento_id && inscricaoSelecionada?.user_id
+                        ? `/ingresso/${inscricaoSelecionada.evento_id}/${inscricaoSelecionada.user_id}`
+                        : "/pagamento";
+
+                      fecharCheckout();
+                      router.push(destinoPassaporte);
+                    }, 1200);
                   } else if (data.status === "pending" || data.status === "in_process") {
                     setCheckoutMensagem("Pagamento gerado. Assim que for aprovado, a inscrição será liberada automaticamente.");
                   } else {

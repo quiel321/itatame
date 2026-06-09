@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { NextResponse } from "next/server";
 import { calcularComissaoMarketplace } from "@/app/lib/planos-comerciais";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
+import { enviarEmailIngressoConfirmado } from "@/app/lib/email-ingresso";
 
 type EventoPagamento = {
   id: string | number;
@@ -50,10 +51,12 @@ function limparPayloadPagamento(formData: any, valorTotal: number, comissao: num
       inscricao_id: String(inscricao.id),
       evento_id: String(evento.id),
       organizador_id: String(evento.organizador_id),
+      comissao_itatame: String(comissao),
+      comissao_automatica: "sim",
     },
   };
 
-  if (payload.installments) payload.installments = Number(payload.installments);
+  if (payload.installments) payload.installments = 1;
   if (payload.issuer_id) payload.issuer_id = String(payload.issuer_id);
   if (!payload.payer?.email) delete payload.payer;
 
@@ -145,6 +148,11 @@ export async function POST(request: Request) {
 
     if (paymentData.status === "approved") {
       await supabase.from("inscricoes").update({ pagamento_ok: true }).eq("id", inscricao.id);
+      await enviarEmailIngressoConfirmado({
+        inscricaoId: inscricao.id,
+        emailFallback: formData?.payer?.email,
+        paymentId: paymentData.id,
+      });
     }
 
     return NextResponse.json({
