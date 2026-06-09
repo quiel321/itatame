@@ -129,8 +129,14 @@ export default function EventoDetalhesPage() {
                 )
               )}
 
+              {/* 🔥 NOVO BOTÃO DE CHECAGEM GERAL */}
+              <Link href={`/evento/${evento.id}/checagem`} className="bg-green-600 hover:bg-green-500 text-white font-black uppercase tracking-widest text-[10px] md:text-xs px-3 py-2.5 md:px-6 md:py-3.5 rounded-lg shadow-[0_0_15px_rgba(22,163,74,0.3)] transition-all text-center flex-1 md:flex-none flex items-center justify-center gap-1.5">
+                <svg className="w-3.5 h-3.5 md:w-4 md:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                Checagem Aberta
+              </Link>
+
               <Link href={`/pagamento`} className="bg-white hover:bg-zinc-200 text-black font-black uppercase tracking-widest text-[10px] md:text-xs px-3 py-2.5 md:px-6 md:py-3.5 rounded-lg transition-all text-center flex-1 md:flex-none">
-                Pagar / Checar
+                Pagar
               </Link>
               <Link href={`/evento/${evento.id}/publico`} className="bg-white/5 hover:bg-white/10 border border-white/10 text-white font-bold uppercase tracking-widest text-[10px] md:text-xs px-3 py-2.5 md:px-6 md:py-3.5 rounded-lg transition-all text-center flex-1 md:flex-none">
                 Chaves e Resultados

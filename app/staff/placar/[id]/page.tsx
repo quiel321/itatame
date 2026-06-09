@@ -14,7 +14,7 @@ export default function PlacarMesarioDB() {
   const [todasLutasCategoria, setTodasLutasCategoria] = useState<any[]>([]);
   const [loadingDB, setLoadingDB] = useState(true);
 
-  // CONFIGURAÃ‡Ã•ES DA LUTA
+  // CONFIGURAÇÕES DA LUTA
   const [configOpen, setConfigOpen] = useState(true);
   const [showResumo, setShowResumo] = useState(false);
   const [tempoMinutos, setTempoMinutos] = useState(5);
@@ -42,7 +42,7 @@ export default function PlacarMesarioDB() {
   const placarRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-  // ðŸ›¡ï¸ ESTADOS DE SEGURANÃ‡A (CLIQUE TRIPLO)
+  // 🛡️ ESTADOS DE SEGURANÇA (CLIQUE TRIPLO)
   const [clicksFinalizarAzul, setClicksFinalizarAzul] = useState(0);
   const [clicksFinalizarVermelho, setClicksFinalizarVermelho] = useState(0);
   const timeoutAzulRef = useRef<NodeJS.Timeout | null>(null);
@@ -70,7 +70,7 @@ export default function PlacarMesarioDB() {
         .single();
 
       if (error || !luta) {
-        alert("Luta nÃ£o encontrada!");
+        alert("Luta não encontrada!");
         router.push("/staff/painel");
         return;
       }
@@ -103,7 +103,7 @@ export default function PlacarMesarioDB() {
   }, [matchId, router]);
 
   // ==========================================
-  // 2. ATUALIZAÃ‡ÃƒO NO SUPABASE (PLACAR AO VIVO)
+  // 2. ATUALIZAÇÃO NO SUPABASE (PLACAR AO VIVO)
   // ==========================================
   const salvarPontuacaoDB = async (lado: "azul" | "vermelho", pts: number, vts: number, pun: number) => {
     if (!lutaAtual) return;
@@ -130,7 +130,7 @@ export default function PlacarMesarioDB() {
   };
 
   // ==========================================
-  // 3. ENCERRAMENTO E AVANÃ‡O NA CHAVE
+  // 3. ENCERRAMENTO E AVANÇO NA CHAVE
   // ==========================================
   const limparNome = (nome: string | null) => {
     if (!nome) return "";
@@ -192,7 +192,7 @@ export default function PlacarMesarioDB() {
     }
   };
 
-  // ðŸ›¡ï¸ NOVO: FUNÃ‡ÃƒO DO CLIQUE TRIPLO DE SEGURANÃ‡A
+  // NOVO: FUNÇÃO DO CLIQUE TRIPLO DE SEGURANÇA
   const handleFinalizarClick = (lado: "azul" | "vermelho") => {
     if (vencedor || showResumo) return;
 
@@ -205,7 +205,7 @@ export default function PlacarMesarioDB() {
       } else {
         setClicksFinalizarAzul(novosClicks);
         if (timeoutAzulRef.current) clearTimeout(timeoutAzulRef.current);
-        timeoutAzulRef.current = setTimeout(() => setClicksFinalizarAzul(0), 3000); // Reseta apÃ³s 3 segundos
+        timeoutAzulRef.current = setTimeout(() => setClicksFinalizarAzul(0), 3000); // Reseta após 3 segundos
       }
     } else {
       const novosClicks = clicksFinalizarVermelho + 1;
@@ -216,7 +216,7 @@ export default function PlacarMesarioDB() {
       } else {
         setClicksFinalizarVermelho(novosClicks);
         if (timeoutVermelhoRef.current) clearTimeout(timeoutVermelhoRef.current);
-        timeoutVermelhoRef.current = setTimeout(() => setClicksFinalizarVermelho(0), 3000); // Reseta apÃ³s 3 segundos
+        timeoutVermelhoRef.current = setTimeout(() => setClicksFinalizarVermelho(0), 3000); // Reseta após 3 segundos
       }
     }
   };
@@ -304,7 +304,7 @@ export default function PlacarMesarioDB() {
         gain.gain.setValueAtTime(0.8, ctx.currentTime); gain.gain.linearRampToValueAtTime(0.01, ctx.currentTime + 3.0);
         osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 3.0);
       }
-    } catch (error) { console.log("Ãudio nÃ£o suportado", error); }
+    } catch (error) { console.log("Áudio não suportado", error); }
   };
 
   useEffect(() => {
@@ -490,7 +490,7 @@ export default function PlacarMesarioDB() {
         {/* LADO AZUL */}
         <div className={`placar-side placar-side-azul w-1/2 h-full bg-[#05142b] border-r-[2px] border-black flex flex-col pt-6 md:pt-10 px-6 md:px-8 pb-6 relative z-10 transition-all duration-1000 ${vencedor === 'vermelho' ? 'opacity-20 grayscale' : vencedor === 'azul' ? 'brightness-125' : ''}`}>
 
-          {/* ðŸ›¡ï¸ BOTÃƒO DE FINALIZAR - CLIQUE TRIPLO (AZUL) */}
+          {/* BOTÃO DE FINALIZAR - CLIQUE TRIPLO (AZUL) */}
           <button
             onClick={() => handleFinalizarClick("azul")}
             className={`absolute top-1/2 -translate-y-1/2 left-2 md:left-6 z-50 flex flex-col items-center justify-center text-center font-bold uppercase transition-all duration-300 cursor-pointer shadow-[0_0_15px_rgba(0,0,0,0.5)] px-2
@@ -513,7 +513,7 @@ export default function PlacarMesarioDB() {
           {vencedor === 'azul' && (
             <div className="vencedor-overlay absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
               <div className="bg-black/90 px-8 py-4 md:px-12 md:py-6 rounded-[3rem] border-4 border-blue-500 shadow-[0_0_100px_rgba(59,130,246,0.8)] -rotate-12 animate-pulse">
-                <span className="text-blue-400 font-black text-5xl md:text-7xl lg:text-[7rem] uppercase tracking-tighter drop-shadow-[0_0_20px_rgba(59,130,246,1)]">ðŸ† Venceu</span>
+                <span className="text-blue-400 font-black text-5xl md:text-7xl lg:text-[7rem] uppercase tracking-tighter drop-shadow-[0_0_20px_rgba(59,130,246,1)]">Venceu</span>
               </div>
             </div>
           )}
@@ -556,7 +556,7 @@ export default function PlacarMesarioDB() {
                 </div>
               </div>
               <div className="flex-1 bg-black/40 rounded-2xl p-4 flex flex-col items-center border border-white/5 shadow-inner">
-                <span className="text-red-500 text-[10px] md:text-xs font-bold uppercase tracking-widest mb-2 pointer-events-none">PuniÃ§Ãµes</span>
+                <span className="text-red-500 text-[10px] md:text-xs font-bold uppercase tracking-widest mb-2 pointer-events-none">Punições</span>
                 <div className="flex items-center gap-4 md:gap-6 w-full justify-center">
                   <button onClick={() => updatePontos("azul", "punicoes", -1)} className="cursor-pointer text-white/40 hover:text-white text-3xl md:text-4xl font-black transition-colors w-12 h-12 flex items-center justify-center rounded-full hover:bg-white/10 active:scale-95">-</button>
                   <span className="text-5xl md:text-6xl font-black text-red-500 pointer-events-none">{punicoesAzul}</span>
@@ -570,7 +570,7 @@ export default function PlacarMesarioDB() {
         {/* LADO VERMELHO */}
         <div className={`placar-side placar-side-verm w-1/2 h-full bg-[#2f0404] border-l border-black flex flex-col pt-6 md:pt-10 px-6 md:px-8 pb-6 relative z-10 transition-all duration-1000 ${vencedor === 'azul' ? 'opacity-20 grayscale' : vencedor === 'vermelho' ? 'brightness-125' : ''}`}>
 
-          {/* ðŸ›¡ï¸ BOTÃƒO DE FINALIZAR - CLIQUE TRIPLO (VERMELHO) */}
+          {/* BOTÃO DE FINALIZAR - CLIQUE TRIPLO (VERMELHO) */}
           <button
             onClick={() => handleFinalizarClick("vermelho")}
             className={`absolute top-1/2 -translate-y-1/2 right-2 md:right-6 z-50 flex flex-col items-center justify-center text-center font-bold uppercase transition-all duration-300 cursor-pointer shadow-[0_0_15px_rgba(0,0,0,0.5)] px-2
@@ -593,7 +593,7 @@ export default function PlacarMesarioDB() {
           {vencedor === 'vermelho' && (
             <div className="vencedor-overlay absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
               <div className="bg-black/90 px-8 py-4 md:px-12 md:py-6 rounded-[3rem] border-4 border-red-500 shadow-[0_0_100px_rgba(239,68,68,0.8)] -rotate-12 animate-pulse">
-                <span className="text-red-500 font-black text-5xl md:text-7xl lg:text-[7rem] uppercase tracking-tighter drop-shadow-[0_0_20px_rgba(239,68,68,1)]">ðŸ† Venceu</span>
+                <span className="text-red-500 font-black text-5xl md:text-7xl lg:text-[7rem] uppercase tracking-tighter drop-shadow-[0_0_20px_rgba(239,68,68,1)]">Venceu</span>
               </div>
             </div>
           )}
@@ -636,7 +636,7 @@ export default function PlacarMesarioDB() {
                 </div>
               </div>
               <div className="flex-1 bg-black/40 rounded-2xl p-4 flex flex-col items-center border border-white/5 shadow-inner">
-                <span className="text-red-500 text-[10px] md:text-xs font-bold uppercase tracking-widest mb-2 pointer-events-none">PuniÃ§Ãµes</span>
+                <span className="text-red-500 text-[10px] md:text-xs font-bold uppercase tracking-widest mb-2 pointer-events-none">Punições</span>
                 <div className="flex items-center gap-4 md:gap-6 w-full justify-center">
                   <button onClick={() => updatePontos("vermelho", "punicoes", -1)} className="cursor-pointer text-white/40 hover:text-white text-3xl md:text-4xl font-black transition-colors w-12 h-12 flex items-center justify-center rounded-full hover:bg-white/10 active:scale-95">-</button>
                   <span className="text-5xl md:text-6xl font-black text-red-500 pointer-events-none">{punicoesVermelho}</span>
@@ -653,13 +653,13 @@ export default function PlacarMesarioDB() {
             <div className="resumo-modal bg-[#0c1220] border border-white/10 rounded-3xl p-8 w-full max-w-4xl shadow-[0_0_80px_rgba(0,0,0,0.8)] animate-in slide-in-from-bottom-10 duration-500">
               <div className="text-center mb-8">
                 <h2 className="text-4xl font-black text-white uppercase tracking-tighter">Fim de Combate</h2>
-                <p className="text-green-500 font-bold uppercase tracking-widest text-sm mt-1">âœ” Resultados Salvos no Banco Oficial</p>
+                <p className="text-green-500 font-bold uppercase tracking-widest text-sm mt-1">Resultados salvos no banco oficial</p>
               </div>
 
               <div className="resumo-grid grid grid-cols-2 gap-8">
                 <div className={`resumo-card bg-[#05142b]/80 border ${vencedor === 'azul' ? 'border-yellow-500 shadow-[0_0_30px_rgba(234,179,8,0.3)]' : 'border-blue-500/30'} rounded-2xl p-6 relative overflow-hidden transition-all`}>
                   <div className="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>
-                  <h3 className="text-xl font-black text-white uppercase truncate mb-4">{vencedor === 'azul' && "ðŸ† "} {atletaAzul}</h3>
+                  <h3 className="text-xl font-black text-white uppercase truncate mb-4">{vencedor === 'azul' && ""} {atletaAzul}</h3>
                   <div className="text-6xl font-black text-blue-500 mb-6 drop-shadow-md">{pontosAzul} <span className="text-lg text-zinc-500 tracking-widest uppercase">Pts</span></div>
                   <ul className="space-y-3">
                     <li className="flex justify-between items-center text-sm font-bold"><span className="text-zinc-400">Montadas / Costas:</span> <span className="text-white bg-blue-600 px-2 py-0.5 rounded">{stats.azul.montadas}</span></li>
@@ -669,7 +669,7 @@ export default function PlacarMesarioDB() {
                 </div>
                 <div className={`resumo-card bg-[#2f0404]/80 border ${vencedor === 'vermelho' ? 'border-yellow-500 shadow-[0_0_30px_rgba(234,179,8,0.3)]' : 'border-red-500/30'} rounded-2xl p-6 relative overflow-hidden transition-all`}>
                   <div className="absolute top-0 left-0 w-1 h-full bg-red-500"></div>
-                  <h3 className="text-xl font-black text-white uppercase truncate mb-4">{vencedor === 'vermelho' && "ðŸ† "} {atletaVermelho}</h3>
+                  <h3 className="text-xl font-black text-white uppercase truncate mb-4">{vencedor === 'vermelho' && ""} {atletaVermelho}</h3>
                   <div className="text-6xl font-black text-red-500 mb-6 drop-shadow-md">{pontosVermelho} <span className="text-lg text-zinc-500 tracking-widest uppercase">Pts</span></div>
                   <ul className="space-y-3">
                     <li className="flex justify-between items-center text-sm font-bold"><span className="text-zinc-400">Montadas / Costas:</span> <span className="text-white bg-red-600 px-2 py-0.5 rounded">{stats.vermelho.montadas}</span></li>

@@ -2127,7 +2127,7 @@ if (perfilData) {
 
 
 
-                            {/* BOT?O DA CHAVE MENOR */}
+                            {/* BOTAO DA CHAVE MENOR */}
 
                             <button onClick={() => window.location.href = `/evento/${insc.evento_id}/publico`} className="cursor-pointer w-full bg-white/5 hover:bg-white/10 border border-white/10 text-white px-4 py-2.5 rounded-xl font-bold uppercase tracking-widest transition-colors text-[9px] text-center flex items-center justify-center gap-1.5">
 

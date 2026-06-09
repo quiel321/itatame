@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { supabase } from "../lib/supabase"; 
+import { supabase } from "../lib/supabase";
+import { PLANOS_COMERCIAIS, getPlanoComercial, type PlanoComercialId } from "../lib/planos-comerciais";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import imageCompression from 'browser-image-compression';
@@ -16,6 +17,8 @@ export default function AdminPage() {
   const [organizadorNome, setOrganizadorNome] = useState("Organizador");
   const [fotoUrl, setFotoUrl] = useState("");
   const [isOrganizadorNativo, setIsOrganizadorNativo] = useState(false);
+  const [organizadorFinanceiro, setOrganizadorFinanceiro] = useState<any>(null);
+  const [salvandoPlano, setSalvandoPlano] = useState(false);
   
   const [showPerfilModal, setShowPerfilModal] = useState(false);
   const [forceCompletion, setForceCompletion] = useState(false);
@@ -120,6 +123,7 @@ export default function AdminPage() {
 
       if (orgData) {
         setIsOrganizadorNativo(true);
+        setOrganizadorFinanceiro(orgData);
         setOrganizadorNome(orgData.nome.split(" ")[0]);
         if (orgData.foto_url) setFotoUrl(orgData.foto_url);
         
@@ -135,6 +139,7 @@ export default function AdminPage() {
         }
 
       } else {
+        setOrganizadorFinanceiro(null);
         const { data: perfil } = await supabase.from("perfis").select("nome").eq("id", authData.user.id).maybeSingle();
         if (perfil?.nome) setOrganizadorNome(perfil.nome.split(" ")[0]);
         const { data: atleta } = await supabase.from("atletas").select("foto_url").eq("user_id", authData.user.id).maybeSingle();
@@ -410,6 +415,35 @@ export default function AdminPage() {
   const totalPagos = inscricoes.filter(i => i.pagamento_ok).length;
   const totalPendentes = totalInscritos - totalPagos;
 
+  const planoAtual = getPlanoComercial(organizadorFinanceiro?.plano_comercial);
+  const mercadoPagoConectado = Boolean(organizadorFinanceiro?.mp_connected_at);
+
+  async function alterarPlanoComercial(planoId: PlanoComercialId) {
+    if (!currentUserId || salvandoPlano) return;
+
+    const plano = getPlanoComercial(planoId);
+    setSalvandoPlano(true);
+
+    const { error } = await supabase
+      .from("organizadores")
+      .update({
+        plano_comercial: plano.id,
+        comissao_percentual: plano.comissaoPercentual,
+      })
+      .eq("user_id", currentUserId);
+
+    if (error) {
+      alert("Não foi possível atualizar o plano. Verifique se o SQL de marketplace já foi aplicado no Supabase.");
+    } else {
+      setOrganizadorFinanceiro((atual: any) => ({
+        ...(atual || {}),
+        plano_comercial: plano.id,
+        comissao_percentual: plano.comissaoPercentual,
+      }));
+    }
+
+    setSalvandoPlano(false);
+  }
   return (
     <main className="min-h-screen bg-[#050505] text-white p-4 md:p-8 relative overflow-hidden font-sans selection:bg-red-500/30">
       
@@ -512,6 +546,55 @@ export default function AdminPage() {
               </Link>
             </div>
 
+
+            <section className="bg-black/40 border border-white/5 rounded-2xl p-4 md:p-5 mb-8 shadow-xl">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+                <div className="min-w-0">
+                  <span className="text-emerald-400 text-[9px] font-black uppercase tracking-widest">Financeiro</span>
+                  <h2 className="text-lg md:text-xl font-black text-white mt-1">Plano e Mercado Pago</h2>
+                  <p className="text-zinc-500 text-xs mt-1 max-w-2xl">Escolha o bloco contratado pelo organizador e conecte a conta Mercado Pago que receberá as inscrições.</p>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-3 lg:items-center">
+                  <div className="rounded-xl border border-white/10 bg-[#050505] px-4 py-3 min-w-[170px]">
+                    <span className="block text-zinc-500 text-[9px] font-black uppercase tracking-widest">Plano atual</span>
+                    <strong className="block text-white text-sm mt-1">{planoAtual.nome} · {planoAtual.comissaoPercentual}%</strong>
+                  </div>
+                  <Link
+                    href={currentUserId ? `/api/mercado-pago/connect?organizador_id=${currentUserId}` : "#"}
+                    className={`cursor-pointer text-center rounded-xl px-5 py-3 text-[10px] font-black uppercase tracking-widest border transition-all ${mercadoPagoConectado ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20" : "bg-yellow-500 text-black border-yellow-400 hover:bg-yellow-400"}`}
+                  >
+                    {mercadoPagoConectado ? "Mercado Pago conectado" : "Conectar Mercado Pago"}
+                  </Link>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-5">
+                {PLANOS_COMERCIAIS.map((plano) => {
+                  const ativo = planoAtual.id === plano.id;
+                  return (
+                    <button
+                      key={plano.id}
+                      type="button"
+                      onClick={() => alterarPlanoComercial(plano.id)}
+                      disabled={salvandoPlano || ativo}
+                      className={`text-left rounded-xl border p-4 transition-all ${ativo ? "bg-red-600/10 border-red-500/40" : "bg-[#050505] border-white/10 hover:border-white/25"}`}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-white font-black text-sm uppercase tracking-widest">{plano.nome}</span>
+                        <span className={`text-[10px] font-black rounded px-2 py-1 ${ativo ? "bg-red-500 text-white" : "bg-white/5 text-zinc-400"}`}>{plano.comissaoPercentual}%</span>
+                      </div>
+                      <p className="text-zinc-500 text-xs mt-2 leading-relaxed">{plano.resumo}</p>
+                      <div className="flex flex-wrap gap-2 mt-3">
+                        {plano.recursos.map((recurso) => (
+                          <span key={recurso} className="text-[9px] text-zinc-400 bg-white/5 border border-white/5 rounded px-2 py-1 uppercase tracking-widest">{recurso}</span>
+                        ))}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 border-b border-white/5 pb-4">
               <div className="flex items-center gap-3">
                 <Users className="w-5 h-5 text-red-500" />
