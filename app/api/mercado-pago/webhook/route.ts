@@ -9,16 +9,36 @@ function getPaymentId(body: any) {
 export async function POST(request: Request) {
   try {
     const url = new URL(request.url);
-    const inscricaoId = url.searchParams.get("inscricao_id");
-    const organizadorId = url.searchParams.get("organizador_id");
+    let inscricaoId = url.searchParams.get("inscricao_id");
+    let organizadorId = url.searchParams.get("organizador_id");
     const body = await request.json();
     const paymentId = getPaymentId(body);
 
-    if (!paymentId || !inscricaoId || !organizadorId) {
-      return NextResponse.json({ success: true, message: "Webhook sem dados suficientes." });
+    if (!paymentId) {
+      return NextResponse.json({ success: true, message: "Webhook sem pagamento." });
     }
 
     const supabase = createSupabaseServerClient();
+
+    if (!inscricaoId || !organizadorId) {
+      const { data: inscricaoPorPagamento } = await supabase
+        .from("inscricoes")
+        .select("id, eventos ( organizador_id )")
+        .eq("mp_payment_id", String(paymentId))
+        .maybeSingle();
+
+      const evento = Array.isArray(inscricaoPorPagamento?.eventos)
+        ? inscricaoPorPagamento?.eventos[0]
+        : inscricaoPorPagamento?.eventos;
+
+      inscricaoId = inscricaoPorPagamento?.id ? String(inscricaoPorPagamento.id) : null;
+      organizadorId = evento?.organizador_id || null;
+    }
+
+    if (!inscricaoId || !organizadorId) {
+      return NextResponse.json({ success: true, message: "Inscricao nao localizada para este pagamento." });
+    }
+
     const { data: organizador } = await supabase
       .from("organizadores")
       .select("mp_access_token")
@@ -47,7 +67,7 @@ export async function POST(request: Request) {
 
       await supabase
         .from("inscricoes")
-        .update({ pagamento_ok: true })
+        .update({ pagamento_ok: true, mp_payment_id: String(paymentId) })
         .eq("id", inscricaoId);
 
       if (!inscricaoAtual?.pagamento_ok) {

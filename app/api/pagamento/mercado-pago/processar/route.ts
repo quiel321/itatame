@@ -146,8 +146,10 @@ export async function POST(request: Request) {
       );
     }
 
+    await supabase.from("inscricoes").update({ mp_payment_id: String(paymentData.id) }).eq("id", inscricao.id);
+
     if (paymentData.status === "approved") {
-      await supabase.from("inscricoes").update({ pagamento_ok: true }).eq("id", inscricao.id);
+      await supabase.from("inscricoes").update({ pagamento_ok: true, mp_payment_id: String(paymentData.id) }).eq("id", inscricao.id);
       await enviarEmailIngressoConfirmado({
         inscricaoId: inscricao.id,
         emailFallback: formData?.payer?.email,
@@ -160,6 +162,7 @@ export async function POST(request: Request) {
       status: paymentData.status,
       status_detail: paymentData.status_detail,
       payment_method_id: paymentData.payment_method_id,
+      payment_type_id: paymentData.payment_type_id,
       ticket_url: paymentData.transaction_details?.external_resource_url || paymentData.point_of_interaction?.transaction_data?.ticket_url,
       qr_code: paymentData.point_of_interaction?.transaction_data?.qr_code,
       qr_code_base64: paymentData.point_of_interaction?.transaction_data?.qr_code_base64,
