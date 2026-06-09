@@ -135,8 +135,10 @@ export async function POST(request: Request) {
 
     if (!paymentResponse.ok) {
       console.error("Erro ao processar pagamento Mercado Pago:", paymentData);
+      const primeiraCausa = Array.isArray(paymentData?.cause) ? paymentData.cause[0] : null;
+      const mensagem = primeiraCausa?.description || paymentData?.message || paymentData?.error || "Pagamento recusado pelo Mercado Pago.";
       return NextResponse.json(
-        { error: paymentData?.message || "Pagamento recusado pelo Mercado Pago.", details: paymentData },
+        { error: mensagem, details: paymentData },
         { status: 400 }
       );
     }

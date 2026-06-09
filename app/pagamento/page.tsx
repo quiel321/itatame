@@ -94,6 +94,7 @@ export default function PagamentoPage() {
               creditCard: "all",
               debitCard: "all",
               mercadoPago: "all",
+                          maxInstallments: 1,
             },
             visual: {
               style: {
@@ -378,6 +379,9 @@ export default function PagamentoPage() {
                 <span className="text-emerald-400 text-[9px] font-black uppercase tracking-widest">Pagamento seguro</span>
                 <h2 className="text-white text-lg md:text-xl font-black mt-1">{checkoutData.eventoNome}</h2>
                 <p className="text-zinc-500 text-xs mt-1">Total: {formatarMoeda(checkoutData.valorTotal)}</p>
+                {checkoutMensagem && (
+                  <p className="mt-2 text-[11px] font-bold text-yellow-400">{checkoutMensagem}</p>
+                )}
               </div>
               <button onClick={fecharCheckout} className="cursor-pointer text-zinc-400 hover:text-white text-2xl leading-none">×</button>
             </div>
