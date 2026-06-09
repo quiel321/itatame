@@ -12,16 +12,16 @@ export const PLANOS_COMERCIAIS: PlanoComercial[] = [
   {
     id: "essencial",
     nome: "Essencial",
-    resumo: "Chaveamento, check-in e inscrições online.",
+    resumo: "Chaveamento, check-in e inscricoes online.",
     comissaoPercentual: 5,
-    recursos: ["Chaveamento", "Check-in", "Controle de inscrições"],
+    recursos: ["Chaveamento", "Check-in", "Controle de inscricoes"],
   },
   {
     id: "completo",
     nome: "Completo",
-    resumo: "Operação inteira do evento com tatames, mesário e painel ao vivo.",
+    resumo: "Operacao inteira do evento com tatames, mesario e painel ao vivo.",
     comissaoPercentual: 10,
-    recursos: ["Painel do mesário", "Gestão de tatames", "Ao vivo e chamadas"],
+    recursos: ["Painel do mesario", "Gestao de tatames", "Ao vivo e chamadas"],
   },
 ];
 

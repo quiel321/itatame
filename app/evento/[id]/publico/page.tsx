@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { useParams } from "next/navigation"
 import { supabase } from "@/app/lib/supabase"
 import Link from "next/link"
+import { Clock } from "lucide-react"
 
 const formatarHorarioEstimado = (isoString: string | null) => {
   if (!isoString) return '';
@@ -11,9 +12,9 @@ const formatarHorarioEstimado = (isoString: string | null) => {
   return data.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 };
 
-// 🔥 COMPONENTE ATLETA ATUALIZADO COM NOVO VISUAL E RELÓGIO DESKTOP
+// 🔥 COMPONENTES DE DESENHO DA ÁRVORE (Mantidos Inalterados)
 function Atleta({ nome, equipe, numero, foto, reverso = false, centralizado = false, ocultarLinha = false, larguraClass = "w-[100px] md:w-[140px]", campeao = false, horario, status, tatame }: any) {
-  const isBye = !nome || ["BYE", "TBD"].includes(nome.toString().trim().toUpperCase());
+  const isBye = !nome || ["BYE", "TBD"].includes(nome.toString().trim().toUpperCase()) || nome.toString().trim().toUpperCase().includes("SEM OPONENTE");
   const nomeExibicao = isBye ? "" : nome;
   const equipeExibicao = isBye ? "" : equipe;
 
@@ -24,8 +25,8 @@ function Atleta({ nome, equipe, numero, foto, reverso = false, centralizado = fa
           {foto && !isBye ? <img src={foto} alt={nomeExibicao} className="w-full h-full object-cover" /> : <svg className="w-6 h-6 md:w-10 md:h-10 text-yellow-600" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>}
         </div>
         <span className="text-yellow-500 text-[10px] md:text-[12px] font-black uppercase text-center w-full drop-shadow-[0_0_10px_rgba(234,179,8,0.6)] truncate px-1">
-  {nomeExibicao || "A DEFINIR"}
-</span>
+          {nomeExibicao || "A DEFINIR"}
+        </span>
         <span className="text-yellow-600/80 text-[9px] md:text-[11px] font-bold uppercase text-center w-full truncate px-1">{equipeExibicao}</span>
       </div>
     )
@@ -33,29 +34,23 @@ function Atleta({ nome, equipe, numero, foto, reverso = false, centralizado = fa
 
   return (
     <div className={`relative h-[60px] flex-shrink-0 ${larguraClass} group`}>
-      
       {!centralizado && (
         <div className={`hidden md:flex absolute top-[12px] w-[36px] h-[36px] rounded-full bg-[#0a0a0e] border border-zinc-700 overflow-hidden items-center justify-center z-10 transition-transform group-hover:scale-110 group-hover:border-cyan-500/50 ${reverso ? 'right-0' : 'left-0'}`}>
           {foto && !isBye ? <img src={foto} className="w-full h-full object-cover" /> : <svg className="w-5 h-5 text-zinc-600" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>}
         </div>
       )}
-
       <div className={`absolute top-[4px] md:top-[2px] flex items-center ${centralizado ? 'justify-center left-0 right-0' : reverso ? 'left-0 right-0 md:left-0 md:right-[48px] flex-row-reverse' : 'left-0 right-0 md:left-[48px] md:right-0 flex-row'}`}>
         {numero && <span className={`text-zinc-600 text-[9px] md:text-[10px] font-black ${reverso ? 'ml-1.5' : 'mr-1.5'}`}>{numero}</span>}
         <span className={`text-[#57d8ff] text-[10px] md:text-[13px] font-bold tracking-tight truncate flex-1 transition-colors group-hover:text-white ${centralizado ? 'text-center' : reverso ? 'text-right' : 'text-left'}`}>
           {nomeExibicao}
         </span>
       </div>
-
       {!ocultarLinha && <div className={`absolute top-[30px] border-t border-zinc-600/70 transition-colors group-hover:border-[#57d8ff]/50 ${centralizado ? 'left-0 right-0' : reverso ? 'left-0 right-0 md:left-auto md:right-[48px]' : 'left-0 right-0 md:right-auto md:left-[48px]'}`} />}
-      
       <div className={`absolute top-[34px] flex items-center ${centralizado ? 'justify-center left-0 right-0' : reverso ? 'left-0 right-0 md:left-0 md:right-[48px] flex-row-reverse' : 'left-0 right-0 md:left-[48px] md:right-0 flex-row'}`}>
         <span className={`text-zinc-500 text-[8px] md:text-[9.5px] font-medium uppercase truncate flex-1 ${centralizado ? 'text-center' : reverso ? 'text-right' : 'text-left'}`}>
           {equipeExibicao}
         </span>
       </div>
-
-      {/* 🔥 RELÓGIO DESKTOP INJETADO */}
       {!isBye && horario && status !== 'concluida' && status !== 'em_andamento' && (
         <div className={`absolute top-[48px] flex items-center ${centralizado ? 'justify-center left-0 right-0' : reverso ? 'left-0 right-0 md:left-0 md:right-[48px] flex-row-reverse' : 'left-0 right-0 md:left-[48px] md:right-0 flex-row'}`}>
           <span className="text-yellow-500 text-[7px] md:text-[8px] font-black uppercase tracking-widest bg-yellow-500/10 px-1.5 py-[1px] rounded border border-yellow-500/20 whitespace-nowrap z-20 shadow-[0_0_10px_rgba(234,179,8,0.1)] flex items-center gap-1">
@@ -64,8 +59,6 @@ function Atleta({ nome, equipe, numero, foto, reverso = false, centralizado = fa
           </span>
         </div>
       )}
-
-      {/* 🔥 LUTANDO AGORA DESKTOP INJETADO */}
       {!isBye && status === 'em_andamento' && (
         <div className={`absolute top-[48px] flex items-center ${centralizado ? 'justify-center left-0 right-0' : reverso ? 'left-0 right-0 md:left-0 md:right-[48px] flex-row-reverse' : 'left-0 right-0 md:left-[48px] md:right-0 flex-row'}`}>
           <span className="text-red-500 text-[7px] md:text-[8px] font-black uppercase tracking-widest bg-red-500/10 px-1.5 py-[1px] rounded border border-red-500/20 whitespace-nowrap z-20 animate-pulse flex items-center gap-1 cursor-default shadow-[0_0_10px_rgba(239,68,68,0.2)]">
@@ -73,19 +66,15 @@ function Atleta({ nome, equipe, numero, foto, reverso = false, centralizado = fa
           </span>
         </div>
       )}
-
     </div>
   )
 }
-
 function ConectorPequeno({ reverso = false }: any) { return ( <div className="relative w-[12px] md:w-[30px] h-[80px] flex-shrink-0"> <div className={`absolute top-0 w-[6px] md:w-[15px] h-[81px] border-zinc-500 border-y ${reverso ? 'right-0 border-l' : 'left-0 border-r'}`} /> <div className={`absolute top-[40px] w-[6px] md:w-[15px] border-t border-zinc-500 ${reverso ? 'left-0' : 'right-0'}`} /> </div> ) }
 function ConectorMedio({ reverso = false }: any) { return ( <div className="relative w-[12px] md:w-[30px] h-[160px] flex-shrink-0"> <div className={`absolute top-0 w-[6px] md:w-[15px] h-[161px] border-zinc-500 border-y ${reverso ? 'right-0 border-l' : 'left-0 border-r'}`} /> <div className={`absolute top-[80px] w-[6px] md:w-[15px] border-t border-zinc-500 ${reverso ? 'left-0' : 'right-0'}`} /> </div> ) }
 function ConectorGrande({ reverso = false }: any) { return ( <div className="relative w-[12px] md:w-[30px] h-[320px] flex-shrink-0"> <div className={`absolute top-0 w-[6px] md:w-[15px] h-[321px] border-zinc-500 border-y ${reverso ? 'right-0 border-l' : 'left-0 border-r'}`} /> <div className={`absolute top-[160px] w-[6px] md:w-[15px] border-t border-zinc-500 ${reverso ? 'left-0' : 'right-0'}`} /> </div> ) }
 
 export default function ChavesPublicoPage() {
   const params = useParams()
-  
-  // 🔥 BLINDAGEM DO ID DO EVENTO (Aceita params.id ou params.eventoId)
   const idEvento = params.id as string || params.eventoId as string;
   
   const [tipoCategoria, setTipoCategoria] = useState("peso")
@@ -94,7 +83,6 @@ export default function ChavesPublicoPage() {
   const [lutas, setLutas] = useState<any[]>([])
   const [abaAtual, setAbaAtual] = useState(1) 
   const [atletasDB, setAtletasDB] = useState<any[]>([])
-  
   const [temPendencia, setTemPendencia] = useState(false)
 
   async function verificarPagamento() {
@@ -136,18 +124,15 @@ export default function ChavesPublicoPage() {
 
   useEffect(() => { 
     carregarChaves() 
-
     const subscription = supabase
       .channel('public-chaves-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'chaves' }, payload => {
         carregarChaves();
       })
       .subscribe();
-
     return () => { supabase.removeChannel(subscription); }
   }, [categoriaSelecionada])
 
-  // 🔥 Filtro de Categoria
   const categoriasFiltradas = categoriasMenu.filter((cat) => {
     const isAbsoluto = cat.toLowerCase().includes("absoluto");
     return tipoCategoria === "peso" ? !isAbsoluto : isAbsoluto;
@@ -175,9 +160,12 @@ export default function ChavesPublicoPage() {
   const limparNome = (nome: string | null) => {
     if (!nome) return "";
     const strLimpa = String(nome).trim().toUpperCase();
-    if (strLimpa === "BYE" || strLimpa === "TBD") return "";
+    if (strLimpa === "BYE" || strLimpa === "TBD" || strLimpa.includes("SEM OPONENTE")) return "";
     return String(nome);
   }
+
+  const isGhost = (nome: string | null) => !nome || ["BYE", "TBD"].includes(String(nome).trim().toUpperCase()) || String(nome).trim().toUpperCase().includes("SEM OPONENTE");
+  const isAtletaValido = (nome: string | null) => !isGhost(nome);
 
   const buscarFotoPorId = (idNumerico: number | null) => {
     if (!idNumerico) return null;
@@ -185,7 +173,12 @@ export default function ChavesPublicoPage() {
     return match ? match.foto_url : null;
   }
 
-  // 🔥 FUNÇÕES ATUALIZADAS PARA ENVIAR HORÁRIO
+  const getLutaFinal = () => {
+    const finalNormal = lutas.find(l => String(l.id_visual) === "999");
+    if (finalNormal) return finalNormal;
+    return lutas.find(l => !l.proxima_luta); 
+  };
+
   const getAtletaDaPrimeiraFase = (posicaoColuna: number, slot: number, lado: "esquerda" | "direita") => {
     const idLutaVisual = getFase1VisualId(posicaoColuna, lado);
     const luta = lutas.find(l => String(l.id_visual) === String(idLutaVisual));
@@ -218,7 +211,7 @@ export default function ChavesPublicoPage() {
   }
 
   const getAtletaDaFinal = (slot: number) => {
-    const luta = lutas.find(l => String(l.id_visual) === "999");
+    const luta = getLutaFinal();
     if (!luta) return { nome: "", equipe: "", foto: null };
     const nomeBruto = slot === 1 ? luta.atleta_1 : luta.atleta_2;
     const idBruto = slot === 1 ? luta.atleta_1_id : luta.atleta_2_id;
@@ -232,32 +225,53 @@ export default function ChavesPublicoPage() {
   }
 
   const getCampeao = () => {
-    const lutaFinal = lutas.find(l => String(l.id_visual) === "999");
+    const lutaFinal = getLutaFinal();
     const campeao = limparNome(lutaFinal?.vencedor || null);
     const idCampeao = lutaFinal?.vencedor_id || null;
     return { nome: campeao, equipe: "", foto: buscarFotoPorId(idCampeao) }
   }
 
   const getNomeDaFase = (luta: any, todasLutas: any[]) => {
-    if (String(luta.id_visual) === "999") return "FINAL - DISPUTA DO OURO";
-    if (String(luta.proxima_luta) === "999") return "SEMIFINAL";
-    const semis = todasLutas.filter(l => String(l.proxima_luta) === "999").map(l => String(l.id_visual));
-    if (semis.includes(String(luta.proxima_luta))) return "QUARTAS DE FINAL";
+    if (String(luta.id_visual) === "999" || !luta.proxima_luta) return "FINAL - DISPUTA DO OURO";
+    const semis = todasLutas.filter(l => String(l.proxima_luta) === "999" || !l.proxima_luta).map(l => String(l.id_visual));
+    if (semis.includes(String(luta.proxima_luta))) return "SEMIFINAL";
     const quartas = todasLutas.filter(l => semis.includes(String(l.proxima_luta))).map(l => String(l.id_visual));
-    if (quartas.includes(String(luta.proxima_luta))) return "OITAVAS DE FINAL";
+    if (quartas.includes(String(luta.proxima_luta))) return "QUARTAS DE FINAL";
     const oitavas = todasLutas.filter(l => quartas.includes(String(l.proxima_luta))).map(l => String(l.id_visual));
-    if (oitavas.includes(String(luta.proxima_luta))) return "16 AVOS DE FINAL";
+    if (oitavas.includes(String(luta.proxima_luta))) return "OITAVAS DE FINAL";
+    const dezesseis = todasLutas.filter(l => oitavas.includes(String(l.proxima_luta))).map(l => String(l.id_visual));
+    if (dezesseis.includes(String(luta.proxima_luta))) return "16 AVOS DE FINAL";
     return "FASE ELIMINATÓRIA";
   }
 
-  const lutasMobile = [...lutas].filter(luta => {
-      const a1 = limparNome(luta.atleta_1); const a2 = limparNome(luta.atleta_2);
-      if ((!a1 || a1 === "BYE") && (!a2 || a2 === "BYE")) return false;
-      return true;
-  }).sort((a, b) => (parseInt(a.id_visual) || 0) - (parseInt(b.id_visual) || 0));
-
   const campeaoData = getCampeao();
   const temCampeao = campeaoData.nome && campeaoData.nome !== "";
+
+  // 🔥 LÓGICA DE ORGANIZAÇÃO DOS CARDS
+  const lutasAtivas = lutas.filter(l => l.status_luta !== 'concluida' && l.status_luta !== 'em_andamento');
+  const lutasEmAndamento = lutas.filter(l => l.status_luta === 'em_andamento');
+  
+  // Exibe apenas confrontos reais (duas pessoas)
+  const confrontosReais = [...lutasEmAndamento, ...lutasAtivas]
+    .filter(l => isAtletaValido(l.atleta_1) && isAtletaValido(l.atleta_2))
+    .sort((a, b) => (parseInt(a.id_visual) || 0) - (parseInt(b.id_visual) || 0));
+
+  // Atletas na "Baia" (Tem apenas 1 atleta válido na luta agendada)
+  const atletasNaBaia = lutasAtivas.filter(l => (isAtletaValido(l.atleta_1) && !isAtletaValido(l.atleta_2)) || (!isAtletaValido(l.atleta_1) && isAtletaValido(l.atleta_2)));
+
+  // Descobre de onde vem o oponente do atleta que está na Baia
+  const getTextoBaia = (lutaWait: any) => {
+    const lutasAlimentadoras = lutas.filter(l => String(l.proxima_luta) === String(lutaWait.id_visual));
+    if (lutasAlimentadoras.length > 0) {
+      const atletaPresente = isAtletaValido(lutaWait.atleta_1) ? lutaWait.atleta_1 : lutaWait.atleta_2;
+      const feederOponente = lutasAlimentadoras.find(l => limparNome(l.vencedor) !== limparNome(atletaPresente));
+      if (feederOponente) {
+        if (feederOponente.status_luta === 'concluida') return `Aguardando chamada ao tatame`;
+        return `Aguardando vencedor da Luta ${feederOponente.id_visual}`;
+      }
+    }
+    return "Avanço Direto - Aguardando oponente";
+  };
 
   return (
     <main className="min-h-screen bg-black p-0 md:p-6">
@@ -282,25 +296,24 @@ export default function ChavesPublicoPage() {
           </div>
         )}
 
-        <div className="flex flex-col md:flex-row justify-between items-center mb-6 md:mb-10 px-4 md:px-0">
-          <h1 className="text-white text-3xl md:text-5xl font-black">Chaveamento Oficial</h1>
+        <div className="flex flex-col justify-between items-center mb-6 md:mb-10 px-4 md:px-0 mt-8">
+          <h1 className="text-white text-3xl md:text-5xl font-black uppercase tracking-tighter w-full">Chaveamento Oficial</h1>
         </div>
 
-        <div className="bg-[#050816] md:border border-white/10 md:rounded-3xl p-4 md:p-6 mb-4 mx-4 md:mx-0 flex flex-col md:flex-row gap-4 items-end shadow-lg">
+        <div className="bg-[#050816] border-y md:border border-white/10 md:rounded-3xl p-4 md:p-6 mb-4 mx-0 flex flex-col md:flex-row gap-4 items-end shadow-lg">
           <div className="flex-1 w-full flex flex-col gap-2">
-            <label className="text-[#57d8ff] text-xs font-bold uppercase tracking-wider pl-1">Tipo Categoria</label>
-            <select value={tipoCategoria} onChange={(e) => setTipoCategoria(e.target.value)} className="w-full bg-black/50 border border-zinc-700 text-white rounded-lg p-3 outline-none focus:border-[#57d8ff]">
+            <label className="text-[#57d8ff] text-[10px] font-black uppercase tracking-widest pl-1">Tipo Categoria</label>
+            <select value={tipoCategoria} onChange={(e) => setTipoCategoria(e.target.value)} className="w-full bg-black/50 border border-[#57d8ff]/30 text-white rounded-xl p-3.5 outline-none focus:border-[#57d8ff] text-xs font-bold uppercase cursor-pointer">
               <option value="peso">Categoria de Peso Jiu-Jitsu</option>
               <option value="absoluto">Categoria Absoluto Jiu-Jitsu</option>
             </select>
           </div>
           <div className="flex-[2] w-full flex flex-col gap-2">
-            <label className="text-[#57d8ff] text-xs font-bold uppercase tracking-wider pl-1">Categoria</label>
-            <select value={categoriaSelecionada} onChange={(e) => setCategoriaSelecionada(e.target.value)} className="w-full bg-black/50 border border-zinc-700 text-white rounded-lg p-3 outline-none focus:border-[#57d8ff]">
+            <label className="text-[#57d8ff] text-[10px] font-black uppercase tracking-widest pl-1">Categoria e Faixa</label>
+            <select value={categoriaSelecionada} onChange={(e) => setCategoriaSelecionada(e.target.value)} className="w-full bg-black/50 border border-[#57d8ff]/30 text-white rounded-xl p-3.5 outline-none focus:border-[#57d8ff] text-xs font-bold uppercase cursor-pointer">
               {categoriasFiltradas.length === 0 && <option value="">Nenhuma chave nesta modalidade...</option>}
               {categoriasFiltradas.map((cat) => {
                 const [nomeCategoria, faixa] = cat.split("__");
-                // Formata o nome para leitura limpa
                 const catFormatada = nomeCategoria.replace("-", "").trim(); 
                 return <option key={cat} value={cat}>{catFormatada} • Faixa {faixa}</option>
               })}
@@ -318,6 +331,9 @@ export default function ChavesPublicoPage() {
           </div>
         )}
 
+        {/* ============================================== */}
+        {/* ÁRVORE GRÁFICA (VISUAL DESKTOP) */}
+        {/* ============================================== */}
         <div className="hidden md:flex bg-[#050816] md:border md:border-white/10 md:rounded-3xl py-6 md:p-10 w-full overflow-x-auto min-w-0 flex-col items-center scrollbar-hide relative shadow-2xl">
           {totalAbas > 1 && <p className="text-zinc-500 font-bold mb-4 uppercase tracking-widest text-sm absolute top-4 left-4">Chave {abaAtual}/{totalAbas}</p>}
 
@@ -333,7 +349,6 @@ export default function ChavesPublicoPage() {
                 <Atleta {...getAtletaDaPrimeiraFase(4, 1, "esquerda")} />
                 <Atleta {...getAtletaDaPrimeiraFase(4, 2, "esquerda")} />
               </div>
-
               <div className="flex flex-col gap-[80px] pt-[30px]"><ConectorPequeno /><ConectorPequeno /><ConectorPequeno /><ConectorPequeno /></div>
               <div className="flex flex-col gap-[100px] pt-[40px]">
                 <Atleta larguraClass="w-[16px] md:w-[140px]" {...getAtletaDoMeio(100, 2, 1, 1)} />
@@ -390,13 +405,18 @@ export default function ChavesPublicoPage() {
                 <Atleta {...getAtletaDaPrimeiraFase(4, 2, "direita")} reverso />
               </div>
             </div>
-
           </div>
         </div>
 
-        <div className="flex md:hidden flex-col w-full px-4 mb-20 mt-4">
+
+        {/* ============================================== */}
+        {/* LISTAGEM DE CARDS (VISÍVEL NO PC E MOBILE) */}
+        {/* ============================================== */}
+        <div className="flex flex-col w-full px-4 md:px-0 mb-20 mt-8 md:mt-12">
+          
+          {/* CARD DE CAMPEÃO OFICIAL (Apenas Mobile, pois no PC já está na árvore) */}
           {temCampeao && (
-            <div className="bg-gradient-to-t from-yellow-600/20 to-[#0c1220] border border-yellow-500/30 rounded-2xl p-6 flex flex-col items-center justify-center shadow-[0_0_20px_rgba(234,179,8,0.15)] mb-6 animate-in fade-in zoom-in duration-500">
+            <div className="md:hidden bg-gradient-to-t from-yellow-600/20 to-[#0c1220] border border-yellow-500/30 rounded-2xl p-6 flex flex-col items-center justify-center shadow-[0_0_20px_rgba(234,179,8,0.15)] mb-8 animate-in fade-in zoom-in duration-500">
               <span className="text-yellow-500 font-black text-sm mb-3 tracking-widest drop-shadow-[0_0_10px_rgba(234,179,8,0.5)]">🏆 CAMPEÃO OFICIAL</span>
               <div className="w-16 h-16 rounded-full border-[3px] border-yellow-500 overflow-hidden bg-black flex items-center justify-center shadow-[0_0_15px_rgba(234,179,8,0.3)] mb-3 shrink-0">
                 {campeaoData.foto ? <img src={campeaoData.foto} className="w-full h-full object-cover" /> : <span className="text-2xl text-yellow-500 font-black">{campeaoData.nome.charAt(0)}</span>}
@@ -405,86 +425,110 @@ export default function ChavesPublicoPage() {
             </div>
           )}
 
-          {lutasMobile.length === 0 ? (
-            <div className="text-center text-zinc-500 py-10 text-sm">Nenhum confronto ativo no momento.</div>
-          ) : (
-            <div className="flex flex-col gap-3">
-              {lutasMobile.map(luta => {
-                const a1 = limparNome(luta.atleta_1);
-                const a2 = limparNome(luta.atleta_2);
-                
-                const foto1 = buscarFotoPorId(luta.atleta_1_id);
-                const foto2 = buscarFotoPorId(luta.atleta_2_id);
+          {/* 🔥 SEÇÃO: ATLETAS NA BAIA (Avanço Direto) */}
+          {atletasNaBaia.length > 0 && (
+            <div className="mb-10">
+              <h3 className="text-yellow-500 font-black uppercase tracking-widest text-xs md:text-sm mb-4 flex items-center gap-2 border-b border-yellow-500/20 pb-3">
+                <Clock size={16} /> Atletas de Chapéu / Aguardando Definição
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {atletasNaBaia.map(luta => {
+                  const isA1 = isAtletaValido(luta.atleta_1);
+                  const nomeAtl = isA1 ? limparNome(luta.atleta_1) : limparNome(luta.atleta_2);
+                  const equipeAtl = isA1 ? luta.equipe_1 : luta.equipe_2;
+                  const fotoAtl = buscarFotoPorId(isA1 ? luta.atleta_1_id : luta.atleta_2_id);
+                  const textoStatus = getTextoBaia(luta);
 
-                return (
-                  <div key={luta.id} className="bg-[#0c1220] border border-[#57d8ff]/20 rounded-xl flex flex-col shadow-md relative overflow-hidden">
-                    <div className="bg-[#57d8ff]/10 border-b border-[#57d8ff]/20 py-1.5 px-3 flex justify-between items-center">
-                      <span className="text-[9px] font-black text-[#57d8ff] uppercase tracking-widest">{getNomeDaFase(luta, lutas)} • #{luta.id_visual}</span>
-                      {luta.vencedor && <span className="text-[8px] bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded font-bold uppercase border border-green-500/30">Finalizada</span>}
+                  return (
+                    <div key={`baia-${luta.id}`} className="bg-gradient-to-r from-yellow-500/10 to-[#0c1220] border border-yellow-500/20 rounded-xl p-4 flex items-center gap-4 shadow-sm hover:border-yellow-500/40 transition-colors">
+                      <div className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-black border-2 border-yellow-500/50 flex items-center justify-center overflow-hidden shrink-0 shadow-[0_0_10px_rgba(234,179,8,0.2)]">
+                        {fotoAtl ? <img src={fotoAtl} className="w-full h-full object-cover" /> : <span className="text-yellow-500 font-black text-sm">{nomeAtl.charAt(0)}</span>}
+                      </div>
+                      <div className="flex flex-col min-w-0 flex-1">
+                        <span className="text-white font-black uppercase text-sm md:text-sm truncate block">{nomeAtl}</span>
+                        <span className="text-zinc-400 font-bold uppercase text-[9px] md:text-[10px] truncate block mb-2">{equipeAtl || 'Sem Equipe'}</span>
+                        <span className="inline-flex w-max max-w-full items-center gap-1.5 bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 px-2 py-1 rounded text-[8px] md:text-[9px] font-black uppercase tracking-widest truncate">
+                          <Clock size={10} className="shrink-0" />
+                          <span className="truncate">{textoStatus}</span>
+                        </span>
+                      </div>
                     </div>
-
-                    <div className="p-3 flex flex-col gap-1.5">
-                      <div className={`flex justify-between items-center p-2 rounded-lg border transition-colors ${luta.vencedor && luta.vencedor === a1 ? 'bg-green-500/10 border-green-500/40' : 'bg-black/40 border-white/5'}`}>
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center text-xs font-black text-zinc-400 border border-zinc-600 overflow-hidden shrink-0">
-                            {foto1 ? <img src={foto1} className="w-full h-full object-cover"/> : a1 ? a1.charAt(0) : "?"}
-                          </div>
-                          <div className="flex flex-col overflow-hidden">
-                            <span className={`text-xs font-black uppercase tracking-tight truncate ${luta.vencedor === a1 ? 'text-green-400' : 'text-white'}`}>{a1 || "A DEFINIR"}</span>
-                            <span className="text-[9px] text-zinc-500 uppercase truncate">{luta.equipe_1 || "Sem Equipe"}</span>
-                          </div>
-                        </div>
-                        {luta.vencedor === a1 && <svg className="w-5 h-5 text-green-500 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/></svg>}
-                      </div>
-
-                      <div className="relative h-1 w-full flex justify-center items-center my-1">
-                        <div className="absolute w-6 h-6 bg-[#0c1220] border border-[#57d8ff]/30 rounded-full flex items-center justify-center text-[8px] font-black text-[#57d8ff] z-10">VS</div>
-                        <div className="w-full border-t border-white/5"></div>
-                      </div>
-
-                      <div className={`flex justify-between items-center p-2 rounded-lg border transition-colors ${luta.vencedor && luta.vencedor === a2 ? 'bg-green-500/10 border-green-500/40' : 'bg-black/40 border-white/5'}`}>
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center text-xs font-black text-zinc-400 border border-zinc-600 overflow-hidden shrink-0">
-                            {foto2 ? <img src={foto2} className="w-full h-full object-cover"/> : a2 ? a2.charAt(0) : "?"}
-                          </div>
-                          <div className="flex flex-col overflow-hidden">
-                            <span className={`text-xs font-black uppercase tracking-tight truncate ${luta.vencedor === a2 ? 'text-green-400' : 'text-white'}`}>{a2 || "A DEFINIR"}</span>
-                            <span className="text-[9px] text-zinc-500 uppercase truncate">{luta.equipe_2 || "Sem Equipe"}</span>
-                          </div>
-                        </div>
-                        {luta.vencedor === a2 && <svg className="w-5 h-5 text-green-500 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/></svg>}
-                      </div>
-
-                      {luta.horario_estimado && luta.status_luta !== 'concluida' && luta.status_luta !== 'em_andamento' && (
-                        <div className="mt-2 flex items-center justify-center gap-1.5 bg-yellow-500/10 border border-yellow-500/20 px-3 py-2 rounded-lg w-full shadow-inner">
-                          <svg className="w-3.5 h-3.5 text-yellow-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                          <span className="text-[10px] md:text-xs font-black uppercase tracking-widest text-yellow-500">
-                            Previsto: {formatarHorarioEstimado(luta.horario_estimado)}
-                            {luta.tatame && <span className="text-yellow-500/50 ml-1.5">| {luta.tatame}</span>}
-                          </span>
-                        </div>
-                      )}
-
-                      {luta.status_luta === 'em_andamento' && (
-                        <div className="mt-2 flex items-center justify-center gap-2 bg-red-500/10 border border-red-500/30 px-3 py-2 rounded-lg w-full animate-pulse shadow-[0_0_15px_rgba(239,68,68,0.2)]">
-                          <span className="relative flex h-2 w-2">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
-                          </span>
-                          <span className="text-[10px] md:text-xs font-black uppercase tracking-widest text-red-500">
-                            Lutando Agora {luta.tatame && `no ${luta.tatame}`}
-                          </span>
-                        </div>
-                      )}
-
-                    </div>
-                  </div>
-                )
-              })}
+                  )
+                })}
+              </div>
             </div>
           )}
-        </div>
 
+          {/* 🔥 SEÇÃO: CONFRONTOS REAIS (Agendados e Em Andamento) */}
+          {confrontosReais.length > 0 && (
+            <div className="mb-10">
+              <h3 className="text-white font-black uppercase tracking-widest text-xs md:text-sm mb-4 flex items-center gap-2 border-b border-white/10 pb-3">
+                <svg className="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                Cronograma de Lutas
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {confrontosReais.map(luta => {
+                  const a1 = limparNome(luta.atleta_1); const a2 = limparNome(luta.atleta_2);
+                  const foto1 = buscarFotoPorId(luta.atleta_1_id); const foto2 = buscarFotoPorId(luta.atleta_2_id);
+                  
+                  return (
+                    <div key={luta.id} className={`bg-[#0c1220] border ${luta.status_luta === 'em_andamento' ? 'border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.2)]' : 'border-[#57d8ff]/20'} rounded-xl flex flex-col relative overflow-hidden transition-all hover:border-[#57d8ff]/50`}>
+                      <div className={`py-2 px-3 flex justify-between items-center border-b ${luta.status_luta === 'em_andamento' ? 'bg-red-500/10 border-red-500/20' : 'bg-[#57d8ff]/10 border-[#57d8ff]/20'}`}>
+                        <span className={`text-[9px] font-black uppercase tracking-widest ${luta.status_luta === 'em_andamento' ? 'text-red-400' : 'text-[#57d8ff]'}`}>{getNomeDaFase(luta, lutas)} • Luta {luta.id_visual}</span>
+                        {luta.status_luta === 'em_andamento' && <span className="text-[8px] bg-red-500 text-white px-1.5 py-0.5 rounded font-black uppercase animate-pulse shadow-sm">Lutando</span>}
+                      </div>
+
+                      <div className="p-3 flex flex-col gap-1.5">
+                        {/* Atleta 1 */}
+                        <div className="flex justify-between items-center p-2 rounded-lg border bg-black/40 border-white/5">
+                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                            <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center text-xs font-black text-zinc-400 border border-zinc-600 overflow-hidden shrink-0">
+                              {foto1 ? <img src={foto1} className="w-full h-full object-cover"/> : a1 ? a1.charAt(0) : "?"}
+                            </div>
+                            <div className="flex flex-col min-w-0 flex-1">
+                              <span className="text-xs font-black text-white uppercase tracking-tight truncate">{a1 || "A DEFINIR"}</span>
+                              <span className="text-[9px] text-zinc-500 uppercase truncate">{luta.equipe_1 || "Sem Equipe"}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="relative h-1 w-full flex justify-center items-center my-0.5">
+                          <div className="absolute w-6 h-6 bg-[#0c1220] border border-[#57d8ff]/30 rounded-full flex items-center justify-center text-[8px] font-black text-[#57d8ff] z-10">VS</div>
+                          <div className="w-full border-t border-white/5"></div>
+                        </div>
+
+                        {/* Atleta 2 */}
+                        <div className="flex justify-between items-center p-2 rounded-lg border bg-black/40 border-white/5">
+                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                            <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center text-xs font-black text-zinc-400 border border-zinc-600 overflow-hidden shrink-0">
+                              {foto2 ? <img src={foto2} className="w-full h-full object-cover"/> : a2 ? a2.charAt(0) : "?"}
+                            </div>
+                            <div className="flex flex-col min-w-0 flex-1">
+                              <span className="text-xs font-black text-white uppercase tracking-tight truncate">{a2 || "A DEFINIR"}</span>
+                              <span className="text-[9px] text-zinc-500 uppercase truncate">{luta.equipe_2 || "Sem Equipe"}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {luta.horario_estimado && (
+                          <div className="mt-1 flex items-center justify-between px-1 bg-black/30 rounded p-1.5 border border-white/5">
+                            <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest">{luta.tatame || 'Sem Tatame'}</span>
+                            <span className="text-[9px] font-black text-yellow-500 uppercase tracking-widest">Previsto: {formatarHorarioEstimado(luta.horario_estimado)}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {lutasAtivas.length === 0 && lutasEmAndamento.length === 0 && (
+            <div className="text-center text-zinc-500 py-10 text-sm font-bold uppercase tracking-widest border border-dashed border-white/10 rounded-2xl bg-[#0a0a0e]">Nenhum confronto pendente.</div>
+          )}
+
+        </div>
       </div>
     </main>
   )

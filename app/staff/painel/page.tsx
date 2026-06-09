@@ -1,265 +1,272 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '../../lib/supabase';
-import { useRouter } from 'next/navigation';
-import { Play, AlertCircle, CheckCircle, Clock, XCircle, RefreshCw, Edit3, SkipForward, Trophy, Search, Filter, LogOut, ArrowRightLeft, X } from 'lucide-react';
 import Link from 'next/link';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { AlertCircle, ArrowRightLeft, CheckCircle, Clock, Filter, LogOut, Play, RefreshCw, Search, Trophy, X, Edit3, XCircle } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
+import { obterTempoRegulamentar } from '../../lib/cronograma';
+import { processarAvancosAutomaticosChaves } from '../../lib/chaves-auto-avanco';
+
+type StaffSession = {
+  evento_id: string | number;
+  funcao: string;
+  identificacao: string;
+};
+
+type Luta = {
+  id: string | number;
+  evento_id: string | number;
+  categoria: string;
+  faixa: string;
+  fase?: string | null;
+  id_visual?: string | number | null;
+  ordem?: number | null;
+  ordem_tatame?: number | null;
+  tatame?: string | null;
+  atleta_1?: string | null;
+  atleta_2?: string | null;
+  equipe_1?: string | null;
+  equipe_2?: string | null;
+  atleta_1_id?: number | null;
+  atleta_2_id?: number | null;
+  checkin_1?: string | null;
+  checkin_2?: string | null;
+  status_luta?: string | null;
+  vencedor?: string | null;
+  metodo_vitoria?: string | null;
+  proxima_luta?: string | number | null;
+  horario_estimado?: string | null;
+};
+
+type ModalTransferencia = {
+  visivel: boolean;
+  luta: Luta | null;
+};
+
+type CheckinRow = {
+  atleta_id: number | null;
+  status_checkin: string | null;
+};
+
+function normalizar(value?: string | null) {
+  return String(value || '').trim();
+}
+
+function nomeUpper(value?: string | null) {
+  return normalizar(value).toUpperCase();
+}
+
+function isGhost(nome?: string | null) {
+  const clean = nomeUpper(nome);
+  return clean === '' || clean === 'BYE' || clean === 'TBD' || clean.includes('SEM OPONENTE');
+}
+
+function isAtletaValido(nome?: string | null) {
+  return !isGhost(nome);
+}
+
+function displayNome(nome?: string | null) {
+  const clean = nomeUpper(nome);
+  if (clean === "BYE" || clean.includes("SEM OPONENTE")) return "SEM OPONENTE";
+  if (clean === "TBD" || clean === "") return "AGUARDANDO OPONENTE";
+  return normalizar(nome);
+}
+
+function ordenarLutas(a: Luta, b: Luta) {
+  const ordemA = a.ordem_tatame ?? a.ordem ?? 9999;
+  const ordemB = b.ordem_tatame ?? b.ordem ?? 9999;
+  if (ordemA !== ordemB) return ordemA - ordemB;
+  return Number(a.id_visual || 0) - Number(b.id_visual || 0);
+}
+
+function statusCheckinLabel(status?: string | null) {
+  if (status === 'aprovado') return { label: 'Liberado', className: 'text-emerald-300 bg-emerald-500/10 border-emerald-500/20' };
+  if (status === 'pendente') return { label: 'Check-in pendente', className: 'text-yellow-300 bg-yellow-500/10 border-yellow-500/20' };
+  if (status?.includes('desclassificado')) return { label: 'Reprovado', className: 'text-red-300 bg-red-500/10 border-red-500/20' };
+  return { label: 'Sem check-in', className: 'text-zinc-400 bg-white/5 border-white/10' };
+}
+
+function formatarHorario(value?: string | null) {
+  if (!value) return 'Sem horário';
+  return new Date(value).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
 
 export default function PainelMesario() {
   const router = useRouter();
-  const [sessao, setSessao] = useState<any>(null);
-
-  const [lutasOriginais, setLutasOriginais] = useState<any[]>([]);
-  const [lutasExibidas, setLutasExibidas] = useState<any[]>([]);
+  const [sessao, setSessao] = useState<StaffSession | null>(null);
+  const [lutas, setLutas] = useState<Luta[]>([]);
+  const [todasLutasEvento, setTodasLutasEvento] = useState<Luta[]>([]); // 🔥 Para buscar os oponentes da Baia
+  const [tatamesDisponiveis, setTatamesDisponiveis] = useState<string[]>([]);
+  const [modalTransferencia, setModalTransferencia] = useState<ModalTransferencia>({ visivel: false, luta: null });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [abaAtiva, setAbaAtiva] = useState<'pendentes' | 'concluidas'>('pendentes');
-  const [todasAsLutasDoEvento, setTodasAsLutasDoEvento] = useState<any[]>([]);
-
-  const [tatamesDisponiveis, setTatamesDisponiveis] = useState<string[]>([]);
-  const [modalTransferencia, setModalTransferencia] = useState<{ visivel: boolean, luta: any | null }>({ visivel: false, luta: null });
-
+  const [acaoId, setAcaoId] = useState<string | number | null>(null);
+  const [abaAtiva, setAbaAtiva] = useState<'fila' | 'concluidas'>('fila');
   const [buscaNome, setBuscaNome] = useState('');
   const [filtroTipo, setFiltroTipo] = useState<'todos' | 'peso' | 'absoluto'>('todos');
-  const [filtroCategoria, setFiltroCategoria] = useState<string>('');
+  const [filtroCategoria, setFiltroCategoria] = useState('');
+  const [aviso, setAviso] = useState('');
 
   useEffect(() => {
     document.body.classList.add('hide-global-nav');
     const sessaoSalva = localStorage.getItem('itatame_staff_session');
-    if (!sessaoSalva) { router.replace('/staff/login'); return; }
-    const sessaoParse = JSON.parse(sessaoSalva);
-    if (sessaoParse.funcao !== 'mesario') { router.replace('/staff/login'); return; }
+    if (!sessaoSalva) {
+      router.replace('/staff/login');
+      return;
+    }
 
-    setSessao(sessaoParse);
+    const sessaoParse = JSON.parse(sessaoSalva) as StaffSession;
+    if (sessaoParse.funcao !== 'mesario') {
+      router.replace('/staff/login');
+      return;
+    }
+
+    void Promise.resolve().then(() => setSessao(sessaoParse));
     return () => document.body.classList.remove('hide-global-nav');
   }, [router]);
 
-  useEffect(() => {
+  const buscarTatames = useCallback(async () => {
     if (!sessao) return;
-    const carregarTatames = async () => {
-      const { data } = await supabase.from('staff_eventos').select('identificacao').eq('evento_id', sessao.evento_id).eq('funcao', 'mesario');
-      if (data) {
-        const nomes = Array.from(new Set(data.map(t => t.identificacao.trim()))).filter(n => n !== "");
-        setTatamesDisponiveis(nomes.sort());
-      }
-    };
-    carregarTatames();
+
+    const { data } = await supabase
+      .from('staff_eventos')
+      .select('identificacao')
+      .eq('evento_id', sessao.evento_id)
+      .eq('funcao', 'mesario');
+
+    if (data) {
+      const nomes = Array.from(new Set(data.map((item) => normalizar(item.identificacao)).filter(Boolean)));
+      setTatamesDisponiveis(nomes.sort((a, b) => a.localeCompare(b)));
+    }
   }, [sessao]);
 
-  const isGhost = (nome: string | null) => {
-    const clean = String(nome || "").trim().toUpperCase();
-    return clean === "" || clean === "BYE" || clean === "TBD" || clean.includes("SEM OPONENTE");
-  };
-
-  const displayNome = (nome: string | null) => {
-    const clean = String(nome || "").trim().toUpperCase();
-    if (clean === "BYE" || clean.includes("SEM OPONENTE")) return "SEM OPONENTE";
-    if (clean === "TBD" || clean === "") return "AGUARDANDO OPONENTE";
-    return nome;
-  };
-
-  const isAtletaValido = (nome: string | null) => !isGhost(nome);
-
-  const carregarPainel = useCallback(async (isSilent = false) => {
+  const carregarPainel = useCallback(async (silencioso = false) => {
     if (!sessao) return;
-    if (!isSilent) setLoading(true);
+    if (!silencioso) setLoading(true);
     setRefreshing(true);
 
-    const { data: todasAsLutasData, error } = await supabase.from('chaves').select('*').eq('evento_id', sessao.evento_id).order('ordem', { ascending: true });
-    if (error || !todasAsLutasData) {
-      if (!isSilent) setLoading(false);
+    const resultado = await supabase
+      .from('chaves')
+      .select('*')
+      .eq('evento_id', sessao.evento_id)
+      .order('ordem_tatame', { ascending: true })
+      .order('ordem', { ascending: true });
+    let todas = resultado.data;
+    const error = resultado.error;
+
+    if (error || !todas) {
+      setAviso('Não foi possível carregar as lutas deste tatame.');
+      if (!silencioso) setLoading(false);
       setRefreshing(false);
       return;
     }
 
-    const isStrictGhost = (n: string | null) => {
-      const c = String(n || "").trim().toUpperCase();
-      return c === "BYE" || c === "" || c.includes("SEM OPONENTE");
-    };
-
-    // =========================================================================
-    // 🔥 EXORCISMO PARTE 1: ELIMINAR RAMOS MORTOS (BYE vs BYE)
-    // =========================================================================
-    const deadBranches = todasAsLutasData.filter(l => l.status_luta !== 'concluida' && isStrictGhost(l.atleta_1) && isStrictGhost(l.atleta_2));
-
-    if (deadBranches.length > 0) {
-      for (const dead of deadBranches) {
-        await supabase.from('chaves').update({ status_luta: 'concluida', vencedor: 'BYE', metodo_vitoria: 'wo', finalizada_em: new Date().toISOString() }).eq('id', dead.id);
-        if (dead.proxima_luta) {
-          const prox = todasAsLutasData.find(l => l.categoria === dead.categoria && l.faixa === dead.faixa && String(l.id_visual) === String(dead.proxima_luta));
-          if (prox) {
-            const isImpar = Number(dead.id_visual) % 2 !== 0;
-            const updateData = isImpar ? { atleta_1: 'BYE', equipe_1: '', atleta_1_id: null } : { atleta_2: 'BYE', equipe_2: '', atleta_2_id: null };
-            await supabase.from('chaves').update(updateData).eq('id', prox.id);
-          }
-        }
-      }
-      return carregarPainel(isSilent);
+    const houveAvanco = await processarAvancosAutomaticosChaves(supabase, sessao.evento_id);
+    if (houveAvanco) {
+      const { data: atualizadas } = await supabase
+        .from('chaves')
+        .select('*')
+        .eq('evento_id', sessao.evento_id)
+        .order('ordem_tatame', { ascending: true })
+        .order('ordem', { ascending: true });
+      if (atualizadas) todas = atualizadas;
     }
 
-    // =========================================================================
-    // 🤖 EXORCISMO PARTE 2: O ROBÔ AUTÔNOMO (Avançar "Atleta Real vs BYE")
-    // =========================================================================
-    const isWOGhost = (n: string | null) => {
-      const c = String(n || "").trim().toUpperCase();
-      return c === "BYE" || c.includes("SEM OPONENTE");
-    };
+    setTodasLutasEvento(todas as Luta[]); // 🔥 Salva todas para o motor da Baia poder rastrear lutas anteriores
 
-    const lutasParaAvancoAutomatico = todasAsLutasData.filter(l => {
-      if (l.status_luta === 'concluida') return false;
+    const tatameAtual = nomeUpper(sessao.identificacao);
+    
+    // 🔥 AGORA PUXA AS LUTAS MESMO QUE TENHA SÓ UM ATLETA (Para exibir na Baia)
+    const lutasDoTatame = (todas as Luta[])
+      .filter((luta) => nomeUpper(luta.tatame) === tatameAtual)
+      .filter((luta) => {
+        const temPeloMenosUmAtleta = isAtletaValido(luta.atleta_1) || isAtletaValido(luta.atleta_2);
+        return temPeloMenosUmAtleta || luta.status_luta === 'concluida';
+      })
+      .sort(ordenarLutas);
 
-      const a1Real = l.atleta_1 && !isStrictGhost(l.atleta_1) && !String(l.atleta_1).toUpperCase().includes("TBD");
-      const a2Real = l.atleta_2 && !isStrictGhost(l.atleta_2) && !String(l.atleta_2).toUpperCase().includes("TBD");
+    const idsAtletas = Array.from(new Set(lutasDoTatame.flatMap((luta) => [luta.atleta_1_id, luta.atleta_2_id]).filter(Boolean)));
+    const { data: inscricoes } = idsAtletas.length > 0
+      ? await supabase.from('inscricoes').select('atleta_id, status_checkin').eq('evento_id', sessao.evento_id).in('atleta_id', idsAtletas)
+      : { data: [] as CheckinRow[] };
 
-      const a1WO = isWOGhost(l.atleta_1);
-      const a2WO = isWOGhost(l.atleta_2);
-
-      // A luta só avança se tiver exatamente UM atleta real e UM fantasma
-      return (a1Real && a2WO) || (a2Real && a1WO);
-    });
-
-    if (lutasParaAvancoAutomatico.length > 0) {
-      for (const luta of lutasParaAvancoAutomatico) {
-        const a1Real = luta.atleta_1 && !isStrictGhost(luta.atleta_1) && !String(luta.atleta_1).toUpperCase().includes("TBD");
-        const vencedorOficial = a1Real ? luta.atleta_1 : luta.atleta_2;
-        const equipeVencedor = a1Real ? luta.equipe_1 : luta.equipe_2;
-        const vencedorId = a1Real ? luta.atleta_1_id : luta.atleta_2_id;
-
-        // 1. O Robô finaliza a luta fantasma
-        await supabase.from('chaves').update({
-          status_luta: 'concluida',
-          vencedor: vencedorOficial,
-          vencedor_id: vencedorId,
-          metodo_vitoria: 'wo',
-          finalizada_em: new Date().toISOString()
-        }).eq('id', luta.id);
-
-        // 2. O Robô atualiza as medalhas e status do Atleta
-        if (vencedorId) {
-          const { data: atletaData } = await supabase.from("atletas").select("vitorias_wo, ouro").eq("id", vencedorId).single();
-          if (atletaData) {
-            let updates: any = { vitorias_wo: Math.max(0, (atletaData.vitorias_wo || 0) + 1) };
-            const isFinal = !luta.proxima_luta || String(luta.id_visual) === "999";
-            if (isFinal) updates.ouro = Math.max(0, (atletaData.ouro || 0) + 1);
-            await supabase.from("atletas").update(updates).eq("id", vencedorId);
-          }
-        }
-
-        // 3. O Robô empurra o atleta para a próxima chave (ou coroa ele)
-        const isFinal = !luta.proxima_luta || String(luta.id_visual) === "999";
-        if (!isFinal && luta.proxima_luta) {
-          const proxIdBanco = todasAsLutasData.find(l => l.categoria === luta.categoria && l.faixa === luta.faixa && String(l.id_visual) === String(luta.proxima_luta));
-          if (proxIdBanco) {
-            const isImpar = Number(luta.id_visual) % 2 !== 0;
-            const updateData = isImpar ? { atleta_1: vencedorOficial, equipe_1: equipeVencedor, atleta_1_id: vencedorId, tatame: luta.tatame } : { atleta_2: vencedorOficial, equipe_2: equipeVencedor, atleta_2_id: vencedorId, tatame: luta.tatame };
-            await supabase.from('chaves').update(updateData).eq('id', proxIdBanco.id);
-          }
-        }
-      }
-      // O Robô volta a chamar o painel para processar a próxima fase limpa!
-      return carregarPainel(isSilent);
-    }
-    // =========================================================================
-
-    const chavesSemTatame = todasAsLutasData.filter(l => !l.tatame && (isAtletaValido(l.atleta_1) || isAtletaValido(l.atleta_2)));
-    if (chavesSemTatame.length > 0) {
-      for (const semTatame of chavesSemTatame) {
-        const lutaComTatame = todasAsLutasData.find(l => l.categoria === semTatame.categoria && l.faixa === semTatame.faixa && l.tatame);
-        const tatameAlvo = lutaComTatame ? lutaComTatame.tatame : sessao.identificacao.trim();
-        await supabase.from('chaves').update({ tatame: tatameAlvo }).eq('id', semTatame.id);
-      }
-      return carregarPainel(isSilent);
-    }
-
-    setTodasAsLutasDoEvento(todasAsLutasData);
-
-    const lutasDoMeuTatame = todasAsLutasData.filter(l => l.tatame && l.tatame.trim().toUpperCase() === sessao.identificacao.trim().toUpperCase());
-    const lutasAtuais = lutasDoMeuTatame.filter(l => ['agendada', 'em_andamento', 'concluida'].includes(l.status_luta));
-
-    // Blindagem: busca pelo atleta_id, não pelo nome.
-    const { data: inscricoesData } = await supabase.from('inscricoes').select('atleta_id, status_checkin').eq('evento_id', sessao.evento_id);
-
-    const lutasComCheckin = lutasAtuais.map((luta: any) => {
-      const getStatus = (idNum: number | null, nomeAtleta: string) => {
-        if (!idNum || isGhost(nomeAtleta)) return 'N/A';
-        const inscricao = inscricoesData?.find((i: any) => i.atleta_id === idNum);
-        return inscricao ? inscricao.status_checkin : 'pendente';
+    const comCheckin = lutasDoTatame.map((luta) => {
+      const getStatus = (id?: number | null) => {
+        if (!id) return 'N/A';
+        return inscricoes?.find((item) => item.atleta_id === id)?.status_checkin || 'pendente';
       };
-      return { ...luta, checkin_1: getStatus(luta.atleta_1_id, luta.atleta_1), checkin_2: getStatus(luta.atleta_2_id, luta.atleta_2) };
+
+      return {
+        ...luta,
+        checkin_1: getStatus(luta.atleta_1_id),
+        checkin_2: getStatus(luta.atleta_2_id),
+      };
     });
 
-    // ?? O EXORCISMO VISUAL: Removemos as lutas que não têm dois atletas reais (Filtra BYE e SEM OPONENTE)
-    const lutasReais = lutasComCheckin.filter((l: any) => {
-      const a1Fantasma = isStrictGhost(l.atleta_1);
-      const a2Fantasma = isStrictGhost(l.atleta_2);
-
-      // 🧹 A MÁGICA NOVA: Se for Fantasma vs Fantasma, oculta completamente (até da aba Concluídas)
-      if (a1Fantasma && a2Fantasma) return false;
-
-      const isLutaFim = l.status_luta === 'concluida';
-      if(isLutaFim) return true;
-
-      const temAtleta1Valido = l.atleta_1 && !a1Fantasma;
-      const temAtleta2Valido = l.atleta_2 && !a2Fantasma;
-      const isAguardandoAdversario = l.atleta_1?.includes("TBD") || l.atleta_2?.includes("TBD");
-
-      // Mostrar se pelo menos UM for válido (para W.O.), ou se estiver aguardando (TBD)
-      return (temAtleta1Valido || temAtleta2Valido) || isAguardandoAdversario;
-    });
-
-    setLutasOriginais(lutasReais);
-
-    if (!isSilent) setLoading(false);
+    setLutas(comCheckin);
+    setAviso('');
+    if (!silencioso) setLoading(false);
     setRefreshing(false);
   }, [sessao]);
 
   useEffect(() => {
-    if (sessao) {
-      carregarPainel();
-      const interval = setInterval(() => carregarPainel(true), 15000);
-      return () => clearInterval(interval);
-    }
-  }, [sessao, carregarPainel]);
+    if (!sessao) return;
+    void Promise.resolve().then(() => {
+      void buscarTatames();
+      void carregarPainel();
+    });
+    const interval = window.setInterval(() => carregarPainel(true), 15000);
+    return () => window.clearInterval(interval);
+  }, [buscarTatames, carregarPainel, sessao]);
 
-  useEffect(() => {
-    let filtradas = lutasOriginais.filter(l => abaAtiva === 'pendentes' ? l.status_luta !== 'concluida' : l.status_luta === 'concluida');
-    if (buscaNome.trim() !== '') {
-      const termo = buscaNome.toLowerCase();
-      filtradas = filtradas.filter(l => (l.atleta_1 && l.atleta_1.toLowerCase().includes(termo)) || (l.atleta_2 && l.atleta_2.toLowerCase().includes(termo)));
-    }
-    if (filtroTipo !== 'todos') {
-      filtradas = filtradas.filter(l => {
-        const isAbsoluto = l.categoria.toLowerCase().includes('absoluto');
-        return filtroTipo === 'peso' ? !isAbsoluto : isAbsoluto;
-      });
-    }
-    if (filtroCategoria !== '') filtradas = filtradas.filter(l => l.categoria === filtroCategoria);
-    setLutasExibidas(filtradas);
-  }, [lutasOriginais, abaAtiva, buscaNome, filtroTipo, filtroCategoria]);
+  const categoriasUnicas = useMemo(() => Array.from(new Set(lutas.map((luta) => luta.categoria))).sort(), [lutas]);
 
-  const updateEstatistica = async (idAtletaNum: number, coluna: string, incremento: number) => {
-    if (!idAtletaNum) return;
-    const { data } = await supabase.from("atletas").select(`id, ${coluna}`).eq("id", idAtletaNum).single();
-    if (data) {
-      const valorAtual = (data as any)[coluna] || 0;
-      await supabase.from("atletas").update({ [coluna]: Math.max(0, valorAtual + incremento) }).eq("id", idAtletaNum);
+  const lutasFiltradas = useMemo(() => {
+    const termo = buscaNome.trim().toLowerCase();
+
+    return lutas.filter((luta) => {
+      const matchAba = abaAtiva === 'fila' ? luta.status_luta !== 'concluida' : luta.status_luta === 'concluida';
+      const matchBusca = !termo
+        || normalizar(luta.atleta_1).toLowerCase().includes(termo)
+        || normalizar(luta.atleta_2).toLowerCase().includes(termo)
+        || normalizar(luta.categoria).toLowerCase().includes(termo);
+      const isAbsoluto = normalizar(luta.categoria).toLowerCase().includes('absoluto');
+      const matchTipo = filtroTipo === 'todos' || (filtroTipo === 'peso' ? !isAbsoluto : isAbsoluto);
+      const matchCategoria = !filtroCategoria || luta.categoria === filtroCategoria;
+      return matchAba && matchBusca && matchTipo && matchCategoria;
+    });
+  }, [abaAtiva, buscaNome, filtroCategoria, filtroTipo, lutas]);
+
+  // 🔥 SEPARA LUTAS PRONTAS (COM 2 ATLETAS) E LUTAS DA BAIA (COM 1 ATLETA)
+  const lutasProntas = useMemo(() => lutasFiltradas.filter(l => isAtletaValido(l.atleta_1) && isAtletaValido(l.atleta_2)), [lutasFiltradas]);
+  
+  const lutaAtual = useMemo(() => lutasProntas.find((luta) => luta.status_luta === 'em_andamento') || null, [lutasProntas]);
+  const proximasLutas = useMemo(() => lutasProntas.filter((luta) => luta.status_luta !== 'em_andamento'), [lutasProntas]);
+  const concluidas = useMemo(() => lutasFiltradas.filter((luta) => luta.status_luta === 'concluida').sort(ordenarLutas), [lutasFiltradas]);
+
+  const atletasNaBaia = useMemo(() => lutasFiltradas.filter(luta =>
+    luta.status_luta !== 'concluida' &&
+    luta.status_luta !== 'em_andamento' &&
+    ((isAtletaValido(luta.atleta_1) && !isAtletaValido(luta.atleta_2)) || (!isAtletaValido(luta.atleta_1) && isAtletaValido(luta.atleta_2)))
+  ).sort(ordenarLutas), [lutasFiltradas]);
+
+  // Descobre de onde vem o oponente do atleta que está na Baia
+  const getTextoBaia = (lutaWait: Luta) => {
+    const lutasAlimentadoras = todasLutasEvento.filter(l => String(l.proxima_luta) === String(lutaWait.id_visual));
+    if (lutasAlimentadoras.length > 0) {
+      const atletaPresente = isAtletaValido(lutaWait.atleta_1) ? lutaWait.atleta_1 : lutaWait.atleta_2;
+      const feederOponente = lutasAlimentadoras.find(l => normalizar(l.vencedor) !== normalizar(atletaPresente));
+      if (feederOponente) {
+        if (feederOponente.status_luta === 'concluida') return `Aguardando o sistema fechar a Luta ${feederOponente.id_visual}`;
+        return `Aguardando Vencedor da Luta ${feederOponente.id_visual}`;
+      }
     }
+    return "Avanço Direto / Aguardando Definição";
   };
 
-  const executarTransferenciaTatame = async (novoTatame: string) => {
-    if (!modalTransferencia.luta) return;
-    if (confirm(`Confirmar envio permanente desta luta para o ${novoTatame}?`)) {
-      setRefreshing(true);
-      const idLuta = modalTransferencia.luta.id;
-      setModalTransferencia({ visivel: false, luta: null });
-      await supabase.from('chaves').update({ tatame: novoTatame }).eq('id', idLuta);
-      await carregarPainel();
-    }
-  };
-
-  const enviarPushAtleta = async (atletaId: number | null, titulo: string, mensagem: string) => {
-    if (!atletaId) return;
+  const enviarPushAtleta = async (atletaId: number | null | undefined, titulo: string, mensagem: string) => {
+    if (!atletaId || !sessao) return;
 
     const response = await fetch('/api/notificar', {
       method: 'POST',
@@ -268,8 +275,8 @@ export default function PainelMesario() {
         atleta_id: atletaId,
         titulo,
         mensagem,
-        url: `/evento/${sessao.evento_id}/ao-vivo`
-      })
+        url: `/evento/${sessao.evento_id}/ao-vivo`,
+      }),
     });
 
     if (!response.ok) {
@@ -278,123 +285,92 @@ export default function PainelMesario() {
     }
   };
 
-  const calcularMinutosAteLuta = (luta: any, lutasAntes: number, agoraMs: number) => {
+  const atletasDaLuta = (luta: Luta) => [
+    { id: luta.atleta_1_id, nome: displayNome(luta.atleta_1) },
+    { id: luta.atleta_2_id, nome: displayNome(luta.atleta_2) },
+  ].filter((atleta) => atleta.id && isAtletaValido(atleta.nome));
+
+  const calcularMinutosAteLuta = (luta: Luta, posicaoFila: number, agoraMs: number) => {
     const horarioEstimado = luta.horario_estimado ? new Date(luta.horario_estimado).getTime() : 0;
     const diffMinutos = horarioEstimado ? Math.ceil((horarioEstimado - agoraMs) / 60000) : 0;
-    const estimativaFila = Math.round(lutasAntes * 7);
+    const tempoRegulamentar = obterTempoRegulamentar(luta.categoria || '', luta.faixa || '');
+    const estimativaFila = Math.max(5, posicaoFila * (tempoRegulamentar + 2));
     return Math.max(5, diffMinutos, estimativaFila);
   };
 
-  const atletasDaLuta = (luta: any) => [
-    { id: luta.atleta_1_id, nome: displayNome(luta.atleta_1) },
-    { id: luta.atleta_2_id, nome: displayNome(luta.atleta_2) }
-  ].filter((atleta) => atleta.id && isAtletaValido(atleta.nome));
+  const chavePush = (lutaId: string | number, tipo: string) => `itatame_push_${sessao?.evento_id}_${lutaId}_${tipo}`;
 
-  const notificarAtletas = async (luta: any) => {
-  try {
-    const tatameAtual = luta.tatame || sessao.identificacao;
-    
-    // 1. AVISO DE "VOCÊ É A PRÓXIMA" (Quando o mesário chama)
-    for (const atleta of atletasDaLuta(luta)) {
-      await enviarPushAtleta(
-        atleta.id,
-        'TATAME: Sua luta começou!',
-        `${atleta.nome}, compareça agora ao ${tatameAtual}. Você é o próximo!`
-      );
-    }
+  const enviarAvisosDeFila = async (lutaChamada: Luta) => {
+    if (!sessao) return;
+    const tatame = lutaChamada.tatame || sessao.identificacao;
 
-    // 2. AVISO DE "SE APROXIMANDO" (Fila de espera)
-    const lutasDoTatame = lutasOriginais
-      .filter((item) => item.id !== luta.id && item.status_luta === 'agendada' && item.tatame === tatameAtual)
-      .sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0))
-      .slice(0, 2); // Pega apenas os 2 próximos da fila
-
-    for (const [index, proximaLuta] of lutasDoTatame.entries()) {
-      const pos = index + 1; // 1 = Próxima, 2 = Depois da próxima
-      const msg = pos === 1 
-        ? "Prepare-se! Sua luta é a próxima após esta." 
-        : "Fique atento! Você é o segundo na fila.";
-
-      for (const atleta of atletasDaLuta(proximaLuta)) {
-        await enviarPushAtleta(atleta.id, 'Aviso de Luta', msg);
+    for (const atleta of atletasDaLuta(lutaChamada)) {
+      const key = chavePush(lutaChamada.id, `chamada_${atleta.id}`);
+      if (!localStorage.getItem(key)) {
+        await enviarPushAtleta(
+          atleta.id,
+          'Sua luta foi chamada',
+          `${atleta.nome}, compareça agora ao ${tatame}. Sua luta vai iniciar em instantes.`
+        );
+        localStorage.setItem(key, new Date().toISOString());
       }
     }
-  } catch (err) {
-    console.error(err);
-  }
-};
 
-  const avancarFaseUnica = async (lutaAtual: any, vencedorOficial: string, equipeVencedor: string, vencedorId: number | null) => {
-    if (!confirm(`Avançar [ ${vencedorOficial} ] de fase por ausência de oponente?`)) return;
-    setRefreshing(true);
-    await supabase.from('chaves').update({
-      status_luta: 'concluida',
-      vencedor: vencedorOficial,
-      vencedor_id: vencedorId,
-      metodo_vitoria: 'wo',
-      finalizada_em: new Date().toISOString()
-    }).eq('id', lutaAtual.id);
+    const fila = proximasLutas.filter((item) => item.id !== lutaChamada.id).slice(0, 3);
 
-    if (vencedorId) await updateEstatistica(vencedorId, "vitorias_wo", 1);
+    for (const [index, proxima] of fila.entries()) {
+      const posicao = index + 1;
+      const agoraMs = new Date().getTime();
+      const minutos = calcularMinutosAteLuta(proxima, posicao, agoraMs);
+      const textoPosicao = posicao === 1 ? 'você é a próxima luta' : `faltam ${posicao} lutas para a sua`;
 
-    const isFinal = !lutaAtual.proxima_luta || String(lutaAtual.id_visual) === "999";
-    if (isFinal) {
-      if (vencedorId) await updateEstatistica(vencedorId, "ouro", 1);
-      alert(`?? ${vencedorOficial} FOI DECLARADO CAMPE?O!`);
-    } else if (lutaAtual.proxima_luta) {
-      const proxIdBanco = todasAsLutasDoEvento.find(l => l.evento_id === lutaAtual.evento_id && l.categoria === lutaAtual.categoria && l.faixa === lutaAtual.faixa && String(l.id_visual) === String(lutaAtual.proxima_luta));
-      if (proxIdBanco) {
-        const isImpar = Number(lutaAtual.id_visual) % 2 !== 0;
-        const updateData = isImpar ? { atleta_1: vencedorOficial, equipe_1: equipeVencedor, atleta_1_id: vencedorId, tatame: lutaAtual.tatame } : { atleta_2: vencedorOficial, equipe_2: equipeVencedor, atleta_2_id: vencedorId, tatame: lutaAtual.tatame };
-        await supabase.from('chaves').update(updateData).eq('id', proxIdBanco.id);
-      } else { alert("Atenção: A próxima luta não foi localizada no sistema."); }
-    }
-    await carregarPainel();
-  };
-
-  const coroarCampeaoDireto = async (lutaInicial: any, vencedorOficial: string, equipeVencedor: string, vencedorId: number | null) => {
-    if (!confirm(`?? ATEN??O!\nO atleta [ ${vencedorOficial} ] ? o ?NICO na chave inteira.\nDeseja varrer a chave e declarar CAMPE?O DIRETO?`)) return;
-    setRefreshing(true);
-    let atual = lutaInicial;
-    while (atual) {
-      await supabase.from('chaves').update({
-        status_luta: 'concluida',
-        vencedor: vencedorOficial,
-        vencedor_id: vencedorId,
-        metodo_vitoria: 'wo',
-        finalizada_em: new Date().toISOString()
-      }).eq('id', atual.id);
-
-      const isFinal = !atual.proxima_luta || String(atual.id_visual) === "999";
-      if (isFinal) {
-        if (vencedorId) {
-          await updateEstatistica(vencedorId, "vitorias_wo", 1);
-          await updateEstatistica(vencedorId, "ouro", 1);
+      for (const atleta of atletasDaLuta(proxima)) {
+        const key = chavePush(proxima.id, `fila_${posicao}_${atleta.id}`);
+        if (!localStorage.getItem(key)) {
+          await enviarPushAtleta(
+            atleta.id,
+            'Prepare-se para lutar',
+            `${atleta.nome}, ${textoPosicao} no ${tatame}. Tempo aproximado: ${minutos} minutos.`
+          );
+          localStorage.setItem(key, new Date().toISOString());
         }
-        alert(`?? ${vencedorOficial} COROADO CAMPE?O!`);
-        break;
       }
-      if (atual.proxima_luta) {
-        const prox = todasAsLutasDoEvento.find(l => l.evento_id === atual.evento_id && l.categoria === atual.categoria && l.faixa === atual.faixa && String(l.id_visual) === String(atual.proxima_luta));
-        if (prox) {
-          const isImpar = Number(atual.id_visual) % 2 !== 0;
-          const updateData = isImpar ? { atleta_1: vencedorOficial, equipe_1: equipeVencedor, atleta_1_id: vencedorId, tatame: atual.tatame } : { atleta_2: vencedorOficial, equipe_2: equipeVencedor, atleta_2_id: vencedorId, tatame: atual.tatame };
-          await supabase.from('chaves').update(updateData).eq('id', prox.id);
-          atual = { ...prox, ...updateData };
-        } else { break; }
-      } else { break; }
     }
-    await carregarPainel();
   };
 
-  const renderStatusCheckin = (status: string) => {
-    switch (status) {
-      case 'aprovado': return <span className="flex items-center gap-1 text-[8px] md:text-[9px] font-black text-green-500 bg-green-500/10 px-1.5 py-0.5 rounded uppercase tracking-widest w-max"><CheckCircle size={10} /> Liberado</span>;
-      case 'pendente': return <span className="flex items-center gap-1 text-[8px] md:text-[9px] font-black text-yellow-500 bg-yellow-500/10 px-1.5 py-0.5 rounded uppercase tracking-widest w-max"><Clock size={10} /> Pendente</span>;
-      case 'desclassificado_peso':
-      case 'desclassificado_kimono': return <span className="flex items-center gap-1 text-[8px] md:text-[9px] font-black text-red-500 bg-red-500/10 px-1.5 py-0.5 rounded uppercase tracking-widest w-max"><AlertCircle size={10} /> Reprovado</span>;
-      default: return null;
+  const chamarLuta = async (luta: Luta) => {
+    if (!sessao) return;
+    setAcaoId(luta.id);
+    setAviso('Chamando luta e enviando avisos aos atletas...');
+
+    try {
+      if (luta.status_luta !== 'em_andamento') {
+        await supabase
+          .from('chaves')
+          .update({
+            status_luta: 'em_andamento',
+            iniciada_em: new Date().toISOString(),
+            tatame: luta.tatame || sessao.identificacao,
+          })
+          .eq('id', luta.id);
+      }
+
+      await enviarAvisosDeFila(luta);
+      router.push(`/staff/placar/${luta.id}`);
+    } catch (error) {
+      console.error(error);
+      setAviso(error instanceof Error ? error.message : 'Não foi possível chamar a luta.');
+      setAcaoId(null);
     }
+  };
+
+  const executarTransferenciaTatame = async (novoTatame: string) => {
+    if (!modalTransferencia.luta) return;
+    setAcaoId(modalTransferencia.luta.id);
+    await supabase.from('chaves').update({ tatame: novoTatame }).eq('id', modalTransferencia.luta.id);
+    setModalTransferencia({ visivel: false, luta: null });
+    await carregarPainel();
+    setAcaoId(null);
   };
 
   const fazerLogout = () => {
@@ -402,98 +378,91 @@ export default function PainelMesario() {
     router.replace('/staff/login');
   };
 
-  const categorizeLuta = (luta: any) => {
-    if (luta.status_luta === 'concluida') return 'concluida';
-    const cleanN1 = String(luta.atleta_1 || "").trim().toUpperCase();
-    const cleanN2 = String(luta.atleta_2 || "").trim().toUpperCase();
-    const temTbd = cleanN1 === "TBD" || cleanN2 === "TBD" || cleanN1 === "" || cleanN2 === "";
-    if (temTbd) return 'aguardando';
-    const temBye = cleanN1 === "BYE" || cleanN2 === "BYE" || cleanN1.includes("SEM OPONENTE") || cleanN2.includes("SEM OPONENTE");
-    if (temBye) return 'wo';
-    return 'prontas';
-  };
+  // 🔥 CARD ESPECIAL PARA A BAIA (APENAS INFORMATIVO)
+  const renderBaiaCard = (luta: Luta) => {
+    const isA1 = isAtletaValido(luta.atleta_1);
+    const nomeAtl = isA1 ? normalizar(luta.atleta_1) : normalizar(luta.atleta_2);
+    const equipeAtl = isA1 ? luta.equipe_1 : luta.equipe_2;
+    const textoStatus = getTextoBaia(luta);
+    const statusCheckin = statusCheckinLabel(isA1 ? luta.checkin_1 : luta.checkin_2);
 
-  const lutasProntas = lutasExibidas.filter(l => categorizeLuta(l) === 'prontas');
-  const lutasWO = lutasExibidas.filter(l => categorizeLuta(l) === 'wo');
-  const lutasAguardando = lutasExibidas.filter(l => categorizeLuta(l) === 'aguardando');
-  const categoriasUnicas = Array.from(new Set(lutasOriginais.map(l => l.categoria))).sort();
+    return (
+      <div key={`baia-${luta.id}`} className="bg-gradient-to-r from-[#0a0a0e] to-black border border-yellow-500/20 rounded-lg p-2.5 flex flex-col sm:flex-row items-center sm:items-stretch gap-3 relative overflow-hidden transition-all opacity-90 hover:opacity-100 hover:border-yellow-500/40">
+        <div className="absolute top-0 left-0 w-1 h-full bg-yellow-500 shadow-[0_0_10px_rgba(234,179,8,0.5)]"></div>
+        <div className="w-full sm:w-[25%] shrink-0 sm:border-r border-white/5 pr-2 pl-2 flex flex-col text-center sm:text-left justify-center">
+          <span className="text-[8px] text-yellow-500/70 font-black uppercase tracking-widest">{luta.fase} • Luta {luta.id_visual}</span>
+          <span className="text-[10px] font-black text-white leading-tight mt-0.5 truncate" title={luta.categoria}>{luta.categoria}</span>
+          <span className="text-[9px] text-zinc-400 font-bold uppercase mt-0.5">{luta.faixa}</span>
+        </div>
+        <div className="flex-1 flex flex-col min-w-0 pl-1 justify-center items-center sm:items-start text-center sm:text-left w-full">
+          <span className="text-[12px] font-black uppercase text-white truncate">{nomeAtl}</span>
+          <span className="text-[9px] text-zinc-500 uppercase truncate">{equipeAtl || 'Sem Equipe'}</span>
+          <div className="mt-1.5 flex flex-wrap items-center justify-center sm:justify-start gap-2 w-full">
+            <span className={`inline-flex rounded border px-1.5 py-0.5 text-[7px] font-black uppercase tracking-widest ${statusCheckin.className}`}>{statusCheckin.label}</span>
+            <span className="text-[9px] font-black text-yellow-500 flex items-center gap-1.5 bg-yellow-500/10 px-2 py-0.5 rounded border border-yellow-500/20"><Clock size={10}/> {textoStatus}</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
-  const renderLutaCard = (luta: any, tipoLista: 'prontas'|'wo'|'aguardando'|'concluida') => {
+  // 🔥 RENDERIZAÇÃO DA LUTA NORMAL
+  const renderLutaCard = (luta: Luta) => {
     const atleta1Real = isAtletaValido(luta.atleta_1);
     const atleta2Real = isAtletaValido(luta.atleta_2);
     const nome1Formatado = displayNome(luta.atleta_1);
     const nome2Formatado = displayNome(luta.atleta_2);
-    const cleanN1 = String(luta.atleta_1 || "").trim().toUpperCase();
-    const cleanN2 = String(luta.atleta_2 || "").trim().toUpperCase();
-
-    const vencedorOficial = atleta1Real ? luta.atleta_1 : luta.atleta_2;
-    const equipeVencedor = atleta1Real ? luta.equipe_1 : luta.equipe_2;
-    const vencedorId = atleta1Real ? luta.atleta_1_id : luta.atleta_2_id;
-
-    const temBye = (cleanN1 === "BYE" || cleanN2 === "BYE" || cleanN1.includes("SEM OPONENTE") || cleanN2.includes("SEM OPONENTE")) && !(luta.status_luta === 'concluida');
-    const isByeAvancavel = temBye && (atleta1Real || atleta2Real);
-    const temTbd = (cleanN1 === "TBD" || cleanN2 === "TBD" || cleanN1 === "" || cleanN2 === "");
-    const temReprovado = luta.checkin_1?.includes('desclassificado') || luta.checkin_2?.includes('desclassificado');
-
-    const checkinPendente = (luta.checkin_1 === 'pendente' || luta.checkin_2 === 'pendente');
-    const lutaBloqueada = (!temBye && temTbd) || (!isByeAvancavel && checkinPendente);
-
-    const outrasLutasDaMesmaCategoria = todasAsLutasDoEvento.filter(l => l.categoria === luta.categoria && l.faixa === luta.faixa && l.id !== luta.id);
-    const temOutroAtletaRealNaCategoria = outrasLutasDaMesmaCategoria.some(l => (isAtletaValido(l.atleta_1) && l.atleta_1 !== vencedorOficial) || (isAtletaValido(l.atleta_2) && l.atleta_2 !== vencedorOficial));
-    const isSozinhoNoMundo = isByeAvancavel && !temOutroAtletaRealNaCategoria;
-
-    const isAguardando = tipoLista === 'aguardando';
+    
+    const status1 = statusCheckinLabel(luta.checkin_1);
+    const status2 = statusCheckinLabel(luta.checkin_2);
+    
+    const temTbd = nomeUpper(luta.atleta_1) === 'TBD' || nomeUpper(luta.atleta_2) === 'TBD';
+    const temCheckinPendente = luta.checkin_1 === 'pendente' || luta.checkin_2 === 'pendente';
+    const temReprovado = String(luta.checkin_1 || '').includes('desclassificado') || String(luta.checkin_2 || '').includes('desclassificado');
+    
+    const lutaBloqueada = temTbd || (temCheckinPendente && !temReprovado);
 
     return (
-      <div key={luta.id} className={`bg-[#0a0a0e] border rounded-xl p-3 md:p-4 flex flex-col sm:flex-row items-center gap-3 relative overflow-hidden transition-all ${luta.status_luta === 'em_andamento' ? 'border-red-500/50 shadow-[0_0_20px_rgba(239,68,68,0.1)]' : 'border-white/10 hover:border-white/20'} ${isAguardando ? 'opacity-50 grayscale hover:opacity-100 hover:grayscale-0' : ''}`}>
-        <div className={`absolute top-0 left-0 w-1 md:w-1.5 h-full ${luta.status_luta === 'concluida' ? 'bg-green-600' : luta.status_luta === 'em_andamento' ? 'bg-red-600' : 'bg-zinc-800'}`}></div>
+      <div key={luta.id} className={`bg-[#0a0a0e] border rounded-lg p-2 md:p-2.5 flex flex-col sm:flex-row items-center gap-2 relative overflow-hidden transition-all ${luta.status_luta === 'em_andamento' ? 'border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.1)]' : 'border-white/10 hover:border-white/20'}`}>
+        <div className={`absolute top-0 left-0 w-1 h-full ${luta.status_luta === 'concluida' ? 'bg-green-600' : luta.status_luta === 'em_andamento' ? 'bg-red-600' : 'bg-zinc-800'}`}></div>
 
-        <div className="w-full sm:w-[28%] shrink-0 sm:border-r border-white/5 pb-2 sm:pb-0 sm:pr-3 pl-2 flex flex-col text-center sm:text-left">
-          <span className="text-[8px] md:text-[9px] text-zinc-500 font-black uppercase tracking-widest">{luta.fase} • Luta {luta.id_visual}</span>
-          <span className="text-[10px] md:text-xs font-black text-white leading-tight mt-0.5 truncate" title={luta.categoria}>{luta.categoria}</span>
-          <span className="text-[9px] md:text-[10px] text-zinc-400 font-bold uppercase mt-1">{luta.faixa}</span>
+        <div className="w-full sm:w-[25%] shrink-0 sm:border-r border-white/5 pb-1 sm:pb-0 sm:pr-2 pl-2 flex flex-col text-center sm:text-left">
+          <span className="text-[7px] md:text-[8px] text-zinc-500 font-black uppercase tracking-widest">{luta.fase} • Luta {luta.id_visual || luta.id}</span>
+          <span className="text-[9px] md:text-[10px] font-black text-white leading-tight mt-0.5 truncate" title={luta.categoria}>{luta.categoria}</span>
+          <span className="text-[8px] md:text-[9px] text-zinc-400 font-bold uppercase mt-0.5">{luta.faixa}</span>
         </div>
 
-        <div className="flex-1 w-full min-w-0 flex items-center justify-between gap-1 md:gap-2 px-1">
+        <div className="flex-1 w-full min-w-0 flex items-center justify-between gap-1 px-1">
            <div className="flex-1 min-w-0 flex flex-col items-end text-right">
-              <span className={`text-[11px] md:text-xs font-black uppercase truncate w-full block ${atleta1Real ? (luta.vencedor === luta.atleta_1 ? 'text-green-400' : 'text-blue-400') : 'text-zinc-600 italic'}`}>{nome1Formatado}</span>
-              {atleta1Real && abaAtiva === 'pendentes' && <div className="mt-1 flex justify-end w-full">{renderStatusCheckin(luta.checkin_1)}</div>}
+              <span className={`text-[10px] md:text-[11px] font-black uppercase truncate w-full block ${atleta1Real ? (luta.vencedor === luta.atleta_1 ? 'text-green-400' : 'text-blue-400') : 'text-zinc-600 italic'}`}>{nome1Formatado}</span>
+              {atleta1Real && abaAtiva === 'fila' && <div className="mt-0.5 flex justify-end w-full"><span className={`inline-flex rounded border px-1.5 py-0.5 text-[7px] font-black uppercase tracking-widest ${status1.className}`}>{status1.label}</span></div>}
            </div>
-           <div className="shrink-0 bg-black/60 border border-white/5 rounded px-1.5 py-0.5 text-[8px] font-black text-zinc-500">VS</div>
+           <div className="shrink-0 bg-black/60 border border-white/5 rounded px-1 py-0.5 text-[7px] font-black text-zinc-500 mx-1">VS</div>
            <div className="flex-1 min-w-0 flex flex-col items-start text-left">
-              <span className={`text-[11px] md:text-xs font-black uppercase truncate w-full block ${atleta2Real ? (luta.vencedor === luta.atleta_2 ? 'text-green-400' : 'text-red-400') : 'text-zinc-600 italic'}`}>{nome2Formatado}</span>
-              {atleta2Real && abaAtiva === 'pendentes' && <div className="mt-1 flex justify-start w-full">{renderStatusCheckin(luta.checkin_2)}</div>}
+              <span className={`text-[10px] md:text-[11px] font-black uppercase truncate w-full block ${atleta2Real ? (luta.vencedor === luta.atleta_2 ? 'text-green-400' : 'text-red-400') : 'text-zinc-600 italic'}`}>{nome2Formatado}</span>
+              {atleta2Real && abaAtiva === 'fila' && <div className="mt-0.5 flex justify-start w-full"><span className={`inline-flex rounded border px-1.5 py-0.5 text-[7px] font-black uppercase tracking-widest ${status2.className}`}>{status2.label}</span></div>}
            </div>
         </div>
 
-        <div className="w-full sm:w-auto shrink-0 mt-3 sm:mt-0 px-1 sm:px-0 flex items-center justify-center gap-2">
-          {abaAtiva === 'pendentes' && (
-            <button onClick={() => setModalTransferencia({ visivel: true, luta })} title="Transferir de Tatame" className="cursor-pointer p-2.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-400 hover:text-white rounded-lg transition-colors">
-              <ArrowRightLeft size={14} />
+        <div className="w-full sm:w-auto shrink-0 mt-2 sm:mt-0 px-1 sm:px-0 flex items-center justify-center gap-1.5">
+          {abaAtiva === 'fila' && (
+            <button onClick={() => setModalTransferencia({ visivel: true, luta })} title="Transferir Tatame" className="cursor-pointer p-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-400 hover:text-white rounded-md transition-colors">
+              <ArrowRightLeft size={12} />
             </button>
           )}
 
           {abaAtiva === 'concluidas' ? (
-            <button onClick={() => router.push(`/staff/placar/${luta.id}`)} className="cursor-pointer w-full sm:w-[120px] bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 py-2.5 rounded-lg font-black uppercase tracking-widest text-[9px] md:text-[10px] flex items-center justify-center gap-1.5 transition-colors"><Edit3 size={14} /> Editar</button>
-          ) : isSozinhoNoMundo ? (
-            <button onClick={() => coroarCampeaoDireto(luta, vencedorOficial, equipeVencedor, vencedorId)} className="cursor-pointer w-full sm:w-[120px] bg-yellow-500/20 hover:bg-yellow-500/40 border border-yellow-500/50 text-yellow-500 py-2.5 rounded-lg font-black uppercase tracking-widest text-[9px] md:text-[10px] flex items-center justify-center gap-1.5 transition-all shadow-[0_0_15px_rgba(234,179,8,0.2)]"><Trophy size={14} /> Coroar</button>
-          ) : isByeAvancavel ? (
-            <button onClick={() => avancarFaseUnica(luta, vencedorOficial, equipeVencedor, vencedorId)} className="cursor-pointer w-full sm:w-[120px] bg-blue-900/30 hover:bg-blue-600/50 border border-blue-500/30 text-blue-400 py-2.5 rounded-lg font-black uppercase tracking-widest text-[9px] md:text-[10px] flex items-center justify-center gap-1 transition-colors shadow-lg"><SkipForward size={14} fill="currentColor" /> Avançar</button>
+            <button onClick={() => router.push(`/staff/placar/${luta.id}`)} className="cursor-pointer w-full sm:w-[100px] bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 py-1.5 rounded-md font-black uppercase tracking-widest text-[8px] md:text-[9px] flex items-center justify-center gap-1 transition-colors"><Edit3 size={12} /> Editar</button>
           ) : temReprovado ? (
-            <button onClick={() => router.push(`/staff/placar/${luta.id}`)} className="cursor-pointer w-full sm:w-[120px] bg-red-950 hover:bg-red-900 border border-red-500/50 text-red-400 py-2.5 rounded-lg font-black uppercase tracking-widest text-[9px] md:text-[10px] flex items-center justify-center gap-1.5 transition-colors"><XCircle size={14} /> W.O. Balança</button>
+            <button onClick={() => router.push(`/staff/placar/${luta.id}`)} className="cursor-pointer w-full sm:w-[100px] bg-red-950 hover:bg-red-900 border border-red-500/50 text-red-400 py-1.5 rounded-md font-black uppercase tracking-widest text-[8px] md:text-[9px] flex items-center justify-center gap-1 transition-colors"><XCircle size={12} /> W.O. Balança</button>
           ) : (
-            <button
-              onClick={() => {
-                // Ao clicar para abrir o placar, dispara o PUSH para os telemóveis
-                if (luta.status_luta !== 'em_andamento') {
-                  notificarAtletas(luta);
-                }
-                router.push(`/staff/placar/${luta.id}`);
-              }}
-              disabled={lutaBloqueada}
-              className={`cursor-pointer w-full sm:w-[120px] py-2.5 rounded-lg font-black uppercase tracking-widest text-[9px] md:text-[10px] flex items-center justify-center gap-1.5 transition-all active:scale-95 ${lutaBloqueada ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed border border-zinc-700' : 'bg-white text-black hover:bg-zinc-200 shadow-[0_0_15px_rgba(255,255,255,0.2)]'}`}
+            <button 
+              onClick={() => chamarLuta(luta)} 
+              disabled={lutaBloqueada || acaoId === luta.id} 
+              className={`cursor-pointer w-full sm:w-[100px] py-1.5 rounded-md font-black uppercase tracking-widest text-[8px] md:text-[9px] flex items-center justify-center gap-1 transition-all active:scale-95 ${lutaBloqueada ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed border border-zinc-700' : 'bg-white text-black hover:bg-zinc-200 shadow-[0_0_10px_rgba(255,255,255,0.2)]'}`}
             >
-              {lutaBloqueada ? (checkinPendente ? '⚠ PENDENTE' : temTbd ? 'AGUARDANDO' : 'BLOQUEADO') : (<><Play size={14} fill="currentColor" /> {luta.status_luta === 'em_andamento' ? 'Retomar' : 'Chamar Luta'}</>)}
+              {acaoId === luta.id ? <RefreshCw size={12} className="animate-spin" /> : <Play size={12} fill="currentColor" />}
+              {lutaBloqueada ? (temTbd ? 'AGUARDANDO' : 'BLOQUEADO') : luta.status_luta === 'em_andamento' ? 'Retomar' : 'Chamar'}
             </button>
           )}
         </div>
@@ -504,141 +473,169 @@ export default function PainelMesario() {
   if (!sessao) return null;
 
   return (
-    <main className="min-h-screen bg-[#050505] text-white font-sans selection:bg-red-500/30 pb-20 relative">
-      <style dangerouslySetInnerHTML={{__html: `.hide-global-nav > header:first-of-type, .hide-global-nav nav:first-of-type { display: none !important; } body.hide-global-nav > main, body.hide-global-nav > div > main { padding-top: 0 !important; margin-top: 0 !important; }`}} />
+    <main className="min-h-screen bg-[#050505] pb-24 text-white selection:bg-red-500/30">
+      <style dangerouslySetInnerHTML={{ __html: `.hide-global-nav > header:first-of-type, .hide-global-nav nav:first-of-type { display: none !important; } body.hide-global-nav > main, body.hide-global-nav > div > main { padding-top: 0 !important; margin-top: 0 !important; }` }} />
 
-      <header className="bg-black/95 backdrop-blur-md border-b border-white/10 sticky top-0 z-50 shadow-2xl">
-        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link href="/" className="cursor-pointer hover:opacity-80 transition-opacity">
-              <span className="text-white text-xl font-black italic tracking-tighter"><span className="text-red-600">i</span>TATAME</span>
-            </Link>
-            <div className="hidden md:flex h-5 w-px bg-zinc-800"></div>
-            <span className="text-red-500 text-xs md:text-sm font-black uppercase tracking-widest flex items-center gap-2">
-              <Trophy size={16} /> {sessao.identificacao}
-            </span>
+      <header className="sticky top-0 z-50 border-b border-white/10 bg-black/95 backdrop-blur-md">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-3 py-3 md:px-6">
+          <div className="min-w-0">
+            <Link href="/" className="block text-lg font-black italic tracking-tighter text-white"><span className="text-red-600">i</span>TATAME</Link>
+            <div className="mt-1 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-red-400">
+              <Trophy size={13} /> <span className="truncate">{sessao.identificacao}</span>
+            </div>
           </div>
-          <div className="flex items-center gap-3">
-            <button onClick={() => carregarPainel()} className="cursor-pointer flex items-center gap-2 text-xs bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-white px-3 py-2 md:px-4 rounded-lg uppercase font-black tracking-widest transition-all active:scale-95">
-              <RefreshCw size={14} className={refreshing ? "animate-spin text-red-500" : ""} /> <span className="hidden md:inline">Atualizar</span>
+          <div className="flex shrink-0 items-center gap-2">
+            
+            {/* 🔥 BOTÃO AO VIVO NO MESÁRIO */}
+            <Link 
+              href={`/evento/${sessao.evento_id}/ao-vivo`} 
+              target="_blank" 
+              className="flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2.5 md:p-3 text-[10px] font-black uppercase tracking-widest text-red-400 hover:bg-red-500/20 transition-colors shadow-[0_0_10px_rgba(239,68,68,0.1)]"
+              title="Abrir Tela Ao Vivo"
+            >
+              <span className="relative flex h-2 w-2 shrink-0">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75"></span>
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500"></span>
+              </span>
+              <span className="hidden sm:inline">Ao Vivo</span>
+            </Link>
+
+            <button onClick={() => carregarPainel()} className="rounded-xl border border-white/10 bg-white/5 p-3 text-white hover:bg-white/10" title="Atualizar">
+              <RefreshCw size={16} className={refreshing ? 'animate-spin text-red-400' : ''} />
             </button>
-            <button onClick={fazerLogout} className="cursor-pointer bg-red-950/30 hover:bg-red-900/50 border border-red-900 text-red-500 p-2 rounded-lg transition-colors" title="Sair"><LogOut size={16} /></button>
+            <button onClick={fazerLogout} className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-red-300 hover:bg-red-500/20" title="Sair">
+              <LogOut size={16} />
+            </button>
           </div>
         </div>
-        <div className="max-w-6xl mx-auto px-4 flex gap-6 pt-1">
-          <button onClick={() => setAbaAtiva('pendentes')} className={`cursor-pointer pb-3 text-xs font-black uppercase tracking-widest transition-all ${abaAtiva === 'pendentes' ? 'text-white border-b-2 border-red-500' : 'text-zinc-600 hover:text-zinc-400'}`}>Fila do Tatame</button>
-          <button onClick={() => setAbaAtiva('concluidas')} className={`cursor-pointer pb-3 text-xs font-black uppercase tracking-widest transition-all ${abaAtiva === 'concluidas' ? 'text-white border-b-2 border-green-500' : 'text-zinc-600 hover:text-zinc-400'}`}>Concluídas</button>
+
+        <div className="mx-auto grid max-w-7xl grid-cols-2 px-3 md:px-6">
+          <button onClick={() => setAbaAtiva('fila')} className={`border-b-2 py-3 text-[11px] font-black uppercase tracking-widest ${abaAtiva === 'fila' ? 'border-red-500 text-white' : 'border-transparent text-zinc-600'}`}>Fila do tatame</button>
+          <button onClick={() => setAbaAtiva('concluidas')} className={`border-b-2 py-3 text-[11px] font-black uppercase tracking-widest ${abaAtiva === 'concluidas' ? 'border-emerald-500 text-white' : 'border-transparent text-zinc-600'}`}>Concluídas</button>
         </div>
       </header>
 
-      <div className="max-w-6xl mx-auto p-4 py-6">
-        <div className="bg-[#0a0a0e] border border-white/10 rounded-2xl p-4 mb-8 shadow-xl flex flex-col md:flex-row gap-3 md:gap-4">
-          <div className="flex-1 relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Search className="h-4 w-4 text-zinc-500" /></div>
-            <input type="text" placeholder="Buscar Atleta..." value={buscaNome} onChange={(e) => setBuscaNome(e.target.value)} className="w-full bg-black/60 border border-zinc-800 focus:border-red-500 text-white text-sm rounded-xl pl-10 pr-4 py-3 outline-none transition-all placeholder:text-zinc-600" />
+      <div className="mx-auto max-w-7xl space-y-4 p-3 md:p-6">
+        <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <div className="rounded-2xl border border-white/10 bg-[#0b0b10] p-4">
+            <span className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Na fila</span>
+            <strong className="mt-2 block text-2xl font-black">{proximasLutas.length}</strong>
           </div>
-          <div className="flex flex-col sm:flex-row gap-3 md:gap-4 flex-1">
-            <div className="flex-1 relative">
-              <select value={filtroTipo} onChange={(e) => { setFiltroTipo(e.target.value as any); setFiltroCategoria(''); }} className="w-full bg-black/60 border border-zinc-800 focus:border-red-500 text-white text-sm rounded-xl px-4 py-3 outline-none transition-all appearance-none cursor-pointer">
-                <option value="todos">Todas Modalidades</option>
-                <option value="peso">Só Categorias de Peso</option>
-                <option value="absoluto">Só Absolutos</option>
-              </select>
-              <Filter className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500 pointer-events-none" />
-            </div>
-            <div className="flex-1 relative">
-              <select value={filtroCategoria} onChange={(e) => setFiltroCategoria(e.target.value)} className="w-full bg-black/60 border border-zinc-800 focus:border-red-500 text-white text-sm rounded-xl px-4 py-3 outline-none transition-all appearance-none cursor-pointer truncate">
-                <option value="">Qualquer Peso/Faixa</option>
-                {categoriasUnicas.map(cat => (<option key={cat} value={cat}>{cat}</option>))}
-              </select>
-            </div>
+          <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4">
+            <span className="text-[9px] font-black uppercase tracking-widest text-red-300">Agora</span>
+            <strong className="mt-2 block text-2xl font-black text-red-300">{lutaAtual ? 1 : 0}</strong>
           </div>
-        </div>
+          <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
+            <span className="text-[9px] font-black uppercase tracking-widest text-emerald-300">Concluídas</span>
+            <strong className="mt-2 block text-2xl font-black text-emerald-300">{concluidas.length}</strong>
+          </div>
+          <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-4">
+            <span className="text-[9px] font-black uppercase tracking-widest text-cyan-300">Próxima</span>
+            <strong className="mt-2 block text-sm font-black text-cyan-200">{proximasLutas[0] ? formatarHorario(proximasLutas[0].horario_estimado) : 'Livre'}</strong>
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-white/10 bg-[#0b0b10] p-3 md:p-4">
+          <div className="grid gap-3 md:grid-cols-[1.2fr_0.8fr_1fr]">
+            <label className="flex items-center gap-3 rounded-xl border border-white/10 bg-black px-3 py-2.5">
+              <Search size={16} className="text-zinc-600" />
+              <input value={buscaNome} onChange={(event) => setBuscaNome(event.target.value)} placeholder="Buscar atleta ou categoria" className="w-full bg-transparent text-sm text-white outline-none placeholder:text-zinc-700" />
+            </label>
+            <label className="relative flex items-center rounded-xl border border-white/10 bg-black">
+              <select value={filtroTipo} onChange={(event) => { setFiltroTipo(event.target.value as 'todos' | 'peso' | 'absoluto'); setFiltroCategoria(''); }} className="w-full appearance-none bg-transparent px-3 py-3 text-sm text-white outline-none">
+                <option value="todos">Todas modalidades</option>
+                <option value="peso">Categorias de peso</option>
+                <option value="absoluto">Absolutos</option>
+              </select>
+              <Filter size={15} className="pointer-events-none absolute right-3 text-zinc-600" />
+            </label>
+            <select value={filtroCategoria} onChange={(event) => setFiltroCategoria(event.target.value)} className="rounded-xl border border-white/10 bg-black px-3 py-3 text-sm text-white outline-none">
+              <option value="">Todas categorias</option>
+              {categoriasUnicas.map((categoria) => <option key={categoria} value={categoria}>{categoria}</option>)}
+            </select>
+          </div>
+          {aviso && <div className="mt-3 rounded-xl border border-yellow-500/20 bg-yellow-500/10 p-3 text-xs font-bold text-yellow-100">{aviso}</div>}
+        </section>
 
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-20">
-            <div className="w-8 h-8 border-4 border-red-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Buscando Tatame...</p>
-          </div>
-        ) : lutasExibidas.length === 0 ? (
-          <div className="text-center py-20 bg-[#0a0a0e] rounded-2xl border border-white/5 border-dashed">
-            <Search size={32} className="mx-auto text-zinc-700 mb-3" />
-            <h2 className="text-base md:text-lg font-black text-white uppercase">Fila Vazia</h2>
-            <p className="text-zinc-600 text-[10px] md:text-xs font-bold uppercase mt-1">{abaAtiva === 'pendentes' ? 'Nenhum atleta real aguardando luta.' : 'Nenhuma luta concluída encontrada.'}</p>
-          </div>
+          <div className="rounded-2xl border border-white/10 bg-[#0b0b10] p-12 text-center text-xs font-black uppercase tracking-widest text-zinc-500">Carregando fila...</div>
         ) : abaAtiva === 'concluidas' ? (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 md:gap-4">
-            {lutasExibidas.map(l => renderLutaCard(l, 'concluida'))}
-          </div>
+          concluidas.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-white/10 bg-[#0b0b10] p-12 text-center text-xs font-black uppercase tracking-widest text-zinc-500">Nenhuma luta concluída neste filtro.</div>
+          ) : (
+            <section className="grid gap-3 lg:grid-cols-2">
+              {concluidas.map((luta) => <div key={luta.id}>{renderLutaCard(luta)}</div>)}
+            </section>
+          )
         ) : (
-          <div className="space-y-10">
-
-            {lutasProntas.length > 0 && (
+          <div className="space-y-4">
+            {lutaAtual && (
               <section>
-                <h3 className="text-white font-black text-sm uppercase tracking-widest mb-4 flex items-center gap-2 border-b border-white/10 pb-2">
-                  <CheckCircle size={14} className="text-red-500" /> Prontas para o Tatame
-                </h3>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 md:gap-4">
-                  {lutasProntas.map(l => renderLutaCard(l, 'prontas'))}
+                <h2 className="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-red-300"><Clock size={14} /> Em andamento</h2>
+                {renderLutaCard(lutaAtual)}
+              </section>
+            )}
+
+            {/* 🔥 NOVO BLOCO DA BAIA PARA O MESÁRIO */}
+            {atletasNaBaia.length > 0 && (
+              <section className="mt-6 mb-6">
+                <h2 className="mb-3 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-yellow-500 border-b border-yellow-500/20 pb-2">
+                  <Clock size={14} /> Aguardando Oponente (Baia)
+                </h2>
+                <div className="grid gap-3 lg:grid-cols-2">
+                  {atletasNaBaia.map((luta) => renderBaiaCard(luta))}
                 </div>
               </section>
             )}
 
-            {lutasWO.length > 0 && (
+            {proximasLutas.length > 0 && (
               <section>
-                <h3 className="text-white font-black text-sm uppercase tracking-widest mb-4 flex items-center gap-2 border-b border-white/10 pb-2">
-                  <AlertCircle size={14} className="text-yellow-500" /> Avanços Rápidos (W.O. / Sem Oponente)
-                </h3>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 md:gap-4">
-                  {lutasWO.map(l => renderLutaCard(l, 'wo'))}
+                <h2 className="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-white"><CheckCircle size={14} className="text-emerald-400" /> Próximas chamadas</h2>
+                <div className="grid gap-3 lg:grid-cols-2">
+                  {proximasLutas.map((luta) => <div key={luta.id}>{renderLutaCard(luta)}</div>)}
                 </div>
               </section>
             )}
 
-            {lutasAguardando.length > 0 && (
-              <section>
-                <h3 className="text-zinc-500 font-black text-sm uppercase tracking-widest mb-4 flex items-center gap-2 border-b border-white/5 pb-2">
-                  <Clock size={14} className="text-zinc-600" /> Aguardando Chaveamento
-                </h3>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 md:gap-4">
-                  {lutasAguardando.map(l => renderLutaCard(l, 'aguardando'))}
-                </div>
-              </section>
+            {!lutaAtual && proximasLutas.length === 0 && (
+              <div className="rounded-2xl border border-dashed border-white/10 bg-[#0b0b10] p-12 text-center mt-6">
+                <AlertCircle size={32} className="mx-auto mb-3 text-zinc-700" />
+                <h2 className="text-base font-black uppercase text-white">Fila vazia</h2>
+                <p className="mt-1 text-xs font-bold uppercase tracking-widest text-zinc-600">Nenhuma luta real aguardando neste tatame.</p>
+              </div>
             )}
-
           </div>
         )}
       </div>
 
       {modalTransferencia.visivel && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in zoom-in-95 duration-200">
-          <div className="bg-[#0a0a0e] border border-white/10 rounded-3xl w-full max-w-sm shadow-2xl p-6 relative flex flex-col">
-            <button onClick={() => setModalTransferencia({ visivel: false, luta: null })} className="absolute top-4 right-4 text-zinc-500 hover:text-white bg-white/5 hover:bg-white/10 p-1.5 rounded-full transition-colors cursor-pointer">
-              <X size={18} />
-            </button>
-            <div className="mb-6 flex flex-col items-center text-center mt-2">
-              <div className="w-12 h-12 bg-white/5 border border-white/10 rounded-full flex items-center justify-center mb-3">
-                <ArrowRightLeft size={20} className="text-zinc-300" />
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-3xl border border-white/10 bg-[#0b0b10] p-5 shadow-2xl">
+            <div className="mb-5 flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-black uppercase text-white">Transferir luta</h2>
+                <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-zinc-500">Luta {modalTransferencia.luta?.id_visual || modalTransferencia.luta?.id}</p>
               </div>
-              <h2 className="text-lg font-black uppercase tracking-tight text-white mb-1">Transferir Luta</h2>
-              <p className="text-zinc-500 text-[10px] uppercase font-bold tracking-widest">Luta {modalTransferencia.luta?.id_visual} • {modalTransferencia.luta?.fase}</p>
+              <button onClick={() => setModalTransferencia({ visivel: false, luta: null })} className="rounded-xl bg-white/5 p-2 text-zinc-400 hover:text-white"><X size={18} /></button>
             </div>
-            <div className="flex flex-col gap-2.5">
-              {tatamesDisponiveis.filter(t => t.toUpperCase() !== sessao?.identificacao.trim().toUpperCase()).length === 0 ? (
-                <div className="text-center p-4 border border-dashed border-white/10 rounded-xl bg-white/5 text-zinc-500 text-xs font-medium">Nenhum outro tatame configurado para este evento.</div>
+
+            <div className="space-y-2">
+              {tatamesDisponiveis.filter((tatame) => nomeUpper(tatame) !== nomeUpper(sessao.identificacao)).length === 0 ? (
+                <div className="rounded-xl border border-dashed border-white/10 p-4 text-center text-xs text-zinc-500">Nenhum outro tatame configurado.</div>
               ) : (
-                tatamesDisponiveis.filter(t => t.toUpperCase() !== sessao?.identificacao.trim().toUpperCase()).map(tatame => (
-                  <button key={tatame} onClick={() => executarTransferenciaTatame(tatame)} className="cursor-pointer w-full bg-zinc-900 hover:bg-red-600 text-zinc-300 hover:text-white border border-white/5 hover:border-red-500 py-3.5 rounded-xl font-black uppercase tracking-widest text-xs transition-all flex items-center justify-between px-5 shadow-sm group">
-                    <span>Enviar para {tatame}</span><ArrowRightLeft size={14} className="opacity-50 group-hover:opacity-100" />
-                  </button>
-                ))
+                tatamesDisponiveis
+                  .filter((tatame) => nomeUpper(tatame) !== nomeUpper(sessao.identificacao))
+                  .map((tatame) => (
+                    <button key={tatame} onClick={() => executarTransferenciaTatame(tatame)} className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left text-xs font-black uppercase tracking-widest text-white hover:bg-red-600">
+                      Enviar para {tatame}
+                      <ArrowRightLeft size={14} />
+                    </button>
+                  ))
               )}
             </div>
-            <button onClick={() => setModalTransferencia({ visivel: false, luta: null })} className="cursor-pointer mt-4 w-full text-zinc-500 hover:text-white py-2 text-[10px] font-bold uppercase tracking-widest transition-colors">Cancelar</button>
           </div>
         </div>
       )}
-
     </main>
   );
 }

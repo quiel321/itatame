@@ -146,10 +146,10 @@ export async function POST(request: Request) {
       );
     }
 
-    await supabase.from("inscricoes").update({ mp_payment_id: String(paymentData.id) }).eq("id", inscricao.id);
+    await supabase.from("inscricoes").update({ mp_payment_id: String(paymentData.id), valor_inscricao: valorTotal, valor_total: comissao.valorTotal }).eq("id", inscricao.id);
 
     if (paymentData.status === "approved") {
-      await supabase.from("inscricoes").update({ pagamento_ok: true, mp_payment_id: String(paymentData.id) }).eq("id", inscricao.id);
+      await supabase.from("inscricoes").update({ pagamento_ok: true, mp_payment_id: String(paymentData.id), valor_inscricao: valorTotal, valor_total: comissao.valorTotal }).eq("id", inscricao.id);
       await enviarEmailIngressoConfirmado({
         inscricaoId: inscricao.id,
         emailFallback: formData?.payer?.email,

@@ -26,6 +26,14 @@ export default function NovoEventoPage() {
   const [valoresLotes, setValoresLotes] = useState("");
   const [regrasPesagem, setRegrasPesagem] = useState("");
 
+  // PONTUACAO POR EQUIPE
+  const [pontosEquipeOuro, setPontosEquipeOuro] = useState<number>(10);
+  const [pontosEquipePrata, setPontosEquipePrata] = useState<number>(7);
+  const [pontosEquipeBronze, setPontosEquipeBronze] = useState<number>(4);
+  const [pontosEquipeVitoria, setPontosEquipeVitoria] = useState<number>(1);
+  const [absolutoPontuaEquipe, setAbsolutoPontuaEquipe] = useState(false);
+  const [woPontuaEquipe, setWoPontuaEquipe] = useState(false);
+
   // CRONOGRAMA E VAGAS
   const [limiteVagas, setLimiteVagas] = useState<number>(500);
   const [dataInicioInscricoes, setDataInicioInscricoes] = useState("");
@@ -101,6 +109,16 @@ export default function NovoEventoPage() {
         finalRegulamentoUrl = supabase.storage.from('eventos').getPublicUrl(filePath).data.publicUrl;
       }
 
+
+      const regrasPontuacaoEquipes = {
+        ouro: pontosEquipeOuro,
+        prata: pontosEquipePrata,
+        bronze: pontosEquipeBronze,
+        vitoria: pontosEquipeVitoria,
+        absoluto_pontua: absolutoPontuaEquipe,
+        wo_pontua: woPontuaEquipe
+      };
+
       const novoEvento = {
         organizador_id: authData.user.id,
         nome, descricao: modalidade, cidade, estado, local, data_evento: dataEvento, status, 
@@ -124,9 +142,16 @@ export default function NovoEventoPage() {
         data_fim_checagem: dataFimChecagem || null,
         data_divulgacao_chaves: dataDivulgacaoChaves || null,
         data_divulgacao_cronograma: dataDivulgacaoCronograma || null,
+        regras_pontuacao_equipes: regrasPontuacaoEquipes,
       };
 
-      const { error } = await supabase.from("eventos").insert([novoEvento]);
+      let { error } = await supabase.from("eventos").insert([novoEvento]);
+      if (error && error.message.toLowerCase().includes("regras_pontuacao_equipes")) {
+        const eventoSemPontuacao = { ...novoEvento };
+        delete (eventoSemPontuacao as { regras_pontuacao_equipes?: unknown }).regras_pontuacao_equipes;
+        const retry = await supabase.from("eventos").insert([eventoSemPontuacao]);
+        error = retry.error;
+      }
       if (error) throw new Error("Erro DB: " + error.message);
 
       setSucesso(true);
@@ -282,6 +307,41 @@ export default function NovoEventoPage() {
                 <label className="block text-[9px] font-bold text-purple-500 uppercase mb-0.5">Divulgação do Cronograma</label>
                 <input type="datetime-local" value={dataDivulgacaoCronograma} onChange={(e) => setDataDivulgacaoCronograma(e.target.value)} className={`${inputClass} !py-1 text-[11px]`} />
               </div>
+            </div>
+          </div>
+
+
+
+          <div className={sectionClass}>
+            <h2 className={sectionTitleClass}>4. Pontuação por Equipe</h2>
+            <p className="text-zinc-500 text-[10px] leading-relaxed">Defina como o ranking por equipe vai pontuar neste evento. Esses valores podem mudar conforme o regulamento do organizador.</p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div>
+                <label className={labelClass}>Ouro</label>
+                <input type="number" value={pontosEquipeOuro} onChange={(e) => setPontosEquipeOuro(Number(e.target.value))} className={inputClass} />
+              </div>
+              <div>
+                <label className={labelClass}>Prata</label>
+                <input type="number" value={pontosEquipePrata} onChange={(e) => setPontosEquipePrata(Number(e.target.value))} className={inputClass} />
+              </div>
+              <div>
+                <label className={labelClass}>Bronze</label>
+                <input type="number" value={pontosEquipeBronze} onChange={(e) => setPontosEquipeBronze(Number(e.target.value))} className={inputClass} />
+              </div>
+              <div>
+                <label className={labelClass}>Vitória</label>
+                <input type="number" value={pontosEquipeVitoria} onChange={(e) => setPontosEquipeVitoria(Number(e.target.value))} className={inputClass} />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label className="flex items-center gap-3 bg-[#050505] border border-white/10 rounded-lg p-3 text-xs font-bold text-zinc-300">
+                <input type="checkbox" checked={absolutoPontuaEquipe} onChange={(e) => setAbsolutoPontuaEquipe(e.target.checked)} className="w-4 h-4 accent-red-600" />
+                Absoluto pontua para equipe
+              </label>
+              <label className="flex items-center gap-3 bg-[#050505] border border-white/10 rounded-lg p-3 text-xs font-bold text-zinc-300">
+                <input type="checkbox" checked={woPontuaEquipe} onChange={(e) => setWoPontuaEquipe(e.target.checked)} className="w-4 h-4 accent-red-600" />
+                Vitória por W.O. pontua
+              </label>
             </div>
           </div>
 

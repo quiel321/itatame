@@ -12,6 +12,14 @@ export default function EventoDetalhesPage() {
   const [inscricoes, setInscricoes] = useState<any[]>([]);
   const [abaAtiva, setAbaAtiva] = useState("sobre");
 
+  // 🔥 STATE DO ACORDEÃO NOVO!
+  const [acordeaoAberto, setAcordeaoAberto] = useState<string | null>("pesagem");
+
+  const toggleAcordeao = (id: string) => {
+    if (acordeaoAberto === id) setAcordeaoAberto(null);
+    else setAcordeaoAberto(id);
+  };
+
   useEffect(() => {
     async function carregarDados() {
       if (!params.id) return;
@@ -55,8 +63,19 @@ export default function EventoDetalhesPage() {
 
   const totalInscritos = inscricoes.length;
 
-  // 🔥 MOTOR DE LOTES: Descobre qual lote está valendo agora
+  // 🔥 MOTOR DE LOTES E CHECAGEM
   const agora = new Date();
+  const inicioChecagem = evento.data_inicio_checagem ? new Date(evento.data_inicio_checagem) : null;
+  const fimChecagem = evento.data_fim_checagem ? new Date(evento.data_fim_checagem) : null;
+  const checagemAberta = Boolean(inicioChecagem && agora >= inicioChecagem && (!fimChecagem || agora <= fimChecagem));
+  const textoStatusChecagem = !inicioChecagem
+    ? "Checagem ainda sem data definida."
+    : agora < inicioChecagem
+      ? `Checagem abre em ${formatarDataHora(evento.data_inicio_checagem)}`
+      : fimChecagem && agora > fimChecagem
+        ? "Checagem encerrada."
+        : "Checagem aberta.";
+  
   let loteAtivo = 0;
   if (evento.lote1_data_fim && agora <= new Date(evento.lote1_data_fim)) loteAtivo = 1;
   else if (evento.lote2_data_fim && agora <= new Date(evento.lote2_data_fim)) loteAtivo = 2;
@@ -128,16 +147,31 @@ export default function EventoDetalhesPage() {
                   </Link>
                 )
               )}
-
-              {/* 🔥 NOVO BOTÃO DE CHECAGEM GERAL */}
-              <Link href={`/evento/${evento.id}/checagem`} className="bg-green-600 hover:bg-green-500 text-white font-black uppercase tracking-widest text-[10px] md:text-xs px-3 py-2.5 md:px-6 md:py-3.5 rounded-lg shadow-[0_0_15px_rgba(22,163,74,0.3)] transition-all text-center flex-1 md:flex-none flex items-center justify-center gap-1.5">
-                <svg className="w-3.5 h-3.5 md:w-4 md:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-                Checagem Aberta
-              </Link>
+              
+              {checagemAberta ? (
+                <Link href={`/evento/${evento.id}/checagem`} className="bg-green-600 hover:bg-green-500 text-white font-black uppercase tracking-widest text-[10px] md:text-xs px-3 py-2.5 md:px-6 md:py-3.5 rounded-lg shadow-[0_0_15px_rgba(22,163,74,0.3)] transition-all text-center flex-1 md:flex-none flex items-center justify-center gap-1.5">
+                  <svg className="w-3.5 h-3.5 md:w-4 md:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                  Checagem Aberta
+                </Link>
+              ) : (
+                <div className="bg-white/5 border border-white/10 text-zinc-400 font-black uppercase tracking-widest text-[10px] md:text-xs px-3 py-2.5 md:px-6 md:py-3.5 rounded-lg text-center flex-1 md:flex-none">
+                  {textoStatusChecagem}
+                </div>
+              )}
 
               <Link href={`/pagamento`} className="bg-white hover:bg-zinc-200 text-black font-black uppercase tracking-widest text-[10px] md:text-xs px-3 py-2.5 md:px-6 md:py-3.5 rounded-lg transition-all text-center flex-1 md:flex-none">
                 Pagar
               </Link>
+              
+              {/* 🔥 NOVO BOTÃO: LUTAS AO VIVO */}
+              <Link href={`/evento/${evento.id}/ao-vivo`} className="bg-red-900/30 hover:bg-red-800/50 border border-red-500/50 text-red-200 font-black uppercase tracking-widest text-[10px] md:text-xs px-3 py-2.5 md:px-6 md:py-3.5 rounded-lg transition-all text-center flex-1 md:flex-none flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(239,68,68,0.2)]">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                </span>
+                Ao Vivo
+              </Link>
+
               <Link href={`/evento/${evento.id}/publico`} className="bg-white/5 hover:bg-white/10 border border-white/10 text-white font-bold uppercase tracking-widest text-[10px] md:text-xs px-3 py-2.5 md:px-6 md:py-3.5 rounded-lg transition-all text-center flex-1 md:flex-none">
                 Chaves e Resultados
               </Link>
@@ -227,12 +261,70 @@ export default function EventoDetalhesPage() {
                 </div>
               )}
 
+              {/* 🔥 O ACORDEÃO FICA AQUI */}
               {abaAtiva === "regras" && (
-                <div className="animate-in fade-in duration-500 text-zinc-400 text-xs md:text-sm leading-relaxed font-medium">
-                  <h3 className="text-base md:text-lg font-black text-white mb-3 md:mb-4 uppercase tracking-wide">Regras / Pesagem / Informações</h3>
-                  <div className="whitespace-pre-wrap">
-                    {evento.regras_pesagem || "Regras de pesagem e diretrizes de competição seguirão o livro de regras da modalidade oficial."}
+                <div className="animate-in fade-in duration-500 w-full space-y-2">
+                  
+                  {/* Item 1 do Acordeão: Pesagem */}
+                  <div className="bg-[#050505] border border-white/5 rounded-lg overflow-hidden transition-all">
+                    <button 
+                      onClick={() => toggleAcordeao("pesagem")}
+                      className="w-full px-4 py-3 flex items-center justify-between bg-white/5 hover:bg-white/10 transition-colors"
+                    >
+                      <h3 className="text-sm font-black text-white uppercase tracking-widest text-left">Regras de Pesagem</h3>
+                      <svg className={`w-4 h-4 text-red-500 transition-transform duration-300 ${acordeaoAberto === "pesagem" ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <div className={`transition-all duration-300 ease-in-out ${acordeaoAberto === "pesagem" ? "max-h-[1000px] opacity-100" : "max-h-0 opacity-0 overflow-hidden"}`}>
+                      <div className="p-4 text-xs text-zinc-400 font-medium whitespace-pre-wrap leading-relaxed border-t border-white/5">
+                        {evento.regras_pesagem || "A pesagem ocorrerá conforme o cronograma oficial. A tolerância de peso é zero. O atleta deve estar com o kimono e faixa oficiais que utilizará na luta."}
+                      </div>
+                    </div>
                   </div>
+
+                  {/* Item 2 do Acordeão: Pontuação de Equipes (Gerado automaticamente) */}
+                  {evento.regras_pontuacao_equipes && (
+                    <div className="bg-[#050505] border border-white/5 rounded-lg overflow-hidden transition-all">
+                      <button 
+                        onClick={() => toggleAcordeao("pontos")}
+                        className="w-full px-4 py-3 flex items-center justify-between bg-white/5 hover:bg-white/10 transition-colors"
+                      >
+                        <h3 className="text-sm font-black text-white uppercase tracking-widest text-left">Regras - Pontos por Equipe</h3>
+                        <svg className={`w-4 h-4 text-red-500 transition-transform duration-300 ${acordeaoAberto === "pontos" ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7"></path></svg>
+                      </button>
+                      <div className={`transition-all duration-300 ease-in-out ${acordeaoAberto === "pontos" ? "max-h-[1000px] opacity-100" : "max-h-0 opacity-0 overflow-hidden"}`}>
+                        <div className="p-4 text-xs text-zinc-400 font-medium whitespace-pre-wrap leading-relaxed border-t border-white/5">
+                          <p className="mb-2 text-white font-bold uppercase">Pontuação por Categoria:</p>
+                          <p className="mb-1"><span className="text-red-500 font-bold">{evento.regras_pontuacao_equipes.ouro}</span> - 1º Lugar</p>
+                          <p className="mb-1"><span className="text-red-500 font-bold">{evento.regras_pontuacao_equipes.prata}</span> - 2º Lugar</p>
+                          <p className="mb-1"><span className="text-red-500 font-bold">{evento.regras_pontuacao_equipes.bronze}</span> - 3º Lugar</p>
+                          <p className="mb-1"><span className="text-red-500 font-bold">{evento.regras_pontuacao_equipes.vitoria || 0}</span> - Por Vitória de Luta</p>
+                          
+                          <div className="mt-4 space-y-2 text-[10px] uppercase tracking-widest">
+                            <p>1) Chaves com apenas um atleta = {evento.regras_pontuacao_equipes.wo_pontua ? <span className="text-green-500 font-bold">PONTUA</span> : <span className="text-red-500 font-bold">NÃO PONTUA</span>}</p>
+                            <p>2) Chave de ABSOLUTO = {evento.regras_pontuacao_equipes.absoluto_pontua ? <span className="text-green-500 font-bold">PONTUA</span> : <span className="text-red-500 font-bold">NÃO PONTUA</span>}</p>
+                            <p className="mt-2">3) Em caso de empate: Maior quantidade de Ouro desempata, seguido de Prata e Bronze.</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Item 3 do Acordeão: Reembolso */}
+                  <div className="bg-[#050505] border border-white/5 rounded-lg overflow-hidden transition-all">
+                    <button 
+                      onClick={() => toggleAcordeao("reembolso")}
+                      className="w-full px-4 py-3 flex items-center justify-between bg-white/5 hover:bg-white/10 transition-colors"
+                    >
+                      <h3 className="text-sm font-black text-white uppercase tracking-widest text-left">Política de Reembolso</h3>
+                      <svg className={`w-4 h-4 text-red-500 transition-transform duration-300 ${acordeaoAberto === "reembolso" ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <div className={`transition-all duration-300 ease-in-out ${acordeaoAberto === "reembolso" ? "max-h-[1000px] opacity-100" : "max-h-0 opacity-0 overflow-hidden"}`}>
+                      <div className="p-4 text-xs text-zinc-400 font-medium whitespace-pre-wrap leading-relaxed border-t border-white/5">
+                        Em caso de cancelamento da inscrição por parte do atleta, a taxa de inscrição não será reembolsada, sob nenhuma hipótese. O valor pago também não poderá ser transferido para outro atleta ou para outro evento.
+                      </div>
+                    </div>
+                  </div>
+
                 </div>
               )}
             </div>

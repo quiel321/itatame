@@ -145,6 +145,17 @@ export async function POST(request: Request) {
 
     const preferenceData = await preferenceResponse.json();
 
+    if (preferenceData?.id) {
+      await supabase
+        .from("inscricoes")
+        .update({
+          valor_inscricao: valorTotal,
+          valor_total: comissao.valorTotal,
+          mp_preference_id: String(preferenceData.id),
+        })
+        .eq("id", inscricao.id);
+    }
+
     if (!preferenceResponse.ok || !preferenceData.id) {
       console.error("Erro ao criar preferencia Mercado Pago:", preferenceData);
       return NextResponse.json({ error: "Falha ao preparar o Checkout Bricks." }, { status: 500 });

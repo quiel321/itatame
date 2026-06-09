@@ -14,6 +14,8 @@ type InscricaoCompleta = {
   faixa: string;
   peso: string;
   sexo: string;
+  chave_categoria: string;
+  categoria_rotulo: string;
 };
 
 export default function ChecagemGeralPage() {
@@ -58,15 +60,19 @@ export default function ChecagemGeralPage() {
 
         const dadosCompletos: InscricaoCompleta[] = inscData.map(insc => {
           const atl = atletasData?.find(a => a.user_id === insc.user_id);
+          const categoria = insc.categoria || 'NÃO INFORMADA';
+          const faixa = atl?.faixa || 'FAIXA NÃO INFORMADA';
           return {
             id: insc.id,
-            categoria: insc.categoria || 'NÃO INFORMADA',
+            categoria,
             atleta_nome: atl?.nome || 'Atleta Desconhecido',
             equipe: atl?.equipe || 'SEM EQUIPE',
             professor: atl?.professor || 'Sem Professor',
-            faixa: atl?.faixa || '',
+            faixa,
             peso: atl?.peso || '',
-            sexo: atl?.sexo || ''
+            sexo: atl?.sexo || '',
+            chave_categoria: faixa + '__' + categoria,
+            categoria_rotulo: faixa + ' / ' + categoria
           };
         });
 
@@ -80,7 +86,7 @@ export default function ChecagemGeralPage() {
   }, [eventoId]);
 
   // Extrair listas únicas para os dropdowns
-  const categoriasUnicas = useMemo(() => [...new Set(inscricoes.map(i => i.categoria))].sort(), [inscricoes]);
+  const gruposCategoriaFaixa = useMemo(() => [...new Map(inscricoes.map(i => [i.chave_categoria, i.categoria_rotulo])).entries()].sort((a, b) => a[1].localeCompare(b[1])), [inscricoes]);
   const equipesUnicas = useMemo(() => [...new Set(inscricoes.map(i => i.equipe))].sort(), [inscricoes]);
 
   // Ações de clique nos links da tabela (Navegação Cruzada)
@@ -99,15 +105,23 @@ export default function ChecagemGeralPage() {
   // Filtros calculados para as tabelas
   const atletasFiltradosGeral = useMemo(() => {
     if (!buscaAtleta) return inscricoes;
-    return inscricoes.filter(i => i.atleta_nome.toLowerCase().includes(buscaAtleta.toLowerCase()));
+    const termo = buscaAtleta.toLowerCase();
+    return inscricoes.filter(i => [i.atleta_nome, i.equipe, i.professor, i.categoria, i.faixa, i.categoria_rotulo].join(' ').toLowerCase().includes(termo));
   }, [inscricoes, buscaAtleta]);
 
   const atletasNaCategoria = useMemo(() => {
     if (!catSelecionada) return [];
-    let filtrado = inscricoes.filter(i => i.categoria === catSelecionada);
+    let filtrado = inscricoes.filter(i => i.chave_categoria === catSelecionada);
     if (nomeFiltroCat) filtrado = filtrado.filter(i => i.atleta_nome.toLowerCase().includes(nomeFiltroCat.toLowerCase()));
     return filtrado;
   }, [inscricoes, catSelecionada, nomeFiltroCat]);
+
+  const gruposResumo = useMemo(() => gruposCategoriaFaixa.map(([chave, rotulo]) => {
+    const total = inscricoes.filter(i => i.chave_categoria === chave).length;
+    return { chave, rotulo, total };
+  }), [gruposCategoriaFaixa, inscricoes]);
+
+  const grupoSelecionado = gruposResumo.find(grupo => grupo.chave === catSelecionada);
 
   const atletasNaEquipe = useMemo(() => {
     if (!eqSelecionada) return [];
@@ -115,9 +129,37 @@ export default function ChecagemGeralPage() {
     if (nomeFiltroEq) filtrado = filtrado.filter(i => i.atleta_nome.toLowerCase().includes(nomeFiltroEq.toLowerCase()));
     return filtrado;
   }, [inscricoes, eqSelecionada, nomeFiltroEq]);
-
   if (loading) {
-    return <div className="min-h-screen bg-[#050505] flex items-center justify-center text-red-500 font-black uppercase tracking-widest text-xs animate-pulse">Carregando Checagem...</div>;
+    return <div className="min-h-screen bg-[#050505] flex items-center justify-center text-red-500 font-black uppercase tracking-widest text-xs animate-pulse">Carregando checagem...</div>;
+  }
+
+  const agora = new Date();
+  const inicioChecagem = evento?.data_inicio_checagem ? new Date(evento.data_inicio_checagem) : null;
+  const fimChecagem = evento?.data_fim_checagem ? new Date(evento.data_fim_checagem) : null;
+  const checagemAberta = Boolean(inicioChecagem && agora >= inicioChecagem && (!fimChecagem || agora <= fimChecagem));
+  const formatarPrazo = (valor?: string | null) => valor ? new Date(valor).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : "A definir";
+
+  if (!checagemAberta) {
+    return (
+      <main className="min-h-screen bg-[#050505] text-white flex items-center justify-center px-4">
+        <section className="w-full max-w-lg bg-[#0a0a0e] border border-white/10 rounded-2xl p-6 text-center shadow-2xl">
+          <p className="text-red-500 text-[10px] font-black uppercase tracking-widest mb-3">Checagem indisponível</p>
+          <h1 className="text-xl font-black uppercase mb-2">{evento?.nome || "Evento"}</h1>
+          <p className="text-zinc-400 text-sm leading-relaxed mb-5">A checagem fica visível apenas no período definido pelo organizador.</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6 text-left">
+            <div className="bg-black/40 border border-white/10 rounded-xl p-3">
+              <span className="text-zinc-500 text-[9px] font-black uppercase tracking-widest">Abre</span>
+              <p className="text-white text-xs font-bold mt-1">{formatarPrazo(evento?.data_inicio_checagem)}</p>
+            </div>
+            <div className="bg-black/40 border border-white/10 rounded-xl p-3">
+              <span className="text-zinc-500 text-[9px] font-black uppercase tracking-widest">Fecha</span>
+              <p className="text-white text-xs font-bold mt-1">{formatarPrazo(evento?.data_fim_checagem)}</p>
+            </div>
+          </div>
+          <button onClick={() => router.back()} className="w-full bg-white text-black rounded-xl py-3 text-xs font-black uppercase tracking-widest">Voltar ao evento</button>
+        </section>
+      </main>
+    );
   }
 
   return (
@@ -194,8 +236,8 @@ export default function ChecagemGeralPage() {
                       </td>
                       <td className="px-3 py-2.5 text-zinc-400 uppercase">{insc.professor}</td>
                       <td className="px-3 py-2.5 font-bold">
-                        <button onClick={() => irParaCategoria(insc.categoria)} className="text-blue-400 hover:text-blue-300 hover:underline uppercase transition-colors text-left cursor-pointer">
-                          {insc.categoria}
+                        <button onClick={() => irParaCategoria(insc.chave_categoria)} className="text-blue-400 hover:text-blue-300 hover:underline uppercase transition-colors text-left cursor-pointer">
+                          {insc.categoria_rotulo}
                         </button>
                       </td>
                     </tr>
@@ -222,11 +264,11 @@ export default function ChecagemGeralPage() {
                   className="w-full bg-[#0a0a0e] border border-white/10 text-white text-xs p-3 rounded outline-none focus:border-red-500 uppercase cursor-pointer"
                 >
                   <option value="">------------------------------</option>
-                  {categoriasUnicas.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                  {gruposCategoriaFaixa.map(([chave, rotulo]) => <option key={chave} value={chave}>{rotulo}</option>)}
                 </select>
                 <input 
                   type="text" 
-                  placeholder="Nome do Atleta (Opcional)" 
+                  placeholder="Nome, equipe ou professor (opcional)" 
                   value={nomeFiltroCat}
                   onChange={(e) => setNomeFiltroCat(e.target.value)}
                   className="w-full bg-[#0a0a0e] border border-white/10 text-white text-xs p-3 rounded outline-none focus:border-red-500 uppercase placeholder:text-zinc-600"
@@ -241,17 +283,34 @@ export default function ChecagemGeralPage() {
               </p>
             </div>
 
+            {!catSelecionada && gruposResumo.length > 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-6">
+                {gruposResumo.map((grupo) => (
+                  <button key={grupo.chave} onClick={() => setCatSelecionada(grupo.chave)} className={'text-left rounded-xl border p-3 transition-colors ' + (grupo.total === 1 ? 'border-yellow-500/30 bg-yellow-500/10' : 'border-white/10 bg-white/5 hover:bg-white/10')}>
+                    <span className="block text-white text-xs font-black uppercase leading-tight">{grupo.rotulo}</span>
+                    <span className={'mt-2 inline-flex text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded ' + (grupo.total === 1 ? 'bg-yellow-500/20 text-yellow-200' : 'bg-red-500/10 text-red-400')}>{grupo.total === 1 ? 'Sozinho' : grupo.total + ' atletas'}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
             {catSelecionada && (
               <div className="mt-8 animate-in fade-in slide-in-from-bottom-4">
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="text-red-500 font-black text-sm uppercase tracking-widest flex items-center gap-2">
-                    <Layers size={16} /> {catSelecionada}
+                    <Layers size={16} /> {grupoSelecionado?.rotulo || catSelecionada}
                   </h3>
                   <span className="text-red-500 font-bold text-xs flex items-center gap-1.5 bg-red-500/10 px-2.5 py-1 rounded">
                     <Users size={14} /> {atletasNaCategoria.length} Inscritos
                   </span>
                 </div>
                 
+                {grupoSelecionado?.total === 1 && (
+                  <div className="mb-3 rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-3 text-yellow-100 text-xs font-bold leading-relaxed">
+                    Este atleta está sozinho nesta faixa + categoria. Durante a checagem, ele pode entrar no perfil e ajustar a inscrição para uma categoria de peso maior, se o regulamento permitir.
+                  </div>
+                )}
+
                 <div className="bg-white/5 border border-white/10 rounded-md overflow-x-auto shadow-xl">
                   <table className="w-full text-left whitespace-nowrap">
                     <thead className="bg-[#cc0000] text-white">
@@ -342,8 +401,8 @@ export default function ChecagemGeralPage() {
                             <span className="text-[10px]">🇧🇷</span> {insc.atleta_nome}
                           </td>
                           <td className="px-3 py-2.5 text-zinc-400 uppercase">{insc.professor}</td>
-                          <td className="px-3 py-2.5 font-bold text-blue-400 uppercase cursor-pointer hover:underline" onClick={() => irParaCategoria(insc.categoria)}>
-                            {insc.categoria}
+                          <td className="px-3 py-2.5 font-bold text-blue-400 uppercase cursor-pointer hover:underline" onClick={() => irParaCategoria(insc.chave_categoria)}>
+                            {insc.categoria_rotulo}
                           </td>
                         </tr>
                       ))}

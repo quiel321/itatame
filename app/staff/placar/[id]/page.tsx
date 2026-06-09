@@ -33,6 +33,8 @@ export default function PlacarMesarioDB() {
   const [punicoesVermelho, setPunicoesVermelho] = useState(0);
 
   const [vencedor, setVencedor] = useState<"azul" | "vermelho" | "empate" | null>(null);
+  const [perfilAzul, setPerfilAzul] = useState<any>(null);
+  const [perfilVermelho, setPerfilVermelho] = useState<any>(null);
 
   const [stats, setStats] = useState({
     azul: { quedas: 0, passagens: 0, montadas: 0 },
@@ -76,6 +78,17 @@ export default function PlacarMesarioDB() {
       }
 
       setLutaAtual(luta);
+
+      const idsAtletas = [luta.atleta_1_id, luta.atleta_2_id].filter(Boolean);
+      if (idsAtletas.length > 0) {
+        const { data: perfis } = await supabase
+          .from("atletas")
+          .select("id, nome, foto_url, equipe, academia, faixa")
+          .in("id", idsAtletas);
+
+        setPerfilAzul(perfis?.find((perfil) => perfil.id === luta.atleta_1_id) || null);
+        setPerfilVermelho(perfis?.find((perfil) => perfil.id === luta.atleta_2_id) || null);
+      }
 
       if (luta.pontuacao_atleta_1) {
         setPontosAzul(luta.pontuacao_atleta_1.pontos || 0);
@@ -300,9 +313,22 @@ export default function PlacarMesarioDB() {
         gain.gain.setValueAtTime(0.2, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
         osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.1);
       } else if (tipo === 'fim') {
-        osc.type = 'sawtooth'; osc.frequency.setValueAtTime(180, ctx.currentTime);
-        gain.gain.setValueAtTime(0.8, ctx.currentTime); gain.gain.linearRampToValueAtTime(0.01, ctx.currentTime + 3.0);
-        osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 3.0);
+        const tocarNota = (frequencia: number, inicio: number, duracao: number) => {
+          const nota = ctx.createOscillator();
+          const envelope = ctx.createGain();
+          nota.type = 'sine';
+          nota.frequency.setValueAtTime(frequencia, ctx.currentTime + inicio);
+          envelope.gain.setValueAtTime(0.0001, ctx.currentTime + inicio);
+          envelope.gain.exponentialRampToValueAtTime(0.35, ctx.currentTime + inicio + 0.03);
+          envelope.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + inicio + duracao);
+          nota.connect(envelope);
+          envelope.connect(ctx.destination);
+          nota.start(ctx.currentTime + inicio);
+          nota.stop(ctx.currentTime + inicio + duracao + 0.03);
+        };
+        tocarNota(523.25, 0, 0.28);
+        tocarNota(659.25, 0.24, 0.32);
+        tocarNota(783.99, 0.52, 0.45);
       }
     } catch (error) { console.log("Áudio não suportado", error); }
   };
@@ -651,31 +677,61 @@ export default function PlacarMesarioDB() {
         {showResumo && (
           <div className="absolute inset-0 bg-black/80 backdrop-blur-md z-[100] flex items-center justify-center p-4">
             <div className="resumo-modal bg-[#0c1220] border border-white/10 rounded-3xl p-8 w-full max-w-4xl shadow-[0_0_80px_rgba(0,0,0,0.8)] animate-in slide-in-from-bottom-10 duration-500">
-              <div className="text-center mb-8">
-                <h2 className="text-4xl font-black text-white uppercase tracking-tighter">Fim de Combate</h2>
-                <p className="text-green-500 font-bold uppercase tracking-widest text-sm mt-1">Resultados salvos no banco oficial</p>
+              <div className="text-center mb-6">
+                <p className="text-green-500 font-black uppercase tracking-[0.25em] text-[10px] mb-2">Resultado oficial</p>
+                <h2 className="text-3xl md:text-4xl font-black text-white uppercase tracking-tighter">Fim de Combate</h2>
               </div>
 
-              <div className="resumo-grid grid grid-cols-2 gap-8">
-                <div className={`resumo-card bg-[#05142b]/80 border ${vencedor === 'azul' ? 'border-yellow-500 shadow-[0_0_30px_rgba(234,179,8,0.3)]' : 'border-blue-500/30'} rounded-2xl p-6 relative overflow-hidden transition-all`}>
-                  <div className="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>
-                  <h3 className="text-xl font-black text-white uppercase truncate mb-4">{vencedor === 'azul' && ""} {atletaAzul}</h3>
-                  <div className="text-6xl font-black text-blue-500 mb-6 drop-shadow-md">{pontosAzul} <span className="text-lg text-zinc-500 tracking-widest uppercase">Pts</span></div>
-                  <ul className="space-y-3">
-                    <li className="flex justify-between items-center text-sm font-bold"><span className="text-zinc-400">Montadas / Costas:</span> <span className="text-white bg-blue-600 px-2 py-0.5 rounded">{stats.azul.montadas}</span></li>
-                    <li className="flex justify-between items-center text-sm font-bold"><span className="text-zinc-400">Passagens:</span> <span className="text-white bg-blue-600 px-2 py-0.5 rounded">{stats.azul.passagens}</span></li>
-                    <li className="flex justify-between items-center text-sm font-bold"><span className="text-zinc-400">Quedas / Rasp:</span> <span className="text-white bg-blue-600 px-2 py-0.5 rounded">{stats.azul.quedas}</span></li>
-                  </ul>
+              <div className="bg-black/35 border border-white/10 rounded-2xl overflow-hidden">
+                <div className={"px-5 py-3 text-center font-black uppercase tracking-[0.25em] text-xs " + (vencedor === 'azul' ? 'bg-blue-600 text-white' : vencedor === 'vermelho' ? 'bg-red-600 text-white' : 'bg-zinc-700 text-white')}>
+                  {vencedor === 'empate' ? 'Empate' : 'Vencedor'}
                 </div>
-                <div className={`resumo-card bg-[#2f0404]/80 border ${vencedor === 'vermelho' ? 'border-yellow-500 shadow-[0_0_30px_rgba(234,179,8,0.3)]' : 'border-red-500/30'} rounded-2xl p-6 relative overflow-hidden transition-all`}>
-                  <div className="absolute top-0 left-0 w-1 h-full bg-red-500"></div>
-                  <h3 className="text-xl font-black text-white uppercase truncate mb-4">{vencedor === 'vermelho' && ""} {atletaVermelho}</h3>
-                  <div className="text-6xl font-black text-red-500 mb-6 drop-shadow-md">{pontosVermelho} <span className="text-lg text-zinc-500 tracking-widest uppercase">Pts</span></div>
-                  <ul className="space-y-3">
-                    <li className="flex justify-between items-center text-sm font-bold"><span className="text-zinc-400">Montadas / Costas:</span> <span className="text-white bg-red-600 px-2 py-0.5 rounded">{stats.vermelho.montadas}</span></li>
-                    <li className="flex justify-between items-center text-sm font-bold"><span className="text-zinc-400">Passagens:</span> <span className="text-white bg-red-600 px-2 py-0.5 rounded">{stats.vermelho.passagens}</span></li>
-                    <li className="flex justify-between items-center text-sm font-bold"><span className="text-zinc-400">Quedas / Rasp:</span> <span className="text-white bg-red-600 px-2 py-0.5 rounded">{stats.vermelho.quedas}</span></li>
-                  </ul>
+
+                <div className="p-5 md:p-7 grid grid-cols-1 md:grid-cols-[160px_1fr] gap-5 items-center">
+                  <div className="mx-auto w-32 h-32 md:w-36 md:h-36 rounded-full overflow-hidden border-4 border-yellow-400/80 bg-zinc-900 flex items-center justify-center shadow-[0_0_35px_rgba(234,179,8,0.2)]">
+                    {(vencedor === 'azul' ? perfilAzul?.foto_url : perfilVermelho?.foto_url) ? (
+                      <img src={vencedor === 'azul' ? perfilAzul?.foto_url : perfilVermelho?.foto_url} alt="Foto do vencedor" className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-5xl font-black text-white">{(vencedor === 'azul' ? atletaAzul : vencedor === 'vermelho' ? atletaVermelho : 'E').charAt(0)}</span>
+                    )}
+                  </div>
+
+                  <div className="text-center md:text-left">
+                    <h3 className="text-3xl md:text-5xl font-black text-white uppercase leading-none mb-2">
+                      {vencedor === 'azul' ? atletaAzul : vencedor === 'vermelho' ? atletaVermelho : 'Empate'}
+                    </h3>
+                    {vencedor !== 'empate' && (
+                      <p className="text-zinc-400 text-sm md:text-base font-bold uppercase tracking-widest mb-4">
+                        {vencedor === 'azul' ? (perfilAzul?.equipe || lutaAtual?.equipe_1) : (perfilVermelho?.equipe || lutaAtual?.equipe_2)}
+                      </p>
+                    )}
+
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="bg-white/5 border border-white/10 rounded-xl p-3 text-center">
+                        <span className="block text-[9px] text-zinc-500 font-black uppercase tracking-widest">Pontos</span>
+                        <strong className="text-2xl text-white">{vencedor === 'azul' ? pontosAzul : vencedor === 'vermelho' ? pontosVermelho : pontosAzul + ' x ' + pontosVermelho}</strong>
+                      </div>
+                      <div className="bg-white/5 border border-white/10 rounded-xl p-3 text-center">
+                        <span className="block text-[9px] text-zinc-500 font-black uppercase tracking-widest">Vant.</span>
+                        <strong className="text-2xl text-yellow-400">{vencedor === 'azul' ? vantagensAzul : vencedor === 'vermelho' ? vantagensVermelho : vantagensAzul + ' x ' + vantagensVermelho}</strong>
+                      </div>
+                      <div className="bg-white/5 border border-white/10 rounded-xl p-3 text-center">
+                        <span className="block text-[9px] text-zinc-500 font-black uppercase tracking-widest">Pun.</span>
+                        <strong className="text-2xl text-red-400">{vencedor === 'azul' ? punicoesAzul : vencedor === 'vermelho' ? punicoesVermelho : punicoesAzul + ' x ' + punicoesVermelho}</strong>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 border-t border-white/10 text-xs">
+                  <div className="p-4 bg-blue-950/30 border-r border-white/10">
+                    <p className="font-black text-blue-300 uppercase truncate">{atletaAzul}</p>
+                    <p className="text-zinc-400 mt-1">{pontosAzul} pts | {vantagensAzul} vant. | {punicoesAzul} pun.</p>
+                  </div>
+                  <div className="p-4 bg-red-950/30">
+                    <p className="font-black text-red-300 uppercase truncate">{atletaVermelho}</p>
+                    <p className="text-zinc-400 mt-1">{pontosVermelho} pts | {vantagensVermelho} vant. | {punicoesVermelho} pun.</p>
+                  </div>
                 </div>
               </div>
 

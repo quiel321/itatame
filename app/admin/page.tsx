@@ -566,6 +566,12 @@ export default function AdminPage() {
                   >
                     {mercadoPagoConectado ? "Mercado Pago conectado" : "Conectar Mercado Pago"}
                   </Link>
+                  <Link
+                    href="/admin/financeiro"
+                    className="cursor-pointer text-center rounded-xl px-5 py-3 text-[10px] font-black uppercase tracking-widest border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20 transition-all"
+                  >
+                    Auditoria financeira
+                  </Link>
                 </div>
               </div>
 

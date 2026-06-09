@@ -25,8 +25,10 @@ function FormularioInscricao() {
   const [modalidade, setModalidade] = useState("");
   const [pesoReal, setPesoReal] = useState("");
   const [sexo, setSexo] = useState("Masculino");
-  const [fotoUrl, setFotoUrl] = useState(""); 
-  
+  const [fotoUrl, setFotoUrl] = useState("");
+  const [cpfAtleta, setCpfAtleta] = useState("");
+  const [emailAtleta, setEmailAtleta] = useState("");
+  const [inscricoesEncerradas, setInscricoesEncerradas] = useState(false);
   // Estados do Formulário
   const [categoria, setCategoria] = useState("");
   const [idade, setIdade] = useState("");
@@ -62,11 +64,16 @@ function FormularioInscricao() {
       }
 
       setUserId(authData.user.id);
+      setEmailAtleta(authData.user.email || "");
 
       if (eventoId) {
         const { data: ev } = await supabase.from("eventos").select("*").eq("id", eventoId).single();
         if (ev) {
           setEventoNome(ev.nome);
+          const dataFimInscricoes = ev.data_fim_inscricoes || ev.lote3_data_fim || ev.lote2_data_fim || ev.lote1_data_fim;
+          if (dataFimInscricoes && new Date() > new Date(dataFimInscricoes)) {
+            setInscricoesEncerradas(true);
+          }
           
           const agora = new Date();
           let valor = 0;
@@ -103,8 +110,9 @@ function FormularioInscricao() {
         setSexo(atleta.sexo || "Masculino"); 
         setCategoria(calcularCategoria(Number(atleta.peso)));
         setModalidade(atleta.modalidade || "");
-        setFotoUrl(atleta.foto_url || ""); 
-      }
+        setFotoUrl(atleta.foto_url || "");
+        setCpfAtleta(atleta.cpf || "");
+}
       
       setLoading(false);
     }
@@ -148,90 +156,137 @@ function FormularioInscricao() {
     }
   }
 
-  // 🔥 ALGORITMO CORE: BLINDAGEM E LINHA ÚNICA
   async function finalizarInscricao() {
     setProcessando(true);
     setErro("");
-    
+
     if (perfilIncompleto) {
-      setErro("Seu perfil está incompleto! Atualize seu cadastro antes de prosseguir.");
-      setProcessando(false); return;
+      setErro("Seu perfil está incompleto. Atualize seu cadastro antes de prosseguir.");
+      setProcessando(false);
+      return;
+    }
+
+    if (inscricoesEncerradas) {
+      setErro("As inscrições deste evento já foram encerradas pelo organizador.");
+      setProcessando(false);
+      return;
+    }
+
+    if (tipoInscricao === "absoluto") {
+      setErro("No Jiu-Jitsu, o absoluto só pode ser contratado junto com a categoria de peso.");
+      setProcessando(false);
+      return;
     }
 
     if (!termoAceito) {
       setErro("Você precisa aceitar os termos do evento.");
-      setProcessando(false); return;
+      setProcessando(false);
+      return;
     }
 
-    if (!idade || (tipoInscricao !== "absoluto" && !categoria)) {
-      setErro("Por favor, preencha sua Idade e Categoria.");
-      setProcessando(false); return;
+    if (!idade || !categoria) {
+      setErro("Por favor, preencha sua idade e categoria.");
+      setProcessando(false);
+      return;
     }
 
     const { data } = await supabase.auth.getUser();
-    
-    // ====================================================================
-    // 🛑 TRAVA ANTI-DUPLICIDADE: Impede que o atleta se inscreva 2x
-    // ====================================================================
+    const usuarioAtualId = data.user?.id || userId;
+
     const { data: inscricaoExistente } = await supabase
       .from("inscricoes")
       .select("id")
       .eq("evento_id", eventoId)
-      .eq("user_id", data.user?.id);
+      .or(`user_id.eq.${usuarioAtualId},atleta_id.eq.${atletaId || 0}`);
 
     if (inscricaoExistente && inscricaoExistente.length > 0) {
-      setErro("❌ Opa! Você já possui uma inscrição registrada para este campeonato. Vá até a aba 'Minhas Inscrições' no seu perfil.");
-      setProcessando(false); 
-      return; 
+      setErro("Você já possui uma inscrição registrada para este campeonato.");
+      setProcessando(false);
+      return;
     }
-    // ====================================================================
+
+    if (cpfAtleta) {
+      const { data: atletasMesmoCpf } = await supabase
+        .from("atletas")
+        .select("id")
+        .eq("cpf", cpfAtleta);
+
+      const idsMesmoCpf = (atletasMesmoCpf || []).map((atleta) => atleta.id).filter(Boolean);
+      if (idsMesmoCpf.length > 0) {
+        const { data: inscricaoMesmoCpf } = await supabase
+          .from("inscricoes")
+          .select("id")
+          .eq("evento_id", eventoId)
+          .in("atleta_id", idsMesmoCpf);
+
+        if (inscricaoMesmoCpf && inscricaoMesmoCpf.length > 0) {
+          setErro("Já existe inscrição neste evento para este CPF.");
+          setProcessando(false);
+          return;
+        }
+      }
+    }
+
+    if (emailAtleta) {
+      const { data: inscricaoMesmoEmail, error: erroEmail } = await supabase
+        .from("inscricoes")
+        .select("id")
+        .eq("evento_id", eventoId)
+        .eq("email", emailAtleta);
+
+      if (!erroEmail && inscricaoMesmoEmail && inscricaoMesmoEmail.length > 0) {
+        setErro("Já existe inscrição neste evento para este e-mail.");
+        setProcessando(false);
+        return;
+      }
+    }
 
     const isLiberado = valorTotal === 0;
-
-    // 🔥 PADRÃO OURO DE BANCO DE DADOS: Apenas UMA linha por inscrição
-    let catSalvar = categoria;
-    let absSalvar = false;
-
-    if (tipoInscricao === "peso") {
-      catSalvar = categoria;
-      absSalvar = false;
-    } else if (tipoInscricao === "absoluto") {
-      catSalvar = "Absoluto";
-      absSalvar = true;
-    } else if (tipoInscricao === "ambos") {
-      catSalvar = categoria;
-      absSalvar = true; // A mágica acontece aqui! A coluna booleana diz que ele vai lutar absoluto também
-    }
-
     const inscricaoParaSalvar = {
-      user_id: data.user?.id,
-      atleta_id: atletaId, 
-      atleta: nome, 
+      user_id: usuarioAtualId,
+      atleta_id: atletaId,
+      atleta: nome,
       equipe,
       faixa,
-      sexo, 
-      categoria: catSalvar, 
-      absoluto: absSalvar, 
+      sexo,
+      categoria,
+      absoluto: tipoInscricao === "ambos",
       idade,
       observacoes,
       peso: pesoReal,
       evento_id: eventoId,
-      pagamento_ok: isLiberado
+      pagamento_ok: isLiberado,
+      cpf: cpfAtleta || null,
+      email: emailAtleta || null
     };
 
-    // Salva uma única linha no banco, gerando uma única fatura e um único Passaporte!
-    const { error } = await supabase.from("inscricoes").insert([inscricaoParaSalvar]);
+    let { error } = await supabase.from("inscricoes").insert([inscricaoParaSalvar]);
 
-    if (error) { 
-      setErro("Erro ao registrar: " + error.message); 
-      setProcessando(false); return; 
+    if (error && (error.message.toLowerCase().includes("cpf") || error.message.toLowerCase().includes("email"))) {
+      const { cpf, email, ...payloadSemCamposNovos } = inscricaoParaSalvar;
+      const retry = await supabase.from("inscricoes").insert([payloadSemCamposNovos]);
+      error = retry.error;
     }
-    
-    // Incrementa cupom se usado
+
+    if (error) {
+      setErro("Erro ao registrar: " + error.message);
+      setProcessando(false);
+      return;
+    }
+
     if (desconto > 0 && cupom) {
-      const { data: cupomData } = await supabase.from("cupons").select("id, usos_atualmente").eq("codigo", cupom.trim().toUpperCase()).eq("evento_id", eventoId).maybeSingle();
+      const { data: cupomData } = await supabase
+        .from("cupons")
+        .select("id, usos_atualmente")
+        .eq("codigo", cupom.trim().toUpperCase())
+        .eq("evento_id", eventoId)
+        .maybeSingle();
+
       if (cupomData) {
-        await supabase.from("cupons").update({ usos_atualmente: (cupomData.usos_atualmente || 0) + 1 }).eq("id", cupomData.id);
+        await supabase
+          .from("cupons")
+          .update({ usos_atualmente: (cupomData.usos_atualmente || 0) + 1 })
+          .eq("id", cupomData.id);
       }
     }
 
@@ -239,7 +294,7 @@ function FormularioInscricao() {
     setProcessando(false);
 
     if (isLiberado) {
-      setInscricaoFeita(true); 
+      setInscricaoFeita(true);
     } else {
       router.push("/pagamento");
     }
@@ -278,6 +333,13 @@ function FormularioInscricao() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-5">
+          {inscricoesEncerradas && (
+            <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4">
+              <p className="text-red-400 font-bold text-xs uppercase tracking-widest mb-1">Inscrições encerradas</p>
+              <p className="text-red-100/70 text-xs">O organizador encerrou o período de inscrições deste evento.</p>
+            </div>
+          )}
+
           {perfilIncompleto && (
             <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4">
               <p className="text-yellow-500 font-bold text-xs uppercase tracking-widest mb-1">Perfil Incompleto</p>
@@ -316,8 +378,7 @@ function FormularioInscricao() {
                 <input type="text" value={sexo} disabled className="w-full bg-black/30 border border-transparent rounded-lg px-3 py-2.5 text-zinc-500 text-xs cursor-not-allowed" />
               </div>
             </div>
-            {tipoInscricao !== "absoluto" && (
-              <div>
+            <div>
                 <label className="text-[9px] text-zinc-500 font-bold uppercase block mb-1.5">Categoria de Peso Oficial</label>
                 <select value={categoria} onChange={(e) => setCategoria(e.target.value)} className="w-full bg-black border border-white/10 rounded-lg px-3 py-2.5 text-white text-xs appearance-none">
                   <option value="Pluma (Até 64.500 kg)">Pluma (Até 64.500 kg)</option>
@@ -327,7 +388,6 @@ function FormularioInscricao() {
                   <option value="Pesadíssimo (Acima de 85.5 kg)">Pesadíssimo (Acima de 85.5 kg)</option>
                 </select>
               </div>
-            )}
           </section>
 
           {/* PACOTE */}
@@ -339,23 +399,16 @@ function FormularioInscricao() {
               <label className={`block relative p-4 rounded-xl border cursor-pointer transition-all ${tipoInscricao === 'peso' ? 'border-red-500 bg-red-500/5' : 'border-white/5 bg-black'}`}>
                 <input type="radio" name="tipoInscricao" value="peso" checked={tipoInscricao === 'peso'} onChange={() => setTipoInscricao('peso')} className="absolute opacity-0 w-0 h-0" />
                 <div className="flex justify-between items-center">
-                  <h3 className="font-bold text-xs">Apenas Categoria de Peso</h3>
+                  <h3 className="font-bold text-xs">Categoria de Peso</h3>
                   <span className="font-black text-sm">{isGratis ? "GRÁTIS" : `R$ ${valorLoteAtual.toFixed(2)}`}</span>
                 </div>
               </label>
-
-              <label className={`block relative p-4 rounded-xl border cursor-pointer transition-all ${tipoInscricao === 'absoluto' ? 'border-red-500 bg-red-500/5' : 'border-white/5 bg-black'}`}>
-                <input type="radio" name="tipoInscricao" value="absoluto" checked={tipoInscricao === 'absoluto'} onChange={() => setTipoInscricao('absoluto')} className="absolute opacity-0 w-0 h-0" />
-                <div className="flex justify-between items-center">
-                  <h3 className="font-bold text-xs">Apenas Absoluto Livre</h3>
-                  <span className="font-black text-sm">{isGratis ? "GRÁTIS" : `R$ ${valorLoteAtual.toFixed(2)}`}</span>
-                </div>
-              </label>
+
 
               <label className={`block relative p-4 rounded-xl border cursor-pointer transition-all ${tipoInscricao === 'ambos' ? 'border-red-500 bg-red-500/5' : 'border-white/5 bg-black'}`}>
                 <input type="radio" name="tipoInscricao" value="ambos" checked={tipoInscricao === 'ambos'} onChange={() => setTipoInscricao('ambos')} className="absolute opacity-0 w-0 h-0" />
                 <div className="flex justify-between items-center">
-                  <h3 className="font-bold text-xs">Peso + Absoluto Livre <span className="bg-amber-500/20 text-amber-500 text-[8px] font-black uppercase px-2 py-0.5 rounded ml-2">Dupla Oportunidade</span></h3>
+                  <h3 className="font-bold text-xs">Categoria de Peso + Absoluto <span className="bg-amber-500/20 text-amber-500 text-[8px] font-black uppercase px-2 py-0.5 rounded ml-2">Dupla Oportunidade</span></h3>
                   <span className="font-black text-sm">{isGratis ? "GRÁTIS" : `R$ ${(valorLoteAtual + 50).toFixed(2)}`}</span>
                 </div>
               </label>
@@ -402,7 +455,7 @@ function FormularioInscricao() {
 
             {erro && <div className="mb-4 bg-red-500/10 border border-red-500/20 text-red-400 text-[10px] rounded-lg p-3 text-center font-bold">❌ {erro}</div>}
 
-            <button disabled={processando || perfilIncompleto || (tipoInscricao !== 'absoluto' && !categoria) || !termoAceito} className="cursor-pointer w-full bg-red-600 hover:bg-red-500 text-white font-black uppercase tracking-widest text-[11px] py-4 rounded-xl shadow-[0_0_15px_rgba(239,68,68,0.3)] transition-all disabled:opacity-50 flex items-center justify-center" onClick={finalizarInscricao}>
+            <button disabled={processando || perfilIncompleto || !categoria || !termoAceito || inscricoesEncerradas} className="cursor-pointer w-full bg-red-600 hover:bg-red-500 text-white font-black uppercase tracking-widest text-[11px] py-4 rounded-xl shadow-[0_0_15px_rgba(239,68,68,0.3)] transition-all disabled:opacity-50 flex items-center justify-center" onClick={finalizarInscricao}>
               {processando ? "Salvando Inscrição..." : "Confirmar Inscrição Oficial"}
             </button>
           </div>

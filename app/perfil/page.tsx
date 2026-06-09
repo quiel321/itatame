@@ -78,6 +78,8 @@ export default function PerfilPage() {
   const [stats, setStats] = useState({ eventos: 0, ouros: 0, pratas: 0, bronzes: 0, wo: 0 });
 
   const [minhasInscricoes, setMinhasInscricoes] = useState<any[]>([]);
+  const [editandoInscricao, setEditandoInscricao] = useState<any>(null);
+  const [salvandoInscricao, setSalvandoInscricao] = useState(false);
 
   const [minhaEquipe, setMinhaEquipe] = useState<any[]>([]);
 
@@ -195,18 +197,34 @@ export default function PerfilPage() {
         applicationServerKey: urlBase64ToUint8Array(vapidKey.trim()) // o .trim() remove espaços vazios acidentais!
       });
 
-      // 5. Salva no Supabase
-      const { error } = await supabase.from("assinaturas_push").upsert({
-        user_id: userId,
-        subscription: subscription.toJSON()
-      }, { onConflict: 'user_id' });
+      // 5. Salva no Supabase (MÉTODO BLINDADO CONTRA ERRO DE DUPLICIDADE)
+      const subData = subscription.toJSON();
+      
+      const { data: jaExiste } = await supabase
+        .from("assinaturas_push")
+        .select("id")
+        .eq("user_id", userId)
+        .maybeSingle();
 
-      if (error) throw error;
+      if (jaExiste) {
+        // Já tem? Atualiza com a chave nova!
+        const { error: errUpdate } = await supabase
+          .from("assinaturas_push")
+          .update({ subscription: subData })
+          .eq("id", jaExiste.id);
+        if (errUpdate) throw errUpdate;
+      } else {
+        // Não tem? Cria do zero!
+        const { error: errInsert } = await supabase
+          .from("assinaturas_push")
+          .insert({ user_id: userId, subscription: subData });
+        if (errInsert) throw errInsert;
+      }
+
       alert("✅ SUCESSO ABSOLUTO! Você receberá os avisos de luta.");
 
     } catch (err: any) {
       console.error("Erro completo:", err);
-      // Mostra o erro real para facilitar suporte:
       alert("ERRO REAL DETECTADO: " + (err.message || err.name || "Desconhecido. Verifique se não está em aba anônima."));
     }
   };
@@ -280,7 +298,7 @@ async function carregarDadosCompletos() {
 
       .from("inscricoes")
 
-      .select(`id, evento_id, user_id, categoria, pagamento_ok, pesagem_ok, eventos (nome, data_evento)`)
+      .select(`id, evento_id, user_id, categoria, absoluto, pagamento_ok, pesagem_ok, eventos (nome, data_evento, data_inicio_checagem, data_fim_checagem, data_divulgacao_chaves)`)
 
       .in("user_id", idsFamilia);
 
@@ -382,7 +400,7 @@ if (perfilData) {
 
           if (alunosIds.length > 0) {
 
-            const { data: inscData } = await supabase.from("inscricoes").select(`id, evento_id, user_id, categoria, pagamento_ok, pesagem_ok, eventos (nome, data_evento)`).in("user_id", alunosIds);
+            const { data: inscData } = await supabase.from("inscricoes").select(`id, evento_id, user_id, categoria, absoluto, pagamento_ok, pesagem_ok, eventos (nome, data_evento, data_inicio_checagem, data_fim_checagem, data_divulgacao_chaves)`).in("user_id", alunosIds);
 
             if (inscData) inscricoesAlunos = inscData;
 
@@ -711,11 +729,14 @@ if (perfilData) {
 
 
   async function sairConta() {
-
+    // 1. Encerra a sessão real no banco
     await supabase.auth.signOut();
-
+    
+    // 2. Limpa TODOS os rastros (Mesário, Admin, etc) do navegador para matar o fantasma
+    localStorage.clear();
+    
+    // 3. Volta para o login limpo
     window.location.href = "/login";
-
   }
 
 
@@ -811,6 +832,72 @@ if (perfilData) {
   });
 
 
+
+  const categoriasPesoPermitidas = [
+    "Pluma (Até 64.500 kg)",
+    "Leve (Até 72.500 kg)",
+    "Meio Pesado (Até 80.000 kg)",
+    "Super Pesado (Até 85.500 kg)",
+    "Pesadíssimo (Acima de 85.5 kg)"
+  ];
+
+  const checagemAbertaParaEdicao = (insc: any) => {
+    const evento = insc?.eventos;
+    const agora = new Date();
+    const inicio = evento?.data_inicio_checagem ? new Date(evento.data_inicio_checagem) : null;
+    const fim = evento?.data_fim_checagem ? new Date(evento.data_fim_checagem) : null;
+    if (!inicio && !fim) return true;
+    return Boolean((!inicio || agora >= inicio) && (!fim || agora <= fim));
+  };
+
+  async function abrirEditorInscricao(insc: any) {
+    setErro("");
+    if (!checagemAbertaParaEdicao(insc)) {
+      setErro("A edição da inscrição fica disponível apenas no período de checagem definido pelo organizador.");
+      return;
+    }
+
+    const { count } = await supabase
+      .from("chaves")
+      .select("id", { count: "exact", head: true })
+      .eq("evento_id", insc.evento_id);
+
+    if ((count || 0) > 0) {
+      setErro("As chaves oficiais deste evento já foram geradas. Procure a organização para qualquer ajuste.");
+      return;
+    }
+
+    setEditandoInscricao({ ...insc, categoriaNova: insc.categoria || categoriasPesoPermitidas[0], absolutoNovo: Boolean(insc.absoluto) });
+  }
+
+  async function salvarEdicaoInscricao() {
+    if (!editandoInscricao) return;
+    setSalvandoInscricao(true);
+    setErro("");
+    setMensagem("");
+
+    const payload = {
+      categoria: editandoInscricao.categoriaNova,
+      absoluto: Boolean(editandoInscricao.absolutoNovo)
+    };
+
+    const { error } = await supabase
+      .from("inscricoes")
+      .update(payload)
+      .eq("id", editandoInscricao.id)
+      .eq("user_id", editandoInscricao.user_id || userId);
+
+    if (error) {
+      setErro("Não foi possível atualizar a inscrição: " + error.message);
+      setSalvandoInscricao(false);
+      return;
+    }
+
+    setMinhasInscricoes((prev) => prev.map((insc) => insc.id === editandoInscricao.id ? { ...insc, categoria: payload.categoria, absoluto: payload.absoluto } : insc));
+    setMensagem("Inscrição atualizada. Confira a checagem do evento novamente.");
+    setEditandoInscricao(null);
+    setSalvandoInscricao(false);
+  }
 
   const formatarData = (dataStr: string) => {
 
@@ -951,9 +1038,9 @@ if (perfilData) {
                   <span className="flex items-center gap-3"><svg className="w-3.5 h-3.5 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg> Lista de Alunos</span>
 
                   <span className="bg-zinc-800 text-zinc-400 text-[9px] px-1.5 py-0.5 rounded-full pointer-events-none">{totalAlunos}</span>
-
+                  
                 </button>
-
+                
               </>
 
             ) : (
@@ -2086,6 +2173,7 @@ if (perfilData) {
                         <div className="flex items-center gap-2 mt-2">
 
                           <span className="bg-black border border-white/5 text-zinc-300 text-[10px] font-bold px-3 py-1.5 rounded-md">Categoria: <strong className="text-white">{insc.categoria}</strong></span>
+                          {insc.absoluto && <span className="bg-yellow-500/10 border border-yellow-500/20 text-yellow-300 text-[10px] font-bold px-3 py-1.5 rounded-md">Absoluto incluso</span>}
 
                         </div>
 
@@ -2094,6 +2182,11 @@ if (perfilData) {
 
 
                       <div className="w-full md:w-auto flex flex-col gap-2.5 shrink-0 md:min-w-[220px]">
+
+                        <button onClick={() => abrirEditorInscricao(insc)} className="cursor-pointer w-full bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-400/30 text-cyan-200 px-4 py-2.5 rounded-xl font-black uppercase tracking-widest transition-colors text-[9px] text-center flex items-center justify-center gap-1.5">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                          Editar Inscrição
+                        </button>
 
                         {!insc.pagamento_ok ? (
 
@@ -2362,6 +2455,44 @@ if (perfilData) {
         </div>
 
       </div>
+
+
+      {editandoInscricao && (
+        <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-[#0a0a0e] border border-white/10 rounded-2xl p-5 shadow-2xl">
+            <div className="flex items-start justify-between gap-4 mb-5">
+              <div>
+                <p className="text-cyan-400 text-[10px] font-black uppercase tracking-widest mb-1">Ajuste de checagem</p>
+                <h3 className="text-xl font-black text-white">Editar Inscrição</h3>
+                <p className="text-zinc-500 text-xs mt-1">Use para corrigir categoria antes da geração oficial das chaves.</p>
+              </div>
+              <button onClick={() => setEditandoInscricao(null)} className="text-zinc-500 hover:text-white text-xl leading-none">?</button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-[10px] text-zinc-500 font-black uppercase tracking-widest mb-1.5">Categoria de peso</label>
+                <select value={editandoInscricao.categoriaNova} onChange={(event) => setEditandoInscricao({ ...editandoInscricao, categoriaNova: event.target.value })} className="w-full bg-black border border-white/10 rounded-xl px-3 py-3 text-white text-xs outline-none focus:border-cyan-400">
+                  {categoriasPesoPermitidas.map((categoria) => <option key={categoria} value={categoria}>{categoria}</option>)}
+                </select>
+              </div>
+
+              <label className="flex items-start gap-3 bg-black/50 border border-white/10 rounded-xl p-3 cursor-pointer">
+                <input type="checkbox" checked={Boolean(editandoInscricao.absolutoNovo)} onChange={(event) => setEditandoInscricao({ ...editandoInscricao, absolutoNovo: event.target.checked })} className="mt-0.5 w-4 h-4 accent-yellow-500" />
+                <span>
+                  <strong className="block text-white text-xs uppercase tracking-widest">Manter no Absoluto</strong>
+                  <span className="block text-zinc-500 text-[10px] mt-1 leading-relaxed">O absoluto continua permitido somente junto com uma categoria de peso.</span>
+                </span>
+              </label>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 mt-6">
+              <button onClick={() => setEditandoInscricao(null)} className="cursor-pointer bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-xl py-3 text-[10px] font-black uppercase tracking-widest">Cancelar</button>
+              <button onClick={salvarEdicaoInscricao} disabled={salvandoInscricao} className="cursor-pointer disabled:opacity-60 bg-cyan-500 hover:bg-cyan-400 text-black rounded-xl py-3 text-[10px] font-black uppercase tracking-widest">{salvandoInscricao ? "Salvando..." : "Salvar"}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
 
