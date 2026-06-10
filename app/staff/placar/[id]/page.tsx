@@ -154,6 +154,7 @@ export default function PlacarMesarioDB() {
 
   const processarFimDeLuta = async (vencedorLado: "azul" | "vermelho" | "empate", metodo: string) => {
     if (!lutaAtual || vencedorLado === "empate") return;
+    if (lutaAtual.status_luta === "concluida" || lutaAtual.vencedor) return;
 
     const nomeVencedor = vencedorLado === "azul" ? lutaAtual.atleta_1 : lutaAtual.atleta_2;
     const equipeVencedor = vencedorLado === "azul" ? lutaAtual.equipe_1 : lutaAtual.equipe_2;

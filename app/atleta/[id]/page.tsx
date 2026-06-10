@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
+import { calcularResultadosChaves } from "@/app/lib/ranking-eventos";
 
 export default function PerfilPublicoAtleta() {
   const params = useParams();
@@ -12,6 +13,7 @@ export default function PerfilPublicoAtleta() {
   const [loading, setLoading] = useState(true);
   const [atleta, setAtleta] = useState<any>(null);
   const [historico, setHistorico] = useState<any[]>([]);
+  const [estatisticas, setEstatisticas] = useState({ ouro: 0, prata: 0, bronze: 0, lutas: 0 });
   const [copiado, setCopiado] = useState(false);
 
   useEffect(() => {
@@ -27,13 +29,14 @@ export default function PerfilPublicoAtleta() {
 
       if (atlData) {
         setAtleta(atlData);
+        setEstatisticas({ ouro: atlData.ouro || 0, prata: atlData.prata || 0, bronze: atlData.bronze || 0, lutas: 0 });
 
         // 2. Busca o histórico de eventos que ele participou (Pagos)
         const { data: inscData } = await supabase
           .from("inscricoes")
           .select(`
-            id, 
-            categoria, 
+            id,
+            categoria,
             eventos (nome, data_evento, cidade, estado, banner_url)
           `)
           .eq("user_id", userId)
@@ -41,11 +44,29 @@ export default function PerfilPublicoAtleta() {
           .order("created_at", { ascending: false });
 
         if (inscData) setHistorico(inscData);
+
+        const { data: lutasAtletaData } = await supabase
+          .from("chaves")
+          .select("id, evento_id, categoria, faixa, id_visual, proxima_luta, atleta_1, atleta_2, atleta_1_id, atleta_2_id, equipe_1, equipe_2, vencedor, vencedor_id, status_luta, metodo_vitoria")
+          .or(`atleta_1_id.eq.${atlData.id},atleta_2_id.eq.${atlData.id},vencedor_id.eq.${atlData.id}`)
+          .or("status_luta.eq.concluida,vencedor.not.is.null,vencedor_id.not.is.null");
+
+        const resultadoChaves = calcularResultadosChaves((lutasAtletaData || []) as any[]);
+        const estatisticaAtleta = resultadoChaves.atletas.find((item) => item.atleta_id && String(item.atleta_id) === String(atlData.id));
+        const numeroAtleta = (valor: any) => Number(valor || 0);
+        const vitoriasSalvas = numeroAtleta(atlData.vitorias ?? atlData.vitorias_n ?? atlData["vit\u00f3rias"] ?? atlData["vit\u00f3rias_n"]);
+
+        setEstatisticas({
+          ouro: Math.max(numeroAtleta(estatisticaAtleta?.ouro), numeroAtleta(atlData.ouro)),
+          prata: Math.max(numeroAtleta(estatisticaAtleta?.prata), numeroAtleta(atlData.prata)),
+          bronze: Math.max(numeroAtleta(estatisticaAtleta?.bronze), numeroAtleta(atlData.bronze)),
+          lutas: Math.max(numeroAtleta(estatisticaAtleta?.lutas), numeroAtleta(atlData.lutas), vitoriasSalvas + numeroAtleta(atlData.derrotas)),
+        });
       }
-      
+
       setLoading(false);
     }
-    
+
     carregarPerfil();
   }, [userId]);
 
@@ -84,7 +105,7 @@ export default function PerfilPublicoAtleta() {
 
   if (!atleta) return (
     <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center p-6 text-center">
-      <span className="text-4xl mb-3 opacity-30">🥋</span>
+      <span className="text-4xl mb-3 opacity-30">!</span>
       <h2 className="text-lg font-black text-white mb-1">Atleta Não Encontrado</h2>
       <p className="text-zinc-500 text-xs mb-6 max-w-sm">O perfil que você está tentando acessar não existe ou foi removido.</p>
       <button onClick={() => router.push("/")} className="bg-cyan-600 hover:bg-cyan-500 text-white font-black px-6 py-2.5 rounded-lg uppercase tracking-widest text-[10px] transition-colors">Ir para a Home</button>
@@ -95,21 +116,21 @@ export default function PerfilPublicoAtleta() {
 
   return (
     <main className="min-h-screen bg-[#050505] font-sans relative overflow-x-hidden selection:bg-cyan-500/30 pb-20">
-      
+
       {/* 🌟 EFEITOS DE FUNDO SUTIS */}
       <div className="absolute top-0 left-0 w-full h-[300px] bg-gradient-to-b from-cyan-900/10 to-transparent pointer-events-none"></div>
       <div className="absolute top-[-50px] left-1/2 -translate-x-1/2 w-[400px] h-[200px] bg-cyan-500/5 blur-[80px] rounded-full pointer-events-none"></div>
 
       {/* CONTAINER "APP FEEL" (max-w-2xl para ficar estreito e focado) */}
       <div className="max-w-2xl mx-auto relative z-10 px-4 sm:px-6 pt-6">
-        
+
         {/* CABEÇALHO / VOLTAR */}
         <div className="flex justify-between items-center mb-6">
           <button onClick={() => router.push("/")} className="text-zinc-500 hover:text-white flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest transition-colors">
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"></path></svg>
             iTatame
           </button>
-          
+
           <button onClick={compartilharPerfil} className={`flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full transition-all border ${copiado ? 'bg-green-500/10 text-green-400 border-green-500/30' : 'bg-white/5 text-zinc-300 border-white/5 hover:bg-white/10 hover:text-white'}`}>
             {copiado ? (
               <><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"></path></svg> Copiado!</>
@@ -122,7 +143,7 @@ export default function PerfilPublicoAtleta() {
         {/* 🏆 CARD PRINCIPAL DO ATLETA */}
         <div className="bg-[#0b1320] border border-cyan-500/10 rounded-2xl p-5 md:p-6 shadow-xl relative overflow-hidden mb-6">
           <div className="flex flex-col md:flex-row items-center md:items-start gap-4 md:gap-6 relative z-10">
-            
+
             {/* FOTO COM GLOW DA FAIXA */}
             <div className={`w-28 h-28 md:w-32 md:h-32 rounded-full shrink-0 relative flex items-center justify-center bg-zinc-900 border-[3px] ${estiloFaixa.border} ${estiloFaixa.glow}`}>
               {atleta.foto_url ? (
@@ -144,7 +165,7 @@ export default function PerfilPublicoAtleta() {
               <h1 className="text-2xl md:text-3xl font-black text-white leading-tight tracking-tight mb-1">
                 {atleta.nome}
               </h1>
-              
+
               <h2 className="text-xs md:text-sm text-zinc-400 font-medium flex flex-col md:flex-row items-center md:items-start gap-1 md:gap-2 mb-4">
                 <span className="text-zinc-200 font-bold">{atleta.equipe || "Equipe Não Informada"}</span>
                 {atleta.academia && <span className="hidden md:inline text-zinc-600">•</span>}
@@ -178,21 +199,26 @@ export default function PerfilPublicoAtleta() {
           <svg className="w-3.5 h-3.5 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"></path></svg>
           Mural de Conquistas
         </h3>
-        <div className="grid grid-cols-3 gap-2 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-8">
           <div className="bg-gradient-to-br from-yellow-500/10 to-[#050505] border border-yellow-500/20 rounded-xl p-3 flex flex-col items-center justify-center relative overflow-hidden shadow-sm">
-            <div className="absolute -right-2 -top-1 text-5xl opacity-10 pointer-events-none">🥇</div>
-            <span className="text-3xl font-black text-yellow-500 drop-shadow-sm">{atleta.ouro || 0}</span>
+
+            <span className="text-3xl font-black text-yellow-500 drop-shadow-sm">{estatisticas.ouro}</span>
             <span className="text-[9px] font-black text-yellow-600/80 uppercase tracking-widest mt-1">Ouros</span>
           </div>
           <div className="bg-gradient-to-br from-zinc-300/10 to-[#050505] border border-zinc-400/20 rounded-xl p-3 flex flex-col items-center justify-center relative overflow-hidden shadow-sm">
-            <div className="absolute -right-2 -top-1 text-5xl opacity-10 pointer-events-none filter grayscale">🥈</div>
-            <span className="text-3xl font-black text-zinc-300 drop-shadow-sm">{atleta.prata || 0}</span>
+
+            <span className="text-3xl font-black text-zinc-300 drop-shadow-sm">{estatisticas.prata}</span>
             <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest mt-1">Pratas</span>
           </div>
           <div className="bg-gradient-to-br from-orange-700/10 to-[#050505] border border-orange-700/20 rounded-xl p-3 flex flex-col items-center justify-center relative overflow-hidden shadow-sm">
-            <div className="absolute -right-2 -top-1 text-5xl opacity-10 pointer-events-none sepia">🥉</div>
-            <span className="text-3xl font-black text-orange-500 drop-shadow-sm">{atleta.bronze || 0}</span>
+
+            <span className="text-3xl font-black text-orange-500 drop-shadow-sm">{estatisticas.bronze}</span>
             <span className="text-[9px] font-black text-orange-700/80 uppercase tracking-widest mt-1">Bronzes</span>
+          </div>
+          <div className="bg-gradient-to-br from-cyan-500/10 to-[#050505] border border-cyan-500/20 rounded-xl p-3 flex flex-col items-center justify-center relative overflow-hidden shadow-sm">
+            <div className="absolute -right-1 -top-1 text-5xl opacity-10 pointer-events-none font-black">L</div>
+            <span className="text-3xl font-black text-cyan-400 drop-shadow-sm">{estatisticas.lutas}</span>
+            <span className="text-[9px] font-black text-cyan-600/80 uppercase tracking-widest mt-1">Lutas</span>
           </div>
         </div>
 
@@ -201,7 +227,7 @@ export default function PerfilPublicoAtleta() {
           <svg className="w-3.5 h-3.5 text-cyan-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
           Histórico de Eventos
         </h3>
-        
+
         <div className="space-y-2">
           {historico.length === 0 ? (
             <div className="bg-black/30 border border-dashed border-white/5 rounded-xl p-6 text-center">
@@ -210,12 +236,12 @@ export default function PerfilPublicoAtleta() {
           ) : (
             historico.map((insc, index) => (
               <div key={index} className="bg-black/40 border border-white/5 rounded-xl p-3 flex items-center gap-3 hover:bg-white/5 transition-colors">
-                
+
                 <div className="w-12 h-12 bg-zinc-900 rounded-lg overflow-hidden shrink-0 border border-white/5 relative">
                   {insc.eventos?.banner_url ? (
                     <img src={insc.eventos.banner_url} className="w-full h-full object-cover opacity-70" />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center text-sm opacity-30">🥋</div>
+                    <div className="w-full h-full flex items-center justify-center text-sm opacity-30">IT</div>
                   )}
                 </div>
 

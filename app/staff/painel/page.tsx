@@ -373,8 +373,9 @@ export default function PainelMesario() {
     setAcaoId(null);
   };
 
-  const fazerLogout = () => {
+  const fazerLogout = async () => {
     localStorage.removeItem('itatame_staff_session');
+    await supabase.auth.signOut();
     router.replace('/staff/login');
   };
 

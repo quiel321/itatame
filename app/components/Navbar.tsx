@@ -11,20 +11,29 @@ export default function Navbar() {
   useEffect(() => {
     async function checkAuth() {
       const { data: { session } } = await supabase.auth.getSession();
-      
-      if (session?.user) {
-        const { data } = await supabase.from("atletas").select("nome").eq("user_id", session.user.id).single();
-        if (data && data.nome) {
-          setUserName(data.nome.split(" ")[0]);
-        } else {
-          setUserName("Atleta");
-        }
-      } else {
+
+      if (!session?.user || session.user.is_anonymous) {
         setUserName(null);
+        setLoading(false);
+        return;
       }
+
+      const { data } = await supabase
+        .from("atletas")
+        .select("nome")
+        .eq("user_id", session.user.id)
+        .maybeSingle();
+
+      setUserName(data?.nome ? data.nome.split(" ")[0] : null);
       setLoading(false);
     }
+
     checkAuth();
+    const { data: listener } = supabase.auth.onAuthStateChange(() => {
+      void checkAuth();
+    });
+
+    return () => listener.subscription.unsubscribe();
   }, []);
 
   const linkConta = userName ? "/perfil" : "/login";

@@ -149,102 +149,126 @@ export default function ChavesPage() {
     const lutaAtual = lutas.find(l => l.id === idBanco);
     if (!lutaAtual) return;
 
-    if (lutaAtual.vencedor === nomeVenc) {
-      console.log("Clique ignorado: Atleta já é o vencedor desta luta.");
-      return; 
-    }
-
-    await supabase.from("chaves").update({ vencedor: nomeVenc }).eq("id", idBanco);
-
+    const normalizar = (valor: string | null | undefined) => limparNome(valor || "").trim().toUpperCase();
     const nome1 = limparNome(lutaAtual.atleta_1);
     const nome2 = limparNome(lutaAtual.atleta_2);
-    
-    const ganhouPorWO = (nome1 === "" || nome2 === "");
-    const isFinal = !lutaAtual.proxima_luta || String(lutaAtual.id_visual) === "999";
-    const isSemifinal = String(lutaAtual.proxima_luta) === "999"; 
-    const vencedorAntigo = limparNome(lutaAtual.vencedor);
+    const id1 = lutaAtual.atleta_1_id || null;
+    const id2 = lutaAtual.atleta_2_id || null;
 
-    const updateEstatistica = async (nomeAtleta: string, coluna: string, incremento: number) => {
-      if (!nomeAtleta) return;
-      const { data } = await supabase.from("atletas").select(`id, ${coluna}`).ilike("nome", `%${nomeAtleta}%`).limit(1).single();
+    const idPorNomeNaLuta = (luta: any, nome: string | null | undefined) => {
+      const alvo = normalizar(nome);
+      if (!alvo) return null;
+      if (normalizar(luta.atleta_1) === alvo) return luta.atleta_1_id || null;
+      if (normalizar(luta.atleta_2) === alvo) return luta.atleta_2_id || null;
+      return null;
+    };
+
+    const nomeVencNormalizado = normalizar(nomeVenc);
+    const idVencedor = normalizar(lutaAtual.atleta_1) === nomeVencNormalizado ? id1 : normalizar(lutaAtual.atleta_2) === nomeVencNormalizado ? id2 : null;
+    if (!idVencedor) return;
+
+    const idPerdedor = String(idVencedor) === String(id1) ? id2 : id1;
+    const vencedorAntigo = limparNome(lutaAtual.vencedor);
+    const idVencedorAntigo = lutaAtual.vencedor_id || idPorNomeNaLuta(lutaAtual, vencedorAntigo);
+
+    if (idVencedorAntigo && String(idVencedorAntigo) === String(idVencedor)) {
+      console.log("Clique ignorado: atleta ja e o vencedor desta luta.");
+      return;
+    }
+
+    const ganhouPorWO = !nome1 || !nome2 || !id1 || !id2;
+    const isFinal = !lutaAtual.proxima_luta || String(lutaAtual.id_visual) === "999";
+    const isSemifinal = String(lutaAtual.proxima_luta) === "999";
+
+    const updateEstatistica = async (idAtletaNum: number | string | null, coluna: string, incremento: number) => {
+      if (!idAtletaNum) return;
+      const { data } = await supabase.from("atletas").select(`id, ${coluna}`).eq("id", idAtletaNum).single();
       if (data) {
         const valorAtual = (data as any)[coluna] || 0;
-        const novoValor = Math.max(0, valorAtual + incremento);
-        await supabase.from("atletas").update({ [coluna]: novoValor }).eq("id", (data as any).id);
+        await supabase.from("atletas").update({ [coluna]: Math.max(0, valorAtual + incremento) }).eq("id", (data as any).id);
       }
     };
-    
-    if (!vencedorAntigo) {
-      if (ganhouPorWO) await updateEstatistica(nomeVenc, "vitorias_wo", 1);
-      
+
+    await supabase.from("chaves").update({
+      vencedor: nomeVenc,
+      vencedor_id: idVencedor,
+      status_luta: "concluida",
+      metodo_vitoria: ganhouPorWO ? "wo" : (lutaAtual.metodo_vitoria || "manual"),
+      finalizada_em: lutaAtual.finalizada_em || new Date().toISOString(),
+    }).eq("id", idBanco);
+
+    if (!idVencedorAntigo) {
+      if (ganhouPorWO) await updateEstatistica(idVencedor, "vitorias_wo", 1);
+
       if (isFinal) {
-        await updateEstatistica(nomeVenc, "ouro", 1); 
-        const nomePerdedor = nomeVenc.toUpperCase() === nome1.toUpperCase() ? nome2 : nome1;
-        await updateEstatistica(nomePerdedor, "prata", 1); 
+        await updateEstatistica(idVencedor, "ouro", 1);
+        await updateEstatistica(idPerdedor, "prata", 1);
       }
 
       if (isSemifinal) {
-        const nomePerdedor = nomeVenc.toUpperCase() === nome1.toUpperCase() ? nome2 : nome1;
-        if (nomePerdedor && nomePerdedor !== "") await updateEstatistica(nomePerdedor, "bronze", 1); 
+        await updateEstatistica(idPerdedor, "bronze", 1);
       }
-    } 
-    else if (vencedorAntigo !== nomeVenc) {
+    } else if (String(idVencedorAntigo) !== String(idVencedor)) {
       if (ganhouPorWO) {
-        await updateEstatistica(vencedorAntigo, "vitorias_wo", -1);
-        await updateEstatistica(nomeVenc, "vitorias_wo", 1);
+        await updateEstatistica(idVencedorAntigo, "vitorias_wo", -1);
+        await updateEstatistica(idVencedor, "vitorias_wo", 1);
       }
 
       if (isFinal) {
-        await updateEstatistica(vencedorAntigo, "ouro", -1); 
-        await updateEstatistica(vencedorAntigo, "prata", 1); 
-        
-        await updateEstatistica(nomeVenc, "prata", -1); 
-        await updateEstatistica(nomeVenc, "ouro", 1);  
+        await updateEstatistica(idVencedorAntigo, "ouro", -1);
+        await updateEstatistica(idVencedorAntigo, "prata", 1);
+        await updateEstatistica(idVencedor, "prata", -1);
+        await updateEstatistica(idVencedor, "ouro", 1);
       }
 
       if (isSemifinal) {
-        if (vencedorAntigo !== "") await updateEstatistica(vencedorAntigo, "bronze", 1);
-        if (nomeVenc !== "") await updateEstatistica(nomeVenc, "bronze", -1);
+        await updateEstatistica(idVencedorAntigo, "bronze", 1);
+        await updateEstatistica(idVencedor, "bronze", -1);
       }
     }
 
     if (lutaAtual.proxima_luta) {
       const proximaLuta = lutas.find(l => String(l.id_visual) === String(lutaAtual.proxima_luta));
       if (proximaLuta) {
-        
         const isImpar = Number(idVisual) % 2 !== 0;
-        let updateData: any = isImpar ? { atleta_1: nomeVenc, equipe_1: equipeVenc } : { atleta_2: nomeVenc, equipe_2: equipeVenc };
+        let updateData: any = isImpar
+          ? { atleta_1: nomeVenc, equipe_1: equipeVenc, atleta_1_id: idVencedor }
+          : { atleta_2: nomeVenc, equipe_2: equipeVenc, atleta_2_id: idVencedor };
 
-        if (proximaLuta.vencedor) {
-            const proxVencedor = limparNome(proximaLuta.vencedor);
-            const proxNome1 = limparNome(proximaLuta.atleta_1);
-            const proxNome2 = limparNome(proximaLuta.atleta_2);
-            const proxPerdedor = proxVencedor === proxNome1 ? proxNome2 : proxNome1;
-            const proxGanhouPorWO = (proxNome1 === "" || proxNome2 === "");
-            
-            const isProxFinal = String(proximaLuta.id_visual) === "999";
-            const isProxSemi = String(proximaLuta.proxima_luta) === "999";
+        if (proximaLuta.vencedor || proximaLuta.vencedor_id) {
+          const proxVencedor = limparNome(proximaLuta.vencedor);
+          const proxVencedorId = proximaLuta.vencedor_id || idPorNomeNaLuta(proximaLuta, proxVencedor);
+          const proxId1 = proximaLuta.atleta_1_id || null;
+          const proxId2 = proximaLuta.atleta_2_id || null;
+          const proxPerdedorId = proxVencedorId && String(proxVencedorId) === String(proxId1) ? proxId2 : proxId1;
+          const proxGanhouPorWO = !limparNome(proximaLuta.atleta_1) || !limparNome(proximaLuta.atleta_2) || !proxId1 || !proxId2;
+          const isProxFinal = !proximaLuta.proxima_luta || String(proximaLuta.id_visual) === "999";
+          const isProxSemi = String(proximaLuta.proxima_luta) === "999";
 
-            if (proxGanhouPorWO && proxVencedor !== "") {
-                await updateEstatistica(proxVencedor, "vitorias_wo", -1);
-            }
+          if (proxGanhouPorWO) await updateEstatistica(proxVencedorId, "vitorias_wo", -1);
 
-            if (isProxFinal) {
-               if (proxVencedor !== "") await updateEstatistica(proxVencedor, "ouro", -1);
-               if (proxPerdedor !== "") await updateEstatistica(proxPerdedor, "prata", -1);
-            } else if (isProxSemi) {
-               if (proxPerdedor !== "") await updateEstatistica(proxPerdedor, "bronze", -1);
-            }
+          if (isProxFinal) {
+            await updateEstatistica(proxVencedorId, "ouro", -1);
+            await updateEstatistica(proxPerdedorId, "prata", -1);
+          } else if (isProxSemi) {
+            await updateEstatistica(proxPerdedorId, "bronze", -1);
+          }
 
-            updateData.vencedor = null; 
+          updateData = {
+            ...updateData,
+            vencedor: null,
+            vencedor_id: null,
+            status_luta: null,
+            metodo_vitoria: null,
+            finalizada_em: null,
+          };
         }
 
         await supabase.from("chaves").update(updateData).eq("id", proximaLuta.id);
       }
     }
-    await carregarChaves(); 
+    await carregarChaves();
   }
-
   const getAtletaDaPrimeiraFase = (posicaoColuna: number, slot: number, lado: "esquerda" | "direita") => {
     const idLutaVisual = getFase1VisualId(posicaoColuna, lado);
     const luta = lutas.find(l => String(l.id_visual) === String(idLutaVisual));

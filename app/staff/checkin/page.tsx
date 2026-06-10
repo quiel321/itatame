@@ -61,22 +61,64 @@ export default function CheckinOperador() {
 
     // 2. BLOQUEIO DA CARTEIRINHA DIGITAL (Evita fraude de Instagram)
     if (textoLido.includes('/atleta/') || textoLido.includes('|DIGITAL|')) {
-      setErro('❌ QR Code da Carteira. Peça ao atleta para abrir "Minhas Inscrições" e apresentar o Passaporte (QR) deste evento específico!');
+      setErro('QR Code da carteira. Peça ao atleta para abrir "Minhas Inscrições" e apresentar o Passaporte deste evento específico.');
       return;
     }
 
     // SE CHEGOU AQUI, TENTARAM BURLAR OU LERAM OUTRA COISA
-    setErro('❌ QR Code Inválido ou Falsificado. Acesso Negado.');
+    setErro('QR Code inválido ou falsificado. Acesso negado.');
+  };
+
+  const obterFimInscricoes = (evento: any) => {
+    const valor = evento?.data_fim_inscricoes || evento?.lote3_data_fim || evento?.lote2_data_fim || evento?.lote1_data_fim;
+    if (!valor) return null;
+    const data = new Date(valor);
+    return Number.isNaN(data.getTime()) ? null : data;
+  };
+
+  const formatarDataHora = (data: Date) => {
+    return data.toLocaleString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    }).replace(',', ' às');
   };
 
   // =========================================================================
-  // BUSCA NO BANCO DE DADOS (100% amarrada aos UUIDs Evento + Usuário)
+  // BUSCA NO BANCO DE DADOS (100% amarrada aos UUIDs Evento + Usuario)
   // =========================================================================
   const fetchAtleta = async (eventoId: string, userId: string) => {
     setLoading(true);
     setErro('');
-    
-    // Busca exata cruzando o Evento e o Usuário
+
+    const { data: eventoData, error: eventoError } = await supabase
+      .from('eventos')
+      .select('id, nome, status, data_fim_inscricoes, lote1_data_fim, lote2_data_fim, lote3_data_fim')
+      .eq('id', eventoId)
+      .single();
+
+    if (eventoError || !eventoData) {
+      setErro('Evento não encontrado. Confira se este passaporte pertence ao evento correto.');
+      setLoading(false);
+      return;
+    }
+
+    const fimInscricoes = obterFimInscricoes(eventoData);
+    if (!fimInscricoes) {
+      setErro('Check-in bloqueado: o organizador ainda não definiu o encerramento das inscrições deste evento.');
+      setLoading(false);
+      return;
+    }
+
+    if (new Date() < fimInscricoes) {
+      setErro(`Check-in bloqueado: as inscrições ainda estão abertas até ${formatarDataHora(fimInscricoes)}. Gere/valide o check-in somente após o fechamento.`);
+      setLoading(false);
+      return;
+    }
+
+    // Busca exata cruzando o Evento e o Usuario
     const { data: inscricoesData, error: inscricaoError } = await supabase
       .from('inscricoes')
       .select('*')
@@ -85,6 +127,13 @@ export default function CheckinOperador() {
 
     if (inscricaoError || !inscricoesData || inscricoesData.length === 0) {
       setErro('Inscrição não encontrada ou não autorizada para este evento.');
+      setLoading(false);
+      return;
+    }
+
+    const pendentes = inscricoesData.filter((inscricao: any) => inscricao.pagamento_ok !== true);
+    if (pendentes.length > 0) {
+      setErro('Check-in bloqueado: existe pagamento pendente para este atleta. Somente pagamento aprovado, evento gratuito ou cupom de isenção total liberam a pesagem.');
       setLoading(false);
       return;
     }
@@ -105,11 +154,10 @@ export default function CheckinOperador() {
       }
     }
 
-    setAtleta({ ...inscricaoData, foto_url: fotoUrl });
+    setAtleta({ ...inscricaoData, foto_url: fotoUrl, evento_nome: eventoData.nome, inscricoes_liberadas: inscricoesData.length });
     setPesoAferido(inscricaoData.peso || ''); 
     setLoading(false);
   };
-
   // =========================================================================
   // SALVAR CHECK-IN (Com Blindagem de UUID)
   // =========================================================================
@@ -124,12 +172,12 @@ export default function CheckinOperador() {
       pesagem_ok: status === 'aprovado'
     };
 
-    // A MÁGICA SEGURA: Atualiza usando o cruzamento absoluto (Evento + User_ID)
+    // Atualização segura: Atualiza usando o cruzamento absoluto (Evento + User_ID)
     const { error } = await supabase
       .from('inscricoes')
       .update(atualizacao)
       .eq('evento_id', atleta.evento_id)
-      .eq('user_id', atleta.user_id); // 🔒 Totalmente seguro contra homônimos
+      .eq('user_id', atleta.user_id); // Seguro contra homônimos
 
     if (error) {
       alert('Erro de conexão ao salvar no sistema: ' + error.message);
@@ -138,9 +186,9 @@ export default function CheckinOperador() {
     }
 
     if(status === 'aprovado') {
-        alert(`✅ Atleta ${atleta.atleta} APROVADO com sucesso nas chaves!`);
+        alert(`Atleta ${atleta.atleta} aprovado no check-in.`);
     } else {
-        alert(`❌ Atleta ${atleta.atleta} DESCLASSIFICADO.`);
+        alert(`Atleta ${atleta.atleta} desclassificado no check-in.`);
     }
 
     resetarTela();
