@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+// 1. Adicionado o useRef aqui nas importações
+import { useEffect, useMemo, useState, useRef } from "react";
 import { CalendarDays, ChevronRight, MapPin, MonitorDot, Search, ShieldCheck, Trophy, Users } from "lucide-react";
 import { supabase } from "./lib/supabase";
 
@@ -11,12 +12,24 @@ export default function Home() {
   const [modalidadeFiltro, setModalidadeFiltro] = useState("Todas");
   const [estadoFiltro, setEstadoFiltro] = useState("Todos");
 
+  // 2. Criada a referência para o vídeo
+  const videoRef = useRef<HTMLVideoElement>(null);
+
   async function carregarEventos() {
     const { data, error } = await supabase.from("eventos").select("*").order("data_evento", { ascending: true });
     if (!error) setEventos(data || []);
   }
 
   useEffect(() => { carregarEventos(); }, []);
+
+  // 3. O motor de arranque: Força o vídeo a reproduzir assim que a página é montada
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.play().catch((error) => {
+        console.log("O navegador pausou o autoplay no first-paint. A aguardar interação:", error);
+      });
+    }
+  }, []);
 
   const getCorTema = (status: string) => {
     const s = status?.toUpperCase() || "ABERTO";
@@ -49,8 +62,8 @@ export default function Home() {
   
   <div className="absolute -top-2 md:-top-1 bottom-0 left-0 right-0 bg-[#020202] pointer-events-none overflow-hidden">
     
-    
     <video 
+      ref={videoRef} /* 4. Referência conectada ao vídeo aqui! */
       autoPlay 
       loop 
       muted 
@@ -259,4 +272,4 @@ function SystemPill({ icon, title, text }: { icon: React.ReactNode; title: strin
       </div>
     </div>
   );
-} 
+}
