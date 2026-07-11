@@ -1,0 +1,14 @@
+﻿[
+  {
+    "AllowedOrigins": [
+      "http://localhost:3000",
+      "https://itatame.com.br",
+      "https://www.itatame.com.br",
+      "https://fotos.itatame.com.br"
+    ],
+    "AllowedMethods": ["GET", "PUT", "HEAD"],
+    "AllowedHeaders": ["Content-Type"],
+    "ExposeHeaders": ["ETag"],
+    "MaxAgeSeconds": 3600
+  }
+]

@@ -2,9 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { supabase } from "../lib/supabase";
 
+
 export default function Navbar() {
+  const pathname = usePathname();
+  const isHome = pathname === "/";
   const [userName, setUserName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -42,7 +46,13 @@ export default function Navbar() {
     <>
       {/* HEADER MAIS FINO E ELEGANTE */}
       <header className="fixed top-0 left-0 right-0 z-50 border-b border-white/5 bg-[#0a0a0a]/90 backdrop-blur-md">
-        <div className="max-w-7xl mx-auto px-4 md:px-6 py-3 flex items-center justify-between">
+        <div
+  className={`
+    max-w-7xl mx-auto px-4 md:px-6 pt-3
+    flex items-center justify-between
+    ${isHome ? "pb-5 md:pb-4" : "pb-3"}
+  `}
+>
           
           {/* ESQUERDA: LOGO + MENU DE NAVEGAÇÃO LIMPO */}
           <div className="flex items-center gap-8">
@@ -66,6 +76,12 @@ export default function Navbar() {
               <Link href="/ranking" className="flex items-center gap-1.5 hover:text-white transition-colors">
                 <svg className="w-3.5 h-3.5 opacity-70" fill="currentColor" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
                 Ranking
+              </Link>
+
+              {/* 🚀 NOVO: LINK DO ITATAME FOTOS */}
+              <Link href="/fotos" className="flex items-center gap-1.5 hover:text-white transition-colors">
+                <svg className="w-3.5 h-3.5 opacity-70" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                Fotos
               </Link>
             </nav>
           </div>
@@ -111,31 +127,37 @@ export default function Navbar() {
         </div>
       </header>
 
-      {/* BOTTOM BAR MOBILE MANTIDA COM 5 BOTÕES */}
+      {/* BOTTOM BAR MOBILE MANTIDA COM 6 BOTÕES BEM DISTRIBUÍDOS */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#07070a]/95 backdrop-blur-xl border-t border-white/5 pb-safe">
         <div className="flex justify-around items-center h-16 px-1">
           
-          <Link href="/" className="flex flex-col items-center justify-center w-[18%] gap-1 text-zinc-500 hover:text-white transition-colors">
+          <Link href="/" className="flex flex-col items-center justify-center flex-1 gap-1 text-zinc-500 hover:text-white transition-colors">
             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
             <span className="text-[9px] font-medium">Início</span>
           </Link>
           
-          <Link href="/" className="flex flex-col items-center justify-center w-[18%] gap-1 text-zinc-500 hover:text-white transition-colors">
+          <Link href="/" className="flex flex-col items-center justify-center flex-1 gap-1 text-zinc-500 hover:text-white transition-colors">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
             <span className="text-[9px] font-medium">Buscar</span>
           </Link>
           
-          <Link href="/placar" className="flex flex-col items-center justify-center w-[18%] gap-0.5 text-zinc-500 hover:text-white transition-colors">
+          <Link href="/placar" className="flex flex-col items-center justify-center flex-1 gap-0.5 text-zinc-500 hover:text-white transition-colors">
             <span className="text-lg leading-none">⏱️</span>
             <span className="text-[9px] font-medium">Placar</span>
           </Link>
 
-          <Link href="/login-organizador" className="flex flex-col items-center justify-center w-[18%] gap-1 text-yellow-600 hover:text-yellow-400 transition-colors relative">
+          {/* 🚀 NOVO: FOTOS NO MOBILE */}
+          <Link href="/fotos" className="flex flex-col items-center justify-center flex-1 gap-1 text-zinc-500 hover:text-white transition-colors">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+            <span className="text-[9px] font-medium">Fotos</span>
+          </Link>
+
+          <Link href="/login-organizador" className="flex flex-col items-center justify-center flex-1 gap-1 text-yellow-600 hover:text-yellow-400 transition-colors relative">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
             <span className="text-[9px] font-bold">Org.</span>
           </Link>
 
-          <Link href={linkConta} className="flex flex-col items-center justify-center w-[18%] gap-1 text-zinc-500 hover:text-white transition-colors">
+          <Link href={linkConta} className="flex flex-col items-center justify-center flex-1 gap-1 text-zinc-500 hover:text-white transition-colors">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
             <span className="text-[9px] font-medium">Perfil</span>
           </Link>

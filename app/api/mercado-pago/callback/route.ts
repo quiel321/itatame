@@ -2,8 +2,13 @@ import crypto from "crypto";
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
 
+type PerfilMercadoPago = "organizador" | "fotografo";
+
 type OAuthState = {
-  organizadorUserId: string;
+  perfil?: PerfilMercadoPago;
+  userId?: string;
+  organizadorUserId?: string;
+  returnTo?: string;
   ts: number;
 };
 
@@ -20,6 +25,11 @@ function getStateSecret() {
   return process.env.MP_OAUTH_STATE_SECRET || process.env.MP_CLIENT_SECRET || "";
 }
 
+function returnToSeguro(valor: string | null | undefined, perfil: PerfilMercadoPago) {
+  if (valor && valor.startsWith("/") && !valor.startsWith("//")) return valor;
+  return perfil === "fotografo" ? "/fotos/fotografo/dashboard" : "/admin";
+}
+
 function lerState(state: string | null): OAuthState | null {
   if (!state) return null;
   const [body, signature] = state.split(".");
@@ -30,9 +40,23 @@ function lerState(state: string | null): OAuthState | null {
 
   const payload = JSON.parse(Buffer.from(body, "base64url").toString("utf8")) as OAuthState;
   const quinzeMinutos = 15 * 60 * 1000;
-  if (!payload.organizadorUserId || Date.now() - payload.ts > quinzeMinutos) return null;
+  const userId = payload.userId || payload.organizadorUserId;
+  if (!userId || Date.now() - payload.ts > quinzeMinutos) return null;
 
   return payload;
+}
+
+function credenciaisMercadoPago(tokenData: any, expiresAt: string | null) {
+  return {
+    mp_access_token: tokenData.access_token,
+    mp_refresh_token: tokenData.refresh_token || null,
+    mp_public_key: tokenData.public_key || null,
+    mp_user_id: tokenData.user_id ? String(tokenData.user_id) : null,
+    mp_token_expires_at: expiresAt,
+    mp_connected_at: new Date().toISOString(),
+    mp_scope: tokenData.scope || null,
+    mp_live_mode: Boolean(tokenData.live_mode),
+  };
 }
 
 export async function GET(request: Request) {
@@ -41,12 +65,15 @@ export async function GET(request: Request) {
   const error = url.searchParams.get("error");
   const state = lerState(url.searchParams.get("state"));
   const baseUrl = getBaseUrl(request);
+  const perfil = state?.perfil === "fotografo" ? "fotografo" : "organizador";
+  const userId = state?.userId || state?.organizadorUserId || "";
+  const returnTo = returnToSeguro(state?.returnTo, perfil);
 
   if (error) {
-    return NextResponse.redirect(`${baseUrl}/admin?mp=erro&motivo=${encodeURIComponent(error)}`);
+    return NextResponse.redirect(`${baseUrl}${returnTo}?mp=erro&motivo=${encodeURIComponent(error)}`);
   }
 
-  if (!code || !state) {
+  if (!code || !state || !userId) {
     return NextResponse.redirect(`${baseUrl}/admin?mp=erro&motivo=oauth_invalido`);
   }
 
@@ -54,7 +81,7 @@ export async function GET(request: Request) {
   const clientSecret = process.env.MP_CLIENT_SECRET;
 
   if (!clientId || !clientSecret) {
-    return NextResponse.redirect(`${baseUrl}/admin?mp=erro&motivo=env_mercado_pago`);
+    return NextResponse.redirect(`${baseUrl}${returnTo}?mp=erro&motivo=env_mercado_pago`);
   }
 
   const tokenResponse = await fetch("https://api.mercadopago.com/oauth/token", {
@@ -74,7 +101,7 @@ export async function GET(request: Request) {
 
   if (!tokenResponse.ok || !tokenData.access_token) {
     console.error("Erro OAuth Mercado Pago:", tokenData);
-    return NextResponse.redirect(`${baseUrl}/admin?mp=erro&motivo=token`);
+    return NextResponse.redirect(`${baseUrl}${returnTo}?mp=erro&motivo=token`);
   }
 
   const expiresAt = tokenData.expires_in
@@ -82,24 +109,35 @@ export async function GET(request: Request) {
     : null;
 
   const supabase = createSupabaseServerClient();
-  const { error: dbError } = await supabase
-    .from("organizadores")
-    .update({
-      mp_access_token: tokenData.access_token,
-      mp_refresh_token: tokenData.refresh_token || null,
-      mp_public_key: tokenData.public_key || null,
-      mp_user_id: tokenData.user_id ? String(tokenData.user_id) : null,
-      mp_token_expires_at: expiresAt,
-      mp_connected_at: new Date().toISOString(),
-      mp_scope: tokenData.scope || null,
-      mp_live_mode: Boolean(tokenData.live_mode),
-    })
-    .eq("user_id", state.organizadorUserId);
+  const credenciais = credenciaisMercadoPago(tokenData, expiresAt);
 
-  if (dbError) {
-    console.error("Erro ao salvar credenciais Mercado Pago:", dbError);
-    return NextResponse.redirect(`${baseUrl}/admin?mp=erro&motivo=banco`);
+  if (perfil === "fotografo") {
+    const { data: fotografo } = await supabase.from("fotografos").select("id").eq("user_id", userId).maybeSingle();
+
+    const resultado = fotografo?.id
+      ? await supabase.from("fotografos").update(credenciais).eq("id", fotografo.id)
+      : await supabase.from("fotografos").insert({
+          user_id: userId,
+          nome: "Fotógrafo",
+          status: "ativo",
+          ...credenciais,
+        });
+
+    if (resultado.error) {
+      console.error("Erro ao salvar Mercado Pago do fotógrafo:", resultado.error);
+      return NextResponse.redirect(`${baseUrl}${returnTo}?mp=erro&motivo=banco`);
+    }
+  } else {
+    const { error: dbError } = await supabase
+      .from("organizadores")
+      .update(credenciais)
+      .eq("user_id", userId);
+
+    if (dbError) {
+      console.error("Erro ao salvar credenciais Mercado Pago:", dbError);
+      return NextResponse.redirect(`${baseUrl}${returnTo}?mp=erro&motivo=banco`);
+    }
   }
 
-  return NextResponse.redirect(`${baseUrl}/admin?mp=conectado`);
+  return NextResponse.redirect(`${baseUrl}${returnTo}?mp=conectado`);
 }

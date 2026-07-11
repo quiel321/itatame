@@ -19,7 +19,7 @@ svg + div {
   display: none !important;
 }
 
-/* ESCONDER SCROLLBAR NA TELA PÚBLICA DE CHAVES */
+/* ESCONDER SCROLLBAR NA TELA PÃƒÅ¡BLICA DE CHAVES */
 @layer utilities {
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
@@ -28,4 +28,28 @@ svg + div {
     -ms-overflow-style: none; /* IE e Edge */
     scrollbar-width: none;    /* Firefox */
   }
+}
+/* Rotas do portal de fotos usam navegaÃ§Ã£o prÃ³pria, sem o chrome pÃºblico padrÃ£o. */
+body:has([data-fotos-shell]) > header,
+body:has([data-fotos-shell]) > footer {
+  display: none !important;
+}
+
+body:has([data-fotos-shell]) > main {
+  padding-top: 0 !important;
+}
+
+body:has([data-fotos-shell]) > div.fixed {
+  display: none !important;
+}
+
+body.fotos-route > header,
+body.fotos-route > footer,
+body.fotos-route > div.md\:hidden.fixed,
+body.fotos-route > div.fixed.bottom-0 {
+  display: none !important;
+}
+
+body.fotos-route > main {
+  padding-top: 0 !important;
 }

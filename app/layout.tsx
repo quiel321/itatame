@@ -24,7 +24,8 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         
         <Navbar />
 
-        <main className="flex-1 pt-[60px] md:pt-[65px]">
+       {/* 🛡️ PROTEÇÃO RESTAURADA: Mantém o Login, Ranking e outras páginas abaixo da Navbar */}
+        <main className="flex-1 flex flex-col pt-[60px] md:pt-[65px]">
           {children}
         </main>
 
@@ -76,6 +77,13 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
                     <Link href="/placar" className="flex items-center gap-2 text-zinc-400 hover:text-yellow-500 text-xs font-bold transition-colors">
                       Placar Digital
                       <span className="bg-yellow-500/10 border border-yellow-500/30 text-yellow-500 text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider">Free</span>
+                    </Link>
+                  </li>
+                  {/* LINK DO ITATAME FOTOS ADICIONADO AQUI 👇 */}
+                  <li>
+                    <Link href="/fotos" className="flex items-center gap-2 text-zinc-400 hover:text-blue-400 text-xs font-bold transition-colors">
+                      iTatame Fotos
+                      <span className="bg-blue-500/10 border border-blue-500/30 text-blue-400 text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider">Novo</span>
                     </Link>
                   </li>
                   <li><Link href="/ppv" className="text-zinc-400 hover:text-white text-xs font-bold transition-colors">Transmissão PPV</Link></li>
