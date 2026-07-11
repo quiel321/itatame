@@ -70,6 +70,8 @@ export default function FotosAdminPage() {
   const [comboQtd, setComboQtd] = useState("3");
   const [comboPercentual, setComboPercentual] = useState("20");
   const [regrasCombo, setRegrasCombo] = useState<Record<string, { qtd: string; percentual: string }>>({});
+  const [emailFotografo, setEmailFotografo] = useState<Record<string, string>>({});
+  const [credenciandoEvento, setCredenciandoEvento] = useState<string | null>(null);
   
   const [mensagem, setMensagem] = useState("");
   const [salvandoPerfil, setSalvandoPerfil] = useState(false);
@@ -114,10 +116,12 @@ export default function FotosAdminPage() {
       estado: est
     });
 
-    let base = await supabase.from("eventos").select("id, nome, local, cidade, estado, data_evento, banner_url").eq("organizador_id", user.id).order("data_evento", { ascending: false }).limit(50);
-    if (base.error) {
-      base = await supabase.from("eventos").select("id, nome, local, cidade, estado, data_evento, banner_url").order("data_evento", { ascending: false }).limit(50);
-    }
+    const base = await supabase
+      .from("eventos")
+      .select("id, nome, local, cidade, estado, data_evento, banner_url")
+      .eq("organizador_id", user.id)
+      .order("data_evento", { ascending: false })
+      .limit(50);
 
     const fotoEvt = await supabase.from("foto_eventos").select("id, nome, evento_id, status, preco_padrao_centavos, desconto_combo_qtd, desconto_combo_percentual").eq("organizador_user_id", user.id).order("created_at", { ascending: false });
 
@@ -241,6 +245,41 @@ export default function FotosAdminPage() {
 
     await supabase.from("foto_eventos").update({ desconto_combo_qtd: qtd, desconto_combo_percentual: percentual }).eq("id", eventoId).eq("organizador_user_id", userId);
     void carregar();
+  }
+
+  async function credenciarFotografo(eventoId: string) {
+    const email = (emailFotografo[eventoId] || "").trim();
+    if (!email) {
+      setMensagem("Informe o e-mail do fotógrafo.");
+      return;
+    }
+
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      setMensagem("Sessão expirada. Faça login novamente.");
+      return;
+    }
+
+    setCredenciandoEvento(eventoId);
+    setMensagem("");
+    const response = await fetch("/api/fotos/admin/credenciar-fotografo", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ eventoId, email }),
+    });
+    const resultado = await response.json();
+    setCredenciandoEvento(null);
+
+    if (!response.ok) {
+      setMensagem(resultado.error || "Não foi possível credenciar o fotógrafo.");
+      return;
+    }
+
+    setEmailFotografo((atual) => ({ ...atual, [eventoId]: "" }));
+    setMensagem(`${resultado.fotografo.nome} foi credenciado com sucesso.`);
   }
 
   const mercadoPagoConectado = Boolean(organizador?.mp_connected_at);
@@ -454,6 +493,26 @@ export default function FotosAdminPage() {
                           </div>
                           <button type="button" onClick={() => salvarRegraCombo(evento.id)} className="h-10 cursor-pointer rounded-lg bg-cyan-500/10 border border-cyan-500/30 px-5 text-[9px] font-black uppercase tracking-widest text-cyan-400 hover:bg-cyan-500 hover:text-black transition-colors">
                             Atualizar
+                          </button>
+                        </div>
+                        <div className="mt-2 grid gap-2 rounded-xl border border-white/5 bg-white/[0.02] p-3 sm:grid-cols-[1fr_auto] sm:items-end">
+                          <div>
+                            <label className="mb-1 ml-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Credenciar fotógrafo por e-mail</label>
+                            <input
+                              type="email"
+                              value={emailFotografo[evento.id] || ""}
+                              onChange={(e) => setEmailFotografo((atual) => ({ ...atual, [evento.id]: e.target.value }))}
+                              placeholder="fotografo@email.com"
+                              className="h-10 w-full rounded-lg border border-white/5 bg-black px-3 text-[11px] font-bold text-white outline-none focus:border-amber-500/50"
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            disabled={credenciandoEvento === evento.id}
+                            onClick={() => credenciarFotografo(evento.id)}
+                            className="h-10 cursor-pointer rounded-lg border border-amber-500/30 bg-amber-500/10 px-5 text-[9px] font-black uppercase tracking-widest text-amber-400 transition-colors hover:bg-amber-500 hover:text-black disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {credenciandoEvento === evento.id ? "Credenciando..." : "Credenciar"}
                           </button>
                         </div>
                       </div>

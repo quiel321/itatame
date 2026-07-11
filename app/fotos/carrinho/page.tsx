@@ -20,7 +20,31 @@ import {
   Wallet,
 } from "lucide-react";
 
-type EtapaPagamento = "carrinho" | "gerando_pix" | "pix_gerado" | "pago";
+declare global {
+  interface Window {
+    MercadoPago?: any;
+    fotosPaymentBrickController?: any;
+  }
+}
+
+type EtapaPagamento = "carrinho" | "preparando" | "checkout" | "pago";
+
+type CheckoutData = {
+  publicKey: string;
+  preferenceId: string;
+  pedidoId: string;
+  eventoNome: string;
+  total: number;
+};
+
+type ResultadoPagamento = {
+  id?: string | number;
+  pedidoId?: string;
+  status?: string;
+  qr_code?: string;
+  qr_code_base64?: string;
+  ticket_url?: string;
+};
 
 type FotoCarrinho = {
   id: string;
@@ -40,6 +64,24 @@ function primeiraRelacao(valor: any) {
   return Array.isArray(valor) ? valor[0] : valor;
 }
 
+function carregarSdkMercadoPago() {
+  return new Promise<void>((resolve, reject) => {
+    if (window.MercadoPago) return resolve();
+    const existente = document.querySelector<HTMLScriptElement>('script[src="https://sdk.mercadopago.com/js/v2"]');
+    if (existente) {
+      existente.addEventListener("load", () => resolve(), { once: true });
+      existente.addEventListener("error", () => reject(new Error("Falha ao carregar Mercado Pago.")), { once: true });
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = "https://sdk.mercadopago.com/js/v2";
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Falha ao carregar Mercado Pago."));
+    document.body.appendChild(script);
+  });
+}
+
 export default function FotosCarrinhoPage() {
   const router = useRouter();
   const [fotos, setFotos] = useState<FotoCarrinho[]>([]);
@@ -47,6 +89,9 @@ export default function FotosCarrinhoPage() {
   const [copiado, setCopiado] = useState(false);
   const [carregandoCart, setCarregandoCart] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
+  const [checkoutData, setCheckoutData] = useState<CheckoutData | null>(null);
+  const [resultadoPagamento, setResultadoPagamento] = useState<ResultadoPagamento | null>(null);
+  const [mensagemPagamento, setMensagemPagamento] = useState("");
 
   const subtotal = fotos.reduce((acc, foto) => acc + foto.precoCentavos, 0);
   const comboQtd = fotos[0]?.comboQtd || COMBO_QTD_PADRAO;
@@ -129,20 +174,127 @@ export default function FotosCarrinhoPage() {
     localStorage.setItem(CARRINHO_FOTOS_KEY, JSON.stringify(novasFotos.map((foto) => foto.id)));
   }
 
-  function handleGerarPix() {
+  async function handleGerarPix() {
     if (!userId) {
       router.push("/fotos/login?perfil=comprador&next=/fotos/carrinho");
       return;
     }
-    setEtapa("gerando_pix");
-    setTimeout(() => setEtapa("pix_gerado"), 1800);
+    setEtapa("preparando");
+    setMensagemPagamento("");
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      router.push("/fotos/login?perfil=comprador&next=/fotos/carrinho");
+      return;
+    }
+
+    const response = await fetch("/api/fotos/pagamento/preparar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ fotoIds: fotos.map((foto) => foto.id) }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      setMensagemPagamento(data.error || "Não foi possível preparar o pagamento.");
+      setEtapa("carrinho");
+      return;
+    }
+    setCheckoutData(data);
+    setEtapa("checkout");
   }
 
   function handleCopiarPix() {
-    navigator.clipboard.writeText("00020126580014br.gov.bcb.pix0136itatame-fotos-codigo-simulado-1234");
+    if (!resultadoPagamento?.qr_code) return;
+    navigator.clipboard.writeText(resultadoPagamento.qr_code);
     setCopiado(true);
     setTimeout(() => setCopiado(false), 3000);
   }
+
+  useEffect(() => {
+    if (etapa !== "checkout" || !checkoutData) return;
+    let cancelado = false;
+
+    async function montarCheckout() {
+      try {
+        await carregarSdkMercadoPago();
+        if (cancelado || !window.MercadoPago) return;
+        if (window.fotosPaymentBrickController?.unmount) await window.fotosPaymentBrickController.unmount();
+
+        const mp = new window.MercadoPago(checkoutData!.publicKey, { locale: "pt-BR" });
+        window.fotosPaymentBrickController = await mp.bricks().create("payment", "fotosPaymentBrick", {
+          initialization: {
+            amount: checkoutData!.total,
+            preferenceId: checkoutData!.preferenceId,
+            marketplace: true,
+          },
+          customization: {
+            paymentMethods: {
+              ticket: "all",
+              bankTransfer: "all",
+              creditCard: "all",
+              debitCard: "all",
+              mercadoPago: "all",
+              maxInstallments: 1,
+            },
+            visual: { style: { theme: "dark" } },
+          },
+          callbacks: {
+            onReady: () => setMensagemPagamento(""),
+            onSubmit: async ({ formData }: any) => {
+              setMensagemPagamento("Processando pagamento...");
+              const { data: { session } } = await supabase.auth.getSession();
+              if (!session) throw new Error("Sessão expirada.");
+              const response = await fetch("/api/fotos/pagamento/processar", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+                body: JSON.stringify({ pedidoId: checkoutData!.pedidoId, formData }),
+              });
+              const resultado = await response.json();
+              if (!response.ok) throw new Error(resultado.error || "Pagamento recusado.");
+              setResultadoPagamento(resultado);
+              if (resultado.status === "approved") {
+                localStorage.removeItem(CARRINHO_FOTOS_KEY);
+                setEtapa("pago");
+                setMensagemPagamento("Pagamento aprovado. Suas fotos foram liberadas.");
+                window.setTimeout(() => router.push("/fotos/minhas-compras"), 1200);
+              } else {
+                setMensagemPagamento("Pagamento gerado. Aguardando confirmação.");
+              }
+            },
+            onError: () => setMensagemPagamento("Não foi possível carregar o checkout."),
+          },
+        });
+      } catch (error) {
+        setMensagemPagamento(error instanceof Error ? error.message : "Erro ao carregar pagamento.");
+      }
+    }
+
+    void montarCheckout();
+    return () => {
+      cancelado = true;
+      if (window.fotosPaymentBrickController?.unmount) void window.fotosPaymentBrickController.unmount();
+      window.fotosPaymentBrickController = undefined;
+    };
+  }, [checkoutData, etapa, router]);
+
+  useEffect(() => {
+    if (!checkoutData?.pedidoId || !resultadoPagamento?.id || resultadoPagamento.status === "approved") return;
+    const intervalo = window.setInterval(async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const response = await fetch(`/api/fotos/pagamento/status?pedido_id=${checkoutData.pedidoId}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const status = await response.json();
+      if (status.status === "pago") {
+        window.clearInterval(intervalo);
+        localStorage.removeItem(CARRINHO_FOTOS_KEY);
+        setEtapa("pago");
+        setMensagemPagamento("Pagamento confirmado. Suas fotos foram liberadas.");
+        window.setTimeout(() => router.push("/fotos/minhas-compras"), 1200);
+      }
+    }, 5000);
+    return () => window.clearInterval(intervalo);
+  }, [checkoutData?.pedidoId, resultadoPagamento?.id, resultadoPagamento?.status, router]);
 
   return (
     <FotosShell>
@@ -271,36 +423,37 @@ export default function FotosCarrinhoPage() {
 
                   {etapa === "carrinho" && (
                     <button onClick={handleGerarPix} className="flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-red-600 text-[10px] font-black uppercase tracking-widest text-white shadow-[0_0_30px_rgba(239,68,68,0.25)] transition-all hover:scale-[1.02] hover:bg-red-500">
-                      <QrCode size={16} /> Pagar com Pix
+                      <QrCode size={16} /> Escolher forma de pagamento
                     </button>
                   )}
 
-                  {etapa === "gerando_pix" && (
+                  {etapa === "preparando" && (
                     <button disabled className="flex h-14 w-full cursor-wait items-center justify-center gap-3 rounded-2xl border border-white/5 bg-zinc-900 text-[11px] font-black uppercase tracking-widest text-zinc-500">
-                      <Loader2 size={18} className="animate-spin text-red-500" /> Processando pagamento...
+                      <Loader2 size={18} className="animate-spin text-red-500" /> Preparando checkout...
                     </button>
                   )}
 
-                  {etapa === "pix_gerado" && (
+                  {etapa === "checkout" && (
                     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                      <div className="relative mb-5 flex items-center justify-center overflow-hidden rounded-2xl bg-white p-5">
-                        <img src="https://upload.wikimedia.org/wikipedia/commons/d/d0/QR_code_for_mobile_English_Wikipedia.svg" alt="QR Code Pix" className="h-48 w-48 opacity-90" />
-                      </div>
-                      <p className="mb-3 text-center text-[9px] font-bold uppercase tracking-[0.2em] text-zinc-500">Copie o código abaixo:</p>
-                      <div className="flex gap-2">
-                        <div className="flex h-12 flex-1 items-center overflow-hidden rounded-xl border border-white/10 bg-[#050505] px-4">
-                          <span className="select-all truncate font-mono text-xs text-zinc-400">00020126580014br.gov.bcb.pix0136itatame...</span>
+                      <div id="fotosPaymentBrick" className={resultadoPagamento?.id ? "hidden" : ""} />
+                      {resultadoPagamento?.qr_code_base64 && (
+                        <div className="mb-4 flex justify-center rounded-xl bg-white p-4">
+                          <img src={`data:image/png;base64,${resultadoPagamento.qr_code_base64}`} alt="QR Code Pix" className="h-44 w-44" />
                         </div>
-                        <button onClick={handleCopiarPix} className={`flex h-12 cursor-pointer items-center gap-2 rounded-xl px-5 text-[10px] font-black uppercase tracking-widest transition-all ${copiado ? "bg-emerald-500 text-black" : "border border-white/5 bg-white/10 text-white hover:bg-white/20"}`}>
+                      )}
+                      {resultadoPagamento?.qr_code && (
+                        <button onClick={handleCopiarPix} className={`flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-xl px-5 text-[10px] font-black uppercase tracking-widest transition-all ${copiado ? "bg-emerald-500 text-black" : "border border-white/5 bg-white/10 text-white hover:bg-white/20"}`}>
                           {copiado ? <CheckCircle2 size={16} /> : <Copy size={16} />}
-                          {copiado ? "Copiado" : "Copiar"}
+                          {copiado ? "Código copiado" : "Copiar código Pix"}
                         </button>
-                      </div>
-                      <div className="mt-6 flex items-center justify-center gap-2 rounded-xl border border-white/5 bg-black/40 py-3 text-[10px] font-black uppercase tracking-widest text-zinc-500">
-                        <Loader2 size={14} className="animate-spin text-red-500" />
-                        Aguardando confirmação...
-                      </div>
+                      )}
                     </div>
+                  )}
+
+                  {mensagemPagamento && (
+                    <p className={`mt-4 rounded-xl border p-3 text-center text-[10px] font-bold ${etapa === "pago" ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" : "border-amber-500/20 bg-amber-500/10 text-amber-200"}`}>
+                      {mensagemPagamento}
+                    </p>
                   )}
                 </div>
               </div>

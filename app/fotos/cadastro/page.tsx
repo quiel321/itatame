@@ -99,50 +99,13 @@ export default function FotosCadastroPage() {
     const { data, error } = await supabase.auth.signUp({ 
       email, 
       password: senha,
-      options: { data: { nome_completo: nome } }
+      options: { data: { nome_completo: nome, foto_perfil: perfil } }
     });
     
     if (error || !data.user) {
       setCarregando(false);
       setErro("Erro ao criar conta. Este e-mail já pode estar em uso.");
       return;
-    }
-
-    const user = data.user;
-
-    // 🔥 2. MOTOR DE DISTRIBUIÇÃO: Cada um na sua gaveta certa!
-    try {
-      if (perfil === "comprador") {
-        // Gaveta: Atletas e Pais que compram fotos
-        await supabase.from("foto_compradores").insert({ 
-          user_id: user.id, nome: nome, email: user.email 
-        });
-      } 
-      else if (perfil === "fotografo") {
-        // Gaveta: Profissionais de fotografia
-        await supabase.from("fotografos").insert({ 
-          user_id: user.id, nome: nome, email: user.email, status: "ativo" 
-        });
-      } 
-      else if (perfil === "organizador") {
-        // Gaveta Dupla: Organizadores ganham Vitrine (Fotos) + Carteira Financeira (Eventos)
-        
-        // A) Vitrine Pública do iTatame Fotos
-        const slugBase = nome.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-        await supabase.from("foto_organizadores").insert({
-          id: user.id,
-          nome: nome,
-          slug: `${slugBase}-${Math.floor(Math.random() * 1000)}`,
-          localizacao: "Brasil"
-        });
-        
-        // B) Base Financeira para Mercado Pago (Mesma gaveta do iTatame Eventos)
-        await supabase.from("organizadores").insert({ 
-          user_id: user.id, nome: nome, email: user.email, status: "pendente" 
-        });
-      }
-    } catch (err) {
-      console.error("Erro na distribuição de tabelas:", err);
     }
 
     setCarregando(false);

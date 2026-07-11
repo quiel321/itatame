@@ -13,6 +13,12 @@ type Pedido = {
   status: string | null;
   total_centavos: number | null;
   created_at: string;
+  foto_pedido_itens?: Array<{
+    id: string;
+    download_liberado: boolean;
+    download_expires_at: string | null;
+    foto_arquivos?: { id: string; titulo: string | null } | Array<{ id: string; titulo: string | null }> | null;
+  }>;
 };
 
 type CompradorPerfil = {
@@ -36,6 +42,8 @@ export default function FotosMinhasComprasPage() {
   const [salvandoPerfil, setSalvandoPerfil] = useState(false);
   const [carregando, setCarregando] = useState(true);
   const [itensCarrinho, setItensCarrinho] = useState(0);
+  const [pedidoAberto, setPedidoAberto] = useState<string | null>(null);
+  const [baixandoItem, setBaixandoItem] = useState<string | null>(null);
 
   useEffect(() => {
     async function carregar() {
@@ -75,7 +83,7 @@ export default function FotosMinhasComprasPage() {
 
       const { data } = await supabase
         .from("foto_pedidos")
-        .select("id, status, total_centavos, created_at")
+        .select("id, status, total_centavos, created_at, foto_pedido_itens(id, download_liberado, download_expires_at, foto_arquivos(id, titulo))")
         .eq("comprador_user_id", auth.user.id)
         .order("created_at", { ascending: false });
 
@@ -124,7 +132,31 @@ export default function FotosMinhasComprasPage() {
     setMensagemPerfil("Perfil salvo com sucesso.");
   }
 
-  const pedidosPagos = pedidos.filter((pedido) => ["pago", "aprovado", "approved"].includes(String(pedido.status || "").toLowerCase())).length;
+  const fotosLiberadas = pedidos.reduce(
+    (total, pedido) => total + (pedido.foto_pedido_itens || []).filter((item) => item.download_liberado).length,
+    0,
+  );
+
+  async function baixarFoto(itemId: string) {
+    setBaixandoItem(itemId);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      router.push("/fotos/login?perfil=comprador&next=/fotos/minhas-compras");
+      return;
+    }
+    const response = await fetch(`/api/fotos/download/${itemId}`, {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    });
+    setBaixandoItem(null);
+    if (!response.ok) return;
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "itatame-foto.jpg";
+    link.click();
+    URL.revokeObjectURL(url);
+  }
 
   return (
     <FotosShell>
@@ -167,7 +199,7 @@ export default function FotosMinhasComprasPage() {
             </div>
             <div className="rounded-xl border border-white/10 bg-zinc-950 p-4">
               <p className="flex items-center gap-2 text-[10px] font-black uppercase tracking-wider text-zinc-500"><Download size={13} /> Fotos liberadas</p>
-              <p className="mt-1 text-2xl font-black text-cyan-300">{pedidosPagos}</p>
+              <p className="mt-1 text-2xl font-black text-cyan-300">{fotosLiberadas}</p>
               <p className="mt-2 text-xs text-zinc-500">Pedidos pagos aparecem para download.</p>
             </div>
           </div>
@@ -216,15 +248,32 @@ export default function FotosMinhasComprasPage() {
                   </div>
                 ) : (
                   pedidos.map((pedido) => (
-                    <div key={pedido.id} className="flex flex-col gap-3 rounded-xl border border-white/10 bg-black p-4 md:flex-row md:items-center md:justify-between">
+                    <div key={pedido.id} className="flex flex-col gap-3 rounded-xl border border-white/10 bg-black p-4 md:flex-row md:flex-wrap md:items-center md:justify-between">
                       <div>
                         <p className="text-sm font-black uppercase">Pedido {pedido.id.slice(0, 8)}</p>
                         <p className="mt-1 text-[10px] uppercase tracking-wider text-zinc-500">Status: {pedido.status || "pendente"}</p>
                       </div>
                       <div className="text-left md:text-right">
                         <p className="text-lg font-black text-cyan-400">{formatarPrecoFotos(pedido.total_centavos)}</p>
-                        <button className="mt-2 cursor-pointer rounded-md border border-white/10 px-4 py-2 text-[10px] font-black uppercase tracking-wider text-white hover:bg-white hover:text-black">Ver downloads</button>
+                        <button onClick={() => setPedidoAberto((atual) => atual === pedido.id ? null : pedido.id)} className="mt-2 cursor-pointer rounded-md border border-white/10 px-4 py-2 text-[10px] font-black uppercase tracking-wider text-white hover:bg-white hover:text-black">Ver downloads</button>
                       </div>
+                      {pedidoAberto === pedido.id && (
+                        <div className="w-full border-t border-white/10 pt-3 md:basis-full">
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            {(pedido.foto_pedido_itens || []).map((item) => {
+                              const foto = Array.isArray(item.foto_arquivos) ? item.foto_arquivos[0] : item.foto_arquivos;
+                              return (
+                                <div key={item.id} className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-zinc-950 p-3">
+                                  <p className="truncate text-xs font-bold">{foto?.titulo || "Foto do evento"}</p>
+                                  <button disabled={!item.download_liberado || baixandoItem === item.id} onClick={() => baixarFoto(item.id)} className="inline-flex h-9 shrink-0 cursor-pointer items-center gap-2 rounded-md bg-cyan-400 px-3 text-[9px] font-black uppercase text-black disabled:cursor-not-allowed disabled:opacity-40">
+                                    <Download size={12} /> {baixandoItem === item.id ? "Baixando" : "Baixar"}
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))
                 )}

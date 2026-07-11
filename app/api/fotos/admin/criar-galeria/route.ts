@@ -31,14 +31,17 @@ export async function POST(request: Request) {
 
     const { data: evento, error: eventoError } = await supabase
       .from("eventos")
-      .select("id, nome, local, cidade, estado, data_evento, banner_url")
+      .select("id, nome, local, cidade, estado, data_evento, banner_url, organizador_id")
       .eq("id", eventoId)
       .maybeSingle();
 
-    if (eventoError || !evento) return NextResponse.json({ error: "Evento nao encontrado." }, { status: 404 });
+    if (eventoError || !evento) return NextResponse.json({ error: "Evento não encontrado." }, { status: 404 });
+    if (evento.organizador_id !== auth.user.id) {
+      return NextResponse.json({ error: "Você não pode criar uma galeria para este evento." }, { status: 403 });
+    }
 
     const { data: existente } = await supabase.from("foto_eventos").select("id").eq("evento_id", evento.id).maybeSingle();
-    if (existente) return NextResponse.json({ error: "Esse evento ja possui galeria de fotos." }, { status: 409 });
+    if (existente) return NextResponse.json({ error: "Esse evento já possui galeria de fotos." }, { status: 409 });
 
     const preco = Number.isFinite(Number(precoCentavos)) ? Math.max(0, Number(precoCentavos)) : 1500;
     const comboQtd = Number.isFinite(Number(descontoComboQtd)) ? Math.max(2, Math.round(Number(descontoComboQtd))) : 3;
@@ -70,7 +73,8 @@ export async function POST(request: Request) {
     if (albumError) return NextResponse.json({ error: albumError.message }, { status: 500 });
 
     return NextResponse.json({ galeria });
-  } catch (error: any) {
-    return NextResponse.json({ error: error?.message || "Erro ao criar galeria." }, { status: 500 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Erro ao criar galeria.";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

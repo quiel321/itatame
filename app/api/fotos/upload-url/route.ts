@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { createR2PresignedPutUrl } from "@/app/lib/r2";
 import { fotoStoragePath } from "@/app/lib/fotos";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
+import { fotografoPodePublicarNoEvento, obterFotografoDoUsuario } from "@/app/lib/fotos-auth";
 
 export const runtime = "nodejs";
 
@@ -46,26 +47,23 @@ export async function POST(request: Request) {
     if (!TIPOS_PERMITIDOS.has(contentType)) return NextResponse.json({ error: "Envie JPG, PNG ou WebP." }, { status: 400 });
     if (!size || size > MAX_UPLOAD_BYTES) return NextResponse.json({ error: "Arquivo acima do limite de 5 MB." }, { status: 400 });
 
-    let { data: fotografo } = await supabase.from("fotografos").select("id").eq("user_id", auth.user.id).maybeSingle();
-    if (!fotografo) {
-      const nome = auth.user.user_metadata?.nome_completo || auth.user.user_metadata?.nome || auth.user.email?.split("@")[0] || "Fotógrafo";
-      const { data: novoFotógrafo, error: fotografoError } = await supabase
-        .from("fotografos")
-        .insert({ user_id: auth.user.id, nome, email: auth.user.email, status: "ativo" })
-        .select("id")
-        .single();
-
-      if (fotografoError || !novoFotógrafo) {
-        return NextResponse.json({ error: "Não foi possível criar o perfil do fotógrafo." }, { status: 500 });
-      }
-      fotografo = novoFotógrafo;
+    const fotografo = await obterFotografoDoUsuario(supabase, auth.user.id);
+    if (!fotografo || fotografo.status !== "ativo") {
+      return NextResponse.json({ error: "Perfil de fotógrafo não encontrado ou inativo." }, { status: 403 });
     }
 
     const { data: evento } = await supabase.from("foto_eventos").select("id, preco_padrao_centavos").eq("id", eventoId).maybeSingle();
     if (!evento) return NextResponse.json({ error: "Evento de fotos não encontrado." }, { status: 404 });
 
-    const { data: album } = await supabase.from("foto_albuns").select("id").eq("id", albumId).eq("evento_id", eventoId).maybeSingle();
+    if (!(await fotografoPodePublicarNoEvento(supabase, eventoId, fotografo.id))) {
+      return NextResponse.json({ error: "Fotógrafo não credenciado para este evento." }, { status: 403 });
+    }
+
+    const { data: album } = await supabase.from("foto_albuns").select("id, fotografo_id").eq("id", albumId).eq("evento_id", eventoId).maybeSingle();
     if (!album) return NextResponse.json({ error: "Álbum não encontrado." }, { status: 404 });
+    if (album.fotografo_id && album.fotografo_id !== fotografo.id) {
+      return NextResponse.json({ error: "Este álbum pertence a outro fotógrafo." }, { status: 403 });
+    }
 
     const fotoId = crypto.randomUUID();
     const key = fotoStoragePath(eventoId, albumId, fotoId, nomeSeguro(fileName));
@@ -97,7 +95,8 @@ export async function POST(request: Request) {
       previewKey,
       expiresIn: 900,
     });
-  } catch (error: any) {
-    return NextResponse.json({ error: error?.message || "Erro ao gerar upload." }, { status: 500 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Erro ao gerar upload.";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

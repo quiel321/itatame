@@ -134,7 +134,13 @@ export default function FotografoDashboardPage() {
         setTotais((atual) => ({ ...atual, fotos: fotos.count || 0, albuns: albuns.count || 0 }));
       }
 
-      const eventos = await supabase.from("foto_eventos").select("id", { count: "exact", head: true }).eq("status", "publicado");
+      const eventos = perfilAtual?.id
+        ? await supabase
+            .from("foto_evento_fotografos")
+            .select("id", { count: "exact", head: true })
+            .eq("fotografo_id", perfilAtual.id)
+            .eq("status", "ativo")
+        : { count: 0 };
       setTotais((atual) => ({ ...atual, eventos: eventos.count || 0 }));
       setCarregando(false);
     }

@@ -1,26 +1,12 @@
 ﻿import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
+import { fotografoPodePublicarNoEvento, obterFotografoDoUsuario } from "@/app/lib/fotos-auth";
 
 export const runtime = "nodejs";
 
 function bearerToken(request: Request) {
   const header = request.headers.get("authorization") || "";
   return header.toLowerCase().startsWith("bearer ") ? header.slice(7) : null;
-}
-
-async function garantirFotografo(supabase: ReturnType<typeof createSupabaseServerClient>, user: any) {
-  let { data: fotografo } = await supabase.from("fotografos").select("id").eq("user_id", user.id).maybeSingle();
-  if (fotografo) return fotografo;
-
-  const nome = user.user_metadata?.nome_completo || user.user_metadata?.nome || user.email?.split("@")[0] || "Fotógrafo";
-  const { data, error } = await supabase
-    .from("fotografos")
-    .insert({ user_id: user.id, nome, email: user.email, status: "ativo" })
-    .select("id")
-    .single();
-
-  if (error || !data) throw new Error(error?.message || "Nao foi possivel criar fotografo.");
-  return data;
 }
 
 export async function POST(request: Request) {
@@ -35,7 +21,23 @@ export async function POST(request: Request) {
     const { eventoId, titulo } = await request.json();
     if (!eventoId || !String(titulo || "").trim()) return NextResponse.json({ error: "Informe evento e titulo." }, { status: 400 });
 
-    const fotografo = await garantirFotografo(supabase, auth.user);
+    const fotografo = await obterFotografoDoUsuario(supabase, auth.user.id);
+    if (!fotografo || fotografo.status !== "ativo") {
+      return NextResponse.json({ error: "Perfil de fotógrafo não encontrado ou inativo." }, { status: 403 });
+    }
+
+    const { data: evento } = await supabase
+      .from("foto_eventos")
+      .select("id, status")
+      .eq("id", eventoId)
+      .maybeSingle();
+    if (!evento || evento.status !== "publicado") {
+      return NextResponse.json({ error: "Evento de fotos indisponível." }, { status: 404 });
+    }
+
+    if (!(await fotografoPodePublicarNoEvento(supabase, eventoId, fotografo.id))) {
+      return NextResponse.json({ error: "Fotógrafo não credenciado para este evento." }, { status: 403 });
+    }
     const { data, error } = await supabase
       .from("foto_albuns")
       .insert({ evento_id: eventoId, fotografo_id: fotografo.id, titulo: String(titulo).trim(), status: "publicado" })
@@ -44,7 +46,8 @@ export async function POST(request: Request) {
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ album: data });
-  } catch (error: any) {
-    return NextResponse.json({ error: error?.message || "Erro ao criar album." }, { status: 500 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Erro ao criar álbum.";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

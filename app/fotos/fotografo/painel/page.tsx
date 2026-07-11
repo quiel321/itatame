@@ -116,6 +116,7 @@ async function gerarPreviewComMarcaDagua(file: File) {
 export default function PainelFotografoPage() {
   const router = useRouter();
   const [email, setEmail] = useState<string | null>(null);
+  const [fotografoId, setFotografoId] = useState("");
   const [eventos, setEventos] = useState<FotoEvento[]>([]);
   const [albuns, setAlbuns] = useState<FotoAlbum[]>([]);
   const [eventoId, setEventoId] = useState("");
@@ -147,11 +148,30 @@ export default function PainelFotografoPage() {
         return;
       }
 
-      const { data } = await supabase
-        .from("foto_eventos")
-        .select("id, nome, slug, local, cidade, estado, data_evento, capa_url, status")
-        .eq("status", "publicado")
-        .order("data_evento", { ascending: false });
+      const { data: fotografo } = await supabase
+        .from("fotografos")
+        .select("id")
+        .eq("user_id", auth.user.id)
+        .maybeSingle();
+      setFotografoId(fotografo?.id || "");
+
+      const { data: credenciais } = fotografo
+        ? await supabase
+            .from("foto_evento_fotografos")
+            .select("evento_id")
+            .eq("fotografo_id", fotografo.id)
+            .eq("status", "ativo")
+        : { data: [] };
+      const eventosPermitidos = (credenciais || []).map((item) => item.evento_id);
+
+      const { data } = eventosPermitidos.length
+        ? await supabase
+            .from("foto_eventos")
+            .select("id, nome, slug, local, cidade, estado, data_evento, capa_url, status")
+            .in("id", eventosPermitidos)
+            .eq("status", "publicado")
+            .order("data_evento", { ascending: false })
+        : { data: [] };
 
       const lista = (data || []) as FotoEvento[];
       setEventos(lista);
@@ -164,7 +184,7 @@ export default function PainelFotografoPage() {
 
   useEffect(() => {
     async function carregarAlbuns() {
-      if (!eventoId) {
+      if (!eventoId || !fotografoId) {
         setAlbuns([]);
         setAlbumId("");
         return;
@@ -174,6 +194,7 @@ export default function PainelFotografoPage() {
         .from("foto_albuns")
         .select("id, evento_id, fotografo_id, titulo, descricao, capa_url, status")
         .eq("evento_id", eventoId)
+        .or(`fotografo_id.eq.${fotografoId},fotografo_id.is.null`)
         .order("ordem", { ascending: true });
 
       const lista = (data || []) as FotoAlbum[];
@@ -182,7 +203,7 @@ export default function PainelFotografoPage() {
     }
 
     void carregarAlbuns();
-  }, [eventoId]);
+  }, [eventoId, fotografoId]);
 
   const eventoSelecionado = useMemo(() => eventos.find((evento) => evento.id === eventoId), [eventos, eventoId]);
   const valorAtual = formatarPrecoFotos(precoCentavos());
