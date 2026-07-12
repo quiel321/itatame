@@ -133,7 +133,7 @@ export default function FotosLoginPage() {
                     key={key}
                     type="button"
                     onClick={() => { setPerfil(key); setDestinoManual(null); }}
-                    className={`rounded-3xl border p-5 text-left transition-all duration-300 transform ${ativo ? `${temaBotao.activeCard} md:-translate-y-2 shadow-xl` : "border-white/5 bg-[#111] hover:bg-white/5"}`}
+                    className={`cursor-pointer rounded-3xl border p-5 text-left transition-all duration-300 transform ${ativo ? `${temaBotao.activeCard} md:-translate-y-2 shadow-xl` : "border-white/5 bg-[#111] hover:bg-white/5"}`}
                   >
                     <Icon size={24} className={ativo ? temaBotao.activeIcon : "text-zinc-600"} />
                     <p className={`mt-4 text-[11px] font-black uppercase tracking-wider ${ativo ? "text-white" : "text-zinc-300"}`}>{item.titulo}</p>
@@ -164,7 +164,7 @@ export default function FotosLoginPage() {
                      type="email" 
                      required 
                      placeholder="seu@email.com"
-                     className={`h-14 w-full rounded-2xl border border-white/5 bg-[#050505] pl-11 pr-4 text-xs font-bold text-white outline-none transition-all placeholder:text-zinc-700 focus:ring-1 ${temaAtual.focus}`} 
+                     className={`cursor-text h-14 w-full rounded-2xl border border-white/5 bg-[#050505] pl-11 pr-4 text-xs font-bold text-white outline-none transition-all placeholder:text-zinc-700 focus:ring-1 ${temaAtual.focus}`} 
                    />
                  </div>
                </div>
@@ -172,7 +172,7 @@ export default function FotosLoginPage() {
                <div>
                  <div className="flex items-center justify-between ml-1 mb-1.5">
                     <label className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500">Senha</label>
-                    <Link href="/recuperar-senha" className="text-[9px] font-bold text-zinc-500 hover:text-white transition-colors">Esqueceu?</Link>
+                    <Link href="/recuperar-senha" className="cursor-pointer text-[9px] font-bold text-zinc-500 hover:text-white transition-colors">Esqueceu?</Link>
                  </div>
                  <div className="relative">
                    <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-600" />
@@ -182,7 +182,7 @@ export default function FotosLoginPage() {
                      type="password" 
                      required 
                      placeholder="••••••••"
-                     className={`h-14 w-full rounded-2xl border border-white/5 bg-[#050505] pl-11 pr-4 text-xs font-bold text-white outline-none transition-all placeholder:text-zinc-700 focus:ring-1 ${temaAtual.focus}`} 
+                     className={`cursor-text h-14 w-full rounded-2xl border border-white/5 bg-[#050505] pl-11 pr-4 text-xs font-bold text-white outline-none transition-all placeholder:text-zinc-700 focus:ring-1 ${temaAtual.focus}`} 
                    />
                  </div>
                </div>
@@ -196,18 +196,18 @@ export default function FotosLoginPage() {
 
             <button 
                disabled={carregando} 
-               className={`mt-8 h-14 w-full rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${temaAtual.button}`}
+               className={`cursor-pointer mt-8 h-14 w-full rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${temaAtual.button}`}
             >
                {carregando ? "Acessando sistema..." : `Entrar como ${perfilAtual.titulo.split(' / ')[0]}`}
                {!carregando && temaAtual.iconeBtn}
             </button>
 
-            {/* 🔥 LINK DE CADASTRO DINÂMICO ÚNICO! */}
+            {/* 🔥 LINK DE CADASTRO DINÂMICO ÚNICO COM MÃOZINHA! */}
             <div className="mt-8 pt-6 border-t border-white/5">
                <p className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500 text-center mb-4">Ainda não tem conta?</p>
                <Link 
                  href={`/fotos/cadastro?perfil=${perfil}`} 
-                 className={`h-14 flex items-center justify-center rounded-2xl border bg-[#050505] text-[10px] font-black uppercase tracking-widest transition-all ${temaAtual.hoverLink}`}
+                 className={`cursor-pointer h-14 flex items-center justify-center rounded-2xl border bg-[#050505] text-[10px] font-black uppercase tracking-widest transition-all ${temaAtual.hoverLink}`}
                >
                  {perfilAtual.textoCadastro}
                </Link>

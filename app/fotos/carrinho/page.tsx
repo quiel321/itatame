@@ -122,8 +122,8 @@ export default function FotosCarrinhoPage() {
             preview_url,
             thumb_url,
             status,
-            foto_eventos ( nome, desconto_combo_qtd, desconto_combo_percentual ),
-            fotografos ( nome )
+            evento_dados:foto_eventos!evento_id ( nome, desconto_combo_qtd, desconto_combo_percentual ),
+            fotografo_dados:fotografos!fotografo_id ( nome )
           `)
           .in("id", idsSalvos)
           .eq("status", "publicada");
@@ -143,8 +143,10 @@ export default function FotosCarrinhoPage() {
           .map((id: string) => mapa.get(id))
           .filter(Boolean)
           .map((foto: any) => {
-            const evento = primeiraRelacao(foto.foto_eventos);
-            const fotografo = primeiraRelacao(foto.fotografos);
+            // Agora puxamos pelo apelido exato que demos na query acima!
+            const evento = primeiraRelacao(foto.evento_dados);
+            const fotografo = primeiraRelacao(foto.fotografo_dados);
+            
             return {
               id: String(foto.id),
               evento: evento?.nome || "Evento Oficial",

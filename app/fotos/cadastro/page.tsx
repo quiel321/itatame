@@ -95,7 +95,6 @@ export default function FotosCadastroPage() {
     setErro("");
     setCarregando(true);
     
-    // 1. Cria o utilizador no Cofre do Supabase (Auth Central do Ecossistema)
     const { data, error } = await supabase.auth.signUp({ 
       email, 
       password: senha,
@@ -145,7 +144,7 @@ export default function FotosCadastroPage() {
                     key={key}
                     type="button"
                     onClick={() => { setPerfil(key); setDestinoManual(null); }}
-                    className={`rounded-3xl border p-5 text-left transition-all duration-300 transform ${ativo ? `${temaBotao.activeCard} md:-translate-y-2 shadow-xl` : "border-white/5 bg-[#111] hover:bg-white/5"}`}
+                    className={`cursor-pointer rounded-3xl border p-5 text-left transition-all duration-300 transform ${ativo ? `${temaBotao.activeCard} md:-translate-y-2 shadow-xl` : "border-white/5 bg-[#111] hover:bg-white/5"}`}
                   >
                     <Icon size={24} className={ativo ? temaBotao.activeIcon : "text-zinc-600"} />
                     <p className={`mt-4 text-[11px] font-black uppercase tracking-wider ${ativo ? "text-white" : "text-zinc-300"}`}>{item.titulo}</p>
@@ -170,7 +169,7 @@ export default function FotosCadastroPage() {
                  <label className="block text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500 ml-1 mb-1.5">Seu Nome Completo</label>
                  <div className="relative">
                    <User size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-600" />
-                   <input value={nome} onChange={(e) => setNome(e.target.value)} type="text" required placeholder="Nome e Sobrenome" className={`h-14 w-full rounded-2xl border border-white/5 bg-[#050505] pl-11 pr-4 text-xs font-bold text-white outline-none transition-all placeholder:text-zinc-700 focus:ring-1 ${temaAtual.focus}`} />
+                   <input value={nome} onChange={(e) => setNome(e.target.value)} type="text" required placeholder="Nome e Sobrenome" className={`h-14 w-full cursor-text rounded-2xl border border-white/5 bg-[#050505] pl-11 pr-4 text-xs font-bold text-white outline-none transition-all placeholder:text-zinc-700 focus:ring-1 ${temaAtual.focus}`} />
                  </div>
                </div>
 
@@ -178,7 +177,7 @@ export default function FotosCadastroPage() {
                  <label className="block text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500 ml-1 mb-1.5">E-mail</label>
                  <div className="relative">
                    <Mail size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-600" />
-                   <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" required placeholder="seu@email.com" className={`h-14 w-full rounded-2xl border border-white/5 bg-[#050505] pl-11 pr-4 text-xs font-bold text-white outline-none transition-all placeholder:text-zinc-700 focus:ring-1 ${temaAtual.focus}`} />
+                   <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" required placeholder="seu@email.com" className={`h-14 w-full cursor-text rounded-2xl border border-white/5 bg-[#050505] pl-11 pr-4 text-xs font-bold text-white outline-none transition-all placeholder:text-zinc-700 focus:ring-1 ${temaAtual.focus}`} />
                  </div>
                </div>
 
@@ -186,7 +185,7 @@ export default function FotosCadastroPage() {
                  <label className="block text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500 ml-1 mb-1.5">Criar Senha</label>
                  <div className="relative">
                    <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-600" />
-                   <input value={senha} onChange={(e) => setSenha(e.target.value)} type="password" required placeholder="Mínimo 6 caracteres" minLength={6} className={`h-14 w-full rounded-2xl border border-white/5 bg-[#050505] pl-11 pr-4 text-xs font-bold text-white outline-none transition-all placeholder:text-zinc-700 focus:ring-1 ${temaAtual.focus}`} />
+                   <input value={senha} onChange={(e) => setSenha(e.target.value)} type="password" required placeholder="Mínimo 6 caracteres" minLength={6} className={`h-14 w-full cursor-text rounded-2xl border border-white/5 bg-[#050505] pl-11 pr-4 text-xs font-bold text-white outline-none transition-all placeholder:text-zinc-700 focus:ring-1 ${temaAtual.focus}`} />
                  </div>
                </div>
             </div>
@@ -197,14 +196,14 @@ export default function FotosCadastroPage() {
                </div>
             )}
 
-            <button disabled={carregando} className={`mt-8 h-14 w-full rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${temaAtual.button}`}>
+            <button disabled={carregando} className={`cursor-pointer mt-8 h-14 w-full rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${temaAtual.button}`}>
                {carregando ? "A criar conta..." : "Completar Cadastro"}
                {!carregando && temaAtual.iconeBtn}
             </button>
 
             <div className="mt-8 pt-6 border-t border-white/5">
                <p className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500 text-center mb-4">Já tem uma conta?</p>
-               <Link href={`/fotos/login?perfil=${perfil}`} className={`h-14 flex items-center justify-center rounded-2xl border bg-[#050505] text-[10px] font-black uppercase tracking-widest transition-all ${temaAtual.hoverLink}`}>
+               <Link href={`/fotos/login?perfil=${perfil}`} className={`cursor-pointer h-14 flex items-center justify-center rounded-2xl border bg-[#050505] text-[10px] font-black uppercase tracking-widest transition-all ${temaAtual.hoverLink}`}>
                  {perfilAtual.textoLogin}
                </Link>
             </div>

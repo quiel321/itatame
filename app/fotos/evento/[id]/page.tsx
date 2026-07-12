@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
 import { FotoAlbum, FotoArquivo, FotoEvento, formatarPrecoFotos } from "@/app/lib/fotos";
 import FotosShell from "../../_components/FotosShell";
+import { Camera, /* ... outros ícones ... */ } from "lucide-react";
 import { AlertTriangle, CalendarDays, CheckCircle2, ChevronLeft, Filter, Image as ImageIcon, MapPin, ScanFace, Search, ShieldCheck, ShoppingCart, X, Building2, Percent } from "lucide-react";
 
 const CARRINHO_FOTOS_KEY = "carrinho_fotos";
@@ -75,7 +76,7 @@ export default function FotosEventoPage() {
       const [{ data: eventoData }, { data: albunsData }, { data: fotosData }] = await Promise.all([
         supabase.from("foto_eventos").select("id, nome, slug, local, cidade, estado, data_evento, capa_url, status, vendas_ate, desconto_combo_qtd, desconto_combo_percentual, organizador_user_id").eq("id", eventoId).maybeSingle(),
         supabase.from("foto_albuns").select("id, evento_id, fotografo_id, titulo, descricao, capa_url, status").eq("evento_id", eventoId).eq("status", "publicado").order("ordem", { ascending: true }),
-        supabase.from("foto_arquivos").select("id, evento_id, album_id, fotografo_id, titulo, r2_original_key, r2_preview_key, r2_thumb_key, preview_url, thumb_url, preco_centavos, status").eq("evento_id", eventoId).eq("status", "publicada").order("created_at", { ascending: false }),
+        supabase.from("foto_arquivos").select("id, evento_id, album_id, fotografo_id, titulo, r2_original_key, r2_preview_key, r2_thumb_key, preview_url, thumb_url, preco_centavos, status, fotografo_dados:fotografos!fotografo_id(nome)").eq("evento_id", eventoId).eq("status", "publicada").order("created_at", { ascending: false }),
       ]);
 
       // 2. 🔥 BUSCA O ORGANIZADOR REAL NO BANCO DE DADOS
@@ -296,8 +297,16 @@ export default function FotosEventoPage() {
                       <div className="flex h-full items-center justify-center px-4 text-center text-[9px] font-black uppercase tracking-[0.2em] text-zinc-700 bg-zinc-950">iTatame</div>
                     )}
 
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.25] md:opacity-[0.18] group-hover:opacity-[0.25] transition-opacity select-none z-10">
-                      <span className="text-white text-xl md:text-2xl font-black uppercase tracking-[0.3em] rotate-[-30deg] drop-shadow-2xl">iTatame</span>
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.15] group-hover:opacity-[0.25] transition-opacity select-none z-10">
+                      <span className="text-xl md:text-2xl font-black uppercase tracking-[0.3em] rotate-[-30deg]">
+                        <span className="text-white drop-shadow-md">i</span><span className="text-red-500 drop-shadow-md">Tatame</span>
+                      </span>
+                    </div>
+
+                    <div className="absolute left-1 md:left-2 top-0 bottom-0 flex items-center justify-center pointer-events-none select-none z-10 opacity-30">
+                      <span className="text-white text-[7px] md:text-[8px] font-black uppercase tracking-[0.25em] -rotate-90 whitespace-nowrap drop-shadow-md">
+                        Não tire print, valorize o fotógrafo
+                      </span>
                     </div>
 
                     <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/95 via-black/40 to-transparent pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20"></div>
@@ -363,27 +372,64 @@ export default function FotosEventoPage() {
                   loading="lazy" 
                 />
                 
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.25] md:opacity-[0.15] select-none z-10">
-                  <span className="text-white text-3xl md:text-6xl font-black uppercase tracking-[0.4em] rotate-[-25deg] drop-shadow-2xl">iTatame Fotos</span>
+                {/* MARCA D'ÁGUA CENTRAL SUTIL */}
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.15] select-none z-10">
+                  <span className="text-4xl md:text-6xl font-black uppercase tracking-[0.3em] rotate-[-25deg]">
+                    <span className="text-white drop-shadow-lg">i</span><span className="text-red-500 drop-shadow-lg">Tatame</span>
+                  </span>
+                </div>
+
+                {/* AVISO VERTICAL SUTIL */}
+                <div className="absolute left-2 md:left-6 top-0 bottom-0 flex items-center justify-center pointer-events-none select-none z-10 opacity-30">
+                  <span className="text-white text-[10px] md:text-sm font-black uppercase tracking-[0.3em] -rotate-90 whitespace-nowrap drop-shadow-lg">
+                    Não tire print, valorize o fotógrafo
+                  </span>
                 </div>
               </div>
 
               <div className="w-full md:w-[340px] shrink-0 bg-[#0a0a0e] border border-white/5 rounded-3xl p-5 md:p-6 flex flex-col gap-5 shadow-2xl">
-                <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-2xl bg-zinc-900 flex items-center justify-center text-zinc-500 border border-white/5 shrink-0">
+                
+                {/* 1. Cabeçalho da Foto Refinado */}
+                <div className="flex items-center gap-3.5">
+                    <div className="w-12 h-12 rounded-2xl bg-zinc-900 flex items-center justify-center text-zinc-500 border border-white/5 shrink-0 shadow-inner">
                         <ImageIcon size={20}/>
                     </div>
-                    <div>
-                        <h3 className="text-white text-xs font-black uppercase tracking-tight truncate px-1">{fotoSelecionada.titulo || "Foto do evento"}</h3>
-                        <p className="text-zinc-500 text-[9px] uppercase tracking-widest mt-1">REF: {fotoSelecionada.id.toString().substring(0, 10)}</p>
+                    <div className="flex-1 min-w-0">
+                        <h3 className="text-white text-sm font-black uppercase tracking-tight truncate">{fotoSelecionada.titulo || "Foto do evento"}</h3>
+                        <p className="text-zinc-500 text-[9px] uppercase tracking-widest mt-0.5">REF: {fotoSelecionada.id.toString().substring(0, 8)}</p>
                     </div>
                 </div>
 
-                <div className="w-full h-[1px] bg-white/5"></div>
+                <div className="w-full h-[1px] bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
 
-                <div className="flex flex-wrap items-center gap-2">
-                    <span className="bg-white/5 text-zinc-400 text-[8px] font-bold uppercase tracking-wider px-2.5 py-1.5 rounded-md border border-white/10">Jiu-Jitsu</span>
-                    {evento && <span className="bg-white/5 text-zinc-400 text-[8px] font-bold uppercase tracking-wider px-2.5 py-1.5 rounded-md border border-white/10">{formatarData(evento.data_evento)}</span>}
+                {/* 2. NOVO: Card do Fotógrafo e Tags */}
+                <div className="flex flex-col gap-4">
+                    
+                    {/* Card do Fotógrafo */}
+                    <div className="flex items-center gap-3 bg-white/[0.02] border border-white/5 rounded-2xl p-3 transition-colors hover:bg-white/[0.04]">
+                        <div className="w-9 h-9 rounded-xl bg-red-500/10 flex items-center justify-center text-red-500 shrink-0 border border-red-500/20">
+                            <Camera size={16} />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                            <p className="text-[8px] font-bold text-zinc-500 uppercase tracking-widest mb-0.5">Lentes por</p>
+                            <p className="text-[11px] font-black text-white uppercase tracking-wider truncate">
+                                {/* Usamos o 'any' rápido para o TS não reclamar da coluna nova que injetamos na query */}
+                                {(fotoSelecionada as any).fotografo_dados?.nome || "Fotógrafo Parceiro"}
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* Tags Estilizadas */}
+                    <div className="flex flex-wrap items-center gap-2">
+                        <span className="bg-white/5 text-zinc-400 text-[9px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg border border-white/10 flex items-center gap-1.5">
+                           <ShieldCheck size={12} className="text-emerald-500/70"/> Jiu-Jitsu
+                        </span>
+                        {evento && (
+                           <span className="bg-white/5 text-zinc-400 text-[9px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg border border-white/10 flex items-center gap-1.5">
+                              <CalendarDays size={12} className="text-cyan-500/70"/> {formatarData(evento.data_evento)}
+                           </span>
+                        )}
+                    </div>
                 </div>
                 
                 <div className="mt-auto flex flex-col gap-4">
@@ -392,15 +438,34 @@ export default function FotosEventoPage() {
                       <p className="text-3xl font-black text-cyan-400 tracking-tight leading-none pr-1">{formatarPrecoFotos(fotoSelecionada.preco_centavos)}</p>
                   </div>
 
-                  {carrinho.includes(String(fotoSelecionada.id)) ? (
-                     <button onClick={(e) => toggleCarrinho(String(fotoSelecionada.id), e)} className="w-full cursor-pointer py-4 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-black text-[11px] font-black uppercase tracking-widest transition-colors flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(16,185,129,0.2)]">
-                       <CheckCircle2 size={16}/> Na Sacola (Remover)
-                     </button>
-                  ) : (
-                    <button onClick={(e) => toggleCarrinho(String(fotoSelecionada.id), e)} className="w-full cursor-pointer py-4 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-black text-[11px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(6,182,212,0.2)]">
-                      <ShoppingCart size={16}/> Adicionar ao Carrinho
-                    </button>
-                  )}
+                  {/* BOTÕES LADO A LADO */}
+                  <div className="grid grid-cols-2 gap-3 w-full">
+                    
+                    {/* Botão de Adicionar/Remover */}
+                    {carrinho.includes(String(fotoSelecionada.id)) ? (
+                       <button onClick={(e) => toggleCarrinho(String(fotoSelecionada.id), e)} className="w-full cursor-pointer py-3.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-colors flex items-center justify-center gap-1.5 shadow-[0_0_15px_rgba(16,185,129,0.2)]">
+                         <CheckCircle2 size={14}/> Na Sacola
+                       </button>
+                    ) : (
+                      <button onClick={(e) => toggleCarrinho(String(fotoSelecionada.id), e)} className="w-full cursor-pointer py-3.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 shadow-[0_0_15px_rgba(6,182,212,0.2)]">
+                        <ShoppingCart size={14}/> Adicionar
+                      </button>
+                    )}
+                    
+                    {/* Botão de Finalizar Compra Rápida */}
+                    <Link 
+                      href="/fotos/carrinho" 
+                      onClick={(e) => {
+                        // O "Truque de Mestre": Se ele clicar em Finalizar sem ter adicionado antes, o sistema adiciona automaticamente e já leva pro carrinho!
+                        if (!carrinho.includes(String(fotoSelecionada.id))) {
+                          toggleCarrinho(String(fotoSelecionada.id));
+                        }
+                      }} 
+                      className="w-full cursor-pointer py-3.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 shadow-[0_0_15px_rgba(239,68,68,0.2)] text-center"
+                    >
+                      Finalizar
+                    </Link>
+                  </div>
                 </div>
               </div>
             </div>
