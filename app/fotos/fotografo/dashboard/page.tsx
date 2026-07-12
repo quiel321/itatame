@@ -8,7 +8,7 @@ import FotosShell from "../../_components/FotosShell";
 import { ArrowRight, Camera, CheckCircle2, CloudUpload, CreditCard, FolderOpen, ImagePlus, ShieldCheck, Wallet, LogOut, AlertCircle, Store } from "lucide-react";
 
 type FotografoPerfil = { id: string; nome: string | null; email: string | null; telefone?: string | null; documento?: string | null; cep?: string | null; endereco?: string | null; cidade?: string | null; estado?: string | null; bio?: string | null; perfil_completo?: boolean | null; status: string | null; mp_connected_at?: string | null; mp_user_id?: string | null; };
-type Totais = { fotos: number; albuns: number; eventos: number };
+type Totais = { fotos: number; albuns: number; eventos: number; vendas: number };
 type PerfilForm = { nome: string; telefone: string; documento: string; cep: string; endereco: string; cidade: string; estado: string; bio: string; };
 
 function perfilParaForm(perfil: FotografoPerfil | null, email: string | null): PerfilForm {
@@ -21,7 +21,7 @@ export default function FotografoDashboardPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [email, setEmail] = useState<string | null>(null);
   const [perfil, setPerfil] = useState<FotografoPerfil | null>(null);
-  const [totais, setTotais] = useState<Totais>({ fotos: 0, albuns: 0, eventos: 0 });
+  const [totais, setTotais] = useState<Totais>({ fotos: 0, albuns: 0, eventos: 0, vendas: 0 });
   const [carregando, setCarregando] = useState(true);
   const [salvandoPerfil, setSalvandoPerfil] = useState(false);
   const [mostrarFormularioPerfil, setMostrarFormularioPerfil] = useState(false);
@@ -45,7 +45,6 @@ export default function FotografoDashboardPage() {
         return;
       }
 
-      // 🔥 BLINDAGEM 1: Se for organizador, CHUTA pra área dele (/fotos/admin)
       const { data: isOrg } = await supabase.from("organizadores").select("user_id").eq("user_id", user.id).maybeSingle();
       if (isOrg) {
         router.replace("/fotos/admin");
@@ -65,7 +64,6 @@ export default function FotografoDashboardPage() {
         perfilAtual = (tentativaBasica.data as FotografoPerfil | null) || null;
       }
 
-      // 🔥 BLINDAGEM 2: Se não é fotógrafo e chegou aqui, joga pra tela de cadastro que você enviou
       if (!perfilAtual) {
         router.replace("/fotos/login?perfil=fotografo");
         return;
@@ -74,12 +72,14 @@ export default function FotografoDashboardPage() {
       setPerfil(perfilAtual);
       setPerfilForm(perfilParaForm(perfilAtual, user.email || null));
 
+      // 🔥 BUSCANDO AS VENDAS REAIS!
       if (perfilAtual?.id) {
-        const [fotos, albuns] = await Promise.all([
+        const [fotos, albuns, vendas] = await Promise.all([
           supabase.from("foto_arquivos").select("id", { count: "exact", head: true }).eq("fotografo_id", perfilAtual.id),
           supabase.from("foto_albuns").select("id", { count: "exact", head: true }).eq("fotografo_id", perfilAtual.id),
+          supabase.from("foto_pedidos").select("id", { count: "exact", head: true }).eq("fotografo_id", perfilAtual.id).eq("status", "pago"),
         ]);
-        setTotais((atual) => ({ ...atual, fotos: fotos.count || 0, albuns: albuns.count || 0 }));
+        setTotais((atual) => ({ ...atual, fotos: fotos.count || 0, albuns: albuns.count || 0, vendas: vendas.count || 0 }));
       }
 
       const eventos = perfilAtual?.id ? await supabase.from("foto_evento_fotografos").select("id", { count: "exact", head: true }).eq("fotografo_id", perfilAtual.id).eq("status", "ativo") : { count: 0 };
@@ -139,7 +139,8 @@ export default function FotografoDashboardPage() {
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {[[ImagePlus, "Fotos Publicadas", totais.fotos, "text-cyan-400"], [FolderOpen, "Álbuns Criados", totais.albuns, "text-white"], [Store, "Eventos Abertos", totais.eventos, "text-amber-400"], [Wallet, "Vendas", "0", "text-emerald-400"]].map(([Icon, label, valor, cor], index) => {
+              {/* 🔥 AGORA COM totais.vendas INSERIDO! */}
+              {[[ImagePlus, "Fotos Publicadas", totais.fotos, "text-cyan-400"], [FolderOpen, "Álbuns Criados", totais.albuns, "text-white"], [Store, "Eventos Abertos", totais.eventos, "text-amber-400"], [Wallet, "Vendas", totais.vendas, "text-emerald-400"]].map(([Icon, label, valor, cor], index) => {
                 const IconComponent = Icon as typeof Camera;
                 return (
                   <div key={index} className="relative overflow-hidden rounded-2xl border border-white/5 bg-[#0a0a0e]/80 backdrop-blur-md p-5 shadow-lg group hover:border-white/10 transition-colors">

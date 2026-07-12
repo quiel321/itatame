@@ -11,41 +11,33 @@ function primeiraRelacao<T>(valor: T | T[] | null | undefined) {
 export async function POST(request: Request) {
   try {
     const url = new URL(request.url);
-    const body = await request.json().catch(() => ({})); // Garante que não quebre se o corpo for vazio
+    const body = await request.json().catch(() => ({})); 
     
-    // Mercado Pago pode enviar o ID de várias formas diferentes (data.id no json ou na URL)
     const paymentId = String(body?.data?.id || url.searchParams.get("data.id") || "");
     
     if (!paymentId || paymentId === "undefined" || paymentId === "null") {
-      return NextResponse.json({ success: true, message: "Aviso do MP recebido, mas não era um pagamento." });
+      return NextResponse.json({ success: true, message: "Aviso do MP ignorado." });
     }
 
     const supabase = createSupabaseServerClient();
     
-    // Tenta pegar o pedidoId pela URL que nós mesmos mandamos na criação do Pix
-    let pedidoId = url.searchParams.get("pedido_id");
-    let pedido = null;
-
-    if (pedidoId) {
-      pedido = (await supabase.from("foto_pedidos").select("id, total_centavos, status, fotografo_id, fotografos(mp_access_token)").eq("id", pedidoId).maybeSingle()).data;
-    }
+    // Busca o pedido pelo ID do pagamento gerado
+    const { data: pedidoBusca } = await supabase
+      .from("foto_pedidos")
+      .select("id, total_centavos, status, fotografo_id, fotografos(mp_access_token)")
+      .eq("provedor_payment_id", paymentId)
+      .maybeSingle();
     
-    // Se não achou pela URL, tenta achar pelo paymentId que guardamos no banco
-    if (!pedido) {
-      pedido = (await supabase.from("foto_pedidos").select("id, total_centavos, status, fotografo_id, fotografos(mp_access_token)").eq("provedor_payment_id", paymentId).maybeSingle()).data;
-      pedidoId = pedido?.id || null;
-    }
-    
-    if (!pedido || !pedidoId) {
-      return NextResponse.json({ success: true, message: "Pedido não localizado na base do iTatame." });
+    if (!pedidoBusca || !pedidoBusca.id) {
+      return NextResponse.json({ success: true, message: "Pedido não localizado." });
     }
 
-    const fotografo = primeiraRelacao(pedido.fotografos);
+    const fotografo = primeiraRelacao(pedidoBusca.fotografos);
     if (!fotografo?.mp_access_token) {
-      return NextResponse.json({ success: true, message: "Token do fotógrafo não encontrado." });
+      return NextResponse.json({ success: true, message: "Token do fotógrafo ausente." });
     }
 
-    // A MÁGICA DE SEGURANÇA: Vamos direto no Mercado Pago perguntar se esse pagamento é real e se já está pago!
+    // Consulta direta na fonte de verdade: O Mercado Pago
     const paymentResponse = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
       headers: { Authorization: `Bearer ${fotografo.mp_access_token}` },
     });
@@ -56,29 +48,37 @@ export async function POST(request: Request) {
 
     const payment = await paymentResponse.json();
 
-    // Verificações de segurança (Garante que o pagamento é realmente deste pedido e no valor certo)
-    const valorCorreto = Math.round(Number(payment.transaction_amount || 0) * 100) === Number(pedido.total_centavos);
-    if (payment.external_reference !== `foto_pedido:${pedidoId}` || !valorCorreto) {
+    // 🔥 A TESOURA: Pega apenas o UUID limpo da referência do MP
+    const uuidRegex = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+    const match = payment.external_reference?.match(uuidRegex);
+    const extractedPedidoId = match ? match[0] : null;
+
+    // Verificações de Segurança Rigorosas
+    const valorCorreto = Math.round(Number(payment.transaction_amount || 0) * 100) === Number(pedidoBusca.total_centavos);
+    if (!extractedPedidoId || extractedPedidoId !== pedidoBusca.id || !valorCorreto) {
       return NextResponse.json({ success: true, message: "Pagamento divergente ou manipulado." });
     }
 
-    // Atualiza o banco com os dados novos do Mercado Pago
+    // 🔥 TRADUTOR: Se o MP disser "approved", nós forçamos a palavra "pago" no Supabase!
+    const isAprovado = payment.status === "approved";
+    const statusBanco = isAprovado ? "pago" : pedidoBusca.status;
+
+    // Atualiza o banco garantindo o status correto
     await supabase.from("foto_pedidos").update({
       provedor_payment_id: paymentId,
       provedor_status_detail: payment.status_detail || null,
-    }).eq("id", pedidoId);
+      status: statusBanco 
+    }).eq("id", extractedPedidoId);
     
-    // SE O MP DISSER QUE ESTÁ PAGO (approved) e o nosso sistema ainda não marcou como pago...
-    if (payment.status === "approved" && pedido.status !== "pago") {
-      // 🚀 LIBERA AS FOTOS!
-      await liberarPedidoFotos(supabase, pedidoId, paymentId, payment.status_detail);
-      console.log(`[iTatame Webhook] PIX Aprovado! Pedido ${pedidoId} liberado com sucesso.`);
+    // E finalmente, libera os downloads!
+    if (isAprovado && pedidoBusca.status !== "pago") {
+      await liberarPedidoFotos(supabase, extractedPedidoId, paymentId, payment.status_detail);
+      console.log(`[iTatame Webhook] PIX Aprovado! Pedido ${extractedPedidoId} liberado com sucesso.`);
     }
 
     return NextResponse.json({ success: true, status: payment.status });
   } catch (error) {
     console.error("[iTatame Webhook Error]:", error);
-    // Retornamos 200 pro MP parar de enviar a mesma notificação, mas avisamos que deu erro interno
     return NextResponse.json({ success: false, message: "Erro interno no servidor." }, { status: 200 });
   }
 }
