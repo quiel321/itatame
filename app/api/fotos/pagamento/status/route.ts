@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
+import { sincronizarPagamentoFotos } from "@/app/lib/fotos-mercado-pago";
 
 function bearerToken(request: Request) {
   const header = request.headers.get("authorization") || "";
@@ -17,14 +18,22 @@ export async function GET(request: Request) {
   const pedidoId = new URL(request.url).searchParams.get("pedido_id");
   if (!pedidoId) return NextResponse.json({ error: "Pedido não informado." }, { status: 400 });
 
-  const { data: pedido } = await supabase
-    .from("foto_pedidos")
-    .select("id, status, provedor_status_detail, pago_em")
-    .eq("id", pedidoId)
-    .eq("comprador_user_id", auth.user.id)
-    .maybeSingle();
-  if (!pedido) return NextResponse.json({ error: "Pedido não encontrado." }, { status: 404 });
-
-  return NextResponse.json(pedido);
+  try {
+    const pedido = await sincronizarPagamentoFotos(supabase, {
+      pedidoId,
+      compradorUserId: auth.user.id,
+    });
+    if (!pedido) return NextResponse.json({ error: "Pedido não encontrado." }, { status: 404 });
+    return NextResponse.json(pedido);
+  } catch (error) {
+    console.error("Consulta de pagamento iTatame Fotos:", error);
+    const { data: pedido } = await supabase
+      .from("foto_pedidos")
+      .select("id, status, provedor_status_detail, pago_em")
+      .eq("id", pedidoId)
+      .eq("comprador_user_id", auth.user.id)
+      .maybeSingle();
+    if (!pedido) return NextResponse.json({ error: "Pedido não encontrado." }, { status: 404 });
+    return NextResponse.json({ ...pedido, sincronizado: false });
+  }
 }
-

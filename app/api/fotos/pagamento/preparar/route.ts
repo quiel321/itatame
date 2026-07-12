@@ -16,6 +16,13 @@ function baseUrl(request: Request) {
   return process.env.NEXT_PUBLIC_BASE_URL || new URL(request.url).origin;
 }
 
+function notificationUrl(request: Request, pedidoId: string) {
+  const url = new URL("/api/fotos/pagamento/webhook", baseUrl(request));
+  url.searchParams.set("pedido_id", pedidoId);
+  url.searchParams.set("source_news", "webhooks");
+  return url.toString();
+}
+
 export async function POST(request: Request) {
   try {
     const token = bearerToken(request);
@@ -123,7 +130,7 @@ export async function POST(request: Request) {
         }],
         external_reference: `foto_pedido:${pedido.id}`,
         marketplace_fee: comissaoCentavos / 100,
-        notification_url: `${baseUrl(request)}/api/fotos/pagamento/webhook?pedido_id=${pedido.id}`,
+        notification_url: notificationUrl(request, pedido.id),
         metadata: { pedido_id: pedido.id, evento_id: eventoId, fotografo_id: fotografoId },
       }),
     });
@@ -147,4 +154,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
-

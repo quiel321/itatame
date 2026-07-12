@@ -18,6 +18,13 @@ function baseUrl(request: Request) {
   return process.env.NEXT_PUBLIC_BASE_URL || new URL(request.url).origin;
 }
 
+function notificationUrl(request: Request, pedidoId: string) {
+  const url = new URL("/api/fotos/pagamento/webhook", baseUrl(request));
+  url.searchParams.set("pedido_id", pedidoId);
+  url.searchParams.set("source_news", "webhooks");
+  return url.toString();
+}
+
 export async function POST(request: Request) {
   try {
     const token = bearerToken(request);
@@ -50,7 +57,7 @@ export async function POST(request: Request) {
       description: "Compra de fotos iTatame",
       external_reference: `foto_pedido:${pedido.id}`,
       application_fee: Number(pedido.comissao_itatame_centavos) / 100,
-      notification_url: `${baseUrl(request)}/api/fotos/pagamento/webhook?pedido_id=${pedido.id}`,
+      notification_url: notificationUrl(request, pedido.id),
       metadata: { ...(formData.metadata || {}), pedido_id: pedido.id, fotografo_id: pedido.fotografo_id },
       installments: 1,
     };
@@ -96,4 +103,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
-

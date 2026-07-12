@@ -6,7 +6,9 @@ alter table public.foto_pedidos
   add column if not exists subtotal_centavos integer not null default 0 check (subtotal_centavos >= 0),
   add column if not exists desconto_centavos integer not null default 0 check (desconto_centavos >= 0),
   add column if not exists comissao_itatame_centavos integer not null default 0 check (comissao_itatame_centavos >= 0),
-  add column if not exists provedor_status_detail text;
+  add column if not exists provedor_status_detail text,
+  add column if not exists email_confirmacao_enviado_em timestamptz,
+  add column if not exists email_confirmacao_erro text;
 
 create index if not exists idx_foto_pedidos_payment_id
   on public.foto_pedidos(provedor_payment_id);
@@ -21,4 +23,3 @@ create policy foto_pedido_itens_own_insert
       where p.id = pedido_id and p.comprador_user_id = auth.uid()
     )
   );
-

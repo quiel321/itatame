@@ -4,8 +4,9 @@ import Link from "next/link";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
+import { podeAcessarPerfilFotos } from "@/app/lib/fotos-acesso";
 import FotosShell from "../_components/FotosShell";
-import { Camera, Images, ShieldCheck, Users, Lock, Mail, ArrowRight } from "lucide-react";
+import { Camera, Images, ShieldCheck, Users, Lock, Mail, ArrowRight, type LucideIcon } from "lucide-react";
 
 type Perfil = "comprador" | "fotografo" | "organizador";
 
@@ -31,7 +32,7 @@ const perfis = {
     textoCadastro: "Criar Conta de Organizador",
     icon: Users,
   },
-} satisfies Record<Perfil, { titulo: string; texto: string; destino: string; textoCadastro: string; icon: any }>;
+} satisfies Record<Perfil, { titulo: string; texto: string; destino: string; textoCadastro: string; icon: LucideIcon }>;
 
 // 🔥 TEMAS DINÂMICOS
 const temas = {
@@ -79,8 +80,11 @@ export default function FotosLoginPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const perfilParam = params.get("perfil") as Perfil | null;
-    if (perfilParam && perfilParam in perfis) setPerfil(perfilParam);
-    setDestinoManual(params.get("next"));
+    queueMicrotask(() => {
+      if (perfilParam && perfilParam in perfis) setPerfil(perfilParam);
+      setDestinoManual(params.get("next"));
+    });
+    if (params.get("trocar") === "1") void supabase.auth.signOut();
   }, []);
 
   const destino = useMemo(() => destinoManual || perfis[perfil].destino, [destinoManual, perfil]);
@@ -91,12 +95,20 @@ export default function FotosLoginPage() {
     e.preventDefault();
     setErro("");
     setCarregando(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password: senha });
-    setCarregando(false);
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
     if (error) {
+      setCarregando(false);
       setErro("E-mail ou senha inválidos. Tente novamente.");
       return;
     }
+    const autorizado = data.user ? await podeAcessarPerfilFotos(supabase, data.user, perfil) : false;
+    if (!autorizado) {
+      await supabase.auth.signOut();
+      setCarregando(false);
+      setErro(`Esta conta não possui acesso como ${perfilAtual.titulo.toLowerCase()}. Entre com a conta correta.`);
+      return;
+    }
+    setCarregando(false);
     router.push(destino);
   }
 

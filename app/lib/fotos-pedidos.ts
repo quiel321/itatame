@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { enviarEmailPedidoFotosConfirmado } from "@/app/lib/email-fotos";
 
 export async function liberarPedidoFotos(
   supabase: SupabaseClient,
@@ -26,5 +27,11 @@ export async function liberarPedidoFotos(
     .update({ download_liberado: true, download_expires_at: expiraEm })
     .eq("pedido_id", pedidoId);
   if (itensError) throw new Error(itensError.message);
-}
 
+  // O e-mail é complementar: uma falha no provedor não pode reverter a liberação já confirmada.
+  try {
+    await enviarEmailPedidoFotosConfirmado(supabase, pedidoId);
+  } catch (error) {
+    console.error("Falha inesperada ao enviar a confirmação do pedido de fotos:", error);
+  }
+}

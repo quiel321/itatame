@@ -5,6 +5,7 @@ import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
 import { formatarPrecoFotos } from "@/app/lib/fotos";
+import { podeAcessarPerfilFotos, rotaLoginFotos } from "@/app/lib/fotos-acesso";
 import FotosShell from "../_components/FotosShell";
 import { ArrowRight, Download, Image as ImageIcon, Pencil, ShoppingCart, UserRound, LogOut, CheckCircle2, AlertCircle, History, PackageOpen } from "lucide-react";
 
@@ -26,7 +27,9 @@ export default function FotosMinhasComprasPage() {
   const [itensCarrinho, setItensCarrinho] = useState(0);
   const [pedidoAberto, setPedidoAberto] = useState<string | null>(null);
   const [baixandoItem, setBaixandoItem] = useState<string | null>(null);
-  const [perfilInvalido, setPerfilInvalido] = useState<'fotógrafo' | 'organizador' | null>(null);
+  const perfilInvalido: 'fotógrafo' | 'organizador' | null = null;
+  const [verificandoPedido, setVerificandoPedido] = useState<string | null>(null);
+  const [mensagemPagamento, setMensagemPagamento] = useState("");
 
   const primeiroNome = useMemo(() => perfil?.nome?.split(' ')[0] || email?.split('@')[0] || "Comprador", [perfil?.nome, email]);
 
@@ -36,18 +39,15 @@ export default function FotosMinhasComprasPage() {
       const { data: auth } = await supabase.auth.getUser();
 
       if (!auth.user) {
-        router.replace("/fotos/login?perfil=comprador&next=/fotos/comprador");
+        router.replace(rotaLoginFotos("comprador", "/fotos/comprador"));
         return;
       }
 
       // 🔥 BLINDAGEM CORRIGIDA: Agora bate na tabela raiz "organizadores"
-      const [{ data: isFoto }, { data: isOrg }] = await Promise.all([
-        supabase.from("fotografos").select("id").eq("user_id", auth.user.id).maybeSingle(),
-        supabase.from("organizadores").select("user_id").eq("user_id", auth.user.id).maybeSingle()
-      ]);
-
-      if (isFoto) { setPerfilInvalido('fotógrafo'); setCarregando(false); return; }
-      if (isOrg) { setPerfilInvalido('organizador'); setCarregando(false); return; }
+      if (!(await podeAcessarPerfilFotos(supabase, auth.user, "comprador"))) {
+        router.replace(rotaLoginFotos("comprador", "/fotos/comprador", true));
+        return;
+      }
 
       setEmail(auth.user.email || null);
       setUserId(auth.user.id);
@@ -63,11 +63,28 @@ export default function FotosMinhasComprasPage() {
       
       setPerfil(perfilAtual);
       setPerfilForm({ nome: nomeInicial, telefone: perfilAtual?.telefone || "", });
-      setMostrarPerfil(!perfilAtual?.perfil_completo || !perfilAtual?.nome || !perfilAtual?.telefone);
+      const abrirCadastro = new URLSearchParams(window.location.search).get("cadastro") === "1";
+      setMostrarPerfil(abrirCadastro || !perfilAtual?.perfil_completo || !perfilAtual?.nome || !perfilAtual?.telefone);
 
-      const { data } = await supabase.from("foto_pedidos").select("id, status, total_centavos, created_at, foto_pedido_itens(id, download_liberado, download_expires_at, foto_arquivos(id, titulo))").eq("comprador_user_id", auth.user.id).order("created_at", { ascending: false });
+      const consultaPedidos = () => supabase.from("foto_pedidos").select("id, status, total_centavos, created_at, foto_pedido_itens(id, download_liberado, download_expires_at, foto_arquivos(id, titulo))").eq("comprador_user_id", auth.user.id).order("created_at", { ascending: false });
+      let { data } = await consultaPedidos();
+      const pendentes = ((data || []) as Pedido[]).filter((pedido) => pedido.status !== "pago").slice(0, 5);
+      if (pendentes.length) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          const resultados = await Promise.all(pendentes.map(async (pedido) => {
+            const response = await fetch(`/api/fotos/pagamento/status?pedido_id=${pedido.id}`, {
+              headers: { Authorization: `Bearer ${session.access_token}` },
+            });
+            return response.ok ? response.json() : null;
+          }));
+          if (resultados.some((resultado) => resultado?.status === "pago")) ({ data } = await consultaPedidos());
+        }
+      }
 
       setPedidos((data || []) as Pedido[]);
+      const pedidoDoLink = new URLSearchParams(window.location.search).get("pedido");
+      if (pedidoDoLink && (data || []).some((pedido) => pedido.id === pedidoDoLink)) setPedidoAberto(pedidoDoLink);
       setCarregando(false);
     }
     void carregar();
@@ -114,6 +131,31 @@ export default function FotosMinhasComprasPage() {
     link.download = "itatame-foto.jpg";
     link.click();
     URL.revokeObjectURL(url);
+  }
+
+  async function verificarPagamento(pedidoId: string) {
+    setVerificandoPedido(pedidoId);
+    setMensagemPagamento("");
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      router.push(rotaLoginFotos("comprador", "/fotos/minhas-compras"));
+      return;
+    }
+    const response = await fetch(`/api/fotos/pagamento/status?pedido_id=${pedidoId}`, {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    });
+    const resultado = await response.json().catch(() => null);
+    setVerificandoPedido(null);
+    if (!response.ok) {
+      setMensagemPagamento(resultado?.error || "Não foi possível consultar o pagamento.");
+      return;
+    }
+    if (resultado?.status === "pago") {
+      setPedidos((atuais) => atuais.map((pedido) => pedido.id === pedidoId ? { ...pedido, status: "pago" } : pedido));
+      setMensagemPagamento("Pagamento confirmado. Atualize a página para carregar os downloads liberados.");
+    } else {
+      setMensagemPagamento("O Mercado Pago ainda não confirmou este pagamento.");
+    }
   }
 
   const StatusBadge = ({ status }: { status: string | null }) => {
@@ -192,6 +234,11 @@ export default function FotosMinhasComprasPage() {
         </section>
 
         <section className="mx-auto max-w-6xl px-4 py-6 md:px-6">
+          {mensagemPagamento && (
+            <p className="mb-4 rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs font-bold text-amber-200">
+              {mensagemPagamento}
+            </p>
+          )}
           {mostrarPerfil && (
             <div className="mb-6 rounded-2xl border border-red-500/20 bg-red-500/5 p-5 animate-in fade-in">
               <div className="flex items-center justify-between mb-4">
@@ -248,6 +295,11 @@ export default function FotosMinhasComprasPage() {
                         </div>
                         <div className="flex items-center sm:flex-col sm:items-end justify-between gap-3 sm:gap-1.5">
                           <p className="text-base font-black text-white">{formatarPrecoFotos(pedido.total_centavos)}</p>
+                          {pedido.status !== "pago" && (
+                            <button type="button" onClick={() => verificarPagamento(pedido.id)} disabled={verificandoPedido === pedido.id} className="cursor-pointer rounded-lg bg-amber-400 px-3 py-1.5 text-[8px] font-black uppercase tracking-widest text-black hover:bg-amber-300 disabled:cursor-wait disabled:opacity-60">
+                              {verificandoPedido === pedido.id ? "Verificando..." : "Verificar pagamento"}
+                            </button>
+                          )}
                           <button onClick={() => setPedidoAberto((atual) => atual === pedido.id ? null : pedido.id)} className={`cursor-pointer rounded-lg border px-3 py-1.5 text-[8px] font-black uppercase tracking-widest transition-colors ${pedidoAberto === pedido.id ? "bg-white text-black border-white" : "bg-white/5 text-zinc-300 border-white/10 hover:bg-white/10 hover:text-white"}`}>{pedidoAberto === pedido.id ? "Ocultar" : "Ver Downloads"}</button>
                         </div>
                       </div>
