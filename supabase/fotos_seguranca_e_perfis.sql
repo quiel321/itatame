@@ -22,7 +22,7 @@ create table if not exists public.foto_evento_fotografos (
   status text not null default 'ativo'
     check (status in ('convidado', 'ativo', 'suspenso')),
   comissao_organizador_percentual numeric(5,2) not null default 0
-    check (comissao_organizador_percentual between 0 and 90),
+    check (comissao_organizador_percentual between 0 and 15),
   convidado_por uuid references auth.users(id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),

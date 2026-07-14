@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import imageCompression from "browser-image-compression";
+import { FOTO_IA_MAX_BYTES, FOTO_IA_MAX_DIMENSAO } from "@/app/lib/fotos-ai";
 import { supabase } from "@/app/lib/supabase";
 import { FotoAlbum, FotoEvento, formatarPrecoFotos } from "@/app/lib/fotos";
 import FotosShell from "../../_components/FotosShell";
@@ -24,9 +25,9 @@ import {
 
 type UploadStatus = "idle" | "preparando" | "enviando" | "confirmando" | "ok" | "erro";
 
-const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+const MAX_UPLOAD_BYTES = 3 * 1024 * 1024; // 🔥 Limite alterado para 3MB
 const MAX_SOURCE_BYTES = 40 * 1024 * 1024;
-const MAX_UPLOAD_FILES = 80;
+const MAX_UPLOAD_FILES = 500; // 🔥 Limite de 500 fotos por lote
 const TIPOS_PERMITIDOS = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 function formatarTamanho(bytes: number) {
@@ -42,32 +43,44 @@ async function otimizarFotoParaUpload(file: File) {
   const criarArquivoJpeg = (blob: Blob) =>
     new File([blob], `${nomeBase}.jpg`, { type: "image/jpeg", lastModified: file.lastModified });
 
+  // 1ª Tentativa: Mantém resolução altíssima (4500px) e qualidade 90%
   let comprimida = criarArquivoJpeg(await imageCompression(file, {
-    maxSizeMB: 4.8,
-    maxWidthOrHeight: 6000,
+    maxSizeMB: 2.9,
+    maxWidthOrHeight: 4500,
     useWebWorker: true,
     fileType: "image/jpeg",
-    initialQuality: 0.92,
+    initialQuality: 0.90,
   }));
 
+  // 2ª Tentativa (Garantia): Se a foto tiver muitos detalhes e ainda não bateu 3MB, reduz levemente
   if (comprimida.size > MAX_UPLOAD_BYTES) {
     comprimida = criarArquivoJpeg(await imageCompression(comprimida, {
-      maxSizeMB: 4.7,
-      maxWidthOrHeight: 4500,
+      maxSizeMB: 2.8,
+      maxWidthOrHeight: 3500, // 3500px ainda imprime um A4 perfeito
       useWebWorker: true,
       fileType: "image/jpeg",
-      initialQuality: 0.9,
+      initialQuality: 0.85,
     }));
   }
 
   if (comprimida.size > MAX_UPLOAD_BYTES) {
-    throw new Error(`${file.name} não conseguiu ficar abaixo de 5 MB sem perda excessiva.`);
+    throw new Error(`${file.name} não conseguiu ficar abaixo de 3 MB sem perda excessiva.`);
   }
 
   return { file: comprimida, otimizada: true };
 }
 
-async function gerarPreviewComMarcaDagua(file: File) {
+function canvasParaJpeg(canvas: HTMLCanvasElement, qualidade: number) {
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => (blob ? resolve(blob) : reject(new Error("Não foi possível gerar a imagem."))),
+      "image/jpeg",
+      qualidade,
+    );
+  });
+}
+
+async function gerarDerivadosFoto(file: File) {
   const bitmap = await createImageBitmap(file);
   const maxWidth = 1200;
   const scale = Math.min(1, maxWidth / bitmap.width);
@@ -108,9 +121,35 @@ async function gerarPreviewComMarcaDagua(file: File) {
   ctx.fillText("iTATAME FOTOS - PRÉVIA PROTEGIDA", 22, height - 29);
   ctx.restore();
 
-  return await new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("Não foi possível gerar preview."))), "image/jpeg", 0.82);
-  });
+  const previewBlob = await canvasParaJpeg(canvas, 0.82);
+
+  const dimensoes = [FOTO_IA_MAX_DIMENSAO, 1760, 1600, 1440, 1280, 1120, 960];
+  const qualidades = [0.86, 0.78, 0.7, 0.62, 0.54];
+  let miniaturaIa: Blob | null = null;
+
+  for (const dimensao of dimensoes) {
+    const escalaIa = Math.min(1, dimensao / Math.max(bitmap.width, bitmap.height));
+    const canvasIa = document.createElement("canvas");
+    canvasIa.width = Math.max(1, Math.round(bitmap.width * escalaIa));
+    canvasIa.height = Math.max(1, Math.round(bitmap.height * escalaIa));
+    const ctxIa = canvasIa.getContext("2d");
+    if (!ctxIa) throw new Error("Não foi possível gerar a miniatura de busca.");
+    ctxIa.drawImage(bitmap, 0, 0, canvasIa.width, canvasIa.height);
+
+    for (const qualidade of qualidades) {
+      const tentativa = await canvasParaJpeg(canvasIa, qualidade);
+      if (!miniaturaIa || tentativa.size < miniaturaIa.size) miniaturaIa = tentativa;
+      if (tentativa.size <= FOTO_IA_MAX_BYTES) break;
+    }
+    if (miniaturaIa && miniaturaIa.size <= FOTO_IA_MAX_BYTES) break;
+  }
+
+  bitmap.close();
+  if (!miniaturaIa || miniaturaIa.size > FOTO_IA_MAX_BYTES) {
+    throw new Error("Não foi possível preparar a miniatura de reconhecimento abaixo de 300 KB.");
+  }
+
+  return { previewBlob, miniaturaIa };
 }
 
 export default function PainelFotografoPage() {
@@ -222,7 +261,7 @@ export default function PainelFotografoPage() {
     setOtimizando(true);
     setStatus("idle");
     setUploadAtual(0);
-    setMensagem(`Otimizando ${lote.length} foto(s) antes do envio...`);
+    setMensagem(`Otimizando ${lote.length} foto(s) antes do envio... Isso pode levar alguns instantes dependendo da quantidade.`);
 
     for (const arquivo of lote) {
       if (!TIPOS_PERMITIDOS.has(arquivo.type) || arquivo.size > MAX_SOURCE_BYTES) {
@@ -248,7 +287,7 @@ export default function PainelFotografoPage() {
     if (recusados > 0) {
       setMensagem(`${aceitos.length} foto(s) pronta(s). ${otimizadas} foram otimizadas automaticamente e ${recusados} ficaram fora por formato inválido, arquivo muito pesado ou lote acima de ${MAX_UPLOAD_FILES} fotos.`);
     } else if (otimizadas > 0) {
-      setMensagem(`${aceitos.length} foto(s) pronta(s). ${otimizadas} foram otimizadas automaticamente para até 5MB.`);
+      setMensagem(`${aceitos.length} foto(s) pronta(s). ${otimizadas} foram otimizadas automaticamente para até 3MB.`);
     } else {
       setMensagem(`${aceitos.length} foto(s) pronta(s) para envio.`);
     }
@@ -304,20 +343,37 @@ export default function PainelFotografoPage() {
     const uploadData = await uploadResponse.json();
     if (!uploadResponse.ok) throw new Error(uploadData.error || "Erro ao preparar os links de upload.");
 
-    const previewBlob = await gerarPreviewComMarcaDagua(arquivo);
-    const previewResponse = await fetch(uploadData.previewUploadUrl, {
-      method: "PUT",
-      headers: { "Content-Type": "image/jpeg" },
-      body: previewBlob,
-    });
-    if (!previewResponse.ok) throw new Error("Falha ao enviar a prévia para a nuvem (CORS/R2).");
+    async function enviarArquivo(blob: Blob, tipo: "preview" | "original" | "ia", contentType: string) {
+      return fetch("/api/fotos/enviar-arquivo", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": contentType,
+          "X-Foto-Id": uploadData.fotoId,
+          "X-Arquivo-Tipo": tipo,
+        },
+        body: blob,
+      });
+    }
 
-    const putResponse = await fetch(uploadData.uploadUrl, {
-      method: "PUT",
-      headers: { "Content-Type": arquivo.type },
-      body: arquivo,
-    });
-    if (!putResponse.ok) throw new Error("Falha ao enviar a foto original para a nuvem (CORS/R2).");
+    const { previewBlob, miniaturaIa } = await gerarDerivadosFoto(arquivo);
+    const iaResponse = await enviarArquivo(miniaturaIa, "ia", "image/jpeg");
+    if (!iaResponse.ok) {
+      const detalhe = await iaResponse.json().catch(() => null);
+      throw new Error(detalhe?.error || "Falha ao preparar a busca facial desta foto.");
+    }
+
+    const previewResponse = await enviarArquivo(previewBlob, "preview", "image/jpeg");
+    if (!previewResponse.ok) {
+      const detalhe = await previewResponse.json().catch(() => null);
+      throw new Error(detalhe?.error || "Falha ao enviar a previa para o R2.");
+    }
+
+    const putResponse = await enviarArquivo(arquivo, "original", arquivo.type);
+    if (!putResponse.ok) {
+      const detalhe = await putResponse.json().catch(() => null);
+      throw new Error(detalhe?.error || "Falha ao enviar a foto original para o R2.");
+    }
 
     const confirmarResponse = await fetch("/api/fotos/confirmar-upload", {
       method: "POST",
@@ -341,6 +397,7 @@ export default function PainelFotografoPage() {
       return;
     }
 
+    let concluidas = 0;
     try {
       setMensagem("");
       for (let index = 0; index < arquivos.length; index++) {
@@ -349,6 +406,7 @@ export default function PainelFotografoPage() {
         setMensagem(`Preparando ${index + 1}/${arquivos.length}: ${arquivos[index].name}`);
         setStatus("enviando");
         await enviarUmaFoto(arquivos[index], token);
+        concluidas += 1;
         setStatus("confirmando");
       }
 
@@ -356,9 +414,14 @@ export default function PainelFotografoPage() {
       if (fileInputRef.current) fileInputRef.current.value = "";
       setStatus("ok");
       setMensagem("Todas as fotos foram publicadas com sucesso.");
-    } catch (error: any) {
+    } catch (error: unknown) {
+      let detalhe = error instanceof Error ? error.message : "Erro desconhecido ao enviar fotos.";
+      if (concluidas > 0) {
+        setArquivos((atuais) => atuais.slice(concluidas));
+        detalhe = `${concluidas} foto(s) foram publicadas. As restantes ficaram na fila para tentar novamente. ${detalhe}`;
+      }
       setStatus("erro");
-      setMensagem(error?.message || "Erro desconhecido ao enviar fotos.");
+      setMensagem(detalhe);
     }
   }
 
@@ -374,7 +437,7 @@ export default function PainelFotografoPage() {
                 </p>
                 <h1 className="mt-4 text-3xl font-black uppercase leading-none md:text-5xl">Carregar fotos</h1>
                 <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-400">
-                  Publique várias fotos por evento e álbum. Fotos acima de 5MB são otimizadas automaticamente antes do envio.
+                  Publique várias fotos por evento e álbum. Fotos acima de 3MB são otimizadas automaticamente antes do envio.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -469,10 +532,10 @@ export default function PainelFotografoPage() {
             <div className="rounded-2xl border border-white/10 bg-zinc-950 p-4">
               <p className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-white"><ShieldCheck size={16} className="text-emerald-400" /> Regras do envio</p>
               <div className="mt-3 space-y-2 text-xs text-zinc-400">
-                <p>1. Fotos grandes são comprimidas automaticamente até 5MB.</p>
+                <p>1. Lotes maiores podem demorar alguns segundos na preparação inicial.</p>
                 <p>2. JPG, PNG ou WebP, com qualidade alta para venda.</p>
-                <p>3. A versão otimizada fica privada no Cloudflare R2.</p>
-                <p>4. A loja mostra apenas a prévia com marca d'água.</p>
+                <p>3. Fotos grandes são comprimidas automaticamente até 3MB.</p>
+                <p>4. A loja mostra apenas a prévia com a marca d&apos;água automática.</p>
               </div>
             </div>
           </aside>
@@ -481,7 +544,7 @@ export default function PainelFotografoPage() {
             <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 className="text-lg font-black uppercase">Enviar fotos</h2>
-                <p className="mt-1 text-xs text-zinc-500">Selecione várias fotos de uma vez. Arquivos grandes serão otimizados antes do upload.</p>
+                <p className="mt-1 text-xs text-zinc-500">Selecione até 500 fotos de uma vez. O sistema otimiza o peso mantendo a resolução de impressão.</p>
               </div>
               {eventoSelecionado && <p className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-cyan-200">{eventoSelecionado.nome}</p>}
             </div>
@@ -491,8 +554,8 @@ export default function PainelFotografoPage() {
                 <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(e) => void selecionarArquivos(e.target.files)} className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0" />
                 <div className="mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-white/5 text-zinc-500"><CloudUpload size={30} /></div>
                 <p className="text-sm font-black uppercase tracking-wider text-white">Clique ou arraste as fotos</p>
-                <p className="mt-2 max-w-sm text-xs leading-5 text-zinc-500">O sistema aceita lote com várias imagens e gera prévia protegida automaticamente.</p>
-                <p className="mt-3 text-[10px] font-black uppercase tracking-wider text-cyan-300">JPG, PNG ou WebP · otimização automática até 5MB</p>
+                <p className="mt-2 max-w-sm text-xs leading-5 text-zinc-500">O sistema aceita lote de até 500 imagens e gera prévia protegida automaticamente.</p>
+                <p className="mt-3 text-[10px] font-black uppercase tracking-wider text-cyan-300">JPG, PNG ou WebP · otimização inteligente até 3MB</p>
               </div>
 
               <div className="rounded-2xl border border-white/10 bg-black p-4">
@@ -502,7 +565,7 @@ export default function PainelFotografoPage() {
                   <input value={preco} onChange={(e) => setPreco(e.target.value)} className="h-12 w-full rounded-lg border border-white/10 bg-zinc-950 pl-9 pr-3 text-lg font-black outline-none focus:border-cyan-400" />
                 </div>
                 <p className="mt-2 text-xs text-zinc-500">Valor atual: <span className="font-bold text-emerald-300">{valorAtual}</span></p>
-                <p className="mt-3 text-xs text-zinc-500">Lote: <span className="font-bold text-white">{arquivos.length}</span> foto(s) · {formatarTamanho(totalBytes)}</p>
+                <p className="mt-3 text-xs text-zinc-500">Lote atual: <span className="font-bold text-white">{arquivos.length}</span> foto(s) · {formatarTamanho(totalBytes)}</p>
 
                 <button type="button" onClick={enviarFotos} disabled={uploadBloqueado} className="mt-4 inline-flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-cyan-400 text-xs font-black uppercase tracking-wider text-black shadow-[0_0_24px_rgba(34,211,238,0.18)] transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500">
                   {otimizando ? <><Loader2 size={16} className="animate-spin" /> Otimizando fotos</> : enviando ? <><Loader2 size={16} className="animate-spin" /> Enviando {uploadAtual}/{arquivos.length}</> : <>Enviar lote</>}

@@ -6,9 +6,13 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "fotos:ia:indexar": "tsx scripts/indexar-fotos-ia.ts",
+    "fotos:ia:verificar": "tsx scripts/verificar-fotos-ia.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-rekognition": "^3.1086.0",
+    "@aws-sdk/client-s3": "^3.1086.0",
     "@g-loot/react-tournament-brackets": "^1.0.31-rc",
     "@supabase/supabase-js": "^2.106.2",
     "@yudiel/react-qr-scanner": "^2.6.0",
@@ -26,6 +30,7 @@
     "react-dom": "19.2.4",
     "react-qr-code": "^2.0.21",
     "resend": "^6.12.4",
+    "sharp": "0.34.5",
     "web-push": "^3.6.7"
   },
   "devDependencies": {
@@ -38,6 +43,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
     "tailwindcss": "^4",
+    "tsx": "^4.23.1",
     "typescript": "^5"
   }
 }

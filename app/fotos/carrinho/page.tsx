@@ -60,6 +60,10 @@ const CARRINHO_FOTOS_KEY = "carrinho_fotos";
 const COMBO_QTD_PADRAO = 3;
 const COMBO_PERCENTUAL_PADRAO = 20;
 
+function notificarCarrinhoAtualizado(ids: string[]) {
+  window.dispatchEvent(new CustomEvent("carrinho-fotos-atualizado", { detail: ids }));
+}
+
 function primeiraRelacao(valor: any) {
   return Array.isArray(valor) ? valor[0] : valor;
 }
@@ -159,7 +163,9 @@ export default function FotosCarrinhoPage() {
           });
 
         setFotos(fotosReais);
-        localStorage.setItem(CARRINHO_FOTOS_KEY, JSON.stringify(fotosReais.map((foto: FotoCarrinho) => foto.id)));
+        const idsValidos = fotosReais.map((foto: FotoCarrinho) => foto.id);
+        localStorage.setItem(CARRINHO_FOTOS_KEY, JSON.stringify(idsValidos));
+        notificarCarrinhoAtualizado(idsValidos);
       } catch (err) {
         console.error("Erro ao carregar carrinho:", err);
       } finally {
@@ -173,7 +179,9 @@ export default function FotosCarrinhoPage() {
   function removerFoto(id: string) {
     const novasFotos = fotos.filter((foto) => foto.id !== id);
     setFotos(novasFotos);
-    localStorage.setItem(CARRINHO_FOTOS_KEY, JSON.stringify(novasFotos.map((foto) => foto.id)));
+    const idsRestantes = novasFotos.map((foto) => foto.id);
+    localStorage.setItem(CARRINHO_FOTOS_KEY, JSON.stringify(idsRestantes));
+    notificarCarrinhoAtualizado(idsRestantes);
   }
 
   async function handleGerarPix() {
@@ -255,6 +263,7 @@ export default function FotosCarrinhoPage() {
               setResultadoPagamento(resultado);
               if (resultado.status === "approved") {
                 localStorage.removeItem(CARRINHO_FOTOS_KEY);
+                notificarCarrinhoAtualizado([]);
                 setEtapa("pago");
                 setMensagemPagamento("Pagamento aprovado. Suas fotos foram liberadas.");
                 window.setTimeout(() => router.push("/fotos/minhas-compras"), 1200);
@@ -290,6 +299,7 @@ export default function FotosCarrinhoPage() {
       if (status.status === "pago") {
         window.clearInterval(intervalo);
         localStorage.removeItem(CARRINHO_FOTOS_KEY);
+        notificarCarrinhoAtualizado([]);
         setEtapa("pago");
         setMensagemPagamento("Pagamento confirmado. Suas fotos foram liberadas.");
         window.setTimeout(() => router.push("/fotos/minhas-compras"), 1200);
@@ -354,7 +364,7 @@ export default function FotosCarrinhoPage() {
                       </div>
 
                       {etapa === "carrinho" && (
-                        <button onClick={() => removerFoto(foto.id)} className="absolute right-3 top-3 cursor-pointer rounded-lg bg-black/60 p-2.5 text-white opacity-0 shadow-lg backdrop-blur-md transition-all duration-300 hover:bg-red-600 group-hover:translate-y-0 group-hover:opacity-100" title="Remover foto">
+                        <button onClick={() => removerFoto(foto.id)} className="absolute right-2 top-2 cursor-pointer rounded-lg bg-red-600/95 p-2.5 text-white opacity-100 shadow-lg backdrop-blur-md transition-all duration-300 hover:bg-red-500 md:right-3 md:top-3 md:bg-black/60 md:opacity-0 md:group-hover:opacity-100 md:hover:bg-red-600" title="Remover foto" aria-label="Remover foto do carrinho">
                           <Trash2 size={14} />
                         </button>
                       )}

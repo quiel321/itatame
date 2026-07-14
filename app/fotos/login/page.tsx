@@ -184,7 +184,7 @@ export default function FotosLoginPage() {
                <div>
                  <div className="flex items-center justify-between ml-1 mb-1.5">
                     <label className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500">Senha</label>
-                    <Link href="/recuperar-senha" className="cursor-pointer text-[9px] font-bold text-zinc-500 hover:text-white transition-colors">Esqueceu?</Link>
+                    <Link href={`/recuperar-senha?origem=fotos&perfil=${perfil}`} className="cursor-pointer text-[9px] font-bold text-zinc-500 hover:text-white transition-colors">Esqueceu?</Link>
                  </div>
                  <div className="relative">
                    <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-600" />

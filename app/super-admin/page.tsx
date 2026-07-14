@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
-import { ShieldCheck, Map, Trash2, Users, RefreshCw, Edit3, Trophy, Search, ChevronDown, Activity, Globe, Scale, Medal } from "lucide-react";
+import { ShieldCheck, Map, Trash2, Users, RefreshCw, Edit3, Trophy, Search, ChevronDown, Activity, Globe, Scale, Medal, Banknote } from "lucide-react";
 
 export default function SuperAdminMasterPage() {
   const router = useRouter()
@@ -178,7 +178,7 @@ export default function SuperAdminMasterPage() {
         <h2 className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-3 ml-1 cursor-default">Módulos Exclusivos Super-Admin</h2>
         
         {/* GRID DE ACESSOS RÁPIDOS */}
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 mb-10">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-10">
           
           <Link href="/super-admin/organizadores" className="group cursor-pointer relative bg-gradient-to-br from-[#0a0a0e] to-black border border-white/5 hover:border-indigo-500/50 rounded-2xl p-5 md:p-6 transition-all shadow-lg overflow-hidden flex flex-col justify-between min-h-[160px]">
             <div className="absolute right-0 bottom-0 w-24 h-24 bg-indigo-500/5 blur-2xl group-hover:bg-indigo-500/10 transition-colors pointer-events-none"></div>
@@ -211,6 +211,17 @@ export default function SuperAdminMasterPage() {
             <div>
               <h3 className="text-sm md:text-base font-black text-white group-hover:text-yellow-400 transition-colors">Acessar Painel Comum</h3>
               <p className="text-zinc-500 text-[9px] md:text-[10px] font-medium mt-1 leading-relaxed">Ir para a visão normal de organizador.</p>
+            </div>
+          </Link>
+
+          <Link href="/super-admin/fotos" className="col-span-2 md:col-span-1 group cursor-pointer relative bg-gradient-to-br from-[#0a0a0e] to-black border border-cyan-500/20 hover:border-cyan-500/60 rounded-2xl p-5 md:p-6 transition-all shadow-lg overflow-hidden flex flex-col justify-between min-h-[160px]">
+            <div className="absolute right-0 bottom-0 w-28 h-28 bg-cyan-500/10 blur-2xl group-hover:bg-cyan-500/20 transition-colors pointer-events-none"></div>
+            <div className="w-10 h-10 bg-cyan-500/10 text-cyan-400 rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 group-hover:bg-cyan-500 group-hover:text-black transition-all shadow-[0_0_15px_rgba(6,182,212,0.2)]">
+              <Banknote className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm md:text-base font-black text-white group-hover:text-cyan-300 transition-colors">Financeiro Itatame Fotos</h3>
+              <p className="text-zinc-500 text-[9px] md:text-[10px] font-medium mt-1 leading-relaxed">Comissões, royalties, galerias e repasses.</p>
             </div>
           </Link>
         </div>

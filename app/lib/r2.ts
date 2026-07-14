@@ -38,7 +38,7 @@ export function r2Config() {
   return { endpoint, bucket, accessKeyId, secretAccessKey };
 }
 
-function createR2PresignedUrl(key: string, method: "GET" | "PUT", expiresSeconds = 900) {
+function createR2PresignedUrl(key: string, method: "GET" | "PUT" | "DELETE", expiresSeconds = 900) {
   const { endpoint, bucket, accessKeyId, secretAccessKey } = r2Config();
   const url = new URL(endpoint);
   const host = url.host;
@@ -84,6 +84,59 @@ export function createR2PresignedPutUrl(key: string, expiresSeconds = 900) {
 
 export function createR2PresignedGetUrl(key: string, expiresSeconds = 300) {
   return createR2PresignedUrl(key, "GET", expiresSeconds);
+}
+
+export function createR2PresignedDeleteUrl(key: string, expiresSeconds = 120) {
+  return createR2PresignedUrl(key, "DELETE", expiresSeconds);
+}
+
+export async function deleteR2Object(key: string) {
+  const response = await fetch(createR2PresignedDeleteUrl(key), {
+    method: "DELETE",
+    cache: "no-store",
+  });
+
+  if (!response.ok && response.status !== 404) {
+    throw new Error(`Falha ao excluir objeto do R2 (${response.status}).`);
+  }
+}
+
+export async function getR2ObjectBytes(key: string, maxBytes = 10 * 1024 * 1024) {
+  const response = await fetch(createR2PresignedGetUrl(key, 300), { cache: "no-store" });
+  if (!response.ok) {
+    const error = new Error(`Falha ao ler objeto do R2 (${response.status}).`) as Error & { status?: number };
+    error.status = response.status;
+    throw error;
+  }
+
+  const tamanhoInformado = Number(response.headers.get("content-length") || 0);
+  if (tamanhoInformado > maxBytes) throw new Error(`Objeto do R2 excede o limite de ${maxBytes} bytes.`);
+
+  const bytes = Buffer.from(await response.arrayBuffer());
+  if (!bytes.length || bytes.length > maxBytes) throw new Error(`Objeto do R2 invalido ou acima de ${maxBytes} bytes.`);
+  return bytes;
+}
+
+export async function tryGetR2ObjectBytes(key: string, maxBytes = 10 * 1024 * 1024) {
+  try {
+    return await getR2ObjectBytes(key, maxBytes);
+  } catch (error: unknown) {
+    if (error instanceof Error && "status" in error && (error as Error & { status?: number }).status === 404) return null;
+    throw error;
+  }
+}
+
+export async function putR2Object(key: string, body: Buffer | Uint8Array, contentType: string) {
+  const payload = new ArrayBuffer(body.byteLength);
+  new Uint8Array(payload).set(body);
+  const response = await fetch(createR2PresignedPutUrl(key, 300), {
+    method: "PUT",
+    headers: { "Content-Type": contentType },
+    body: payload,
+    cache: "no-store",
+  });
+
+  if (!response.ok) throw new Error(`Falha ao gravar objeto no R2 (${response.status}).`);
 }
 
 export function r2ObjectUrl(key: string) {

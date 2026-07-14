@@ -313,7 +313,18 @@ export default function FotosMinhasComprasPage() {
                               return (
                                 <div key={item.id} className="flex items-center justify-between gap-2 rounded-lg border border-white/5 bg-[#050505] p-2">
                                   <div className="flex items-center gap-2 min-w-0">
-                                     <div className="w-8 h-8 rounded-md bg-zinc-900 flex items-center justify-center shrink-0 border border-white/5"><ImageIcon size={12} className="text-zinc-600"/></div>
+                                     <div className="relative w-10 h-10 rounded-md bg-zinc-900 flex items-center justify-center shrink-0 overflow-hidden border border-white/10">
+                                       <ImageIcon size={12} className="text-zinc-600"/>
+                                       {foto?.id && (
+                                         <img
+                                           src={`/api/fotos/arquivo/${foto.id}?tipo=thumb`}
+                                           alt={`Previa protegida de ${foto.titulo || "foto comprada"}`}
+                                           loading="lazy"
+                                           onError={(event) => { event.currentTarget.style.display = "none"; }}
+                                           className="absolute inset-0 h-full w-full object-cover"
+                                         />
+                                       )}
+                                     </div>
                                      <p className="truncate text-[10px] font-black uppercase text-white">{foto?.titulo || "Foto"}</p>
                                   </div>
                                   <button disabled={!item.download_liberado || baixandoItem === item.id} onClick={() => baixarFoto(item.id)} className={`cursor-pointer inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md px-3 text-[8px] font-black uppercase tracking-widest transition-all ${item.download_liberado ? "bg-cyan-500 text-black hover:bg-cyan-400" : "bg-zinc-900 text-zinc-600 border border-white/5 disabled:cursor-not-allowed"}`}>

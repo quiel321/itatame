@@ -1,13 +1,12 @@
 ﻿"use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
-import { FotoAlbum, FotoArquivo, FotoEvento, formatarPrecoFotos } from "@/app/lib/fotos";
+import { FotoAlbum, FotoArquivo, formatarPrecoFotos } from "@/app/lib/fotos";
 import FotosShell from "../../_components/FotosShell";
-import { Camera, /* ... outros ícones ... */ } from "lucide-react";
-import { AlertTriangle, CalendarDays, CheckCircle2, ChevronLeft, Filter, Image as ImageIcon, MapPin, ScanFace, Search, ShieldCheck, ShoppingCart, X, Building2, Percent } from "lucide-react";
+import { Camera, CalendarDays, CheckCircle2, ChevronLeft, Filter, Image as ImageIcon, MapPin, ScanFace, Search, ShieldCheck, ShoppingCart, X, Building2, Percent } from "lucide-react";
 
 const CARRINHO_FOTOS_KEY = "carrinho_fotos";
 
@@ -18,7 +17,7 @@ function fotoPreviewSrc(foto: FotoArquivo) {
 export default function FotosEventoPage() {
   const params = useParams<{ id: string }>();
   const eventoId = params.id;
-  const [evento, setEvento] = useState<any>(null); // Usando any temporariamente para aceitar os dados do organizador mockados
+  const [evento, setEvento] = useState<any>(null); 
   const [albuns, setAlbuns] = useState<FotoAlbum[]>([]);
   const [fotos, setFotos] = useState<FotoArquivo[]>([]);
   const [albumAtivo, setAlbumAtivo] = useState("todos");
@@ -28,27 +27,97 @@ export default function FotosEventoPage() {
   const [carrinho, setCarrinho] = useState<string[]>([]);
   const [carrinhoCarregado, setCarrinhoCarregado] = useState(false);
   const [fotoSelecionada, setFotoSelecionada] = useState<FotoArquivo | null>(null);
+  const [fotoOrigemIa, setFotoOrigemIa] = useState(false);
   const [printScreenDetectado, setPrintScreenDetectado] = useState(false);
+  const temporizadorProtecaoRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const ignorarProtecaoAoFecharRef = useRef(0);
 
-  // DETEÇÃO DE PRINT SCREEN
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
-      const cmd = isMac ? e.metaKey : e.ctrlKey;
-      
-      const isScreenshot = 
-        e.key === 'PrintScreen' || 
-        (cmd && e.shiftKey && (e.key === '3' || e.key === '4')) ||
-        (e.key === 'P' && cmd && e.shiftKey); 
+    let janelaSemFoco = false;
 
-      if (isScreenshot) {
-        setPrintScreenDetectado(true);
-        setTimeout(() => setPrintScreenDetectado(false), 3000);
-      }
+    const desativarProtecao = () => {
+      document.documentElement.classList.remove("fotos-protecao-instantanea");
+      setPrintScreenDetectado(false);
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    const agendarDesativacao = (duracao: number) => {
+      if (temporizadorProtecaoRef.current) clearTimeout(temporizadorProtecaoRef.current);
+      temporizadorProtecaoRef.current = setTimeout(desativarProtecao, duracao);
+    };
+
+    const ativarProtecao = (duracao = 2500) => {
+      document.documentElement.classList.add("fotos-protecao-instantanea");
+      setPrintScreenDetectado(true);
+      agendarDesativacao(duracao);
+    };
+
+    const teclaPreventiva = (e: KeyboardEvent) =>
+      e.key === "Shift" ||
+      e.key === "Meta" ||
+      e.key === "OS" ||
+      e.key === "Super" ||
+      e.key === "PrintScreen" ||
+      e.code === "ShiftLeft" ||
+      e.code === "ShiftRight" ||
+      e.code === "MetaLeft" ||
+      e.code === "MetaRight" ||
+      e.code === "PrintScreen";
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!teclaPreventiva(e)) return;
+      if (e.key === "PrintScreen" || e.code === "PrintScreen") e.preventDefault();
+      ativarProtecao(2500);
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (teclaPreventiva(e) && !janelaSemFoco) agendarDesativacao(350);
+    };
+
+    const handleBlur = () => {
+      if (Date.now() < ignorarProtecaoAoFecharRef.current) return;
+      janelaSemFoco = true;
+      ativarProtecao(1800);
+    };
+    const handleFocus = () => {
+      janelaSemFoco = false;
+      agendarDesativacao(350);
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== "visible") ativarProtecao(2500);
+      else agendarDesativacao(350);
+    };
+    const handleBeforePrint = () => ativarProtecao(10000);
+    const handleAfterPrint = () => agendarDesativacao(350);
+    const handlePageHide = () => ativarProtecao(2500);
+    const protegerInteracao = (e: Event) => {
+      const alvo = e.target as HTMLElement | null;
+      if (alvo?.closest("[data-foto-protegida]")) e.preventDefault();
+    };
+
+    window.addEventListener("keydown", handleKeyDown, true);
+    window.addEventListener("keyup", handleKeyUp, true);
+    window.addEventListener("blur", handleBlur, true);
+    window.addEventListener("focus", handleFocus, true);
+    window.addEventListener("pagehide", handlePageHide, true);
+    window.addEventListener("beforeprint", handleBeforePrint);
+    window.addEventListener("afterprint", handleAfterPrint);
+    document.addEventListener("visibilitychange", handleVisibilityChange, true);
+    document.addEventListener("contextmenu", protegerInteracao);
+    document.addEventListener("dragstart", protegerInteracao);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown, true);
+      window.removeEventListener("keyup", handleKeyUp, true);
+      window.removeEventListener("blur", handleBlur, true);
+      window.removeEventListener("focus", handleFocus, true);
+      window.removeEventListener("pagehide", handlePageHide, true);
+      window.removeEventListener("beforeprint", handleBeforePrint);
+      window.removeEventListener("afterprint", handleAfterPrint);
+      document.removeEventListener("visibilitychange", handleVisibilityChange, true);
+      document.removeEventListener("contextmenu", protegerInteracao);
+      document.removeEventListener("dragstart", protegerInteracao);
+      if (temporizadorProtecaoRef.current) clearTimeout(temporizadorProtecaoRef.current);
+      document.documentElement.classList.remove("fotos-protecao-instantanea");
+    };
   }, []);
 
   useEffect(() => {
@@ -65,6 +134,7 @@ export default function FotosEventoPage() {
   useEffect(() => {
     if (!carrinhoCarregado) return;
     localStorage.setItem(CARRINHO_FOTOS_KEY, JSON.stringify(carrinho));
+    window.dispatchEvent(new CustomEvent("carrinho-fotos-atualizado", { detail: carrinho }));
   }, [carrinho, carrinhoCarregado]);
 
   useEffect(() => {
@@ -72,28 +142,40 @@ export default function FotosEventoPage() {
       if (!eventoId) return;
       setCarregando(true);
 
-      // 1. Busca os dados base do evento
+      // 1. Busca os dados base do evento (🔥 ADICIONADO: 'created_by' no select)
       const [{ data: eventoData }, { data: albunsData }, { data: fotosData }] = await Promise.all([
-        supabase.from("foto_eventos").select("id, nome, slug, local, cidade, estado, data_evento, capa_url, status, vendas_ate, desconto_combo_qtd, desconto_combo_percentual, organizador_user_id").eq("id", eventoId).maybeSingle(),
+        supabase.from("foto_eventos").select("id, nome, slug, local, cidade, estado, data_evento, capa_url, status, vendas_ate, desconto_combo_qtd, desconto_combo_percentual, organizador_user_id, created_by").eq("id", eventoId).maybeSingle(),
         supabase.from("foto_albuns").select("id, evento_id, fotografo_id, titulo, descricao, capa_url, status").eq("evento_id", eventoId).eq("status", "publicado").order("ordem", { ascending: true }),
         supabase.from("foto_arquivos").select("id, evento_id, album_id, fotografo_id, titulo, r2_original_key, r2_preview_key, r2_thumb_key, preview_url, thumb_url, preco_centavos, status, fotografo_dados:fotografos!fotografo_id(nome)").eq("evento_id", eventoId).eq("status", "publicada").order("created_at", { ascending: false }),
       ]);
 
-      // 2. 🔥 BUSCA O ORGANIZADOR REAL NO BANCO DE DADOS
-      let organizadorReal = null;
+      // 2. 🔥 INTELIGÊNCIA DO BANNER CORRIGIDA
+      let autorNome = "Organizador";
+      let autorSlug = "";
+      let tipoAutor = "organizador";
+
       if (eventoData?.organizador_user_id) {
-         const { data: orgData } = await supabase
-            .from("foto_organizadores")
-            .select("nome, slug")
-            .eq("id", eventoData.organizador_user_id)
-            .maybeSingle();
-         organizadorReal = orgData;
+         // Se tem organizador_user_id, é uma galeria oficial de Organizador
+         const { data: orgData } = await supabase.from("foto_organizadores").select("nome, slug").eq("id", eventoData.organizador_user_id).maybeSingle();
+         if (orgData) {
+            autorNome = orgData.nome || "Organizador";
+            autorSlug = orgData.slug || "";
+            tipoAutor = "organizador";
+         }
+      } else if (eventoData?.created_by) {
+         // Se não tem organizador, mas tem created_by, é Fotógrafo Freelancer
+         const { data: fotoData } = await supabase.from("fotografos").select("nome").eq("user_id", eventoData.created_by).maybeSingle();
+         if (fotoData) {
+            autorNome = fotoData.nome || "Fotógrafo Parceiro";
+            tipoAutor = "fotografo";
+         }
       }
 
       const eventoCompleto = {
         ...(eventoData || {}),
-        organizador_nome: organizadorReal?.nome || "Organizador",
-        organizador_slug: organizadorReal?.slug || ""
+        autor_nome: autorNome,
+        autor_slug: autorSlug,
+        tipo_autor: tipoAutor
       };
 
       setEvento(eventoCompleto);
@@ -104,6 +186,22 @@ export default function FotosEventoPage() {
 
     carregar();
   }, [eventoId]);
+
+  useEffect(() => {
+    if (fotos.length === 0) return;
+    const parametros = new URLSearchParams(window.location.search);
+    const fotoId = parametros.get("foto");
+    if (!fotoId) return;
+
+    const fotoEncontrada = fotos.find((foto) => String(foto.id) === fotoId);
+    if (!fotoEncontrada) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      setFotoSelecionada(fotoEncontrada);
+      setFotoOrigemIa(parametros.get("origem") === "ia");
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [fotos]);
 
   const fotosFiltradas = useMemo(() => {
     const termo = busca.trim().toLowerCase();
@@ -120,6 +218,22 @@ export default function FotosEventoPage() {
     setCarrinho(prev => prev.includes(id) ? prev.filter(fotoId => fotoId !== id) : [...prev, id]);
   };
 
+  const fecharFotoSelecionada = () => {
+    ignorarProtecaoAoFecharRef.current = Date.now() + 700;
+    if (temporizadorProtecaoRef.current) clearTimeout(temporizadorProtecaoRef.current);
+    document.documentElement.classList.remove("fotos-protecao-instantanea");
+    setPrintScreenDetectado(false);
+    setFotoSelecionada(null);
+    setFotoOrigemIa(false);
+
+    const url = new URL(window.location.href);
+    if (url.searchParams.has("foto")) {
+      url.searchParams.delete("foto");
+      url.searchParams.delete("origem");
+      window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+    }
+  };
+
   const valorTotalCarrinho = carrinho.reduce((total, fotoId) => {
     const foto = fotos.find(f => String(f.id) === fotoId);
     return total + (foto ? foto.preco_centavos : 0);
@@ -131,15 +245,14 @@ export default function FotosEventoPage() {
     return `${dia}/${mes}/${ano}`;
   };
 
-  const screenshotBlurClass = printScreenDetectado ? "filter blur-[30px] select-none pointer-events-none transition-all duration-300" : "";
+  const screenshotBlurClass = printScreenDetectado ? "filter blur-[45px] opacity-20 scale-[1.02] select-none pointer-events-none transition-all duration-150" : "transition-all duration-150";
 
   return (
     <FotosShell>
-      <main className={`min-h-screen bg-[#020202] text-white font-sans pb-28 relative ${screenshotBlurClass}`}>
+      <main data-foto-protegida className={`min-h-screen bg-[#020202] text-white font-sans pb-28 relative print:hidden ${screenshotBlurClass}`}>
         
         <div className="max-w-screen-2xl mx-auto px-2 md:px-4">
           
-          {/* 🔥 HEROBANNER CONSOLIDADO COM LINK DO ORGANIZADOR */}
           <section className="mt-4 mb-4 overflow-hidden rounded-2xl border border-white/10 bg-[#0a0a0e] shadow-2xl relative">
             <div className="relative min-h-[220px] md:min-h-[260px] px-4 py-6 md:px-8 md:py-8 flex flex-col">
               <div className="absolute inset-0 opacity-40">
@@ -157,16 +270,27 @@ export default function FotosEventoPage() {
                   <ChevronLeft size={14} /> Voltar aos eventos
                 </Link>
                 
-                {/* 🔥 LINK PARA A PÁGINA DO ORGANIZADOR (ESTILO FOTTO) */}
+                {/* 🔥 IDENTIFICAÇÃO DO AUTOR DA GALERIA */}
                 <div className="mb-3">
-                   <Link href={`/fotos/organizador/${evento?.organizador_slug}`} className="inline-flex items-center gap-2.5 bg-white/10 hover:bg-white/20 border border-white/10 rounded-full pr-4 pl-1 py-1 backdrop-blur-md transition-all cursor-pointer group w-fit">
-                      <div className="w-6 h-6 rounded-full bg-zinc-900 border border-white/10 flex items-center justify-center text-[9px] font-black text-white group-hover:scale-110 transition-transform">
-                         <Building2 size={12} className="text-zinc-400 group-hover:text-white" />
-                      </div>
-                      <span className="text-[10px] font-bold text-zinc-300 group-hover:text-white uppercase tracking-widest">
-                         Por: {evento?.organizador_nome}
-                      </span>
-                   </Link>
+                   {evento?.tipo_autor === "organizador" && evento?.autor_slug ? (
+                       <Link href={`/fotos/organizador/${evento.autor_slug}`} className="inline-flex items-center gap-2.5 bg-white/10 hover:bg-white/20 border border-white/10 rounded-full pr-4 pl-1 py-1 backdrop-blur-md transition-all cursor-pointer group w-fit">
+                          <div className="w-6 h-6 rounded-full bg-zinc-900 border border-white/10 flex items-center justify-center text-[9px] font-black text-white group-hover:scale-110 transition-transform">
+                             <Building2 size={12} className="text-zinc-400 group-hover:text-white" />
+                          </div>
+                          <span className="text-[10px] font-bold text-zinc-300 group-hover:text-white uppercase tracking-widest">
+                             Por: {evento.autor_nome}
+                          </span>
+                       </Link>
+                   ) : (
+                       <div className="inline-flex items-center gap-2.5 bg-cyan-500/10 border border-cyan-500/20 rounded-full pr-4 pl-1 py-1 backdrop-blur-md w-fit">
+                          <div className="w-6 h-6 rounded-full bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center text-[9px] font-black text-cyan-400">
+                             <Camera size={12} />
+                          </div>
+                          <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-widest">
+                             Por: {evento?.autor_nome}
+                          </span>
+                       </div>
+                   )}
                 </div>
 
                 <h1 className="mt-1 max-w-3xl text-3xl font-black uppercase tracking-tight leading-none text-white md:text-5xl">
@@ -237,7 +361,6 @@ export default function FotosEventoPage() {
             </div>
           </div>
 
-          {/* 🔥 BANNER PROMO COMBO (Inspirado no print da Fotto) */}
           <div className="mb-6 rounded-3xl bg-gradient-to-r from-[#1a0505] via-red-950/20 to-[#0a0a0e] border border-red-500/20 p-5 md:p-6 flex flex-col md:flex-row items-center justify-between gap-5 shadow-lg shadow-red-900/10">
              <div className="flex items-center gap-4 text-center md:text-left">
                 <div className="hidden sm:flex w-12 h-12 rounded-full bg-red-500/10 text-red-500 items-center justify-center shrink-0 border border-red-500/20">
@@ -245,10 +368,10 @@ export default function FotosEventoPage() {
                 </div>
                 <div>
                    <h3 className="text-lg md:text-xl font-black uppercase tracking-tight text-white mb-1">
-                     Leve mais, <span className="text-red-500">Pague menos</span>
+                      Leve mais, <span className="text-red-500">Pague menos</span>
                    </h3>
                    <p className="text-[11px] text-zinc-400 font-medium uppercase tracking-widest">
-                     Economize até 20% comprando pacotes no carrinho.
+                      Economize até 20% comprando pacotes no carrinho.
                    </p>
                 </div>
              </div>
@@ -282,7 +405,10 @@ export default function FotosEventoPage() {
                 return (
                   <article 
                     key={foto.id} 
-                    onClick={() => setFotoSelecionada(foto)}
+                    onClick={() => {
+                      setFotoOrigemIa(false);
+                      setFotoSelecionada(foto);
+                    }}
                     className="group relative aspect-[4/5] rounded-2xl overflow-hidden bg-[#111] border border-white/5 shadow-md cursor-pointer transition-all duration-300 hover:shadow-cyan-900/20 hover:border-cyan-500/30"
                   >
                     
@@ -348,7 +474,7 @@ export default function FotosEventoPage() {
                 </div>
               </div>
               <Link href="/fotos/carrinho" className="bg-red-600 hover:bg-red-500 text-white px-6 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer shadow-lg shadow-red-950/20 hover:scale-105">
-                Pagar via Pix
+                Finalizar compra
               </Link>
             </div>
           )}
@@ -357,10 +483,10 @@ export default function FotosEventoPage() {
 
         {/* MODAL DE FOTO */}
         {fotoSelecionada && (
-          <div className="fixed inset-0 z-[200] bg-black/95 backdrop-blur-md flex items-center justify-center p-2 md:p-4 animate-in fade-in duration-300" onClick={() => setFotoSelecionada(null)}>
+          <div className="fixed inset-0 z-[200] bg-black/95 backdrop-blur-md flex items-center justify-center p-2 md:p-4 animate-in fade-in duration-300" onClick={fecharFotoSelecionada}>
             <div className="relative w-full max-w-7xl h-full flex flex-col md:flex-row gap-4 items-center justify-center" onClick={(e) => e.stopPropagation()}>
               
-              <button onClick={() => setFotoSelecionada(null)} className="absolute top-2 right-2 md:top-4 md:right-4 z-50 cursor-pointer text-white bg-black/60 hover:bg-black p-2.5 rounded-full backdrop-blur-sm border border-white/10 transition-colors">
+              <button onPointerDown={() => { ignorarProtecaoAoFecharRef.current = Date.now() + 700; }} onClick={fecharFotoSelecionada} className="absolute top-2 right-2 md:top-4 md:right-4 z-50 cursor-pointer text-white bg-black/60 hover:bg-black p-2.5 rounded-full backdrop-blur-sm border border-white/10 transition-colors" aria-label="Fechar foto">
                 <X size={20} />
               </button>
 
@@ -372,14 +498,12 @@ export default function FotosEventoPage() {
                   loading="lazy" 
                 />
                 
-                {/* MARCA D'ÁGUA CENTRAL SUTIL */}
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.15] select-none z-10">
                   <span className="text-4xl md:text-6xl font-black uppercase tracking-[0.3em] rotate-[-25deg]">
                     <span className="text-white drop-shadow-lg">i</span><span className="text-red-500 drop-shadow-lg">Tatame</span>
                   </span>
                 </div>
 
-                {/* AVISO VERTICAL SUTIL */}
                 <div className="absolute left-2 md:left-6 top-0 bottom-0 flex items-center justify-center pointer-events-none select-none z-10 opacity-30">
                   <span className="text-white text-[10px] md:text-sm font-black uppercase tracking-[0.3em] -rotate-90 whitespace-nowrap drop-shadow-lg">
                     Não tire print, valorize o fotógrafo
@@ -388,8 +512,13 @@ export default function FotosEventoPage() {
               </div>
 
               <div className="w-full md:w-[340px] shrink-0 bg-[#0a0a0e] border border-white/5 rounded-3xl p-5 md:p-6 flex flex-col gap-5 shadow-2xl">
+
+                {fotoOrigemIa && (
+                  <div className="flex items-center gap-2 rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-[9px] font-black uppercase tracking-widest text-emerald-300">
+                    <ScanFace size={14} /> Encontrada pela busca facial
+                  </div>
+                )}
                 
-                {/* 1. Cabeçalho da Foto Refinado */}
                 <div className="flex items-center gap-3.5">
                     <div className="w-12 h-12 rounded-2xl bg-zinc-900 flex items-center justify-center text-zinc-500 border border-white/5 shrink-0 shadow-inner">
                         <ImageIcon size={20}/>
@@ -402,10 +531,8 @@ export default function FotosEventoPage() {
 
                 <div className="w-full h-[1px] bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
 
-                {/* 2. NOVO: Card do Fotógrafo e Tags */}
                 <div className="flex flex-col gap-4">
                     
-                    {/* Card do Fotógrafo */}
                     <div className="flex items-center gap-3 bg-white/[0.02] border border-white/5 rounded-2xl p-3 transition-colors hover:bg-white/[0.04]">
                         <div className="w-9 h-9 rounded-xl bg-red-500/10 flex items-center justify-center text-red-500 shrink-0 border border-red-500/20">
                             <Camera size={16} />
@@ -413,13 +540,11 @@ export default function FotosEventoPage() {
                         <div className="min-w-0 flex-1">
                             <p className="text-[8px] font-bold text-zinc-500 uppercase tracking-widest mb-0.5">Lentes por</p>
                             <p className="text-[11px] font-black text-white uppercase tracking-wider truncate">
-                                {/* Usamos o 'any' rápido para o TS não reclamar da coluna nova que injetamos na query */}
                                 {(fotoSelecionada as any).fotografo_dados?.nome || "Fotógrafo Parceiro"}
                             </p>
                         </div>
                     </div>
 
-                    {/* Tags Estilizadas */}
                     <div className="flex flex-wrap items-center gap-2">
                         <span className="bg-white/5 text-zinc-400 text-[9px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg border border-white/10 flex items-center gap-1.5">
                            <ShieldCheck size={12} className="text-emerald-500/70"/> Jiu-Jitsu
@@ -438,10 +563,8 @@ export default function FotosEventoPage() {
                       <p className="text-3xl font-black text-cyan-400 tracking-tight leading-none pr-1">{formatarPrecoFotos(fotoSelecionada.preco_centavos)}</p>
                   </div>
 
-                  {/* BOTÕES LADO A LADO */}
                   <div className="grid grid-cols-2 gap-3 w-full">
                     
-                    {/* Botão de Adicionar/Remover */}
                     {carrinho.includes(String(fotoSelecionada.id)) ? (
                        <button onClick={(e) => toggleCarrinho(String(fotoSelecionada.id), e)} className="w-full cursor-pointer py-3.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-colors flex items-center justify-center gap-1.5 shadow-[0_0_15px_rgba(16,185,129,0.2)]">
                          <CheckCircle2 size={14}/> Na Sacola
@@ -452,11 +575,9 @@ export default function FotosEventoPage() {
                       </button>
                     )}
                     
-                    {/* Botão de Finalizar Compra Rápida */}
                     <Link 
                       href="/fotos/carrinho" 
                       onClick={(e) => {
-                        // O "Truque de Mestre": Se ele clicar em Finalizar sem ter adicionado antes, o sistema adiciona automaticamente e já leva pro carrinho!
                         if (!carrinho.includes(String(fotoSelecionada.id))) {
                           toggleCarrinho(String(fotoSelecionada.id));
                         }
@@ -472,23 +593,26 @@ export default function FotosEventoPage() {
           </div>
         )}
 
-        {/* ALERTA DE BLOQUEIO DE PRINT SCREEN */}
-        {printScreenDetectado && (
-          <div className="fixed inset-0 z-[300] bg-black/95 backdrop-blur-[60px] flex flex-col items-center justify-center p-8 text-center animate-in fade-in duration-100">
-            <div className="w-20 h-20 rounded-full bg-red-500/10 flex items-center justify-center border border-red-500/20 text-red-500 mb-6 shadow-[0_0_50px_rgba(239,68,68,0.3)]">
-                <AlertTriangle size={36} />
-            </div>
-            <h2 className="text-3xl md:text-4xl font-black text-white uppercase tracking-tighter leading-tight">Proteção de Imagem</h2>
-            <p className="text-zinc-400 text-xs md:text-sm mt-4 max-w-md leading-relaxed font-medium">
-              Por motivos de segurança e respeito ao trabalho do fotógrafo, esta galeria bloqueia automaticamente tentativas de capturar a tela.
-            </p>
-            <div className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest mt-8 shadow-lg">
-                <ShieldCheck size={16}/> iTatame Security
-            </div>
-          </div>
-        )}
-
       </main>
+
+      <div
+        data-foto-protecao-overlay
+        aria-hidden={!printScreenDetectado}
+        className={`fixed inset-0 z-[9999] items-center justify-center bg-[#050505] px-6 text-center print:hidden ${printScreenDetectado ? "flex" : "hidden"}`}
+      >
+          <div className="max-w-md rounded-3xl border border-red-500/30 bg-red-500/10 p-8 shadow-[0_0_80px_rgba(239,68,68,0.2)]">
+            <ShieldCheck size={38} className="mx-auto mb-4 text-red-400" />
+            <p className="text-lg font-black uppercase tracking-tight text-white">Conteúdo protegido</p>
+            <p className="mt-2 text-xs leading-5 text-zinc-400">A visualização foi ocultada temporariamente para proteger o trabalho do fotógrafo.</p>
+          </div>
+      </div>
+
+      <div className="fixed inset-0 z-[9999] hidden items-center justify-center bg-white p-10 text-center text-black print:flex">
+        <div>
+          <p className="text-2xl font-black uppercase">Impressão desativada</p>
+          <p className="mt-3 text-sm">Adquira a foto para baixar o arquivo original autorizado.</p>
+        </div>
+      </div>
     </FotosShell>
   );
 }

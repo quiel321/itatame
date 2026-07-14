@@ -53,3 +53,15 @@ body.fotos-route > div.fixed.bottom-0 {
 body.fotos-route > main {
   padding-top: 0 !important;
 }
+
+/* Proteção imediata das prévias: a classe é aplicada no primeiro keydown,
+   antes de aguardar um novo ciclo de renderização do React. */
+html.fotos-protecao-instantanea [data-foto-protegida] {
+  visibility: hidden !important;
+  opacity: 0 !important;
+  transition: none !important;
+}
+
+html.fotos-protecao-instantanea [data-foto-protecao-overlay] {
+  display: flex !important;
+}

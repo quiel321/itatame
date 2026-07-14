@@ -25,7 +25,9 @@ export default function FotosShell({ children }: { children: ReactNode }) {
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
           
           <div className="flex flex-col items-center md:items-start gap-2">
-            <img src="/logo.svg" alt="iTatame" className="h-5 md:h-6 w-auto opacity-50 grayscale hover:grayscale-0 hover:opacity-100 transition-all" />
+            <Link href="/" aria-label="Voltar ao site do Itatame" title="Voltar ao site do Itatame">
+              <img src="/logo.svg" alt="iTatame" className="h-5 md:h-6 w-auto opacity-50 grayscale hover:grayscale-0 hover:opacity-100 transition-all" />
+            </Link>
             <p className="text-[9px] text-zinc-600 font-bold uppercase tracking-widest">
               &copy; {new Date().getFullYear()} iTatame. Todos os direitos reservados.
             </p>
@@ -33,9 +35,18 @@ export default function FotosShell({ children }: { children: ReactNode }) {
 
           <div className="flex flex-wrap items-center justify-center gap-6 text-[9px] font-black uppercase tracking-widest text-zinc-600">
             <Link href="/" className="hover:text-red-500 transition-colors">Voltar ao Sistema</Link>
-            <Link href="/termos" className="hover:text-white transition-colors">Termos de Uso</Link>
-            <Link href="/privacidade" className="hover:text-white transition-colors">Privacidade</Link>
-            <a href="mailto:contato@itatame.com.br" className="hover:text-white transition-colors">Suporte</a>
+            <Link href="/fotos/precos" className="hover:text-white transition-colors">Preços</Link>
+            <Link href="/fotos/termos-de-uso" className="hover:text-white transition-colors">Termos de Uso</Link>
+            <Link href="/fotos/privacidade" className="hover:text-white transition-colors">Privacidade</Link>
+            <a
+              href="https://wa.me/5565993059729?text=Ol%C3%A1%2C%20preciso%20de%20suporte%20no%20Itatame%20Fotos."
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-emerald-400 transition-colors"
+              aria-label="Falar com o suporte do Itatame Fotos pelo WhatsApp"
+            >
+              Suporte
+            </a>
           </div>
 
         </div>

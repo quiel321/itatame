@@ -1,8 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/app/lib/supabase";
 import { useRouter } from "next/navigation";
+import FotosShell from "@/app/fotos/_components/FotosShell";
+
+type PerfilFotosRecuperacao = "comprador" | "fotografo" | "organizador";
+
+function normalizarPerfilFotos(valor: string | null): PerfilFotosRecuperacao {
+  return valor === "fotografo" || valor === "organizador" ? valor : "comprador";
+}
 
 export default function RecuperarSenha() {
   const router = useRouter();
@@ -10,6 +17,16 @@ export default function RecuperarSenha() {
   const [loading, setLoading] = useState(false);
   const [mensagem, setMensagem] = useState("");
   const [erro, setErro] = useState("");
+  const [origemFotos, setOrigemFotos] = useState(false);
+  const [perfilFotos, setPerfilFotos] = useState<PerfilFotosRecuperacao>("comprador");
+
+  useEffect(() => {
+    const parametros = new URLSearchParams(window.location.search);
+    queueMicrotask(() => {
+      setOrigemFotos(parametros.get("origem") === "fotos");
+      setPerfilFotos(normalizarPerfilFotos(parametros.get("perfil")));
+    });
+  }, []);
 
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -17,9 +34,17 @@ export default function RecuperarSenha() {
     setMensagem("");
     setErro("");
 
-    // Dispara o e-mail pelo Supabase e avisa para qual tela voltar
+    const parametros = new URLSearchParams(window.location.search);
+    const recuperacaoFotos = parametros.get("origem") === "fotos";
+    const perfilRecuperacao = normalizarPerfilFotos(parametros.get("perfil"));
+    const destinoNovaSenha = new URL("/nova-senha", window.location.origin);
+    if (recuperacaoFotos) {
+      destinoNovaSenha.searchParams.set("origem", "fotos");
+      destinoNovaSenha.searchParams.set("perfil", perfilRecuperacao);
+    }
+
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/nova-senha`,
+      redirectTo: destinoNovaSenha.toString(),
     });
 
     if (error) {
@@ -31,13 +56,13 @@ export default function RecuperarSenha() {
     setLoading(false);
   };
 
-  return (
+  const conteudo = (
     <div className="min-h-screen bg-[#050505] flex items-center justify-center p-4 selection:bg-red-500/30">
       <div className="max-w-md w-full bg-[#0a0a0e] border border-white/10 p-8 rounded-3xl shadow-2xl relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-600 to-red-900"></div>
         
-        <h1 className="text-2xl font-black text-white mb-2 tracking-tight">Esqueci minha senha</h1>
-        <p className="text-zinc-400 text-xs mb-8">Digite o e-mail cadastrado na sua conta. Vamos te enviar um link para criar uma senha nova.</p>
+        <h1 className="text-2xl font-black text-white mb-2 tracking-tight">{origemFotos ? "Recuperar senha do iTatame Fotos" : "Esqueci minha senha"}</h1>
+        <p className="text-zinc-400 text-xs mb-8">Digite o e-mail cadastrado na sua conta. Vamos enviar um link seguro para criar uma senha nova.</p>
 
         <form onSubmit={handleResetPassword} className="space-y-4">
           <div>
@@ -65,11 +90,13 @@ export default function RecuperarSenha() {
         </form>
 
         <div className="mt-6 text-center">
-          <button onClick={() => router.push('/login')} className="cursor-pointer text-zinc-500 hover:text-white text-[10px] font-bold uppercase tracking-widest transition-colors">
-            Voltar para o Login
+          <button onClick={() => router.push(origemFotos ? `/fotos/login?perfil=${perfilFotos}` : "/login")} className="cursor-pointer text-zinc-500 hover:text-white text-[10px] font-bold uppercase tracking-widest transition-colors">
+            {origemFotos ? "Voltar ao login do Fotos" : "Voltar para o Login"}
           </button>
         </div>
       </div>
     </div>
   );
+
+  return origemFotos ? <FotosShell>{conteudo}</FotosShell> : conteudo;
 } 

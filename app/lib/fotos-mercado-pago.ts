@@ -1,6 +1,10 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { liberarPedidoFotos } from "@/app/lib/fotos-pedidos";
+import {
+  confirmarRoyaltyOrganizador,
+  estornarRoyaltyOrganizador,
+  liberarPedidoFotos,
+} from "@/app/lib/fotos-pedidos";
 import { enviarEmailPedidoFotosConfirmado } from "@/app/lib/email-fotos";
 
 function primeiraRelacao<T>(valor: T | T[] | null | undefined) {
@@ -54,12 +58,19 @@ export async function sincronizarPagamentoFotos(
   if (payment.status === "approved" && pedido.status !== "pago") {
     await liberarPedidoFotos(supabase, pedido.id, idPagamento, payment.status_detail);
   } else if (payment.status === "approved") {
+    await confirmarRoyaltyOrganizador(supabase, pedido.id, idPagamento);
     await enviarEmailPedidoFotosConfirmado(supabase, pedido.id);
+  } else if (["cancelled", "refunded", "charged_back"].includes(String(payment.status))) {
+    const statusPedido = payment.status === "cancelled" ? "cancelado" : "reembolsado";
+    await supabase.from("foto_pedidos").update({ status: statusPedido }).eq("id", pedido.id);
+    await estornarRoyaltyOrganizador(supabase, pedido.id);
   }
 
   return {
     id: pedido.id,
-    status: payment.status === "approved" ? "pago" : pedido.status,
+    status: payment.status === "approved"
+      ? "pago"
+      : (["refunded", "charged_back"].includes(String(payment.status)) ? "reembolsado" : payment.status === "cancelled" ? "cancelado" : pedido.status),
     provedor_status: payment.status,
     provedor_status_detail: payment.status_detail || null,
     sincronizado: true,

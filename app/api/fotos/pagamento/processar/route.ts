@@ -1,4 +1,3 @@
-import crypto from "crypto";
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
 import { liberarPedidoFotos } from "@/app/lib/fotos-pedidos";
@@ -39,7 +38,7 @@ export async function POST(request: Request) {
 
     const { data: pedido } = await supabase
       .from("foto_pedidos")
-      .select("id, comprador_user_id, status, total_centavos, comissao_itatame_centavos, fotografo_id, fotografos(mp_access_token)")
+      .select("id, comprador_user_id, status, total_centavos, comissao_itatame_centavos, comissao_organizador_centavos, fotografo_id, organizador_user_id, fotografos(mp_access_token)")
       .eq("id", pedidoId)
       .eq("comprador_user_id", auth.user.id)
       .maybeSingle();
@@ -56,9 +55,16 @@ export async function POST(request: Request) {
       transaction_amount: Number(pedido.total_centavos) / 100,
       description: "Compra de fotos iTatame",
       external_reference: `foto_pedido:${pedido.id}`,
-      application_fee: Number(pedido.comissao_itatame_centavos) / 100,
+      application_fee: (
+        Number(pedido.comissao_itatame_centavos) + Number(pedido.comissao_organizador_centavos || 0)
+      ) / 100,
       notification_url: notificationUrl(request, pedido.id),
-      metadata: { ...(formData.metadata || {}), pedido_id: pedido.id, fotografo_id: pedido.fotografo_id },
+      metadata: {
+        ...(formData.metadata || {}),
+        pedido_id: pedido.id,
+        fotografo_id: pedido.fotografo_id,
+        organizador_user_id: pedido.organizador_user_id,
+      },
       installments: 1,
     };
 
@@ -68,7 +74,7 @@ export async function POST(request: Request) {
         accept: "application/json",
         "content-type": "application/json",
         Authorization: `Bearer ${fotografo.mp_access_token}`,
-        "X-Idempotency-Key": crypto.randomUUID(),
+        "X-Idempotency-Key": `foto-pedido-${pedido.id}`,
       },
       body: JSON.stringify(payload),
     });

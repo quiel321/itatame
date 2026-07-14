@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
+import {
+  calcularDistribuicaoFotos,
+  COMISSAO_ITATAME_FOTOS_PERCENTUAL,
+} from "@/app/lib/fotos-financeiro";
 
 export const runtime = "nodejs";
 
@@ -45,7 +49,7 @@ export async function POST(request: Request) {
       .from("foto_arquivos")
       .select(`
         id, evento_id, fotografo_id, titulo, preco_centavos, status,
-        foto_eventos (id, nome, status, vendas_ate, desconto_combo_qtd, desconto_combo_percentual),
+        foto_eventos (id, nome, status, vendas_ate, desconto_combo_qtd, desconto_combo_percentual, organizador_user_id),
         fotografos (id, nome, mp_access_token, mp_connected_at, status)
       `)
       .in("id", fotoIds)
@@ -81,8 +85,25 @@ export async function POST(request: Request) {
     const totalCentavos = subtotalCentavos - descontoCentavos;
     if (totalCentavos <= 0) return NextResponse.json({ error: "Total do pedido inválido." }, { status: 409 });
 
-    const percentualComissao = Math.min(90, Math.max(0, Number(process.env.FOTOS_COMISSAO_PERCENTUAL || 10)));
-    const comissaoCentavos = Math.round(totalCentavos * percentualComissao / 100);
+    let percentualOrganizador = 0;
+    const organizadorUserId = evento.organizador_user_id ? String(evento.organizador_user_id) : null;
+    if (organizadorUserId) {
+      const { data: vinculo, error: vinculoError } = await supabase
+        .from("foto_evento_fotografos")
+        .select("comissao_organizador_percentual")
+        .eq("evento_id", eventoId)
+        .eq("fotografo_id", fotografoId)
+        .eq("status", "ativo")
+        .maybeSingle();
+      if (vinculoError) throw new Error(vinculoError.message);
+      percentualOrganizador = Number(vinculo?.comissao_organizador_percentual || 0);
+    }
+
+    const distribuicao = calcularDistribuicaoFotos({
+      totalCentavos,
+      percentualItatame: COMISSAO_ITATAME_FOTOS_PERCENTUAL,
+      percentualOrganizador,
+    });
     const { data: pedido, error: pedidoError } = await supabase
       .from("foto_pedidos")
       .insert({
@@ -95,7 +116,11 @@ export async function POST(request: Request) {
         subtotal_centavos: subtotalCentavos,
         desconto_centavos: descontoCentavos,
         total_centavos: totalCentavos,
-        comissao_itatame_centavos: comissaoCentavos,
+        organizador_user_id: organizadorUserId,
+        comissao_itatame_centavos: distribuicao.comissaoItatameCentavos,
+        comissao_organizador_percentual: distribuicao.percentualOrganizador,
+        comissao_organizador_centavos: distribuicao.comissaoOrganizadorCentavos,
+        repasse_organizador_status: distribuicao.comissaoOrganizadorCentavos > 0 ? "pendente" : "nao_aplicavel",
         provedor_pagamento: "mercado_pago",
       })
       .select("id")
@@ -114,6 +139,23 @@ export async function POST(request: Request) {
       throw new Error(itensError.message);
     }
 
+    if (organizadorUserId && distribuicao.comissaoOrganizadorCentavos > 0) {
+      const { error: royaltyError } = await supabase.from("foto_royalties_organizador").insert({
+        pedido_id: pedido.id,
+        evento_id: eventoId,
+        fotografo_id: fotografoId,
+        organizador_user_id: organizadorUserId,
+        percentual: distribuicao.percentualOrganizador,
+        valor_centavos: distribuicao.comissaoOrganizadorCentavos,
+        status: "pendente",
+      });
+      if (royaltyError) {
+        await supabase.from("foto_pedido_itens").delete().eq("pedido_id", pedido.id);
+        await supabase.from("foto_pedidos").delete().eq("id", pedido.id);
+        throw new Error(royaltyError.message);
+      }
+    }
+
     const preferenceResponse = await fetch("https://api.mercadopago.com/checkout/preferences", {
       method: "POST",
       headers: {
@@ -129,13 +171,19 @@ export async function POST(request: Request) {
           unit_price: totalCentavos / 100,
         }],
         external_reference: `foto_pedido:${pedido.id}`,
-        marketplace_fee: comissaoCentavos / 100,
+        marketplace_fee: distribuicao.comissaoMarketplaceCentavos / 100,
         notification_url: notificationUrl(request, pedido.id),
-        metadata: { pedido_id: pedido.id, evento_id: eventoId, fotografo_id: fotografoId },
+        metadata: {
+          pedido_id: pedido.id,
+          evento_id: eventoId,
+          fotografo_id: fotografoId,
+          organizador_user_id: organizadorUserId,
+        },
       }),
     });
     const preference = await preferenceResponse.json();
     if (!preferenceResponse.ok || !preference.id) {
+      await supabase.from("foto_royalties_organizador").delete().eq("pedido_id", pedido.id);
       await supabase.from("foto_pedido_itens").delete().eq("pedido_id", pedido.id);
       await supabase.from("foto_pedidos").delete().eq("id", pedido.id);
       return NextResponse.json({ error: preference.message || "Falha ao preparar o pagamento." }, { status: 502 });
@@ -148,6 +196,11 @@ export async function POST(request: Request) {
       pedidoId: pedido.id,
       eventoNome: evento.nome || "Evento iTatame",
       total: totalCentavos / 100,
+      distribuicao: {
+        comissaoItatameCentavos: distribuicao.comissaoItatameCentavos,
+        royaltyOrganizadorCentavos: distribuicao.comissaoOrganizadorCentavos,
+        fotografoAntesDaTarifaCentavos: distribuicao.fotografoAntesDaTarifaCentavos,
+      },
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Erro ao preparar pagamento.";
