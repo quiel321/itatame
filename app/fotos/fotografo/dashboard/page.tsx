@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
 import FotosShell from "../../_components/FotosShell";
-import { ArrowRight, Camera, CheckCircle2, CloudUpload, CreditCard, FolderOpen, ImagePlus, ShieldCheck, Wallet, LogOut, AlertCircle, Store, X, Edit, Calendar, MapPin, Image as ImageIcon, Trash2, Loader2, Check, Plus, Images, Trophy } from "lucide-react";
+import { ArrowRight, Camera, CheckCircle2, CloudUpload, CreditCard, FolderOpen, ImagePlus, ShieldCheck, Wallet, LogOut, AlertCircle, Store, X, Edit, Calendar, MapPin, Image as ImageIcon, Trash2, Loader2, Check, Plus, Images, Trophy, ChartNoAxesCombined } from "lucide-react";
 
 type FotografoPerfil = { id: string; nome: string | null; email: string | null; foto_url?: string | null; telefone?: string | null; documento?: string | null; cep?: string | null; endereco?: string | null; cidade?: string | null; estado?: string | null; bio?: string | null; perfil_completo?: boolean | null; status: string | null; mp_connected_at?: string | null; mp_user_id?: string | null; };
 type Totais = { fotos: number; albuns: number; eventos: number; vendas: number };
@@ -490,6 +490,7 @@ export default function FotografoDashboardPage() {
                 <p className="mt-3 max-w-xl text-xs md:text-sm leading-relaxed text-zinc-400 font-medium">Acompanhe suas galerias, conecte sua conta de recebimento e envie fotos oficiais para os eventos liberados.</p>
               </div>
               <div className="flex flex-col sm:flex-row w-full sm:w-auto items-stretch sm:items-center gap-3">
+                <Link href="/fotos/fotografo/financeiro" className="cursor-pointer inline-flex h-11 w-full sm:w-auto items-center justify-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-5 text-[10px] font-black uppercase tracking-widest text-emerald-300 hover:bg-emerald-400 hover:text-black transition-colors shadow-sm">Financeiro <ChartNoAxesCombined size={14} className="shrink-0" /></Link>
                 <Link href="/fotos/fotografo/painel" className="cursor-pointer inline-flex h-11 w-full sm:w-auto items-center justify-center gap-2 rounded-xl bg-cyan-500 px-5 text-[10px] font-black uppercase tracking-widest text-black hover:bg-cyan-400 transition-colors shadow-sm">Upload de Fotos <CloudUpload size={14} className="shrink-0" /></Link>
                 {userId && <button onClick={deslogar} className="cursor-pointer inline-flex h-11 w-full sm:w-auto items-center justify-center gap-2 rounded-xl border border-red-500/20 bg-red-500/10 px-6 text-[10px] font-black uppercase tracking-widest text-red-500 hover:bg-red-500 hover:text-white transition-all shadow-sm">Sair <LogOut size={14} className="shrink-0" /></button>}
               </div>

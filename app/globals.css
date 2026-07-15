@@ -56,12 +56,10 @@ body.fotos-route > main {
 
 /* Proteção imediata das prévias: a classe é aplicada no primeiro keydown,
    antes de aguardar um novo ciclo de renderização do React. */
-html.fotos-protecao-instantanea [data-foto-protegida] {
-  visibility: hidden !important;
-  opacity: 0 !important;
+html.fotos-protecao-instantanea [data-foto-protegida-imagem] {
+  filter: blur(38px) !important;
+  transform: scale(1.08) !important;
   transition: none !important;
 }
 
-html.fotos-protecao-instantanea [data-foto-protecao-overlay] {
-  display: flex !important;
-}
+/* A interface continua visível: somente as fotos à venda recebem o filtro. */

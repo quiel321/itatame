@@ -44,6 +44,13 @@ export async function POST(request: Request) {
 
     const form = await request.formData();
     const imagem = form.get("imagem");
+    const eventoIdInformado = form.get("eventoId");
+    const eventoId = typeof eventoIdInformado === "string" && eventoIdInformado.trim()
+      ? eventoIdInformado.trim()
+      : null;
+    if (eventoId && !UUID_PATTERN.test(eventoId)) {
+      return NextResponse.json({ error: "Galeria inválida para a busca facial." }, { status: 400 });
+    }
     if (!(imagem instanceof File)) {
       return NextResponse.json({ error: "Envie uma selfie para iniciar a busca." }, { status: 400 });
     }
@@ -82,11 +89,13 @@ export async function POST(request: Request) {
     }> = [];
 
     for (let inicio = 0; inicio < ids.length; inicio += 100) {
-      const { data, error } = await supabase
+      let consultaFotos = supabase
         .from("foto_arquivos")
         .select("id, evento_id, titulo, preco_centavos")
         .in("id", ids.slice(inicio, inicio + 100))
         .eq("status", "publicada");
+      if (eventoId) consultaFotos = consultaFotos.eq("evento_id", eventoId);
+      const { data, error } = await consultaFotos;
       if (error) throw new Error(error.message);
       fotos.push(...(data || []));
     }

@@ -18,6 +18,12 @@ type ResultadoFace = {
 const MAX_BUSCA_BYTES = 300 * 1024;
 const CARRINHO_FOTOS_KEY = "carrinho_fotos";
 
+type BuscaFacialProps = {
+  eventoId?: string;
+  triggerLabel?: string;
+  triggerClassName?: string;
+};
+
 function canvasParaBlob(canvas: HTMLCanvasElement, qualidade: number) {
   return new Promise<Blob>((resolve, reject) => {
     canvas.toBlob(
@@ -56,7 +62,7 @@ async function prepararSelfie(file: File) {
   return menor;
 }
 
-export default function BuscaFacial() {
+export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }: BuscaFacialProps = {}) {
   const [aberto, setAberto] = useState(false);
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [preview, setPreview] = useState("");
@@ -105,6 +111,7 @@ export default function BuscaFacial() {
       const selfie = await prepararSelfie(arquivo);
       const form = new FormData();
       form.append("imagem", selfie, "selfie-busca.jpg");
+      if (eventoId) form.append("eventoId", eventoId);
       const response = await fetch("/api/fotos/buscar-por-face", { method: "POST", body: form });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Nao foi possivel buscar suas fotos.");
@@ -160,9 +167,9 @@ export default function BuscaFacial() {
       <button
         type="button"
         onClick={abrirBusca}
-        className="flex h-12 shrink-0 items-center justify-center gap-2 rounded-xl bg-red-600 px-6 text-[10px] font-black uppercase tracking-widest text-white shadow-[0_0_15px_rgba(239,68,68,0.3)] transition-all hover:bg-red-500 md:h-14 md:text-[11px]"
+        className={triggerClassName || "flex h-12 shrink-0 items-center justify-center gap-2 rounded-xl bg-red-600 px-6 text-[10px] font-black uppercase tracking-widest text-white shadow-[0_0_15px_rgba(239,68,68,0.3)] transition-all hover:bg-red-500 md:h-14 md:text-[11px]"}
       >
-        <ScanFace size={16} /> Buscar por face
+        <ScanFace size={16} /> {triggerLabel || "Buscar por face"}
       </button>
 
       {aberto && typeof document !== "undefined" && createPortal(
@@ -214,7 +221,7 @@ export default function BuscaFacial() {
                 {buscando && (
                   <div className="flex min-h-[260px] flex-col items-center justify-center text-center">
                     <Loader2 size={42} className="animate-spin text-cyan-400" />
-                    <p className="mt-4 text-sm font-black uppercase tracking-wider">Procurando em todas as galerias</p>
+                    <p className="mt-4 text-sm font-black uppercase tracking-wider">{eventoId ? "Procurando nesta galeria" : "Procurando em todas as galerias"}</p>
                     <p className="mt-2 text-xs text-zinc-500">Isso costuma levar apenas alguns segundos.</p>
                   </div>
                 )}
@@ -259,7 +266,7 @@ export default function BuscaFacial() {
                             </label>
                             <Link href={`/fotos/evento/${foto.eventoId}?foto=${encodeURIComponent(foto.id)}&origem=ia`} className="group block">
                               <div className="relative aspect-[4/5] overflow-hidden bg-zinc-950">
-                                <img src={`/api/fotos/arquivo/${foto.id}?tipo=thumb`} alt={foto.titulo || "Foto encontrada"} className={`h-full w-full object-cover transition duration-300 group-hover:scale-105 ${noCarrinho ? "opacity-70" : ""}`} />
+                                <img data-foto-protegida-imagem src={`/api/fotos/arquivo/${foto.id}?tipo=thumb`} alt={foto.titulo || "Foto encontrada"} className={`h-full w-full object-cover transition duration-300 group-hover:scale-105 ${noCarrinho ? "opacity-70" : ""}`} />
                                 <span className={`absolute left-2 top-2 rounded-full px-2 py-1 text-[8px] font-black uppercase tracking-wider ${foto.nivel === "forte" ? "bg-emerald-400 text-black" : foto.nivel === "provavel" ? "bg-cyan-400 text-black" : "bg-amber-400 text-black"}`}>{foto.nivel} · {foto.similaridade.toFixed(0)}%</span>
                               </div>
                               <div className="p-2.5">

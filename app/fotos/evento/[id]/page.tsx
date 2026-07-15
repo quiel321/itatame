@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
 import { FotoAlbum, FotoArquivo, formatarPrecoFotos } from "@/app/lib/fotos";
 import FotosShell from "../../_components/FotosShell";
+import BuscaFacial from "../../_components/BuscaFacial";
 import { Camera, CalendarDays, CheckCircle2, ChevronLeft, Filter, Image as ImageIcon, MapPin, ScanFace, Search, ShieldCheck, ShoppingCart, X, Building2, Percent } from "lucide-react";
 
 const CARRINHO_FOTOS_KEY = "carrinho_fotos";
@@ -28,16 +29,11 @@ export default function FotosEventoPage() {
   const [carrinhoCarregado, setCarrinhoCarregado] = useState(false);
   const [fotoSelecionada, setFotoSelecionada] = useState<FotoArquivo | null>(null);
   const [fotoOrigemIa, setFotoOrigemIa] = useState(false);
-  const [printScreenDetectado, setPrintScreenDetectado] = useState(false);
   const temporizadorProtecaoRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const ignorarProtecaoAoFecharRef = useRef(0);
 
   useEffect(() => {
-    let janelaSemFoco = false;
-
     const desativarProtecao = () => {
       document.documentElement.classList.remove("fotos-protecao-instantanea");
-      setPrintScreenDetectado(false);
     };
 
     const agendarDesativacao = (duracao: number) => {
@@ -47,7 +43,6 @@ export default function FotosEventoPage() {
 
     const ativarProtecao = (duracao = 2500) => {
       document.documentElement.classList.add("fotos-protecao-instantanea");
-      setPrintScreenDetectado(true);
       agendarDesativacao(duracao);
     };
 
@@ -70,18 +65,9 @@ export default function FotosEventoPage() {
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
-      if (teclaPreventiva(e) && !janelaSemFoco) agendarDesativacao(350);
+      if (teclaPreventiva(e)) agendarDesativacao(350);
     };
 
-    const handleBlur = () => {
-      if (Date.now() < ignorarProtecaoAoFecharRef.current) return;
-      janelaSemFoco = true;
-      ativarProtecao(1800);
-    };
-    const handleFocus = () => {
-      janelaSemFoco = false;
-      agendarDesativacao(350);
-    };
     const handleVisibilityChange = () => {
       if (document.visibilityState !== "visible") ativarProtecao(2500);
       else agendarDesativacao(350);
@@ -96,8 +82,6 @@ export default function FotosEventoPage() {
 
     window.addEventListener("keydown", handleKeyDown, true);
     window.addEventListener("keyup", handleKeyUp, true);
-    window.addEventListener("blur", handleBlur, true);
-    window.addEventListener("focus", handleFocus, true);
     window.addEventListener("pagehide", handlePageHide, true);
     window.addEventListener("beforeprint", handleBeforePrint);
     window.addEventListener("afterprint", handleAfterPrint);
@@ -107,8 +91,6 @@ export default function FotosEventoPage() {
     return () => {
       window.removeEventListener("keydown", handleKeyDown, true);
       window.removeEventListener("keyup", handleKeyUp, true);
-      window.removeEventListener("blur", handleBlur, true);
-      window.removeEventListener("focus", handleFocus, true);
       window.removeEventListener("pagehide", handlePageHide, true);
       window.removeEventListener("beforeprint", handleBeforePrint);
       window.removeEventListener("afterprint", handleAfterPrint);
@@ -219,10 +201,8 @@ export default function FotosEventoPage() {
   };
 
   const fecharFotoSelecionada = () => {
-    ignorarProtecaoAoFecharRef.current = Date.now() + 700;
     if (temporizadorProtecaoRef.current) clearTimeout(temporizadorProtecaoRef.current);
     document.documentElement.classList.remove("fotos-protecao-instantanea");
-    setPrintScreenDetectado(false);
     setFotoSelecionada(null);
     setFotoOrigemIa(false);
 
@@ -245,11 +225,9 @@ export default function FotosEventoPage() {
     return `${dia}/${mes}/${ano}`;
   };
 
-  const screenshotBlurClass = printScreenDetectado ? "filter blur-[45px] opacity-20 scale-[1.02] select-none pointer-events-none transition-all duration-150" : "transition-all duration-150";
-
   return (
     <FotosShell>
-      <main data-foto-protegida className={`min-h-screen bg-[#020202] text-white font-sans pb-28 relative print:hidden ${screenshotBlurClass}`}>
+      <main data-foto-protegida className="min-h-screen bg-[#020202] text-white font-sans pb-28 relative print:hidden">
         
         <div className="max-w-screen-2xl mx-auto px-2 md:px-4">
           
@@ -318,14 +296,11 @@ export default function FotosEventoPage() {
           
           <div className="sticky top-[60px] md:top-[80px] z-30 mb-6 bg-[#0a0a0e]/90 backdrop-blur-xl border border-white/10 p-2 md:p-3 rounded-2xl flex flex-col md:flex-row gap-3 shadow-2xl">
             
-            <button 
-                onClick={() => alert('Módulo de Inteligência Artificial em fase final de testes! Em breve.')}
-                className="flex items-center justify-center gap-2.5 bg-black/50 hover:bg-black border border-white/5 rounded-xl px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.1em] text-white shrink-0 cursor-pointer transition-colors"
-            >
-                <ScanFace size={16} className="text-red-500" />
-                <span className="hidden sm:inline">Pesquisar por Face (IA)</span>
-                <span className="sm:hidden">Pesquisa Facial</span>
-            </button>
+            <BuscaFacial
+              eventoId={eventoId}
+              triggerLabel="Pesquisa facial"
+              triggerClassName="flex items-center justify-center gap-2.5 bg-black/50 hover:bg-black border border-white/5 rounded-xl px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.1em] text-white shrink-0 cursor-pointer transition-colors"
+            />
 
             <div className="w-[1px] h-8 bg-white/5 hidden md:block self-center"></div>
 
@@ -413,7 +388,8 @@ export default function FotosEventoPage() {
                   >
                     
                     {foto.r2_thumb_key || foto.r2_preview_key ? (
-                      <img 
+                      <img
+                        data-foto-protegida-imagem
                         src={fotoPreviewSrc(foto)} 
                         alt={foto.titulo || "Foto do evento"} 
                         className={`w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105 ${noCarrinho ? 'opacity-40 grayscale-[60%]' : 'opacity-90'}`} 
@@ -486,12 +462,13 @@ export default function FotosEventoPage() {
           <div className="fixed inset-0 z-[200] bg-black/95 backdrop-blur-md flex items-center justify-center p-2 md:p-4 animate-in fade-in duration-300" onClick={fecharFotoSelecionada}>
             <div className="relative w-full max-w-7xl h-full flex flex-col md:flex-row gap-4 items-center justify-center" onClick={(e) => e.stopPropagation()}>
               
-              <button onPointerDown={() => { ignorarProtecaoAoFecharRef.current = Date.now() + 700; }} onClick={fecharFotoSelecionada} className="absolute top-2 right-2 md:top-4 md:right-4 z-50 cursor-pointer text-white bg-black/60 hover:bg-black p-2.5 rounded-full backdrop-blur-sm border border-white/10 transition-colors" aria-label="Fechar foto">
+              <button onClick={fecharFotoSelecionada} className="absolute top-2 right-2 md:top-4 md:right-4 z-50 cursor-pointer text-white bg-black/60 hover:bg-black p-2.5 rounded-full backdrop-blur-sm border border-white/10 transition-colors" aria-label="Fechar foto">
                 <X size={20} />
               </button>
 
               <div className="relative flex-1 h-[70vh] md:h-full w-full flex items-center justify-center overflow-hidden rounded-3xl bg-[#050505] border border-white/5 shadow-2xl">
-                <img 
+                <img
+                  data-foto-protegida-imagem
                   src={fotoPreviewSrc(fotoSelecionada)} 
                   alt={fotoSelecionada.titulo || "Foto do evento"} 
                   className="w-auto h-auto max-w-full max-h-full object-contain select-none pointer-events-none" 
@@ -594,18 +571,6 @@ export default function FotosEventoPage() {
         )}
 
       </main>
-
-      <div
-        data-foto-protecao-overlay
-        aria-hidden={!printScreenDetectado}
-        className={`fixed inset-0 z-[9999] items-center justify-center bg-[#050505] px-6 text-center print:hidden ${printScreenDetectado ? "flex" : "hidden"}`}
-      >
-          <div className="max-w-md rounded-3xl border border-red-500/30 bg-red-500/10 p-8 shadow-[0_0_80px_rgba(239,68,68,0.2)]">
-            <ShieldCheck size={38} className="mx-auto mb-4 text-red-400" />
-            <p className="text-lg font-black uppercase tracking-tight text-white">Conteúdo protegido</p>
-            <p className="mt-2 text-xs leading-5 text-zinc-400">A visualização foi ocultada temporariamente para proteger o trabalho do fotógrafo.</p>
-          </div>
-      </div>
 
       <div className="fixed inset-0 z-[9999] hidden items-center justify-center bg-white p-10 text-center text-black print:flex">
         <div>
