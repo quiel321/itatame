@@ -38,7 +38,7 @@ export async function POST(request: Request) {
 
     const { data: pedido } = await supabase
       .from("foto_pedidos")
-      .select("id, comprador_user_id, status, total_centavos, comissao_itatame_centavos, comissao_organizador_centavos, fotografo_id, organizador_user_id, fotografos(mp_access_token)")
+      .select("id, comprador_user_id, comprador_email, status, total_centavos, comissao_itatame_centavos, comissao_organizador_centavos, fotografo_id, organizador_user_id, fotografos(mp_access_token)")
       .eq("id", pedidoId)
       .eq("comprador_user_id", auth.user.id)
       .maybeSingle();
@@ -49,9 +49,17 @@ export async function POST(request: Request) {
     if (!fotografo?.mp_access_token) {
       return NextResponse.json({ error: "Conta de recebimento indisponível." }, { status: 409 });
     }
+    const compradorEmail = String(auth.user.email || pedido.comprador_email || "").trim().toLowerCase();
+    if (!compradorEmail) {
+      return NextResponse.json({ error: "Sua conta não possui um e-mail válido para o pagamento." }, { status: 400 });
+    }
 
     const payload = {
       ...formData,
+      payer: {
+        ...(formData.payer || {}),
+        email: compradorEmail,
+      },
       transaction_amount: Number(pedido.total_centavos) / 100,
       description: "Compra de fotos iTatame",
       external_reference: `foto_pedido:${pedido.id}`,

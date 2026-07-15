@@ -294,7 +294,7 @@ export default function FotosEventoPage() {
             </div>
           </section>
           
-          <div className="sticky top-[60px] md:top-[80px] z-30 mb-6 bg-[#0a0a0e]/90 backdrop-blur-xl border border-white/10 p-2 md:p-3 rounded-2xl flex flex-col md:flex-row gap-3 shadow-2xl">
+          <div className="sticky top-[60px] md:top-[80px] z-40 mb-6 bg-[#0a0a0e]/90 backdrop-blur-xl border border-white/10 p-2 md:p-3 rounded-2xl flex flex-col md:flex-row gap-3 shadow-2xl">
             
             <BuscaFacial
               eventoId={eventoId}

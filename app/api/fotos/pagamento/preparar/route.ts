@@ -39,6 +39,11 @@ export async function POST(request: Request) {
     const { data: auth, error: authError } = await supabase.auth.getUser(token);
     if (authError || !auth.user) return NextResponse.json({ error: "Sessão inválida." }, { status: 401 });
 
+    const compradorEmail = String(auth.user.email || "").trim().toLowerCase();
+    if (!compradorEmail) {
+      return NextResponse.json({ error: "Sua conta não possui um e-mail válido para o pagamento." }, { status: 400 });
+    }
+
     const body = await request.json();
     const fotoIds = [...new Set((Array.isArray(body.fotoIds) ? body.fotoIds : []).map(String))];
     if (!fotoIds.length || fotoIds.length > 50) {
@@ -108,8 +113,8 @@ export async function POST(request: Request) {
       .from("foto_pedidos")
       .insert({
         comprador_user_id: auth.user.id,
-        comprador_email: auth.user.email,
-        comprador_nome: auth.user.user_metadata?.nome_completo || auth.user.email?.split("@")[0],
+        comprador_email: compradorEmail,
+        comprador_nome: auth.user.user_metadata?.nome_completo || compradorEmail.split("@")[0],
         evento_id: eventoId,
         fotografo_id: fotografoId,
         status: "pendente",
@@ -173,6 +178,9 @@ export async function POST(request: Request) {
         external_reference: `foto_pedido:${pedido.id}`,
         marketplace_fee: distribuicao.comissaoMarketplaceCentavos / 100,
         notification_url: notificationUrl(request, pedido.id),
+        payer: {
+          email: compradorEmail,
+        },
         metadata: {
           pedido_id: pedido.id,
           evento_id: eventoId,
@@ -196,6 +204,7 @@ export async function POST(request: Request) {
       pedidoId: pedido.id,
       eventoNome: evento.nome || "Evento iTatame",
       total: totalCentavos / 100,
+      compradorEmail,
       distribuicao: {
         comissaoItatameCentavos: distribuicao.comissaoItatameCentavos,
         royaltyOrganizadorCentavos: distribuicao.comissaoOrganizadorCentavos,

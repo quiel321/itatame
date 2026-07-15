@@ -35,6 +35,7 @@ type CheckoutData = {
   pedidoId: string;
   eventoNome: string;
   total: number;
+  compradorEmail: string;
 };
 
 type ResultadoPagamento = {
@@ -235,6 +236,9 @@ export default function FotosCarrinhoPage() {
             amount: checkoutData!.total,
             preferenceId: checkoutData!.preferenceId,
             marketplace: true,
+            payer: {
+              email: checkoutData!.compradorEmail,
+            },
           },
           customization: {
             paymentMethods: {
