@@ -167,6 +167,19 @@ export default function ChavesPublicoPage() {
   const isGhost = (nome: string | null) => !nome || ["BYE", "TBD"].includes(String(nome).trim().toUpperCase()) || String(nome).trim().toUpperCase().includes("SEM OPONENTE");
   const isAtletaValido = (nome: string | null) => !isGhost(nome);
 
+  const controleChamador = (valor: any) => {
+    if (!valor) return { presente: false, chamadas: 0 };
+    try {
+      const dados = typeof valor === 'string' ? JSON.parse(valor) : valor;
+      return {
+        presente: Boolean(dados?.chamador_presente),
+        chamadas: Number(dados?.chamador_chamadas || 0),
+      };
+    } catch {
+      return { presente: false, chamadas: 0 };
+    }
+  };
+
   const buscarFotoPorId = (idNumerico: number | null) => {
     if (!idNumerico) return null;
     const match = atletasDB.find(a => a.id === idNumerico);
@@ -257,7 +270,18 @@ export default function ChavesPublicoPage() {
     .sort((a, b) => (parseInt(a.id_visual) || 0) - (parseInt(b.id_visual) || 0));
 
   // Atletas na "Baia" (Tem apenas 1 atleta válido na luta agendada)
-  const atletasNaBaia = lutasAtivas.filter(l => (isAtletaValido(l.atleta_1) && !isAtletaValido(l.atleta_2)) || (!isAtletaValido(l.atleta_1) && isAtletaValido(l.atleta_2)));
+  const atletasNaBaia = lutasAtivas.flatMap((luta) => ([
+    {
+      chave: `${luta.id}-1`, luta, nome: limparNome(luta.atleta_1), equipe: luta.equipe_1,
+      atletaId: luta.atleta_1_id, controle: controleChamador(luta.pontuacao_atleta_1),
+    },
+    {
+      chave: `${luta.id}-2`, luta, nome: limparNome(luta.atleta_2), equipe: luta.equipe_2,
+      atletaId: luta.atleta_2_id, controle: controleChamador(luta.pontuacao_atleta_2),
+    },
+  ])).filter((item) => isAtletaValido(item.nome) && item.controle.presente);
+
+  const atletasAguardandoDefinicao = lutasAtivas.filter(l => (isAtletaValido(l.atleta_1) && !isAtletaValido(l.atleta_2)) || (!isAtletaValido(l.atleta_1) && isAtletaValido(l.atleta_2)));
 
   // Descobre de onde vem o oponente do atleta que está na Baia
   const getTextoBaia = (lutaWait: any) => {
@@ -428,32 +452,39 @@ export default function ChavesPublicoPage() {
           {/* 🔥 SEÇÃO: ATLETAS NA BAIA (Avanço Direto) */}
           {atletasNaBaia.length > 0 && (
             <div className="mb-10">
-              <h3 className="text-yellow-500 font-black uppercase tracking-widest text-xs md:text-sm mb-4 flex items-center gap-2 border-b border-yellow-500/20 pb-3">
-                <Clock size={16} /> Atletas de Chapéu / Aguardando Definição
+              <h3 className="text-cyan-400 font-black uppercase tracking-widest text-xs md:text-sm mb-4 flex items-center gap-2 border-b border-cyan-500/20 pb-3">
+                <Clock size={16} /> Na baia · prontos para chamada
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {atletasNaBaia.map(luta => {
-                  const isA1 = isAtletaValido(luta.atleta_1);
-                  const nomeAtl = isA1 ? limparNome(luta.atleta_1) : limparNome(luta.atleta_2);
-                  const equipeAtl = isA1 ? luta.equipe_1 : luta.equipe_2;
-                  const fotoAtl = buscarFotoPorId(isA1 ? luta.atleta_1_id : luta.atleta_2_id);
-                  const textoStatus = getTextoBaia(luta);
-
+                {atletasNaBaia.map((item) => {
+                  const fotoAtl = buscarFotoPorId(item.atletaId);
                   return (
-                    <div key={`baia-${luta.id}`} className="bg-gradient-to-r from-yellow-500/10 to-[#0c1220] border border-yellow-500/20 rounded-xl p-4 flex items-center gap-4 shadow-sm hover:border-yellow-500/40 transition-colors">
-                      <div className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-black border-2 border-yellow-500/50 flex items-center justify-center overflow-hidden shrink-0 shadow-[0_0_10px_rgba(234,179,8,0.2)]">
-                        {fotoAtl ? <img src={fotoAtl} className="w-full h-full object-cover" /> : <span className="text-yellow-500 font-black text-sm">{nomeAtl.charAt(0)}</span>}
+                    <div key={item.chave} className="bg-gradient-to-r from-cyan-500/10 to-[#0c1220] border border-cyan-500/25 rounded-xl p-4 flex items-center gap-4 shadow-sm">
+                      <div className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-black border-2 border-cyan-400/60 flex items-center justify-center overflow-hidden shrink-0">
+                        {fotoAtl ? <img src={fotoAtl} className="w-full h-full object-cover" alt={item.nome} /> : <span className="text-cyan-400 font-black text-sm">{item.nome.charAt(0)}</span>}
                       </div>
-                      <div className="flex flex-col min-w-0 flex-1">
-                        <span className="text-white font-black uppercase text-sm md:text-sm truncate block">{nomeAtl}</span>
-                        <span className="text-zinc-400 font-bold uppercase text-[9px] md:text-[10px] truncate block mb-2">{equipeAtl || 'Sem Equipe'}</span>
-                        <span className="inline-flex w-max max-w-full items-center gap-1.5 bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 px-2 py-1 rounded text-[8px] md:text-[9px] font-black uppercase tracking-widest truncate">
-                          <Clock size={10} className="shrink-0" />
-                          <span className="truncate">{textoStatus}</span>
+                      <div className="flex min-w-0 flex-1 flex-col">
+                        <span className="block truncate text-sm font-black uppercase text-white">{item.nome}</span>
+                        <span className="mb-2 block truncate text-[9px] font-bold uppercase text-zinc-400">{item.equipe || 'Sem equipe'}</span>
+                        <span className="inline-flex w-max max-w-full items-center gap-1.5 rounded border border-emerald-500/30 bg-emerald-500/15 px-2 py-1 text-[8px] font-black uppercase tracking-widest text-emerald-300">
+                          Presença confirmada · {item.luta.tatame || 'Tatame a definir'}
                         </span>
                       </div>
                     </div>
-                  )
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {atletasAguardandoDefinicao.length > 0 && (
+            <div className="mb-10 rounded-xl border border-yellow-500/15 bg-yellow-500/5 p-4">
+              <h3 className="mb-3 text-[10px] font-black uppercase tracking-widest text-yellow-400">Atletas de chapéu · aguardando definição</h3>
+              <div className="flex flex-wrap gap-2">
+                {atletasAguardandoDefinicao.map((luta) => {
+                  const isA1 = isAtletaValido(luta.atleta_1);
+                  const nome = isA1 ? limparNome(luta.atleta_1) : limparNome(luta.atleta_2);
+                  return <span key={`aguarda-${luta.id}`} className="rounded-lg border border-yellow-500/20 bg-black/40 px-3 py-2 text-[9px] font-black uppercase text-zinc-300">{nome} · {getTextoBaia(luta)}</span>;
                 })}
               </div>
             </div>

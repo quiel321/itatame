@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { supabase } from "@/app/lib/supabase"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { PLANOS_COMERCIAIS, getPlanoComercial, type PlanoComercialId } from "@/app/lib/planos-comerciais"
 
 export default function AprovarOrganizadoresPage() {
   const router = useRouter()
@@ -53,6 +54,19 @@ export default function AprovarOrganizadoresPage() {
       alert("Erro ao atualizar o organizador.");
     }
     setLoadingAcao(null);
+  }
+
+  async function alterarPlano(id: string, planoId: PlanoComercialId) {
+    const plano = getPlanoComercial(planoId)
+    setLoadingAcao(id)
+    const { error } = await supabase
+      .from("organizadores")
+      .update({ plano_comercial: plano.id, comissao_percentual: plano.comissaoPercentual })
+      .eq("id", id)
+
+    if (error) alert("Erro ao atualizar o plano do organizador.")
+    else setOrganizadores(prev => prev.map(org => org.id === id ? { ...org, plano_comercial: plano.id, comissao_percentual: plano.comissaoPercentual } : org))
+    setLoadingAcao(null)
   }
 
   // Filtra os organizadores baseados na aba escolhida
@@ -159,6 +173,13 @@ export default function AprovarOrganizadoresPage() {
                     <span className="text-zinc-300">{org.telefone}</span>
                     <a href={`https://wa.me/${org.telefone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="ml-auto text-green-500 hover:bg-green-500/20 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest bg-green-500/10 transition-colors">Chat</a>
                   </div>
+                </div>
+
+                <div className="mb-4 rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-3">
+                  <label className="mb-2 block text-[9px] font-black uppercase tracking-widest text-indigo-300">Plano comercial · somente Super Admin</label>
+                  <select value={getPlanoComercial(org.plano_comercial).id} onChange={(event) => alterarPlano(org.id, event.target.value as PlanoComercialId)} disabled={loadingAcao === org.id} className="w-full rounded-lg border border-white/10 bg-black px-3 py-2.5 text-[10px] font-black uppercase tracking-widest text-white outline-none disabled:opacity-50">
+                    {PLANOS_COMERCIAIS.map((plano) => <option key={plano.id} value={plano.id}>{plano.nome} · {plano.comissaoPercentual}%</option>)}
+                  </select>
                 </div>
 
                 {/* AÇÕES (BOTÕES) */}

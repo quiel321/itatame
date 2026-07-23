@@ -77,42 +77,25 @@ export default function LoginOrganizadorPage() {
       return;
     }
 
-    if (authData?.user) {
-      // 1º TENTA ACHAR NA TABELA NOVA DE ORGANIZADORES
-      const { data: orgData } = await supabase
-        .from("organizadores")
-        .select("status")
-        .eq("user_id", authData.user.id)
-        .single();
+    if (authData?.session?.access_token) {
+      const resposta = await fetch('/api/organizador/acesso', {
+        headers: { Authorization: `Bearer ${authData.session.access_token}` },
+        cache: 'no-store',
+      });
+      const acesso = await resposta.json() as { destino?: string };
 
-      if (orgData) {
-        if (orgData.status === "aprovado") {
-          router.push("/admin"); 
-        } else if (orgData.status === "super-admin") {
-          router.push("/super-admin"); 
-        } else {
-          setMostrarPendencia(true); // Está como "pendente"
-        }
-        setLoading(false);
-        return;
+      if (acesso.destino === 'admin') {
+        router.push('/admin');
+      } else if (acesso.destino === 'super-admin') {
+        router.push('/super-admin');
+      } else if (acesso.destino === 'pendente') {
+        setMostrarPendencia(true);
+      } else if (acesso.destino === 'erro') {
+        setErro('Não foi possível validar a homologação agora. Tente novamente.');
+      } else {
+        setErro('Acesso Negado: Esta área é restrita para Organizadores.');
+        await supabase.auth.signOut();
       }
-
-      // 2º SE NÃO ACHOU, VERIFICA SE É O SEU USUÁRIO ANTIGO DE SUPER ADMIN NA TABELA ATLETAS
-      const { data: atlData } = await supabase
-        .from("atletas")
-        .select("role")
-        .eq("user_id", authData.user.id)
-        .single();
-
-      if (atlData && atlData.role === "super-admin") {
-        router.push("/super-admin"); 
-        setLoading(false);
-        return;
-      }
-
-      // Se não for nenhum dos dois, chuta fora
-      setErro("Acesso Negado: Esta área é restrita para Organizadores.");
-      await supabase.auth.signOut(); 
     }
     setLoading(false);
   }

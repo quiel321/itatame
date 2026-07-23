@@ -6,18 +6,21 @@ import { supabase } from '../../lib/supabase';
 import { obterTempoRegulamentar } from '../../lib/cronograma';
 import { processarAvancosAutomaticosChaves } from '../../lib/chaves-auto-avanco';
 
-type Evento = { id: string | number; nome: string };
+type Evento = { id: string | number; nome: string; data_evento?: string | null };
 type Luta = {
   id: string | number;
   categoria: string;
   faixa: string;
   fase?: string | null;
+  id_visual?: string | number | null;
+  proxima_luta?: string | number | null;
   ordem?: number | null;
   ordem_tatame?: number | null;
   tatame?: string | null;
   status_luta?: string | null;
   vencedor?: string | null;
   horario_estimado?: string | null;
+  iniciada_em?: string | null;
   atleta_1?: string | null;
   atleta_2?: string | null;
 };
@@ -86,6 +89,7 @@ export default function GestaoTatames() {
   const [eventoSelecionado, setEventoSelecionado] = useState('');
   const [loadingInit, setLoadingInit] = useState(true);
   const [categorias, setCategorias] = useState<CategoriaTatame[]>([]);
+  const [lutasOperacao, setLutasOperacao] = useState<Luta[]>([]);
   const [tatamesDisponiveis, setTatamesDisponiveis] = useState<string[]>([]);
   const [busca, setBusca] = useState('');
   const [loadingLutas, setLoadingLutas] = useState(false);
@@ -95,7 +99,9 @@ export default function GestaoTatames() {
   const [cronoHora, setCronoHora] = useState('09:00');
   const [cronoTransicao, setCronoTransicao] = useState(2);
   const [gerandoCrono, setGerandoCrono] = useState(false);
+  const [tatamesCronometrados, setTatamesCronometrados] = useState<string[]>([]);
   const [mensagem, setMensagem] = useState('');
+  const [temAlteracoesPendentes, setTemAlteracoesPendentes] = useState(false);
 
   useEffect(() => {
     async function inicializar() {
@@ -107,7 +113,7 @@ export default function GestaoTatames() {
 
       const { data } = await supabase
         .from('eventos')
-        .select('id, nome')
+        .select('id, nome, data_evento')
         .eq('organizador_id', authData.user.id)
         .order('id', { ascending: false });
 
@@ -141,19 +147,22 @@ export default function GestaoTatames() {
 
     const { data: lutas, error } = await supabase
       .from('chaves')
-      .select('id, categoria, faixa, fase, tatame, status_luta, vencedor, atleta_1, atleta_2, horario_estimado')
+      .select('id, categoria, faixa, fase, id_visual, proxima_luta, ordem, ordem_tatame, tatame, status_luta, vencedor, atleta_1, atleta_2, horario_estimado, iniciada_em')
       .eq('evento_id', eventoSelecionado);
 
     if (error) {
       setMensagem(`Erro ao carregar chaves: ${error.message}`);
       setCategorias([]);
+      setLutasOperacao([]);
       setLoadingLutas(false);
       return;
     }
 
+    const lutasCarregadas = (lutas || []) as Luta[];
+    setLutasOperacao(lutasCarregadas);
     const grupos: Record<string, CategoriaTatame> = {};
 
-    ((lutas || []) as Luta[]).forEach((luta) => {
+    lutasCarregadas.forEach((luta) => {
       const temAtletaReal = !isFantasma(luta.atleta_1) || !isFantasma(luta.atleta_2);
       if (!temAtletaReal) return;
 
@@ -189,24 +198,29 @@ export default function GestaoTatames() {
     });
   }, [carregarLutas, carregarTatamesConfigurados, eventoSelecionado]);
 
-  const alterarTatame = async (categoriaObj: CategoriaTatame, novoTatame: string) => {
-    setSaving(categoriaObj.idUnico);
+  const alterarTatame = (categoriaObj: CategoriaTatame, novoTatame: string) => {
+    setCategorias((prev) => prev.map((cat) => cat.idUnico === categoriaObj.idUnico ? { ...cat, tatameAtual: novoTatame } : cat));
+    setTemAlteracoesPendentes(true);
+    setMensagem('Alteração preparada. Use “Salvar alterações” ao terminar a distribuição.');
+  };
 
-    const { error } = await supabase
+  const salvarAlteracoes = async () => {
+    if (!eventoSelecionado || categorias.length === 0) return;
+    setSaving('todos');
+    setMensagem('Salvando distribuição dos tatames...');
+    const resultados = await Promise.all(categorias.map((categoria) => supabase
       .from('chaves')
-      .update({ tatame: novoTatame })
+      .update({ tatame: categoria.tatameAtual === 'Não definido' ? null : categoria.tatameAtual })
       .eq('evento_id', eventoSelecionado)
-      .eq('categoria', categoriaObj.nome)
-      .eq('faixa', categoriaObj.faixa);
-
-    if (error) {
-      setMensagem(`Erro ao transferir categoria: ${error.message}`);
-    } else {
-      setCategorias((prev) => prev.map((cat) => cat.idUnico === categoriaObj.idUnico ? { ...cat, tatameAtual: novoTatame } : cat));
-      setMensagem('Categoria transferida. O painel do mesário será atualizado em instantes.');
-    }
-
+      .eq('categoria', categoria.nome)
+      .eq('faixa', categoria.faixa)));
+    const falha = resultados.find((resultado) => resultado.error)?.error;
+    setMensagem(falha ? `Erro ao salvar alterações: ${falha.message}` : 'Alterações salvas. Mesários e Chamador receberão a nova distribuição.');
     setSaving(null);
+    if (!falha) {
+      setTemAlteracoesPendentes(false);
+      await carregarLutas();
+    }
   };
 
   const gerarCronogramaTatame = async () => {
@@ -239,7 +253,11 @@ export default function GestaoTatames() {
         return;
       }
 
-      const dataBase = new Date();
+      const evento = eventos.find((item) => String(item.id) === eventoSelecionado);
+      const dataEvento = String(evento?.data_evento || '').slice(0, 10);
+      const dataBase = /^\d{4}-\d{2}-\d{2}$/.test(dataEvento)
+        ? new Date(`${dataEvento}T00:00:00`)
+        : new Date();
       const [horas, minutos] = cronoHora.split(':');
       dataBase.setHours(Number(horas), Number(minutos), 0, 0);
       const ponteiroTempo = new Date(dataBase);
@@ -257,7 +275,9 @@ export default function GestaoTatames() {
 
       await Promise.all(updates);
       setMensagem(`Cronograma do ${cronoTatame} gerado para ${lutasReais.length} lutas reais pendentes.`);
-      setShowCronoModal(false);
+      setTatamesCronometrados((atuais) => Array.from(new Set([...atuais, cronoTatame])));
+      const proximoTatame = tatamesPendentesCrono.find((tatame) => tatame !== cronoTatame);
+      if (proximoTatame) setCronoTatame(proximoTatame);
       await carregarLutas();
     } catch (error) {
       console.error(error);
@@ -279,6 +299,38 @@ export default function GestaoTatames() {
     return { total, concluidas, semTatame };
   }, [categorias]);
 
+  const operacaoPorTatame = useMemo(() => {
+    const grupos = new globalThis.Map<string, Luta[]>();
+    lutasOperacao.forEach((luta) => {
+      const tatame = limpar(luta.tatame);
+      if (!tatame || (isFantasma(luta.atleta_1) && isFantasma(luta.atleta_2))) return;
+      grupos.set(tatame, [...(grupos.get(tatame) || []), luta]);
+    });
+
+    return Array.from(grupos.entries()).map(([tatame, itens]) => {
+      const ordenadas = [...itens].sort(ordenarLutasCronograma);
+      const pendentes = ordenadas.filter((luta) => !statusConcluido(luta));
+      const baias = pendentes.filter((luta) => isFantasma(luta.atleta_1) !== isFantasma(luta.atleta_2));
+      const atual = pendentes.find((luta) => luta.status_luta === 'em_andamento') || null;
+      const chamadas = pendentes.filter((luta) => luta.status_luta !== 'em_andamento' && Boolean(luta.iniciada_em));
+      const proximas = pendentes.filter((luta) => isLutaReal(luta) && luta.status_luta !== 'em_andamento').slice(0, 3);
+      return { tatame, atual, chamadas, baias, proximas };
+    }).sort((a, b) => a.tatame.localeCompare(b.tatame));
+  }, [lutasOperacao]);
+
+  const tatamesUsados = Array.from(new Set(categorias.map((cat) => cat.tatameAtual).filter((tatame) => tatame && tatame !== 'Não definido')));
+  const tatamesJaAgendados = Array.from(new Set(categorias.filter((cat) => Boolean(cat.proximaHora)).map((cat) => cat.tatameAtual)));
+  const tatamesPendentesCrono = tatamesUsados.filter((tatame) => !tatamesJaAgendados.includes(tatame) && !tatamesCronometrados.includes(tatame));
+
+  const abrirHorarios = () => {
+    if (temAlteracoesPendentes) {
+      setMensagem('Salve a distribuição dos tatames antes de configurar os horários.');
+      return;
+    }
+    setCronoTatame(tatamesPendentesCrono[0] || tatamesUsados[0] || tatamesDisponiveis[0] || '');
+    setShowCronoModal(true);
+  };
+
   return (
     <main className="min-h-screen bg-[#050505] p-4 md:p-8 text-white">
       <div className="mx-auto max-w-7xl">
@@ -290,14 +342,6 @@ export default function GestaoTatames() {
               <p className="mt-2 max-w-2xl text-xs md:text-sm text-zinc-500">Distribua categorias, gere horários e mantenha mesários, painel ao vivo e atletas sincronizados.</p>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 md:flex md:w-auto">
-              <button onClick={() => setShowCronoModal(true)} disabled={loadingLutas || tatamesDisponiveis.length === 0} className="flex items-center justify-center gap-2 rounded-xl border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-yellow-300 disabled:opacity-40">
-                <Clock size={14} /> Horarios
-              </button>
-              <button onClick={() => { carregarLutas(); carregarTatamesConfigurados(); }} disabled={loadingLutas} className="flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-white disabled:opacity-40">
-                <RefreshCw size={14} className={loadingLutas ? 'animate-spin text-red-400' : ''} /> Sincronizar
-              </button>
-            </div>
           </div>
         </header>
 
@@ -315,6 +359,35 @@ export default function GestaoTatames() {
             <strong className="mt-2 block text-xl md:text-2xl font-black text-yellow-300">{resumo.semTatame}</strong>
           </div>
         </section>
+
+        {operacaoPorTatame.length > 0 && (
+          <section className="mb-6">
+            <div className="mb-3 flex items-end justify-between gap-3">
+              <div>
+                <span className="text-[9px] font-black uppercase tracking-[0.18em] text-cyan-400">Mapa operacional</span>
+                <h2 className="mt-1 text-lg font-black uppercase text-white">Agora, baias e próximas lutas</h2>
+              </div>
+              <button onClick={() => carregarLutas()} className="rounded-xl border border-white/10 bg-white/5 p-2.5 text-zinc-400 hover:text-white" title="Atualizar mapa"><RefreshCw size={15} /></button>
+            </div>
+            <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
+              {operacaoPorTatame.map((grupo) => (
+                <article key={grupo.tatame} className="rounded-2xl border border-white/10 bg-[#0b0b10] p-4">
+                  <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                    <h3 className="font-black uppercase text-white">{grupo.tatame}</h3>
+                    <span className={`rounded-full px-2 py-1 text-[8px] font-black uppercase ${grupo.atual ? 'bg-red-500 text-white' : grupo.chamadas.length ? 'bg-yellow-400 text-black' : 'bg-emerald-500 text-black'}`}>{grupo.atual ? 'Em luta' : grupo.chamadas.length ? 'Chamada' : 'Livre'}</span>
+                  </div>
+                  {grupo.atual && <div className="mt-3 rounded-xl border border-red-500/25 bg-red-500/10 p-3"><span className="text-[8px] font-black uppercase tracking-widest text-red-300">No tatame · luta {grupo.atual.id_visual || grupo.atual.id}</span><strong className="mt-1 block truncate text-xs uppercase text-white">{grupo.atual.atleta_1} × {grupo.atual.atleta_2}</strong></div>}
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 p-3"><span className="text-[8px] font-black uppercase text-cyan-300">Na baia</span><strong className="mt-1 block text-xl text-cyan-200">{grupo.baias.length}</strong></div>
+                    <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/10 p-3"><span className="text-[8px] font-black uppercase text-yellow-300">Já chamadas</span><strong className="mt-1 block text-xl text-yellow-200">{grupo.chamadas.length}</strong></div>
+                  </div>
+                  {grupo.baias.length > 0 && <div className="mt-3 space-y-1.5">{grupo.baias.slice(0, 3).map((luta) => <div key={luta.id} className="rounded-lg bg-black/50 px-3 py-2 text-[9px] font-bold uppercase text-zinc-300"><span className="text-cyan-400">Baia:</span> {isFantasma(luta.atleta_1) ? luta.atleta_2 : luta.atleta_1}<span className="block truncate text-[8px] text-zinc-600">{luta.categoria} · aguarda definição do adversário</span></div>)}</div>}
+                  {grupo.proximas.length > 0 && <div className="mt-3 border-t border-white/5 pt-3"><span className="text-[8px] font-black uppercase tracking-widest text-zinc-600">Próximas</span>{grupo.proximas.map((luta, index) => <p key={luta.id} className="mt-1 truncate text-[9px] font-bold uppercase text-zinc-400">{index + 1}. {luta.atleta_1} × {luta.atleta_2}</p>)}</div>}
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
 
         <section className="mb-6 rounded-2xl border border-white/10 bg-[#0b0b10] p-4">
           <div className="grid gap-3 md:grid-cols-[0.8fr_1.2fr]">
@@ -380,6 +453,17 @@ export default function GestaoTatames() {
             })}
           </div>
         )}
+
+        {!loadingInit && !loadingLutas && categorias.length > 0 && (
+          <div className="mt-6 grid gap-3 border-t border-white/10 pt-6 sm:grid-cols-2">
+            <button onClick={salvarAlteracoes} disabled={Boolean(salvando)} className="flex items-center justify-center gap-2 rounded-xl bg-white px-5 py-4 text-[11px] font-black uppercase tracking-widest text-black transition hover:bg-zinc-200 disabled:opacity-50">
+              {salvando ? <RefreshCw size={16} className="animate-spin" /> : <CheckCircle size={16} />} Salvar alterações
+            </button>
+            <button onClick={abrirHorarios} disabled={tatamesUsados.length === 0 || temAlteracoesPendentes} className="flex items-center justify-center gap-2 rounded-xl border border-yellow-500/30 bg-yellow-500/10 px-5 py-4 text-[11px] font-black uppercase tracking-widest text-yellow-300 disabled:opacity-40">
+              <Clock size={16} /> Horários
+            </button>
+          </div>
+        )}
       </div>
 
       {showCronoModal && (
@@ -390,22 +474,25 @@ export default function GestaoTatames() {
                 <h2 className="flex items-center gap-2 text-xl font-black uppercase text-white"><Clock size={20} className="text-yellow-300" /> Motor de horários</h2>
                 <p className="mt-1 text-xs text-zinc-500">Defina a hora de início e o intervalo médio entre lutas.</p>
               </div>
-              <button onClick={() => setShowCronoModal(false)} className="rounded-xl bg-white/5 p-2 text-zinc-400 hover:text-white"><X size={18} /></button>
+              <button onClick={() => setShowCronoModal(false)} disabled={tatamesPendentesCrono.length > 0} title={tatamesPendentesCrono.length > 0 ? 'Configure todos os tatames antes de concluir' : 'Concluir'} className="rounded-xl bg-white/5 p-2 text-zinc-400 hover:text-white disabled:cursor-not-allowed disabled:opacity-25"><X size={18} /></button>
             </div>
 
             <div className="space-y-4 p-5">
+              <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 p-3 text-[10px] font-black uppercase tracking-widest text-cyan-100">
+                {tatamesPendentesCrono.length > 0 ? `${tatamesPendentesCrono.length} tatame(s) ainda sem horário` : 'Todos os tatames estão programados'}
+              </div>
               <div>
                 <label className="mb-1.5 block text-[10px] font-black uppercase tracking-widest text-zinc-500">Tatame</label>
                 <select value={cronoTatame} onChange={(event) => setCronoTatame(event.target.value)} className="w-full rounded-xl border border-white/10 bg-black px-4 py-3 text-sm font-bold text-white outline-none">
                   <option value="" disabled>Selecione um tatame</option>
-                  {tatamesDisponiveis.map((tatame) => <option key={tatame} value={tatame}>{tatame}</option>)}
+                  {(tatamesUsados.length > 0 ? tatamesUsados : tatamesDisponiveis).map((tatame) => <option key={tatame} value={tatame}>{tatame}{tatamesJaAgendados.includes(tatame) || tatamesCronometrados.includes(tatame) ? ' · programado' : ''}</option>)}
                 </select>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="mb-1.5 block text-[10px] font-black uppercase tracking-widest text-zinc-500">Inicio</label>
-                  <input type="time" value={cronoHora} onChange={(event) => setCronoHora(event.target.value)} className="w-full rounded-xl border border-white/10 bg-black px-4 py-3 text-sm font-black text-white outline-none" />
+                  <div className="flex gap-2"><input type="time" value={cronoHora} onChange={(event) => setCronoHora(event.target.value)} className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black px-3 py-3 text-sm font-black text-white outline-none" /><button type="button" onClick={() => setCronoHora(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }))} className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-3 text-[9px] font-black uppercase text-cyan-200">Agora</button></div>
                 </div>
                 <div>
                   <label className="mb-1.5 block text-[10px] font-black uppercase tracking-widest text-zinc-500">Transição</label>
@@ -421,6 +508,7 @@ export default function GestaoTatames() {
                 {gerandoCrono ? <RefreshCw size={16} className="animate-spin" /> : <Play size={16} fill="currentColor" />}
                 {gerandoCrono ? 'Gerando...' : 'Gerar linha do tempo'}
               </button>
+              {tatamesPendentesCrono.length === 0 && <button onClick={() => setShowCronoModal(false)} className="w-full rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-xs font-black uppercase tracking-widest text-emerald-300">Concluir horários</button>}
             </div>
           </div>
         </div>

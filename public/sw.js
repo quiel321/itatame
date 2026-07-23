@@ -16,8 +16,29 @@ self.addEventListener("push", function(event) {
   );
 });
 
-self.addEventListener("install", function() {
-  self.skipWaiting();
+const SHELL_CACHE = "itatame-shell-v1";
+
+self.addEventListener("install", function(event) {
+  event.waitUntil(
+    caches.open(SHELL_CACHE)
+      .then(function(cache) { return cache.addAll(["/", "/icon.svg"]); })
+      .then(function() { return self.skipWaiting(); })
+  );
+});
+
+self.addEventListener("activate", function(event) {
+  event.waitUntil(self.clients.claim());
+});
+
+self.addEventListener("fetch", function(event) {
+  if (event.request.method !== "GET" || event.request.mode !== "navigate") return;
+  event.respondWith(
+    fetch(event.request).catch(function() {
+      return caches.match("/").then(function(response) {
+        return response || Response.error();
+      });
+    })
+  );
 });
 
 self.addEventListener("notificationclick", function(event) {

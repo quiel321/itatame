@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { useParams } from "next/navigation"
 import { supabase } from "@/app/lib/supabase"
+import { processarAvancosAutomaticosChaves, propagarResultadoChave } from "@/app/lib/chaves-auto-avanco"
 
 // 1. Componente Atleta (COM FOTO E INTELIGÊNCIA DE LAYOUT)
 function Atleta({ nome, equipe, numero, luta_id, id_banco, foto, onAvancar, reverso = false, centralizado = false, ocultarLinha = false, larguraClass = "w-[96px] md:w-[180px]", campeao = false }: any) {
@@ -168,6 +169,8 @@ export default function ChavesPage() {
     if (!idVencedor) return;
 
     const idPerdedor = String(idVencedor) === String(id1) ? id2 : id1;
+    const nomePerdedor = String(idVencedor) === String(id1) ? lutaAtual.atleta_2 : lutaAtual.atleta_1;
+    const equipePerdedor = String(idVencedor) === String(id1) ? lutaAtual.equipe_2 : lutaAtual.equipe_1;
     const vencedorAntigo = limparNome(lutaAtual.vencedor);
     const idVencedorAntigo = lutaAtual.vencedor_id || idPorNomeNaLuta(lutaAtual, vencedorAntigo);
 
@@ -178,7 +181,8 @@ export default function ChavesPage() {
 
     const ganhouPorWO = !nome1 || !nome2 || !id1 || !id2;
     const isFinal = !lutaAtual.proxima_luta || String(lutaAtual.id_visual) === "999";
-    const isSemifinal = String(lutaAtual.proxima_luta) === "999";
+    const primeiraDaChaveDeTres = String(lutaAtual.id_visual) === '1' && String(lutaAtual.fase || '').toUpperCase().includes('CHAVE DE 3');
+    const isSemifinal = String(lutaAtual.proxima_luta) === "999" && !primeiraDaChaveDeTres;
 
     const updateEstatistica = async (idAtletaNum: number | string | null, coluna: string, incremento: number) => {
       if (!idAtletaNum) return;
@@ -267,6 +271,16 @@ export default function ChavesPage() {
         await supabase.from("chaves").update(updateData).eq("id", proximaLuta.id);
       }
     }
+    await propagarResultadoChave(supabase, lutas, lutaAtual, {
+      vencedorNome: nomeVenc,
+      vencedorEquipe: equipeVenc,
+      vencedorId: idVencedor,
+      perdedorNome: nomePerdedor,
+      perdedorEquipe: equipePerdedor,
+      perdedorId: idPerdedor,
+      propagarPerdedor: !ganhouPorWO,
+    });
+    await processarAvancosAutomaticosChaves(supabase, lutaAtual.evento_id);
     await carregarChaves();
   }
   const getAtletaDaPrimeiraFase = (posicaoColuna: number, slot: number, lado: "esquerda" | "direita") => {

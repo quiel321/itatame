@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../lib/supabase'; 
 import { Scanner } from '@yudiel/react-qr-scanner';
 import { CheckCircle, XCircle, Scale, ArrowLeft, QrCode } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { obterTempoRegulamentar } from '../../lib/cronograma';
 
 export default function CheckinOperador() {
   const router = useRouter();
@@ -12,6 +13,7 @@ export default function CheckinOperador() {
   const [atleta, setAtleta] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState('');
+  const canalOperacaoRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   const [pesoAferido, setPesoAferido] = useState('');
   const [kimonoAprovado, setKimonoAprovado] = useState(true);
@@ -24,18 +26,24 @@ export default function CheckinOperador() {
     
     const sessaoSalva = localStorage.getItem('itatame_staff_session');
     if (!sessaoSalva) {
-      // Descomente na produção para forçar o login do staff
-      // router.replace('/staff/login');
-      // return;
+      router.replace('/staff/login');
+      return;
     }
 
     const sessaoParse = sessaoSalva ? JSON.parse(sessaoSalva) : null;
-    if (sessaoParse && sessaoParse.funcao !== 'checkin' && sessaoParse.funcao !== 'mesario') {
-      // router.replace('/staff/login');
-      // return;
+    if (!sessaoParse || sessaoParse.funcao !== 'checkin') {
+      router.replace('/staff/login');
+      return;
     }
 
-    return () => document.body.classList.remove('hide-global-nav');
+    const canal = supabase.channel(`operacao-tatames-${sessaoParse.evento_id}`).subscribe();
+    canalOperacaoRef.current = canal;
+
+    return () => {
+      document.body.classList.remove('hide-global-nav');
+      canalOperacaoRef.current = null;
+      void supabase.removeChannel(canal);
+    };
   }, [router]);
 
   // =========================================================================
@@ -185,7 +193,36 @@ export default function CheckinOperador() {
       return;
     }
 
+    void canalOperacaoRef.current?.send({
+      type: 'broadcast',
+      event: 'checkin_atualizado',
+      payload: { evento_id: atleta.evento_id, atleta_id: atleta.atleta_id, status },
+    });
+
     if(status === 'aprovado') {
+        const { data: lutasEvento } = await supabase
+          .from('chaves')
+          .select('id, categoria, faixa, tatame, atleta_1, atleta_2, atleta_1_id, atleta_2_id, status_luta, ordem_tatame, ordem, horario_estimado')
+          .eq('evento_id', atleta.evento_id)
+          .neq('status_luta', 'concluida')
+          .order('ordem_tatame', { ascending: true })
+          .order('ordem', { ascending: true });
+
+        const fila = (lutasEvento || []).filter((luta) => luta.atleta_1_id && luta.atleta_2_id);
+        const minhaLuta = fila.find((luta) => Number(luta.atleta_1_id) === Number(atleta.atleta_id) || Number(luta.atleta_2_id) === Number(atleta.atleta_id));
+        let mensagemPush = `${atleta.atleta}, seu check-in foi aprovado. Acompanhe o painel ao vivo para saber a hora da chamada.`;
+        if (minhaLuta) {
+          const indice = fila.filter((luta) => String(luta.tatame || '') === String(minhaLuta.tatame || '')).findIndex((luta) => luta.id === minhaLuta.id);
+          const lutasNaFrente = Math.max(0, indice);
+          const minutosFila = Math.max(5, lutasNaFrente * (obterTempoRegulamentar(minhaLuta.categoria || '', minhaLuta.faixa || '') + 2));
+          const horario = minhaLuta.horario_estimado ? new Date(minhaLuta.horario_estimado).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : null;
+          mensagemPush = `${atleta.atleta}, check-in aprovado. Há ${lutasNaFrente} luta(s) antes da sua no ${minhaLuta.tatame || 'tatame'}. Previsão dinâmica: cerca de ${minutosFila} min${horario ? ` (cronograma ${horario})` : ''}.`;
+        }
+        await fetch('/api/notificar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ atleta_id: atleta.atleta_id, titulo: 'Check-in aprovado', mensagem: mensagemPush, url: `/evento/${atleta.evento_id}/ao-vivo` }),
+        }).catch(() => null);
         alert(`Atleta ${atleta.atleta} aprovado no check-in.`);
     } else {
         alert(`Atleta ${atleta.atleta} desclassificado no check-in.`);

@@ -1,9 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AlertCircle, ArrowRightLeft, CheckCircle, Clock, Filter, LogOut, Play, RefreshCw, Search, Trophy, X, Edit3, XCircle } from 'lucide-react';
+import { AlertCircle, ArrowRightLeft, CheckCircle, Clock, Filter, LogOut, Play, RefreshCw, Search, Trophy, X, Edit3, XCircle, LayoutGrid, Radio, Wifi, Megaphone } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { obterTempoRegulamentar } from '../../lib/cronograma';
 import { processarAvancosAutomaticosChaves } from '../../lib/chaves-auto-avanco';
@@ -33,6 +33,7 @@ type Luta = {
   checkin_1?: string | null;
   checkin_2?: string | null;
   status_luta?: string | null;
+  iniciada_em?: string | null;
   vencedor?: string | null;
   metodo_vitoria?: string | null;
   proxima_luta?: string | number | null;
@@ -47,6 +48,12 @@ type ModalTransferencia = {
 type CheckinRow = {
   atleta_id: number | null;
   status_checkin: string | null;
+};
+
+type TatameLivre = {
+  tatame: string;
+  identificacao: string;
+  expiraEm: number;
 };
 
 function normalizar(value?: string | null) {
@@ -102,11 +109,15 @@ export default function PainelMesario() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [acaoId, setAcaoId] = useState<string | number | null>(null);
-  const [abaAtiva, setAbaAtiva] = useState<'fila' | 'concluidas'>('fila');
+  const [abaAtiva, setAbaAtiva] = useState<'fila' | 'geral' | 'concluidas'>('fila');
   const [buscaNome, setBuscaNome] = useState('');
   const [filtroTipo, setFiltroTipo] = useState<'todos' | 'peso' | 'absoluto'>('todos');
   const [filtroCategoria, setFiltroCategoria] = useState('');
   const [aviso, setAviso] = useState('');
+  const [temChamador, setTemChamador] = useState(false);
+  const [disponivelParaReceber, setDisponivelParaReceber] = useState(false);
+  const [tatamesLivres, setTatamesLivres] = useState<Record<string, TatameLivre>>({});
+  const canalOperacaoRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   useEffect(() => {
     document.body.classList.add('hide-global-nav');
@@ -131,13 +142,14 @@ export default function PainelMesario() {
 
     const { data } = await supabase
       .from('staff_eventos')
-      .select('identificacao')
+      .select('funcao, identificacao')
       .eq('evento_id', sessao.evento_id)
-      .eq('funcao', 'mesario');
+      .in('funcao', ['mesario', 'chamador']);
 
     if (data) {
-      const nomes = Array.from(new Set(data.map((item) => normalizar(item.identificacao)).filter(Boolean)));
+      const nomes = Array.from(new Set(data.filter((item) => item.funcao === 'mesario').map((item) => normalizar(item.identificacao)).filter(Boolean)));
       setTatamesDisponiveis(nomes.sort((a, b) => a.localeCompare(b)));
+      setTemChamador(data.some((item) => item.funcao === 'chamador'));
     }
   }, [sessao]);
 
@@ -220,13 +232,89 @@ export default function PainelMesario() {
     return () => window.clearInterval(interval);
   }, [buscarTatames, carregarPainel, sessao]);
 
+  useEffect(() => {
+    if (!sessao) return;
+
+    const removerTatameLivre = (tatame?: string) => {
+      const chave = nomeUpper(tatame);
+      if (!chave) return;
+      setTatamesLivres((atual) => {
+        const proximo = { ...atual };
+        delete proximo[chave];
+        return proximo;
+      });
+    };
+
+    const canal = supabase
+      .channel(`operacao-tatames-${sessao.evento_id}`, { config: { broadcast: { self: true } } })
+      .on('broadcast', { event: 'tatame_disponivel' }, (mensagem) => {
+        const payload = mensagem.payload as Partial<TatameLivre>;
+        const chave = nomeUpper(payload.tatame);
+        if (!chave || !payload.tatame || Number(payload.expiraEm || 0) <= Date.now()) return;
+        setTatamesLivres((atual) => ({
+          ...atual,
+          [chave]: {
+            tatame: payload.tatame as string,
+            identificacao: String(payload.identificacao || payload.tatame),
+            expiraEm: Number(payload.expiraEm),
+          },
+        }));
+      })
+      .on('broadcast', { event: 'tatame_ocupado' }, (mensagem) => {
+        const payload = mensagem.payload as { tatame?: string };
+        removerTatameLivre(payload.tatame);
+      })
+      .on('broadcast', { event: 'luta_transferida' }, (mensagem) => {
+        const payload = mensagem.payload as { tatame?: string; origem?: string };
+        removerTatameLivre(payload.tatame);
+        if (nomeUpper(payload.tatame) === nomeUpper(sessao.identificacao)) {
+          setDisponivelParaReceber(false);
+          setAviso(`Nova luta recebida de ${payload.origem || 'outro tatame'}. A disponibilidade foi encerrada automaticamente.`);
+        }
+        void carregarPainel(true);
+      })
+      .on('broadcast', { event: 'luta_chamada' }, () => { void carregarPainel(true); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chaves', filter: `evento_id=eq.${sessao.evento_id}` }, () => { void carregarPainel(true); })
+      .subscribe();
+
+    canalOperacaoRef.current = canal;
+    const limparExpirados = window.setInterval(() => {
+      const agora = Date.now();
+      setTatamesLivres((atual) => Object.fromEntries(Object.entries(atual).filter(([, item]) => item.expiraEm > agora)));
+    }, 5000);
+
+    return () => {
+      window.clearInterval(limparExpirados);
+      canalOperacaoRef.current = null;
+      void supabase.removeChannel(canal);
+    };
+  }, [carregarPainel, sessao]);
+
+  useEffect(() => {
+    if (!sessao || !disponivelParaReceber) return;
+    const enviar = () => {
+      void canalOperacaoRef.current?.send({
+        type: 'broadcast',
+        event: 'tatame_disponivel',
+        payload: {
+          tatame: sessao.identificacao,
+          identificacao: sessao.identificacao,
+          expiraEm: Date.now() + 16000,
+        },
+      });
+    };
+    enviar();
+    const heartbeat = window.setInterval(enviar, 5000);
+    return () => window.clearInterval(heartbeat);
+  }, [disponivelParaReceber, sessao]);
+
   const categoriasUnicas = useMemo(() => Array.from(new Set(lutas.map((luta) => luta.categoria))).sort(), [lutas]);
 
   const lutasFiltradas = useMemo(() => {
     const termo = buscaNome.trim().toLowerCase();
 
     return lutas.filter((luta) => {
-      const matchAba = abaAtiva === 'fila' ? luta.status_luta !== 'concluida' : luta.status_luta === 'concluida';
+      const matchAba = abaAtiva === 'geral' || (abaAtiva === 'fila' ? luta.status_luta !== 'concluida' : luta.status_luta === 'concluida');
       const matchBusca = !termo
         || normalizar(luta.atleta_1).toLowerCase().includes(termo)
         || normalizar(luta.atleta_2).toLowerCase().includes(termo)
@@ -244,6 +332,26 @@ export default function PainelMesario() {
   const lutaAtual = useMemo(() => lutasProntas.find((luta) => luta.status_luta === 'em_andamento') || null, [lutasProntas]);
   const proximasLutas = useMemo(() => lutasProntas.filter((luta) => luta.status_luta !== 'em_andamento'), [lutasProntas]);
   const concluidas = useMemo(() => lutasFiltradas.filter((luta) => luta.status_luta === 'concluida').sort(ordenarLutas), [lutasFiltradas]);
+
+  const tatamesLivresLista = useMemo(() => Object.values(tatamesLivres).sort((a, b) => a.tatame.localeCompare(b.tatame)), [tatamesLivres]);
+  const podeDisponibilizar = true;
+  const resumoTodosTatames = useMemo(() => {
+    const grupos = new Map<string, Luta[]>();
+    todasLutasEvento
+      .filter((luta) => isAtletaValido(luta.atleta_1) || isAtletaValido(luta.atleta_2))
+      .sort(ordenarLutas)
+      .forEach((luta) => {
+        const tatame = normalizar(luta.tatame) || 'Sem tatame';
+        grupos.set(tatame, [...(grupos.get(tatame) || []), luta]);
+      });
+    return Array.from(grupos.entries()).map(([tatame, itens]) => ({
+      tatame,
+      concluidas: itens.filter((luta) => luta.status_luta === 'concluida').length,
+      emAndamento: itens.find((luta) => luta.status_luta === 'em_andamento') || null,
+      proximas: itens.filter((luta) => luta.status_luta !== 'concluida' && luta.status_luta !== 'em_andamento').slice(0, 6),
+      total: itens.length,
+    })).sort((a, b) => a.tatame.localeCompare(b.tatame));
+  }, [todasLutasEvento]);
 
   const atletasNaBaia = useMemo(() => lutasFiltradas.filter(luta =>
     luta.status_luta !== 'concluida' &&
@@ -286,8 +394,8 @@ export default function PainelMesario() {
   };
 
   const atletasDaLuta = (luta: Luta) => [
-    { id: luta.atleta_1_id, nome: displayNome(luta.atleta_1) },
-    { id: luta.atleta_2_id, nome: displayNome(luta.atleta_2) },
+    { id: luta.atleta_1_id, nome: displayNome(luta.atleta_1), oponente: displayNome(luta.atleta_2) },
+    { id: luta.atleta_2_id, nome: displayNome(luta.atleta_2), oponente: displayNome(luta.atleta_1) },
   ].filter((atleta) => atleta.id && isAtletaValido(atleta.nome));
 
   const calcularMinutosAteLuta = (luta: Luta, posicaoFila: number, agoraMs: number) => {
@@ -310,7 +418,7 @@ export default function PainelMesario() {
         await enviarPushAtleta(
           atleta.id,
           'Sua luta foi chamada',
-          `${atleta.nome}, compareça agora ao ${tatame}. Sua luta vai iniciar em instantes.`
+          `${atleta.nome}, sua luta contra ${atleta.oponente} foi chamada. Compareça agora ao ${tatame}.`
         );
         localStorage.setItem(key, new Date().toISOString());
       }
@@ -322,6 +430,8 @@ export default function PainelMesario() {
       const posicao = index + 1;
       const agoraMs = new Date().getTime();
       const minutos = calcularMinutosAteLuta(proxima, posicao, agoraMs);
+      const horarioPrevisto = new Date(agoraMs + minutos * 60_000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      const previsaoHorario = minutos > 5 ? ` Previsão local: ${horarioPrevisto}.` : '';
       const textoPosicao = posicao === 1 ? 'você é a próxima luta' : `faltam ${posicao} lutas para a sua`;
 
       for (const atleta of atletasDaLuta(proxima)) {
@@ -330,7 +440,7 @@ export default function PainelMesario() {
           await enviarPushAtleta(
             atleta.id,
             'Prepare-se para lutar',
-            `${atleta.nome}, ${textoPosicao} no ${tatame}. Tempo aproximado: ${minutos} minutos.`
+            `${atleta.nome}, sua luta contra ${atleta.oponente}: ${textoPosicao} no ${tatame}. Tempo aproximado: ${minutos} minutos.${previsaoHorario}`
           );
           localStorage.setItem(key, new Date().toISOString());
         }
@@ -340,10 +450,40 @@ export default function PainelMesario() {
 
   const chamarLuta = async (luta: Luta) => {
     if (!sessao) return;
+    if (temChamador && !luta.iniciada_em && luta.status_luta !== 'em_andamento') {
+      setAviso('Esta luta ainda precisa ser liberada pelo Chamador.');
+      return;
+    }
+
+    const idsAtuais = new Set([luta.atleta_1_id, luta.atleta_2_id].filter(Boolean).map(Number));
+    if (idsAtuais.size > 0) {
+      const { data: outrasLutas, error: erroConflito } = await supabase
+        .from('chaves')
+        .select('id, id_visual, tatame, atleta_1_id, atleta_2_id, status_luta, iniciada_em, pontuacao_atleta_1, pontuacao_atleta_2')
+        .eq('evento_id', sessao.evento_id)
+        .neq('id', luta.id)
+        .neq('status_luta', 'concluida');
+      if (erroConflito) {
+        setAviso(`Não foi possível validar a disponibilidade dos atletas: ${erroConflito.message}`);
+        return;
+      }
+      const conflito = (outrasLutas || []).find((outra: any) => {
+        const compartilha = [outra.atleta_1_id, outra.atleta_2_id].filter(Boolean).map(Number).some((id) => idsAtuais.has(id));
+        const p1 = outra.pontuacao_atleta_1 || {};
+        const p2 = outra.pontuacao_atleta_2 || {};
+        const reservada = outra.status_luta === 'em_andamento' || Boolean(outra.iniciada_em) || Boolean(p1.chamador_presente) || Boolean(p2.chamador_presente);
+        return compartilha && reservada;
+      });
+      if (conflito) {
+        setAviso(`Atleta já reservado na luta ${conflito.id_visual || conflito.id}, no ${conflito.tatame || 'tatame definido'}. Finalize ou libere essa luta antes de iniciar outra.`);
+        return;
+      }
+    }
     setAcaoId(luta.id);
-    setAviso('Chamando luta e enviando avisos aos atletas...');
+    setAviso(luta.iniciada_em ? 'Iniciando luta chamada...' : 'Chamando luta e enviando avisos aos atletas...');
 
     try {
+      const jaAvisadaPeloChamador = Boolean(luta.iniciada_em);
       if (luta.status_luta !== 'em_andamento') {
         await supabase
           .from('chaves')
@@ -355,7 +495,7 @@ export default function PainelMesario() {
           .eq('id', luta.id);
       }
 
-      await enviarAvisosDeFila(luta);
+      if (!jaAvisadaPeloChamador) await enviarAvisosDeFila(luta);
       router.push(`/staff/placar/${luta.id}`);
     } catch (error) {
       console.error(error);
@@ -365,16 +505,47 @@ export default function PainelMesario() {
   };
 
   const executarTransferenciaTatame = async (novoTatame: string) => {
-    if (!modalTransferencia.luta) return;
+    if (!modalTransferencia.luta || !sessao) return;
     setAcaoId(modalTransferencia.luta.id);
-    await supabase.from('chaves').update({ tatame: novoTatame }).eq('id', modalTransferencia.luta.id);
+    const { error } = await supabase
+      .from('chaves')
+      .update({ tatame: novoTatame })
+      .eq('id', modalTransferencia.luta.id)
+      .eq('evento_id', sessao.evento_id)
+      .neq('status_luta', 'concluida');
+    if (error) {
+      setAviso(`Não foi possível transferir a luta: ${error.message}`);
+      setAcaoId(null);
+      return;
+    }
+    if (tatamesLivres[nomeUpper(novoTatame)]) {
+      void canalOperacaoRef.current?.send({ type: 'broadcast', event: 'tatame_ocupado', payload: { tatame: novoTatame } });
+      void canalOperacaoRef.current?.send({ type: 'broadcast', event: 'luta_transferida', payload: { tatame: novoTatame, origem: sessao.identificacao, luta_id: modalTransferencia.luta.id } });
+    }
     setModalTransferencia({ visivel: false, luta: null });
     await carregarPainel();
+    setAviso(`Luta transferida para ${novoTatame}.`);
     setAcaoId(null);
+  };
+
+  const alternarDisponibilidade = () => {
+    if (!sessao) return;
+    if (!disponivelParaReceber && !podeDisponibilizar) {
+      setAviso('Conclua ou transfira as lutas pendentes deste tatame antes de anunciá-lo como livre.');
+      return;
+    }
+
+    const novoEstado = !disponivelParaReceber;
+    setDisponivelParaReceber(novoEstado);
+    setAviso(novoEstado ? 'Tatame anunciado como livre para todos os operadores.' : 'Disponibilidade encerrada.');
+    if (!novoEstado) {
+      void canalOperacaoRef.current?.send({ type: 'broadcast', event: 'tatame_ocupado', payload: { tatame: sessao.identificacao } });
+    }
   };
 
   const fazerLogout = async () => {
     localStorage.removeItem('itatame_staff_session');
+    document.cookie = 'itatame_staff_access=; Path=/; Max-Age=0; SameSite=Lax';
     await supabase.auth.signOut();
     router.replace('/staff/login');
   };
@@ -420,12 +591,12 @@ export default function PainelMesario() {
     const temTbd = nomeUpper(luta.atleta_1) === 'TBD' || nomeUpper(luta.atleta_2) === 'TBD';
     const temCheckinPendente = luta.checkin_1 === 'pendente' || luta.checkin_2 === 'pendente';
     const temReprovado = String(luta.checkin_1 || '').includes('desclassificado') || String(luta.checkin_2 || '').includes('desclassificado');
-    
-    const lutaBloqueada = temTbd || (temCheckinPendente && !temReprovado);
+    const aguardandoChamador = temChamador && !luta.iniciada_em && luta.status_luta !== 'em_andamento';
+    const lutaBloqueada = temTbd || (temCheckinPendente && !temReprovado) || aguardandoChamador;
 
     return (
-      <div key={luta.id} className={`bg-[#0a0a0e] border rounded-lg p-2 md:p-2.5 flex flex-col sm:flex-row items-center gap-2 relative overflow-hidden transition-all ${luta.status_luta === 'em_andamento' ? 'border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.1)]' : 'border-white/10 hover:border-white/20'}`}>
-        <div className={`absolute top-0 left-0 w-1 h-full ${luta.status_luta === 'concluida' ? 'bg-green-600' : luta.status_luta === 'em_andamento' ? 'bg-red-600' : 'bg-zinc-800'}`}></div>
+      <div key={luta.id} className={`bg-[#0a0a0e] border rounded-lg p-2 md:p-2.5 flex flex-col sm:flex-row items-center gap-2 relative overflow-hidden transition-all ${luta.status_luta === 'em_andamento' ? 'border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.1)]' : luta.iniciada_em ? 'border-yellow-500/40 shadow-[0_0_15px_rgba(234,179,8,0.08)]' : 'border-white/10 hover:border-white/20'}`}>
+        <div className={`absolute top-0 left-0 w-1 h-full ${luta.status_luta === 'concluida' ? 'bg-green-600' : luta.status_luta === 'em_andamento' ? 'bg-red-600' : luta.iniciada_em ? 'bg-yellow-500' : 'bg-zinc-800'}`}></div>
 
         <div className="w-full sm:w-[25%] shrink-0 sm:border-r border-white/5 pb-1 sm:pb-0 sm:pr-2 pl-2 flex flex-col text-center sm:text-left">
           <span className="text-[7px] md:text-[8px] text-zinc-500 font-black uppercase tracking-widest">{luta.fase} • Luta {luta.id_visual || luta.id}</span>
@@ -463,7 +634,7 @@ export default function PainelMesario() {
               className={`cursor-pointer w-full sm:w-[100px] py-1.5 rounded-md font-black uppercase tracking-widest text-[8px] md:text-[9px] flex items-center justify-center gap-1 transition-all active:scale-95 ${lutaBloqueada ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed border border-zinc-700' : 'bg-white text-black hover:bg-zinc-200 shadow-[0_0_10px_rgba(255,255,255,0.2)]'}`}
             >
               {acaoId === luta.id ? <RefreshCw size={12} className="animate-spin" /> : <Play size={12} fill="currentColor" />}
-              {lutaBloqueada ? (temTbd ? 'AGUARDANDO' : 'BLOQUEADO') : luta.status_luta === 'em_andamento' ? 'Retomar' : 'Chamar'}
+              {aguardandoChamador ? 'CHAMADOR' : lutaBloqueada ? (temTbd ? 'AGUARDANDO' : 'BLOQUEADO') : luta.status_luta === 'em_andamento' ? 'Retomar' : luta.iniciada_em ? 'Iniciar' : 'Chamar'}
             </button>
           )}
         </div>
@@ -510,10 +681,6 @@ export default function PainelMesario() {
           </div>
         </div>
 
-        <div className="mx-auto grid max-w-7xl grid-cols-2 px-3 md:px-6">
-          <button onClick={() => setAbaAtiva('fila')} className={`border-b-2 py-3 text-[11px] font-black uppercase tracking-widest ${abaAtiva === 'fila' ? 'border-red-500 text-white' : 'border-transparent text-zinc-600'}`}>Fila do tatame</button>
-          <button onClick={() => setAbaAtiva('concluidas')} className={`border-b-2 py-3 text-[11px] font-black uppercase tracking-widest ${abaAtiva === 'concluidas' ? 'border-emerald-500 text-white' : 'border-transparent text-zinc-600'}`}>Concluídas</button>
-        </div>
       </header>
 
       <div className="mx-auto max-w-7xl space-y-4 p-3 md:p-6">
@@ -535,6 +702,35 @@ export default function PainelMesario() {
             <strong className="mt-2 block text-sm font-black text-cyan-200">{proximasLutas[0] ? formatarHorario(proximasLutas[0].horario_estimado) : 'Livre'}</strong>
           </div>
         </section>
+
+        <section className={`rounded-2xl border p-4 ${disponivelParaReceber ? 'animate-pulse border-emerald-300 bg-emerald-500/15 shadow-[0_0_32px_rgba(16,185,129,0.45)]' : 'border-white/10 bg-[#0b0b10]'}`}>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <div className={`rounded-xl p-2.5 ${disponivelParaReceber ? 'bg-emerald-500 text-black' : 'bg-white/5 text-zinc-400'}`}><Wifi size={18} /></div>
+              <div>
+                <h2 className="text-sm font-black uppercase">{disponivelParaReceber ? 'Seu tatame está disponível' : 'Seu tatame ficou livre?'}</h2>
+                <p className="mt-1 text-[10px] font-bold text-zinc-500">Avise os outros mesários para receber uma luta por vez.</p>
+              </div>
+            </div>
+            <button onClick={alternarDisponibilidade} disabled={!disponivelParaReceber && !podeDisponibilizar} className={`rounded-xl px-4 py-3 text-[10px] font-black uppercase tracking-widest transition-colors ${disponivelParaReceber ? 'bg-emerald-500 text-black hover:bg-emerald-400' : podeDisponibilizar ? 'bg-white text-black hover:bg-zinc-200' : 'cursor-not-allowed bg-zinc-900 text-zinc-600'}`}>
+              {disponivelParaReceber ? 'Encerrar disponibilidade' : 'Avisar tatame livre'}
+            </button>
+          </div>
+        </section>
+
+        {tatamesLivresLista.length > 0 && (
+          <section className="rounded-2xl border border-cyan-300 bg-cyan-500/10 p-4 shadow-[0_0_30px_rgba(34,211,238,0.35)]">
+            <div className="mb-3 flex items-center gap-2 text-cyan-200"><Radio size={16} className="animate-pulse" /><h2 className="text-xs font-black uppercase tracking-widest">Tatames livres agora</h2></div>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {tatamesLivresLista.map((item) => (
+                <div key={nomeUpper(item.tatame)} className="rounded-xl border border-cyan-400/20 bg-black/30 px-3 py-2.5">
+                  <strong className="block text-xs uppercase text-white">{item.tatame}</strong>
+                  <span className="mt-1 block text-[9px] font-bold uppercase tracking-widest text-cyan-300">Apto a receber 1 luta</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         <section className="rounded-2xl border border-white/10 bg-[#0b0b10] p-3 md:p-4">
           <div className="grid gap-3 md:grid-cols-[1.2fr_0.8fr_1fr]">
@@ -560,6 +756,42 @@ export default function PainelMesario() {
 
         {loading ? (
           <div className="rounded-2xl border border-white/10 bg-[#0b0b10] p-12 text-center text-xs font-black uppercase tracking-widest text-zinc-500">Carregando fila...</div>
+        ) : abaAtiva === 'geral' ? (
+          resumoTodosTatames.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-white/10 bg-[#0b0b10] p-12 text-center text-xs font-black uppercase tracking-widest text-zinc-500">Nenhum tatame com lutas neste evento.</div>
+          ) : (
+            <section className="grid gap-4 lg:grid-cols-2">
+              {resumoTodosTatames.map((grupo) => (
+                <article key={grupo.tatame} className="rounded-2xl border border-white/10 bg-[#0b0b10] p-4">
+                  <div className="mb-4 flex items-center justify-between gap-3 border-b border-white/10 pb-3">
+                    <div>
+                      <h2 className="text-sm font-black uppercase text-white">{grupo.tatame}</h2>
+                      <p className="mt-1 text-[9px] font-bold uppercase tracking-widest text-zinc-500">{grupo.concluidas} de {grupo.total} concluídas</p>
+                    </div>
+                    {tatamesLivres[nomeUpper(grupo.tatame)] ? <span className="rounded-full bg-emerald-500 px-2.5 py-1 text-[8px] font-black uppercase text-black">Livre</span> : grupo.emAndamento ? <span className="rounded-full bg-red-500 px-2.5 py-1 text-[8px] font-black uppercase text-white">Em luta</span> : <span className="rounded-full bg-zinc-800 px-2.5 py-1 text-[8px] font-black uppercase text-zinc-400">Em espera</span>}
+                  </div>
+                  {grupo.emAndamento && (
+                    <div className="mb-3 rounded-xl border border-red-500/20 bg-red-500/10 p-3">
+                      <span className="text-[8px] font-black uppercase tracking-widest text-red-300">Agora</span>
+                      <p className="mt-1 truncate text-[11px] font-black uppercase text-white">{displayNome(grupo.emAndamento.atleta_1)} × {displayNome(grupo.emAndamento.atleta_2)}</p>
+                    </div>
+                  )}
+                  <div className="space-y-2">
+                    {grupo.proximas.length === 0 ? <p className="py-4 text-center text-[10px] font-bold uppercase text-zinc-600">Sem lutas aguardando</p> : grupo.proximas.map((luta, index) => (
+                      <div key={luta.id} className="flex items-center gap-3 rounded-xl border border-white/5 bg-black/30 px-3 py-2.5">
+                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/5 text-[9px] font-black text-zinc-400">{index + 1}</span>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[10px] font-black uppercase text-white">{displayNome(luta.atleta_1)} × {displayNome(luta.atleta_2)}</p>
+                          <p className="mt-0.5 truncate text-[8px] font-bold uppercase text-zinc-600">{luta.categoria}</p>
+                        </div>
+                        {luta.iniciada_em && luta.status_luta !== 'em_andamento' && <Megaphone size={13} className="shrink-0 text-yellow-400" />}
+                      </div>
+                    ))}
+                  </div>
+                </article>
+              ))}
+            </section>
+          )
         ) : abaAtiva === 'concluidas' ? (
           concluidas.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-white/10 bg-[#0b0b10] p-12 text-center text-xs font-black uppercase tracking-widest text-zinc-500">Nenhuma luta concluída neste filtro.</div>
@@ -609,6 +841,14 @@ export default function PainelMesario() {
         )}
       </div>
 
+      <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-white/10 bg-black/95 px-3 pb-[max(0.65rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl">
+        <div className="mx-auto grid max-w-xl grid-cols-3 gap-2">
+          <button onClick={() => setAbaAtiva('fila')} className={`flex flex-col items-center gap-1 rounded-xl py-2 text-[8px] font-black uppercase tracking-widest ${abaAtiva === 'fila' ? 'bg-red-500 text-white' : 'text-zinc-600'}`}><Play size={15} /> Meu tatame</button>
+          <button onClick={() => setAbaAtiva('geral')} className={`flex flex-col items-center gap-1 rounded-xl py-2 text-[8px] font-black uppercase tracking-widest ${abaAtiva === 'geral' ? 'bg-cyan-500 text-black' : 'text-zinc-600'}`}><LayoutGrid size={15} /> Todos</button>
+          <button onClick={() => setAbaAtiva('concluidas')} className={`flex flex-col items-center gap-1 rounded-xl py-2 text-[8px] font-black uppercase tracking-widest ${abaAtiva === 'concluidas' ? 'bg-emerald-500 text-black' : 'text-zinc-600'}`}><CheckCircle size={15} /> Concluídas</button>
+        </div>
+      </nav>
+
       {modalTransferencia.visivel && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 p-4 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-3xl border border-white/10 bg-[#0b0b10] p-5 shadow-2xl">
@@ -626,9 +866,10 @@ export default function PainelMesario() {
               ) : (
                 tatamesDisponiveis
                   .filter((tatame) => nomeUpper(tatame) !== nomeUpper(sessao.identificacao))
+                  .sort((a, b) => Number(!tatamesLivres[nomeUpper(a)]) - Number(!tatamesLivres[nomeUpper(b)]) || a.localeCompare(b))
                   .map((tatame) => (
-                    <button key={tatame} onClick={() => executarTransferenciaTatame(tatame)} className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left text-xs font-black uppercase tracking-widest text-white hover:bg-red-600">
-                      Enviar para {tatame}
+                    <button key={tatame} onClick={() => executarTransferenciaTatame(tatame)} className={`flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left text-xs font-black uppercase tracking-widest text-white ${tatamesLivres[nomeUpper(tatame)] ? 'border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-600' : 'border-white/10 bg-white/5 hover:bg-red-600'}`}>
+                      <span>Enviar para {tatame}{tatamesLivres[nomeUpper(tatame)] && <small className="mt-1 block text-[8px] text-emerald-300">Livre agora</small>}</span>
                       <ArrowRightLeft size={14} />
                     </button>
                   ))

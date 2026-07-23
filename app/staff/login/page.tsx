@@ -31,7 +31,7 @@ export default function StaffLogin() {
     // 1. Checa se o PIN existe e é válido
     const { data: staffData, error } = await supabase
       .from('staff_eventos')
-      .select('*, eventos(nome)')
+      .select('*, eventos(nome, organizador_id)')
       .eq('pin_acesso', pin.trim().toUpperCase())
       .single();
 
@@ -39,6 +39,19 @@ export default function StaffLogin() {
       setErro('Código inválido ou não encontrado.');
       setLoading(false);
       return;
+    }
+
+    if (staffData.funcao !== 'checkin') {
+      const eventoRel = Array.isArray(staffData.eventos) ? staffData.eventos[0] : staffData.eventos;
+      const organizadorId = eventoRel?.organizador_id;
+      const { data: organizador } = organizadorId
+        ? await supabase.from('organizadores').select('plano_comercial').eq('user_id', organizadorId).limit(1).maybeSingle()
+        : { data: null };
+      if (organizador?.plano_comercial !== 'completo') {
+        setErro('Este posto operacional exige o plano Completo. Solicite a regularização ao organizador.');
+        setLoading(false);
+        return;
+      }
     }
 
     // =========================================================
@@ -63,10 +76,13 @@ export default function StaffLogin() {
     };
     
     localStorage.setItem('itatame_staff_session', JSON.stringify(sessaoStaff));
+    document.cookie = `itatame_staff_access=1; Path=/; Max-Age=43200; SameSite=Lax${window.location.protocol === 'https:' ? '; Secure' : ''}`;
 
     // 4. Redirecionar para o posto correto
     if (staffData.funcao === 'checkin') {
       router.push('/staff/checkin');
+    } else if (staffData.funcao === 'chamador') {
+      router.push('/staff/chamador');
     } else if (staffData.funcao === 'mesario') {
       router.push('/staff/painel'); // Ajustei a rota para a o painel do mesário
     } else {
@@ -114,7 +130,7 @@ export default function StaffLogin() {
               O motor que faz o evento <span className="text-red-600">acontecer.</span>
             </h2>
             <p className="text-zinc-400 md:text-zinc-500 text-[10px] md:text-[11px] leading-relaxed max-w-sm font-medium">
-              Acesso exclusivo para Mesários e Equipe de Check-in. Insira o código PIN de segurança fornecido pelo organizador para assumir o seu posto.
+              Acesso exclusivo para Check-in, Chamadores e Mesários. Insira o código PIN de segurança fornecido pelo organizador para assumir o seu posto.
             </p>
           </div>
 

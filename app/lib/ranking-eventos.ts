@@ -35,6 +35,13 @@
       const ptsVitoriaNormal = regras?.vitoria !== undefined ? Number(regras.vitoria) : 0;
       
       const isWO = luta.metodo_vitoria === "wo" || perdedorId === "BYE" || !perdedorId || perdedorId === "null";
+      const perdedorEhCompetidorReal = isCompetidorReal(nomePerdedor);
+
+      // W.O. de ranking é somente o avanço do atleta presente que ficou sem
+      // oponente. Ausência/desclassificação de um adversário real encerra a
+      // operação da chave, mas não vira vitória nem pontuação no ranking.
+      if (luta.metodo_vitoria === "wo" && perdedorEhCompetidorReal) return;
+
       const woPontua = regras?.wo_pontua !== undefined ? regras.wo_pontua : true; 
       const devePontuar = !(isWO && !woPontua);
 

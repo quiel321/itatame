@@ -161,6 +161,22 @@ export default function PerfilPage() {
     const { data: perfilData } = await supabase.from("atletas").select("*").eq("user_id", authData.user.id).maybeSingle();
     const { data: orgData } = await supabase.from("organizadores").select("id").eq("user_id", authData.user.id).maybeSingle();
 
+    if (!perfilData) {
+      const metadataRole = authData.user.user_metadata?.role;
+      if (orgData) {
+        window.location.href = "/admin";
+        return;
+      }
+      if (metadataRole === "super-admin") {
+        window.location.href = "/super-admin";
+        return;
+      }
+
+      await supabase.auth.signOut();
+      window.location.href = "/login?motivo=sem-cadastro";
+      return;
+    }
+
     const userRole = perfilData?.role || authData.user.user_metadata?.role || "atleta";
     setRole(userRole);
 

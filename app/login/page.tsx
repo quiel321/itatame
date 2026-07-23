@@ -10,6 +10,7 @@ function FormularioLogin() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirecionarPara = searchParams.get("redirect");
+  const cadastroNaoEncontrado = searchParams.get("motivo") === "sem-cadastro";
 
   const [isLogin, setIsLogin] = useState(true);
   
@@ -45,7 +46,7 @@ function FormularioLogin() {
       // ==========================================
       // LÓGICA DE LOGIN
       // ==========================================
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data: loginData, error } = await supabase.auth.signInWithPassword({
         email,
         password: senha,
       });
@@ -53,6 +54,19 @@ function FormularioLogin() {
       if (error) {
         setErro("E-mail ou senha incorretos.");
       } else {
+        const { data: atleta, error: atletaError } = await supabase
+          .from("atletas")
+          .select("id, role")
+          .eq("user_id", loginData.user.id)
+          .maybeSingle();
+
+        if (atletaError || !atleta) {
+          await supabase.auth.signOut();
+          setErro("Não encontramos um cadastro de atleta vinculado a este e-mail. Crie seu cadastro antes de acessar a plataforma.");
+          setLoading(false);
+          return;
+        }
+
         if (redirecionarPara) {
           router.push(redirecionarPara);
         } else {
@@ -188,6 +202,12 @@ function FormularioLogin() {
             <span className="text-red-400 text-[10px] md:text-xs font-bold leading-tight">{erro}</span>
           </div>
         )}
+
+        {!erro && cadastroNaoEncontrado && (
+          <div className="mb-5 rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3 text-[10px] font-bold leading-relaxed text-yellow-100 md:text-xs">
+            Não encontramos um cadastro de atleta para esta conta. Faça um cadastro explícito abaixo para continuar.
+          </div>
+        )}
         
         {mensagem && (
           <div className="mb-5 p-2.5 rounded-lg bg-green-500/10 border border-green-500/30 flex items-center gap-2.5 animate-in fade-in shadow-lg">
@@ -243,7 +263,7 @@ function FormularioLogin() {
                 <svg className="w-3.5 h-3.5 text-cyan-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                 <p className="text-[9px] text-zinc-400 leading-relaxed">
                   <strong className="text-cyan-400 block mb-0.5">É responsável por um menor?</strong>
-                  Crie como "Atleta" usando os <span className="text-white">seus dados</span>. Dentro do painel você adiciona dependentes.
+                  Crie como &quot;Atleta&quot; usando os <span className="text-white">seus dados</span>. Dentro do painel você adiciona dependentes.
                 </p>
               </div>
             </div>
@@ -349,6 +369,19 @@ function FormularioLogin() {
             )}
           </button>
         </form>
+
+        {isLogin && (
+          <div className="mt-4 text-center">
+            <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-600">Não encontrou seu cadastro?</p>
+            <button
+              type="button"
+              onClick={() => { setIsLogin(false); setErro(""); setMensagem(""); }}
+              className="mt-2 cursor-pointer text-[10px] font-black uppercase tracking-widest text-red-400 transition-colors hover:text-red-300"
+            >
+              Fazer cadastro de atleta
+            </button>
+          </div>
+        )}
         
         {/* ROTA DE FUGA - ORGANIZADOR */}
         <div className="mt-6 pt-5 border-t border-white/5 text-center relative z-10">

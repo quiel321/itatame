@@ -18,6 +18,17 @@ export type ChaveLutaAuto = {
   atleta_2_id?: number | null;
   status_luta?: string | null;
   vencedor?: string | null;
+  fase?: string | null;
+};
+
+export type ResultadoChave = {
+  vencedorNome: string;
+  vencedorEquipe?: string | null;
+  vencedorId?: number | null;
+  perdedorNome?: string | null;
+  perdedorEquipe?: string | null;
+  perdedorId?: number | null;
+  propagarPerdedor?: boolean;
 };
 
 export function normalizarChaveNome(value?: string | null) {
@@ -52,11 +63,73 @@ function lutaDestino(todas: ChaveLutaAuto[], luta: ChaveLutaAuto) {
 }
 
 function lutasQueAlimentam(todas: ChaveLutaAuto[], luta: ChaveLutaAuto) {
-  return todas.filter((item) => mesmaCategoria(item, luta) && String(item.proxima_luta) === String(luta.id_visual));
+  const alimentadoras = todas.filter((item) => mesmaCategoria(item, luta) && String(item.proxima_luta) === String(luta.id_visual));
+
+  // Na chave oficial de três atletas, a semifinal 2 recebe o perdedor da
+  // semifinal 1. Portanto ela também depende dessa luta, embora o vencedor
+  // da primeira semifinal avance diretamente para a final.
+  if (String(luta.id_visual) === '2' && String(luta.fase || '').toUpperCase().includes('CHAVE DE 3')) {
+    const semifinal1 = todas.find((item) =>
+      mesmaCategoria(item, luta)
+      && String(item.id_visual) === '1'
+      && String(item.fase || '').toUpperCase().includes('CHAVE DE 3')
+    );
+    if (semifinal1 && !alimentadoras.some((item) => String(item.id) === String(semifinal1.id))) {
+      alimentadoras.push(semifinal1);
+    }
+  }
+
+  return alimentadoras;
 }
 
 function ladoDoDestino(luta: ChaveLutaAuto) {
   return Number(luta.id_visual || 0) % 2 !== 0 ? 'atleta_1' : 'atleta_2';
+}
+
+export async function propagarResultadoChave(
+  supabase: SupabaseLike,
+  todas: ChaveLutaAuto[],
+  luta: ChaveLutaAuto,
+  resultado: ResultadoChave,
+) {
+  const proxima = lutaDestino(todas, luta);
+  if (proxima) {
+    const lado = ladoDoDestino(luta);
+    const updateData = lado === 'atleta_1'
+      ? {
+        atleta_1: resultado.vencedorNome,
+        equipe_1: resultado.vencedorEquipe || '',
+        atleta_1_id: resultado.vencedorId || null,
+      }
+      : {
+        atleta_2: resultado.vencedorNome,
+        equipe_2: resultado.vencedorEquipe || '',
+        atleta_2_id: resultado.vencedorId || null,
+      };
+
+    const { error } = await supabase.from('chaves').update(updateData).eq('id', proxima.id);
+    if (error) throw error;
+  }
+
+  const ehPrimeiraSemifinalDeTres = String(luta.id_visual) === '1'
+    && String(luta.fase || '').toUpperCase().includes('CHAVE DE 3');
+
+  if (ehPrimeiraSemifinalDeTres && resultado.propagarPerdedor !== false && isChaveAtletaReal(resultado.perdedorNome)) {
+    const segundaSemifinal = todas.find((item) =>
+      mesmaCategoria(item, luta)
+      && String(item.id_visual) === '2'
+      && String(item.fase || '').toUpperCase().includes('CHAVE DE 3')
+    );
+
+    if (segundaSemifinal) {
+      const { error } = await supabase.from('chaves').update({
+        atleta_1: resultado.perdedorNome,
+        equipe_1: resultado.perdedorEquipe || '',
+        atleta_1_id: resultado.perdedorId || null,
+      }).eq('id', segundaSemifinal.id);
+      if (error) throw error;
+    }
+  }
 }
 
 async function concluirWo(supabase: SupabaseLike, todas: ChaveLutaAuto[], luta: ChaveLutaAuto, ladoVencedor: 'atleta_1' | 'atleta_2' | 'bye') {
@@ -71,30 +144,17 @@ async function concluirWo(supabase: SupabaseLike, todas: ChaveLutaAuto[], luta: 
       status_luta: 'concluida',
       vencedor: vencedorFinal,
       vencedor_id: vencedorId || null,
-      metodo_vitoria: 'wo',
+      metodo_vitoria: ladoVencedor === 'bye' ? 'avanco_direto' : 'wo',
       finalizada_em: new Date().toISOString(),
     })
     .eq('id', luta.id);
 
-  const proxima = lutaDestino(todas, luta);
-  if (!proxima) return;
-
-  const lado = ladoDoDestino(luta);
-  const updateData = lado === 'atleta_1'
-    ? {
-      atleta_1: vencedorFinal,
-      equipe_1: vencedorEquipe || '',
-      atleta_1_id: vencedorId || null,
-      tatame: luta.tatame || proxima.tatame || null,
-    }
-    : {
-      atleta_2: vencedorFinal,
-      equipe_2: vencedorEquipe || '',
-      atleta_2_id: vencedorId || null,
-      tatame: luta.tatame || proxima.tatame || null,
-    };
-
-  await supabase.from('chaves').update(updateData).eq('id', proxima.id);
+  await propagarResultadoChave(supabase, todas, luta, {
+    vencedorNome: vencedorFinal,
+    vencedorEquipe,
+    vencedorId,
+    propagarPerdedor: false,
+  });
 }
 
 export async function processarAvancosAutomaticosChaves(supabase: SupabaseLike, eventoId: string | number) {
@@ -109,6 +169,11 @@ export async function processarAvancosAutomaticosChaves(supabase: SupabaseLike, 
     if (error || !data) return houveAvanco;
 
     const todas = data as ChaveLutaAuto[];
+    const idsComAvanco = Array.from(new Set(todas.flatMap((luta) => [luta.atleta_1_id, luta.atleta_2_id]).filter(Boolean))) as number[];
+    const { data: inscricoes } = idsComAvanco.length > 0
+      ? await supabase.from('inscricoes').select('atleta_id, status_checkin').eq('evento_id', eventoId).in('atleta_id', idsComAvanco)
+      : { data: [] };
+    const checkinPorAtleta = new Map((inscricoes || []).map((item: any) => [Number(item.atleta_id), String(item.status_checkin || 'pendente')]));
     let processouNestaRodada = false;
 
     for (const luta of todas) {
@@ -123,6 +188,7 @@ export async function processarAvancosAutomaticosChaves(supabase: SupabaseLike, 
 
       if (atleta1Real && atleta2Fantasma) {
         if (isChaveTbd(luta.atleta_2) && temAlimentadoraPendente) continue;
+        if (!luta.atleta_1_id || checkinPorAtleta.get(Number(luta.atleta_1_id)) !== 'aprovado') continue;
         await concluirWo(supabase, todas, luta, 'atleta_1');
         processouNestaRodada = true;
         houveAvanco = true;
@@ -131,6 +197,7 @@ export async function processarAvancosAutomaticosChaves(supabase: SupabaseLike, 
 
       if (atleta2Real && atleta1Fantasma) {
         if (isChaveTbd(luta.atleta_1) && temAlimentadoraPendente) continue;
+        if (!luta.atleta_2_id || checkinPorAtleta.get(Number(luta.atleta_2_id)) !== 'aprovado') continue;
         await concluirWo(supabase, todas, luta, 'atleta_2');
         processouNestaRodada = true;
         houveAvanco = true;

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Navbar from "./components/Navbar";
+import SiteConsentAndInstall from "./components/SiteConsentAndInstall";
 import Link from "next/link";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
@@ -23,6 +24,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body className="min-h-full flex flex-col bg-[#050505] text-white">
         
         <Navbar />
+        <SiteConsentAndInstall />
 
        {/* 🛡️ PROTEÇÃO RESTAURADA: Mantém o Login, Ranking e outras páginas abaixo da Navbar */}
         <main className="flex-1 flex flex-col pt-[60px] md:pt-[65px]">

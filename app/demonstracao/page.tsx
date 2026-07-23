@@ -29,7 +29,7 @@ export default function DemonstracaoPage() {
           </h1>
           
           <p className="mt-4 md:mt-5 max-w-xl text-[11px] md:text-sm leading-relaxed text-zinc-400 font-medium px-2">
-            Esqueça as planilhas isoladas e a confusão. O iTatame centraliza inscrição, chaves oficiais, operação de arena e painéis ao vivo em uma só solução Cloud.
+            Esqueça as planilhas isoladas e a confusão. O iTatame centraliza inscrição, chaves oficiais, operação de arena e painéis ao vivo em uma infraestrutura distribuída, rápida e protegida.
           </p>
           
           <div className="mt-5 md:mt-6 w-full max-w-[280px] md:max-w-none">
@@ -41,10 +41,10 @@ export default function DemonstracaoPage() {
 
         {/* MÉTRICAS FLUTUANTES (COMPACTAS) */}
         <div className="relative z-10 mt-8 md:mt-10 grid grid-cols-2 md:grid-cols-4 gap-2 w-full max-w-6xl mx-auto">
-          <Metric value="Cloud" label="Gestão 100% Online" tone="red" />
-          <Metric value="Automático" label="Baixa Pix e Cartão" tone="yellow" />
-          <Metric value="Algoritmo" label="Gerador de Chaves" tone="cyan" />
-          <Metric value="Ao Vivo" label="Resultados na Arena" tone="green" />
+          <Metric value="Distribuída" label="Operação resiliente" tone="red" />
+          <Metric value="Automática" label="Conciliação financeira" tone="yellow" />
+          <Metric value="Inteligente" label="Chaves e filas" tone="cyan" />
+          <Metric value="Tempo Real" label="Arena sincronizada" tone="green" />
         </div>
       </section>
 
@@ -52,11 +52,11 @@ export default function DemonstracaoPage() {
       <section className="relative px-4 py-8 md:px-6 md:py-16 border-b border-white/5 bg-[#050505]">
         <div className="absolute top-0 right-0 w-[250px] h-[250px] md:w-[400px] md:h-[400px] bg-blue-600/5 blur-[80px] md:blur-[120px] rounded-full pointer-events-none"></div>
         <div className="max-w-5xl mx-auto relative z-10">
-          <Header eyebrow="Visão Geral" title="Operação à Prova de Falhas" text="Elimine a margem de erro manual. Centralizamos a gestão financeira e desportiva num ambiente seguro." />
+          <Header eyebrow="Visão Geral" title="Tecnologia feita para o dia da competição" text="Elimine a margem de erro manual com comunicação em tempo real, rotinas redundantes e telas desenhadas para operar com rapidez, sem revelar a infraestrutura interna do produto." />
           <div className="mt-6 md:mt-8 grid gap-3 md:gap-4 md:grid-cols-3">
-            <Feature icon={<WalletCards size={14} />} title="Vendas & Financeiro" items={["Pagamento Inteligente", "Lotes Automáticos", "Repasses Financeiros"]} />
-            <Feature icon={<Swords size={14} />} title="Chaveamento Ninja" items={["Algoritmo Anti-Equipe", "Chaves diversas", "Checagem Pública"]} highlight />
-            <Feature icon={<Radio size={14} />} title="Experiência de Arena" items={["Mesário Mobile", "Placar Sincronizado", "Avisos no Celular"]} />
+            <Feature icon={<WalletCards size={14} />} title="Vendas & Financeiro" items={["Conciliação inteligente", "Lotes automáticos", "Visão financeira centralizada"]} />
+            <Feature icon={<Swords size={14} />} title="Chaveamento Inteligente" items={["Separação anti-equipe", "Triangulares e eliminatórias", "Avanço automático seguro"]} highlight />
+            <Feature icon={<Radio size={14} />} title="Experiência de Arena" items={["Check-in, Chamador e Mesário", "Placar e telão sincronizados", "Alertas progressivos no celular"]} />
           </div>
         </div>
       </section>

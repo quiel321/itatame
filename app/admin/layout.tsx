@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase"; // Ajuste o caminho se necessário
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const [autorizado, setAutorizado] = useState(false);
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     async function verificarAcesso() {
@@ -18,43 +19,29 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         return;
       }
 
-      // 2. PRIMEIRA CHECAGEM: Tabela nova de Organizadores
-      // Usamos maybeSingle() para não dar erro vermelho caso o usuário não exista nessa tabela
-      const { data: orgData } = await supabase
-        .from("organizadores")
-        .select("status")
-        .eq("user_id", session.user.id)
-        .maybeSingle();
+      const resposta = await fetch('/api/organizador/acesso', {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        cache: 'no-store',
+      });
+      const acesso = await resposta.json() as { destino?: string; plano?: string };
 
-      if (orgData) {
-        if (orgData.status === "aprovado" || orgData.status === "super-admin") {
-          setAutorizado(true); // Catraca Liberada!
-          return;
-        } else {
-          // Se estiver pendente ou bloqueado, joga para a tela de aviso no login
-          router.push("/login-organizador");
+      if (acesso.destino === 'admin') {
+        if (pathname.startsWith('/admin/tatames') && acesso.plano !== 'completo') {
+          router.replace('/admin?plano=restrito');
           return;
         }
-      }
-
-      // 3. SEGUNDA CHECAGEM (Fallback): Tabela antiga de Atletas (Para o Super Admin mestre)
-      const { data: atlData } = await supabase
-        .from("atletas")
-        .select("role")
-        .eq("user_id", session.user.id)
-        .maybeSingle();
-
-      if (atlData && (atlData.role === "organizador" || atlData.role === "super-admin")) {
-        setAutorizado(true); // Catraca Liberada!
+        setAutorizado(true);
         return;
       }
-
-      // 4. Se não for organizador em nenhuma das tabelas, é um atleta comum tentando bisbilhotar
-      router.push("/perfil"); 
+      if (acesso.destino === 'super-admin') {
+        router.replace('/super-admin');
+        return;
+      }
+      router.replace('/login-organizador');
     }
 
     verificarAcesso();
-  }, [router]);
+  }, [pathname, router]);
 
   // Tela de carregamento enquanto o "Segurança" checa a identidade
   if (!autorizado) {

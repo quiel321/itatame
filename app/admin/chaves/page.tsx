@@ -5,8 +5,7 @@ import { supabase } from "../../lib/supabase"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 
-import { jsPDF } from "jspdf"
-import autoTable from "jspdf-autotable"
+import { criarKitContingenciaPDF } from "../../lib/kit-contingencia-pdf"
 
 export default function GerarChavesPage() {
   const router = useRouter()
@@ -76,6 +75,44 @@ export default function GerarChavesPage() {
       novoMapa.push(tamanho - mapaAnterior[i] + 1);
     }
     return novoMapa;
+  }
+
+  function distribuirEquipesEmLadosOpostos(atletas: any[], tamanho: number, posicoes: number[]) {
+    const grupos = new Map<string, any[]>();
+    atletas.forEach((atleta) => {
+      const equipe = String(atleta.equipe_atleta || "SEM EQUIPE").trim().toUpperCase();
+      const lista = grupos.get(equipe) || [];
+      lista.push(atleta);
+      grupos.set(equipe, lista);
+    });
+
+    const esquerda: any[] = [];
+    const direita: any[] = [];
+    const capacidade = tamanho / 2;
+    const gruposOrdenados = Array.from(grupos.values())
+      .map((grupo) => grupo.sort(() => Math.random() - 0.5))
+      .sort((a, b) => b.length - a.length);
+
+    gruposOrdenados.forEach((grupo) => {
+      grupo.forEach((atleta, indice) => {
+        let destino = indice % 2 === 0 ? esquerda : direita;
+        let alternativo = destino === esquerda ? direita : esquerda;
+        if (destino.length >= capacidade || (alternativo.length < destino.length && alternativo.length < capacidade)) {
+          [destino, alternativo] = [alternativo, destino];
+        }
+        destino.push(atleta);
+      });
+    });
+
+    esquerda.sort(() => Math.random() - 0.5);
+    direita.sort(() => Math.random() - 0.5);
+    while (esquerda.length < capacidade) esquerda.push({ atleta: "BYE", nome: "BYE", equipe_atleta: "" });
+    while (direita.length < capacidade) direita.push({ atleta: "BYE", nome: "BYE", equipe_atleta: "" });
+
+    const porSeed = Array.from({ length: tamanho }, () => ({ atleta: "BYE", nome: "BYE", equipe_atleta: "" }));
+    posicoes.slice(0, capacidade).forEach((seed, indice) => { porSeed[seed - 1] = esquerda[indice]; });
+    posicoes.slice(capacidade).forEach((seed, indice) => { porSeed[seed - 1] = direita[indice]; });
+    return porSeed;
   }
 
   // ==========================================
@@ -184,46 +221,68 @@ export default function GerarChavesPage() {
       for (const grupo in grupos) {
         let atletasDoGrupo: any[] = grupos[grupo];
         
-        // ==========================================
-        // 🔥 ALGORITMO ANTI-EQUIPES (ESPELHAMENTO)
-        // ==========================================
-        // Embaralha aleatoriamente primeiro para não ter vícios
+        // Embaralha antes de distribuir as equipes nos dois lados da chave.
         atletasDoGrupo.sort(() => Math.random() - 0.5);
-
-        // Separa os atletas por equipe
-        const separacaoEquipes: Record<string, any[]> = {};
-        atletasDoGrupo.forEach(a => {
-          if (!separacaoEquipes[a.equipe_atleta]) separacaoEquipes[a.equipe_atleta] = [];
-          separacaoEquipes[a.equipe_atleta].push(a);
-        });
-
-        // Monta a lista final distribuindo as equipes (ex: A, B, A, B, A, C)
-        const atletasDistribuidos = [];
-        const chavesEquipes = Object.keys(separacaoEquipes);
-        
-        let aindaTemAtletas = true;
-        while(aindaTemAtletas) {
-          aindaTemAtletas = false;
-          for(const eq of chavesEquipes) {
-            if (separacaoEquipes[eq].length > 0) {
-              atletasDistribuidos.push(separacaoEquipes[eq].shift());
-              aindaTemAtletas = true;
-            }
-          }
-        }
-        atletasDoGrupo = atletasDistribuidos;
-        // ==========================================
 
         const categoria = grupo.split("__")[0];
         const faixa = grupo.split("__")[1];
+
+        // Regra oficial para três atletas: o vencedor da primeira semifinal
+        // vai à final; o perdedor enfrenta o terceiro atleta e o vencedor da
+        // segunda semifinal completa a final.
+        if (atletasDoGrupo.length === 3) {
+          const atletaTriangular = (idx: number) => ({
+            nome: atletasDoGrupo[idx]?.atleta || atletasDoGrupo[idx]?.nome || "BYE",
+            equipe: atletasDoGrupo[idx]?.equipe_atleta || "",
+            atleta_id: atletasDoGrupo[idx]?.atleta_id || null,
+          });
+          const primeiro = atletaTriangular(0);
+          const segundo = atletaTriangular(1);
+          const terceiro = atletaTriangular(2);
+          const baseLuta = {
+            evento_id: eventoId,
+            categoria,
+            faixa,
+            vencedor: null,
+            vencedor_id: null,
+            status_luta: 'agendada',
+            pontuacao_atleta_1: { pontos: 0, punicoes: 0, vantagens: 0 },
+            pontuacao_atleta_2: { pontos: 0, punicoes: 0, vantagens: 0 },
+          };
+          const lutasTriangulares = [
+            {
+              ...baseLuta,
+              id_visual: '1',
+              atleta_1: primeiro.nome, equipe_1: primeiro.equipe, numero_1: '01', atleta_1_id: primeiro.atleta_id,
+              atleta_2: segundo.nome, equipe_2: segundo.equipe, numero_2: '02', atleta_2_id: segundo.atleta_id,
+              fase: 'Semifinal 1 · Chave de 3', ordem: 1, lado: 'esquerda', proxima_luta: 999,
+            },
+            {
+              ...baseLuta,
+              id_visual: '2',
+              atleta_1: 'TBD', equipe_1: '', numero_1: '', atleta_1_id: null,
+              atleta_2: terceiro.nome, equipe_2: terceiro.equipe, numero_2: '03', atleta_2_id: terceiro.atleta_id,
+              fase: 'Semifinal 2 · Chave de 3', ordem: 2, lado: 'direita', proxima_luta: 999,
+            },
+            {
+              ...baseLuta,
+              id_visual: '999',
+              atleta_1: 'TBD', equipe_1: '', numero_1: '', atleta_1_id: null,
+              atleta_2: 'TBD', equipe_2: '', numero_2: '', atleta_2_id: null,
+              fase: 'Final · Chave de 3', ordem: 3, lado: 'centro', proxima_luta: null,
+            },
+          ];
+
+          await supabase.from("chaves").insert(lutasTriangulares);
+          continue;
+        }
 
         let tamanhoChave = 2;
         while (tamanhoChave < atletasDoGrupo.length) tamanhoChave *= 2;
         if (tamanhoChave > 64) tamanhoChave = 64;
 
-        while (atletasDoGrupo.length < tamanhoChave) {
-          atletasDoGrupo.push({ atleta: "BYE", nome: "BYE", equipe_atleta: "" });
-        }
+        const posicoes = gerarMapaPosicoes(tamanhoChave);
+        atletasDoGrupo = distribuirEquipesEmLadosOpostos(atletasDoGrupo.slice(0, tamanhoChave), tamanhoChave, posicoes);
 
         const lutas: any[] = [];
         
@@ -232,8 +291,6 @@ export default function GerarChavesPage() {
           equipe: atletasDoGrupo[idx]?.equipe_atleta || "",
           atleta_id: atletasDoGrupo[idx]?.atleta_id || null 
         });
-
-        const posicoes = gerarMapaPosicoes(tamanhoChave);
 
         let faseInicialNome = "Final";
         if (tamanhoChave === 4) faseInicialNome = "Semifinal";
@@ -376,100 +433,14 @@ export default function GerarChavesPage() {
     const lutas = await buscarChavesParaExportacao();
     if (!lutas) return;
 
-    const doc = new jsPDF();
     const nomeEventoAtual = eventos.find(e => e.id.toString() === eventoId)?.nome || "Evento";
-    const pageWidth = doc.internal.pageSize.getWidth();
     const nomeArquivoCompl = tipoGeracao === 'peso' ? 'Categorias' : 'Absoluto';
-
-    const grupos: any = {};
-    lutas.forEach(l => {
-      const titulo = `${l.categoria} - Faixa ${l.faixa}`;
-      if (!grupos[titulo]) grupos[titulo] = [];
-      grupos[titulo].push(l);
+    const doc = criarKitContingenciaPDF({
+      eventoNome: nomeEventoAtual,
+      tipoChave: nomeArquivoCompl,
+      lutas,
     });
-
-    let yPos = 45; 
-
-    for (const [tituloGrupo, lutasGrupo] of Object.entries(grupos)) {
-      if (yPos > 250) {
-        doc.addPage();
-        yPos = 45;
-      }
-
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(12);
-      doc.setTextColor(220, 38, 38); 
-      doc.text(tituloGrupo.toUpperCase(), 14, yPos);
-
-      const tableColumn = ["Luta #", "Fase", "Competidor 1 (Vermelho)", "Competidor 2 (Azul)", "Vencedor (Anotar)"];
-      const tableRows: any[] = [];
-
-      (lutasGrupo as any[]).forEach(l => {
-        const nome1 = formatarNome(l.atleta_1);
-        const eq1 = formatarEquipe(l.atleta_1, l.equipe_1);
-        const txt1 = eq1 ? `${nome1}\n(${eq1})` : nome1;
-
-        const nome2 = formatarNome(l.atleta_2);
-        const eq2 = formatarEquipe(l.atleta_2, l.equipe_2);
-        const txt2 = eq2 ? `${nome2}\n(${eq2})` : nome2;
-
-        tableRows.push([
-          `# ${l.id_visual}`,
-          l.fase,
-          txt1,
-          txt2,
-          "" 
-        ]);
-      });
-
-      autoTable(doc, {
-        head: [tableColumn],
-        body: tableRows,
-        startY: yPos + 4,
-        theme: 'grid',
-        styles: { fontSize: 8, cellPadding: 4, valign: 'middle' },
-        headStyles: { fillColor: [20, 20, 20], textColor: [255, 255, 255], fontStyle: 'bold' },
-        columnStyles: { 
-          0: { cellWidth: 15, halign: 'center', fontStyle: 'bold' },
-          1: { cellWidth: 20 },
-          4: { cellWidth: 40 } 
-        },
-        margin: { top: 40 } 
-      });
-
-      yPos = (doc as any).lastAutoTable.finalY + 15;
-    }
-
-    const pageCount = (doc.internal as any).getNumberOfPages();
-    for (let i = 1; i <= pageCount; i++) {
-      doc.setPage(i);
-      
-      doc.setFillColor(15, 15, 18); 
-      doc.rect(0, 0, pageWidth, 35, 'F');
-      
-      doc.setFont("helvetica", "bolditalic");
-      doc.setFontSize(22);
-      doc.setTextColor(239, 68, 68); 
-      doc.text("// i", 14, 22);
-      doc.setTextColor(255, 255, 255); 
-      doc.text("TATAME", 26, 22);
-
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(10);
-      doc.text(`CRONOGRAMA DE LUTAS (${nomeArquivoCompl.toUpperCase()})`, pageWidth - 14, 16, { align: "right" });
-      
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(10);
-      doc.setTextColor(200, 200, 200);
-      doc.text(nomeEventoAtual.toUpperCase(), pageWidth - 14, 23, { align: "right" });
-
-      doc.setFontSize(8);
-      doc.setTextColor(150, 150, 150);
-      const dataHora = `${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}`;
-      doc.text(`Exportado em: ${dataHora}  |  Página ${i} de ${pageCount}`, pageWidth - 14, 29, { align: "right" });
-    }
-
-    doc.save(`chaveamento_${nomeArquivoCompl}_${nomeEventoAtual.replace(/\s+/g, '_')}.pdf`);
+    doc.save(`kit_contingencia_${nomeArquivoCompl}_${nomeEventoAtual.replace(/\s+/g, '_')}.pdf`);
   }
 
   const exportarMesarioCSV = async () => {
@@ -600,8 +571,8 @@ export default function GerarChavesPage() {
               <svg className="w-4 h-4 text-zinc-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
             </div>
             <div>
-              <h2 className="text-white font-black text-sm md:text-base uppercase tracking-widest leading-none">Área do Mesário</h2>
-              <p className="text-zinc-500 text-[9px] md:text-[10px] mt-1">Exporte as chaves do evento selecionado acima.</p>
+              <h2 className="text-white font-black text-sm md:text-base uppercase tracking-widest leading-none">Plano B do Campeonato</h2>
+              <p className="text-zinc-500 text-[9px] md:text-[10px] mt-1">Caderno simples para operar no papel, inclusive no plano Essencial e sem painéis de staff.</p>
             </div>
           </div>
 
@@ -612,7 +583,7 @@ export default function GerarChavesPage() {
               ) : (
                 <>
                   <svg className="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
-                  <span className="text-[10px] md:text-xs font-black uppercase tracking-widest">Imprimir PDF</span>
+                  <span className="text-[10px] md:text-xs font-black uppercase tracking-widest">Kit Offline PDF</span>
                 </>
               )}
             </button>

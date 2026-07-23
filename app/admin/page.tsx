@@ -2,13 +2,13 @@
 
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "../lib/supabase";
-import { PLANOS_COMERCIAIS, getPlanoComercial, type PlanoComercialId } from "../lib/planos-comerciais";
+import { PLANOS_COMERCIAIS, getPlanoComercial } from "../lib/planos-comerciais";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import imageCompression from 'browser-image-compression';
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
-import { ShieldCheck, Map, Trash2, Key, Users, CheckCircle, Copy, RefreshCw, Play, Edit3, Trophy, Search, ChevronDown } from "lucide-react";
+import { ShieldCheck, Map, Trash2, Key, Users, CheckCircle, Copy, RefreshCw, Play, Edit3, Trophy, Search, ChevronDown, Megaphone } from "lucide-react";
 
 export default function AdminPage() {
   const router = useRouter();
@@ -18,7 +18,6 @@ export default function AdminPage() {
   const [fotoUrl, setFotoUrl] = useState("");
   const [isOrganizadorNativo, setIsOrganizadorNativo] = useState(false);
   const [organizadorFinanceiro, setOrganizadorFinanceiro] = useState<any>(null);
-  const [salvandoPlano, setSalvandoPlano] = useState(false);
   
   const [showPerfilModal, setShowPerfilModal] = useState(false);
   const [forceCompletion, setForceCompletion] = useState(false);
@@ -53,6 +52,7 @@ export default function AdminPage() {
       alert("⚠️ Por favor, selecione um campeonato específico no filtro abaixo para gerenciar os PINs da equipe.");
       return;
     }
+    if (!planoCompleto) setNovoStaff((atual) => ({ ...atual, funcao: 'checkin' }));
     setShowStaffModal(true);
     setLoadingStaff(true);
     
@@ -78,6 +78,10 @@ export default function AdminPage() {
   const adicionarStaff = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!novoStaff.identificacao || !novoStaff.pin_acesso) return;
+    if (!planoCompleto && novoStaff.funcao !== 'checkin') {
+      alert('O plano Essencial permite criar somente acessos de Check-in.');
+      return;
+    }
 
     setLoadingStaff(true);
     const pinLimpo = novoStaff.pin_acesso.trim().toUpperCase();
@@ -416,34 +420,9 @@ export default function AdminPage() {
   const totalPendentes = totalInscritos - totalPagos;
 
   const planoAtual = getPlanoComercial(organizadorFinanceiro?.plano_comercial);
+  const planoCompleto = planoAtual.id === "completo";
   const mercadoPagoConectado = Boolean(organizadorFinanceiro?.mp_connected_at);
 
-  async function alterarPlanoComercial(planoId: PlanoComercialId) {
-    if (!currentUserId || salvandoPlano) return;
-
-    const plano = getPlanoComercial(planoId);
-    setSalvandoPlano(true);
-
-    const { error } = await supabase
-      .from("organizadores")
-      .update({
-        plano_comercial: plano.id,
-        comissao_percentual: plano.comissaoPercentual,
-      })
-      .eq("user_id", currentUserId);
-
-    if (error) {
-      alert("Não foi possível atualizar o plano. Verifique se o SQL de marketplace já foi aplicado no Supabase.");
-    } else {
-      setOrganizadorFinanceiro((atual: any) => ({
-        ...(atual || {}),
-        plano_comercial: plano.id,
-        comissao_percentual: plano.comissaoPercentual,
-      }));
-    }
-
-    setSalvandoPlano(false);
-  }
   return (
     <main className="min-h-screen bg-[#050505] text-white p-4 md:p-8 relative overflow-hidden font-sans selection:bg-red-500/30">
       
@@ -515,7 +494,7 @@ export default function AdminPage() {
                 </div>
               </Link>
 
-              <Link href="/admin/tatames" className="group cursor-pointer bg-black/40 border border-white/5 hover:border-white/20 rounded-2xl p-4 md:p-5 transition-all flex flex-col xl:flex-row xl:items-center gap-3 md:gap-4 shadow-xl hover:-translate-y-1">
+              {planoCompleto ? <Link href="/admin/tatames" className="group cursor-pointer bg-black/40 border border-white/5 hover:border-white/20 rounded-2xl p-4 md:p-5 transition-all flex flex-col xl:flex-row xl:items-center gap-3 md:gap-4 shadow-xl hover:-translate-y-1">
                 <div className="w-10 h-10 md:w-12 md:h-12 bg-black text-emerald-500 border border-white/5 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-emerald-500 group-hover:border-emerald-500 group-hover:text-white transition-all shadow-inner">
                   <Map className="w-5 h-5" />
                 </div>
@@ -523,7 +502,10 @@ export default function AdminPage() {
                   <h3 className="text-xs md:text-sm font-black text-white transition-colors leading-tight">Zonas de Luta</h3>
                   <p className="text-zinc-500 text-[9px] md:text-[10px] font-medium mt-1 hidden md:block">Distribuir tatames.</p>
                 </div>
-              </Link>
+              </Link> : <div className="group bg-black/40 border border-white/5 rounded-2xl p-4 md:p-5 flex flex-col xl:flex-row xl:items-center gap-3 md:gap-4 opacity-45" title="Disponível no plano Completo">
+                <div className="w-10 h-10 md:w-12 md:h-12 bg-black text-zinc-600 border border-white/5 rounded-xl flex items-center justify-center shrink-0"><Map className="w-5 h-5" /></div>
+                <div><h3 className="text-xs md:text-sm font-black text-white leading-tight">Zonas de Luta</h3><p className="text-yellow-500 text-[9px] font-bold mt-1">Plano Completo</p></div>
+              </div>}
 
               <button onClick={abrirModalStaff} className="text-left group cursor-pointer bg-black/40 border border-white/5 hover:border-white/20 rounded-2xl p-4 md:p-5 transition-all flex flex-col xl:flex-row xl:items-center gap-3 md:gap-4 shadow-xl hover:-translate-y-1">
                 <div className="w-10 h-10 md:w-12 md:h-12 bg-black text-blue-400 border border-white/5 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-blue-500 group-hover:border-blue-500 group-hover:text-white transition-all shadow-inner">
@@ -552,7 +534,7 @@ export default function AdminPage() {
                 <div className="min-w-0">
                   <span className="text-emerald-400 text-[9px] font-black uppercase tracking-widest">Financeiro</span>
                   <h2 className="text-lg md:text-xl font-black text-white mt-1">Plano e Mercado Pago</h2>
-                  <p className="text-zinc-500 text-xs mt-1 max-w-2xl">Escolha o bloco contratado pelo organizador e conecte a conta Mercado Pago que receberá as inscrições.</p>
+                  <p className="text-zinc-500 text-xs mt-1 max-w-2xl">Consulte o plano contratado e conecte a conta Mercado Pago que receberá as inscrições. A mudança de plano é exclusiva do Super Admin.</p>
                 </div>
 
                 <div className="flex flex-col sm:flex-row gap-3 lg:items-center">
@@ -582,9 +564,9 @@ export default function AdminPage() {
                     <button
                       key={plano.id}
                       type="button"
-                      onClick={() => alterarPlanoComercial(plano.id)}
-                      disabled={salvandoPlano || ativo}
-                      className={`text-left rounded-xl border p-4 transition-all ${ativo ? "bg-red-600/10 border-red-500/40" : "bg-[#050505] border-white/10 hover:border-white/25"}`}
+                      disabled
+                      title="O plano é definido exclusivamente pelo Super Admin"
+                      className={`text-left rounded-xl border p-4 ${ativo ? "bg-red-600/10 border-red-500/40" : "bg-[#050505] border-white/10 opacity-50"}`}
                     >
                       <div className="flex items-center justify-between gap-3">
                         <span className="text-white font-black text-sm uppercase tracking-widest">{plano.nome}</span>
@@ -800,7 +782,8 @@ export default function AdminPage() {
                 <div className="w-full md:w-1/4">
                   <label className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1.5 block pl-1">Acesso (Função)</label>
                   <select required value={novoStaff.funcao} onChange={(e) => setNovoStaff({...novoStaff, funcao: e.target.value})} className="w-full bg-[#050505] border border-white/10 rounded-xl px-4 py-3 outline-none text-white text-xs font-bold appearance-none cursor-pointer">
-                    <option value="mesario">Mesário / Tatame</option>
+                    <option value="mesario" disabled={!planoCompleto}>Mesário / Tatame{!planoCompleto ? ' · Plano Completo' : ''}</option>
+                    <option value="chamador" disabled={!planoCompleto}>Chamador / Área de espera{!planoCompleto ? ' · Plano Completo' : ''}</option>
                     <option value="checkin">Recepção / Check-in</option>
                   </select>
                 </div>
@@ -837,8 +820,8 @@ export default function AdminPage() {
                     <div key={staff.id} className="bg-black/60 border border-white/5 p-4 rounded-2xl flex items-center justify-between gap-2 group hover:border-white/20 transition-all">
                       
                       <div className="flex items-center gap-3 flex-1 min-w-0">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-inner ${staff.funcao === 'checkin' ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-blue-500/10 text-blue-500 border border-blue-500/20'}`}>
-                          {staff.funcao === 'checkin' ? <Users size={18} /> : <Play size={18} fill="currentColor" />}
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-inner ${staff.funcao === 'checkin' ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : staff.funcao === 'chamador' ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20' : 'bg-blue-500/10 text-blue-500 border border-blue-500/20'}`}>
+                          {staff.funcao === 'checkin' ? <Users size={18} /> : staff.funcao === 'chamador' ? <Megaphone size={18} /> : <Play size={18} fill="currentColor" />}
                         </div>
                         <div className="flex-1 min-w-0">
                           <h4 className="text-white font-black text-sm uppercase tracking-tight truncate w-full">{staff.identificacao}</h4>

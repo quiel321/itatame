@@ -3,8 +3,42 @@
 import Link from "next/link";
 // 1. Adicionado o useRef aqui nas importações
 import { useEffect, useMemo, useState, useRef } from "react";
-import { CalendarDays, ChevronRight, MapPin, MonitorDot, Search, ShieldCheck, Trophy, Users } from "lucide-react";
+import { CalendarDays, ChevronRight, MapPin, MonitorDot, Search, Trophy } from "lucide-react";
 import { supabase } from "./lib/supabase";
+
+function dataOperacional(valor?: string | null, fimDoDia = false) {
+  if (!valor) return null;
+  const somenteData = /^\d{4}-\d{2}-\d{2}$/.test(valor);
+  const data = new Date(somenteData ? `${valor}T${fimDoDia ? '23:59:59' : '00:00:00'}` : valor);
+  return Number.isNaN(data.getTime()) ? null : data;
+}
+
+function etapaInscricao(evento: any) {
+  const agora = new Date();
+  const inicio = dataOperacional(evento.data_inicio_inscricoes);
+  const fim = dataOperacional(evento.data_fim_inscricoes, true);
+  const status = String(evento.status || '').toUpperCase();
+  const formatar = (data: Date) => data.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+
+  if (status === 'ENCERRADO' || (fim && agora > fim)) {
+    return { titulo: 'Inscrições encerradas', detalhe: 'Consulte os detalhes do evento', classe: 'bg-zinc-800 text-zinc-300' };
+  }
+  if ((inicio && agora < inicio) || (!inicio && status === 'EM BREVE')) {
+    return { titulo: 'Inscrições em breve', detalhe: inicio ? `Abertura em ${formatar(inicio)}` : 'Acompanhe a abertura', classe: 'bg-cyan-600 text-black' };
+  }
+
+  const lotes = [
+    { numero: 1, limite: dataOperacional(evento.lote1_data_fim, true) },
+    { numero: 2, limite: dataOperacional(evento.lote2_data_fim, true) },
+    { numero: 3, limite: dataOperacional(evento.lote3_data_fim, true) },
+  ].filter((lote): lote is { numero: number; limite: Date } => Boolean(lote.limite));
+  const loteAtual = lotes.find((lote) => agora <= lote.limite);
+
+  if (loteAtual) {
+    return { titulo: `Inscrever-se · ${loteAtual.numero}º lote`, detalhe: `Condição válida até ${formatar(loteAtual.limite)}`, classe: 'bg-emerald-600 text-black' };
+  }
+  return { titulo: 'Inscreva-se agora', detalhe: fim ? `Inscrições até ${formatar(fim)}` : 'Garanta sua vaga', classe: 'bg-red-600 text-white' };
+}
 
 export default function Home() {
   const [eventos, setEventos] = useState<any[]>([]);
@@ -97,7 +131,13 @@ export default function Home() {
       Inscreva-se nos maiores campeonatos de Artes marciais e consolide o seu nome no ranking.
     </p>
 
-    <div className="mt-4 md:mt-24 mx-auto flex w-full max-w-3xl flex-col gap-2 rounded-2xl border border-white/10 bg-white/[0.05] p-2 shadow-2xl backdrop-blur-md md:flex-row md:rounded-full">
+    <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+      <Link href="/demonstracao" className="inline-flex items-center gap-2 rounded-xl border border-red-500/40 bg-red-600/15 px-4 py-3 text-[9px] font-black uppercase tracking-[0.16em] text-red-200 backdrop-blur-md transition hover:-translate-y-0.5 hover:bg-red-600 hover:text-white">
+        <MonitorDot size={14} /> Conheça o iTatame <ChevronRight size={13} />
+      </Link>
+    </div>
+
+    <div className="mt-4 md:mt-12 mx-auto flex w-full max-w-3xl flex-col gap-2 rounded-2xl border border-white/10 bg-white/[0.05] p-2 shadow-2xl backdrop-blur-md md:flex-row md:rounded-full">
       <div className="flex flex-1 items-center rounded-xl bg-black/40 px-4 transition-colors focus-within:bg-black/80 md:rounded-full h-12 border border-transparent focus-within:border-red-500/50">
         <Search size={16} className="mr-3 shrink-0 text-zinc-300" />
         
@@ -139,31 +179,6 @@ export default function Home() {
   </div>
 </section>
 
-{/* 🚀 PILARES */}
-<section className="relative z-20 mx-auto w-full max-w-5xl px-4 md:px-6 mt-2 md:-mt-16">
-  <div className="grid gap-2.5 rounded-[1.5rem] border border-white/10 bg-[#0a0a0e]/90 p-2.5 shadow-2xl backdrop-blur-xl md:gap-3 md:p-4 md:grid-cols-3">
-    
-    <SystemPill
-      icon={<ShieldCheck size={16} />}
-      title="Gestão Oficial"
-      text="Campeonatos validados com arbitragem qualificada."
-    />
-
-    <SystemPill
-      icon={<Users size={16} />}
-      title="Experiência do Atleta"
-      text="Inscrição rápida, passaporte QR Code e alertas de luta."
-    />
-
-    <SystemPill
-      icon={<MonitorDot size={16} />}
-      title="Operação de Arena"
-      text="Placar eletrônico nas TVs e chaves em tempo real."
-    />
-
-  </div>
-</section>
-
       <section className="relative z-20 mx-auto w-full max-w-7xl px-4 pb-12 pt-16 md:px-8">
         
         <div className="flex items-center justify-between mb-8">
@@ -192,6 +207,7 @@ export default function Home() {
             const borderClass = cor === "red" ? "hover:border-red-500/40" : cor === "green" ? "hover:border-emerald-500/40" : cor === "cyan" ? "hover:border-cyan-500/40" : "hover:border-white/20";
             const badgeClass = cor === "red" ? "bg-red-600 text-white" : cor === "green" ? "bg-emerald-600 text-black" : cor === "cyan" ? "bg-cyan-600 text-black" : "bg-zinc-700 text-white";
             const btnClass = cor === "red" ? "bg-red-600 hover:bg-red-500 text-white" : cor === "green" ? "bg-emerald-600 hover:bg-emerald-500 text-white" : cor === "cyan" ? "bg-cyan-600 hover:bg-cyan-500 text-white" : "bg-zinc-800 hover:bg-zinc-700 text-zinc-300";
+            const etapa = etapaInscricao(evento);
 
             return (
               <Link 
@@ -231,8 +247,12 @@ export default function Home() {
                     )}
                   </div>
 
-                  <div className={`w-full text-center py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors flex items-center justify-center gap-2 ${btnClass}`}>
-                    Inscreva-se Agora <ChevronRight size={14} />
+                  <div className={`flex w-full items-center justify-center gap-2 rounded-xl py-3 text-center transition-colors ${etapa.classe || btnClass}`}>
+                    <span className="flex flex-col">
+                      <strong className="text-[10px] font-black uppercase tracking-widest">{etapa.titulo}</strong>
+                      <small className="mt-0.5 text-[8px] font-bold uppercase tracking-wider opacity-75">{etapa.detalhe}</small>
+                    </span>
+                    <ChevronRight size={14} />
                   </div>
                 </div>
               </Link>
@@ -253,23 +273,5 @@ export default function Home() {
         </div>
       </section>
     </main>
-  );
-}
-
-function SystemPill({ icon, title, text }: { icon: React.ReactNode; title: string; text: string }) {
-  return (
-    // p-3 e gap-3 no mobile, p-4 e gap-4 no desktop
-    <div className="flex gap-3 md:gap-4 rounded-xl border border-white/5 bg-white/[0.02] p-3 md:p-4 hover:bg-white/[0.05] transition-colors">
-      
-      {/* h-8 w-8 no mobile (menor), h-10 w-10 no desktop */}
-      <div className="flex h-8 w-8 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-lg md:rounded-xl bg-red-500/10 border border-red-500/20 text-red-500">
-        {icon}
-      </div>
-      
-      <div className="flex-1">
-        <h3 className="text-[10px] md:text-xs font-black uppercase tracking-tight text-white mb-0.5 md:mb-1.5">{title}</h3>
-        <p className="text-[9px] md:text-[10px] leading-relaxed text-zinc-400 font-medium">{text}</p>
-      </div>
-    </div>
   );
 }
