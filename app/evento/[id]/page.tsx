@@ -3,7 +3,24 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
+import {
+  dataOperacional,
+  formatarDataHoraEvento,
+  obterEtapaEvento,
+  obterLinhaDoTempoEvento,
+  type TomEtapaEvento,
+} from "@/app/lib/evento-etapas";
 import Link from "next/link";
+
+const estiloEtapa: Record<TomEtapaEvento, { badge: string; aviso: string; ponto: string }> = {
+  cyan: { badge: "border-cyan-400/30 bg-cyan-500/15 text-cyan-300", aviso: "border-cyan-500/25 bg-cyan-500/[0.07]", ponto: "bg-cyan-400" },
+  emerald: { badge: "border-emerald-400/30 bg-emerald-500/15 text-emerald-300", aviso: "border-emerald-500/25 bg-emerald-500/[0.07]", ponto: "bg-emerald-400" },
+  amber: { badge: "border-amber-400/30 bg-amber-500/15 text-amber-300", aviso: "border-amber-500/25 bg-amber-500/[0.07]", ponto: "bg-amber-400" },
+  violet: { badge: "border-violet-400/30 bg-violet-500/15 text-violet-300", aviso: "border-violet-500/25 bg-violet-500/[0.07]", ponto: "bg-violet-400" },
+  blue: { badge: "border-blue-400/30 bg-blue-500/15 text-blue-300", aviso: "border-blue-500/25 bg-blue-500/[0.07]", ponto: "bg-blue-400" },
+  red: { badge: "border-red-400/30 bg-red-500/15 text-red-300", aviso: "border-red-500/25 bg-red-500/[0.07]", ponto: "bg-red-500" },
+  zinc: { badge: "border-white/15 bg-zinc-700/70 text-zinc-200", aviso: "border-white/10 bg-white/[0.03]", ponto: "bg-zinc-500" },
+};
 
 export default function EventoDetalhesPage() {
   const params = useParams();
@@ -55,31 +72,27 @@ export default function EventoDetalhesPage() {
     return `${dia}/${mes}/${ano}`;
   };
 
-  const formatarDataHora = (dataISO: string) => {
-    if (!dataISO) return "A definir";
-    const data = new Date(dataISO);
-    return data.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(',', ' às');
-  };
+  const formatarDataHora = (dataISO: string) => formatarDataHoraEvento(dataISO);
 
   const totalInscritos = inscricoes.length;
 
-  // 🔥 MOTOR DE LOTES E CHECAGEM
+  // O mesmo motor temporal alimenta o card público, os avisos e esta página.
   const agora = new Date();
-  const inicioChecagem = evento.data_inicio_checagem ? new Date(evento.data_inicio_checagem) : null;
-  const fimChecagem = evento.data_fim_checagem ? new Date(evento.data_fim_checagem) : null;
-  const checagemAberta = Boolean(inicioChecagem && agora >= inicioChecagem && (!fimChecagem || agora <= fimChecagem));
-  const textoStatusChecagem = !inicioChecagem
-    ? "Checagem ainda sem data definida."
-    : agora < inicioChecagem
-      ? `Checagem abre em ${formatarDataHora(evento.data_inicio_checagem)}`
-      : fimChecagem && agora > fimChecagem
-        ? "Checagem encerrada."
-        : "Checagem aberta.";
+  const etapaAtual = obterEtapaEvento(evento, agora);
+  const linhaDoTempo = obterLinhaDoTempoEvento(evento, agora);
+  const estiloAtual = estiloEtapa[etapaAtual.tom];
+  const fimPagamento = dataOperacional(evento.data_fim_pagamento, true);
+  const pagamentoDisponivel =
+    (etapaAtual.codigo === "INSCRICOES_ABERTAS" || etapaAtual.codigo === "AGUARDANDO_CHECAGEM") &&
+    (!fimPagamento || agora <= fimPagamento);
   
+  const fimLote1 = dataOperacional(evento.lote1_data_fim, true);
+  const fimLote2 = dataOperacional(evento.lote2_data_fim, true);
+  const fimLote3 = dataOperacional(evento.lote3_data_fim, true);
   let loteAtivo = 0;
-  if (evento.lote1_data_fim && agora <= new Date(evento.lote1_data_fim)) loteAtivo = 1;
-  else if (evento.lote2_data_fim && agora <= new Date(evento.lote2_data_fim)) loteAtivo = 2;
-  else if (evento.lote3_data_fim && agora <= new Date(evento.lote3_data_fim)) loteAtivo = 3;
+  if (fimLote1 && agora <= fimLote1) loteAtivo = 1;
+  else if (fimLote2 && agora <= fimLote2) loteAtivo = 2;
+  else if (fimLote3 && agora <= fimLote3) loteAtivo = 3;
   else loteAtivo = 4; // Todos os lotes encerrados
 
   return (
@@ -95,8 +108,8 @@ export default function EventoDetalhesPage() {
         <div className="bg-[#0a0a0e] border border-white/10 rounded-[20px] md:rounded-[24px] p-4 md:p-8 shadow-2xl flex flex-col md:flex-row gap-4 md:gap-8 mb-6 md:mb-8">
           <div className="w-full md:w-[300px] shrink-0 rounded-xl overflow-hidden shadow-2xl border border-white/5 relative bg-[#050505] flex items-center justify-center">
             <img src={evento.banner_url || "/arena.png"} alt={evento.nome} className="w-full h-auto max-h-[250px] md:max-h-[400px] object-contain rounded-lg" />
-            <div className={`absolute top-2 right-2 md:top-3 md:right-3 text-white text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md shadow-lg ${evento.status === 'ENCERRADO' ? 'bg-zinc-600' : evento.status === 'EM BREVE' ? 'bg-cyan-600' : 'bg-red-600'}`}>
-              {evento.status || "ABERTO"}
+            <div className={`absolute top-2 right-2 md:top-3 md:right-3 rounded-md border px-2.5 py-1 text-[9px] font-black uppercase tracking-widest shadow-lg backdrop-blur-md ${estiloAtual.badge}`}>
+              {etapaAtual.titulo}
             </div>
           </div>
 
@@ -125,16 +138,23 @@ export default function EventoDetalhesPage() {
                   <span className="truncate">{evento.cidade} - {evento.estado} | {evento.local || "Local a definir"}</span>
                 </div>
               </div>
+
+              <div className={`mb-4 rounded-xl border p-3 md:mb-5 md:p-4 ${estiloAtual.aviso}`}>
+                <div className="flex items-start gap-3">
+                  <span className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${estiloAtual.ponto} ${etapaAtual.codigo === "LUTAS_AO_VIVO" ? "animate-pulse" : ""}`} />
+                  <div>
+                    <p className="text-[9px] font-black uppercase tracking-[0.18em] text-zinc-500">Estado atual do evento</p>
+                    <p className="mt-1 text-xs font-black uppercase tracking-wide text-white md:text-sm">{etapaAtual.titulo}</p>
+                    <p className="mt-1 text-[10px] font-medium leading-relaxed text-zinc-400 md:text-xs">{etapaAtual.detalhe}. {etapaAtual.proximoPasso}.</p>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-2 md:gap-3">
-              {evento.status === "ENCERRADO" ? (
+              {!etapaAtual.inscricoesAbertas ? (
                 <button disabled className="bg-zinc-800 text-zinc-500 font-black uppercase tracking-widest text-[10px] md:text-xs px-3 py-2.5 md:px-6 md:py-3.5 rounded-lg text-center flex-1 md:flex-none cursor-not-allowed border border-white/5">
-                  Inscrições Fechadas
-                </button>
-              ) : evento.status === "EM BREVE" ? (
-                <button disabled className="bg-cyan-900/30 text-cyan-500 font-black uppercase tracking-widest text-[10px] md:text-xs px-3 py-2.5 md:px-6 md:py-3.5 rounded-lg text-center flex-1 md:flex-none cursor-not-allowed border border-cyan-500/20">
-                  Abre em Breve
+                  {etapaAtual.codigo === "EM_BREVE" ? "Inscrições em breve" : "Inscrições fechadas"}
                 </button>
               ) : (
                 evento.link_inscricao ? (
@@ -148,20 +168,22 @@ export default function EventoDetalhesPage() {
                 )
               )}
               
-              {checagemAberta ? (
+              {etapaAtual.checagemAberta ? (
                 <Link href={`/evento/${evento.id}/checagem`} className="bg-green-600 hover:bg-green-500 text-white font-black uppercase tracking-widest text-[10px] md:text-xs px-3 py-2.5 md:px-6 md:py-3.5 rounded-lg shadow-[0_0_15px_rgba(22,163,74,0.3)] transition-all text-center flex-1 md:flex-none flex items-center justify-center gap-1.5">
                   <svg className="w-3.5 h-3.5 md:w-4 md:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
                   Checagem Aberta
                 </Link>
               ) : (
                 <div className="bg-white/5 border border-white/10 text-zinc-400 font-black uppercase tracking-widest text-[10px] md:text-xs px-3 py-2.5 md:px-6 md:py-3.5 rounded-lg text-center flex-1 md:flex-none">
-                  {textoStatusChecagem}
+                  {etapaAtual.codigo === "EM_CHAVEAMENTO" || etapaAtual.indice > 3 ? "Checagem encerrada" : etapaAtual.proximoPasso}
                 </div>
               )}
 
-              <Link href={`/pagamento`} className="bg-white hover:bg-zinc-200 text-black font-black uppercase tracking-widest text-[10px] md:text-xs px-3 py-2.5 md:px-6 md:py-3.5 rounded-lg transition-all text-center flex-1 md:flex-none">
-                Pagar
-              </Link>
+              {pagamentoDisponivel && (
+                <Link href={`/pagamento`} className="bg-white hover:bg-zinc-200 text-black font-black uppercase tracking-widest text-[10px] md:text-xs px-3 py-2.5 md:px-6 md:py-3.5 rounded-lg transition-all text-center flex-1 md:flex-none">
+                  Pagar inscrição
+                </Link>
+              )}
               
               {/* 🔥 NOVO BOTÃO: LUTAS AO VIVO */}
               <Link href={`/evento/${evento.id}/ao-vivo`} className="bg-red-900/30 hover:bg-red-800/50 border border-red-500/50 text-red-200 font-black uppercase tracking-widest text-[10px] md:text-xs px-3 py-2.5 md:px-6 md:py-3.5 rounded-lg transition-all text-center flex-1 md:flex-none flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(239,68,68,0.2)]">
@@ -169,7 +191,7 @@ export default function EventoDetalhesPage() {
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
                 </span>
-                Ao Vivo
+                Lutas ao Vivo
               </Link>
 
               <Link href={`/evento/${evento.id}/publico`} className="bg-white/5 hover:bg-white/10 border border-white/10 text-white font-bold uppercase tracking-widest text-[10px] md:text-xs px-3 py-2.5 md:px-6 md:py-3.5 rounded-lg transition-all text-center flex-1 md:flex-none">
@@ -372,31 +394,49 @@ export default function EventoDetalhesPage() {
               <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-600 to-red-400 animate-pulse"></div>
               <div className="absolute -top-10 -right-10 md:-top-20 md:-right-20 w-32 h-32 md:w-40 md:h-40 bg-red-600/10 blur-[40px] md:blur-[50px] rounded-full animate-pulse"></div>
 
-              <h3 className="text-sm md:text-base font-black text-white mb-4 md:mb-6 uppercase tracking-wide flex items-center gap-2 relative z-10">
+              <h3 className="text-sm md:text-base font-black text-white mb-2 uppercase tracking-wide flex items-center gap-2 relative z-10">
                 <svg className="w-4 h-4 md:w-5 md:h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                Checklist do Atleta
+                Etapas do Evento
               </h3>
+              <p className="relative z-10 mb-5 text-[9px] font-medium leading-relaxed text-zinc-500 md:text-[10px]">
+                Veja o que já terminou, o momento atual e o que acontece em seguida.
+              </p>
 
-              <div className="space-y-4 md:space-y-5 relative z-10">
-                <div className="border-l-2 border-red-500 pl-3 md:pl-4">
-                  <span className="text-red-400 text-[9px] md:text-[10px] font-black uppercase tracking-widest block mb-0.5">Prazo de Inscrições</span>
-                  <p className="text-white text-[11px] md:text-xs font-medium">Até {formatarDataHora(evento.data_fim_inscricoes)}</p>
-                  <p className="text-zinc-500 text-[9px] md:text-[10px] mt-0.5">Vagas podem esgotar antes da data.</p>
-                </div>
-                <div className="border-l-2 border-zinc-700 pl-3 md:pl-4">
-                  <span className="text-zinc-400 text-[9px] md:text-[10px] font-black uppercase tracking-widest block mb-0.5">Vencimento (Pix/Boleto)</span>
-                  <p className="text-white text-[11px] md:text-xs font-medium">Até {formatarDataHora(evento.data_fim_pagamento)}</p>
-                  <p className="text-zinc-500 text-[9px] md:text-[10px] mt-0.5">Pagamento pendente não garante vaga.</p>
-                </div>
-                <div className="border-l-2 border-zinc-700 pl-3 md:pl-4">
-                  <span className="text-zinc-400 text-[9px] md:text-[10px] font-black uppercase tracking-widest block mb-0.5">Checagem de Chaves</span>
-                  <p className="text-white text-[11px] md:text-xs font-medium">{evento.data_inicio_checagem ? `Abre: ${formatarDataHora(evento.data_inicio_checagem)}` : 'Em breve'}</p>
-                  <p className="text-zinc-500 text-[9px] md:text-[10px] mt-0.5">{evento.data_fim_checagem ? `Fecha: ${formatarDataHora(evento.data_fim_checagem)}` : 'Fique atento ao prazo.'}</p>
-                </div>
-                <div className="border-l-2 border-zinc-700 pl-3 md:pl-4">
-                  <span className="text-zinc-400 text-[9px] md:text-[10px] font-black uppercase tracking-widest block mb-0.5">Divulgação das Chaves</span>
-                  <p className="text-white text-[11px] md:text-xs font-medium">{formatarDataHora(evento.data_divulgacao_chaves)}</p>
-                </div>
+              <div className="relative z-10 space-y-1">
+                {linhaDoTempo.map((marco, indice) => (
+                  <div key={marco.id} className="relative flex gap-3 pb-4 last:pb-0">
+                    {indice < linhaDoTempo.length - 1 && (
+                      <div className={`absolute left-[7px] top-4 h-full w-px ${marco.estado === "concluido" ? "bg-emerald-500/50" : "bg-white/10"}`} />
+                    )}
+                    <div className={`relative z-10 mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
+                      marco.estado === "concluido"
+                        ? "border-emerald-400 bg-emerald-500 text-black"
+                        : marco.estado === "atual"
+                          ? "border-red-400 bg-red-500 shadow-[0_0_12px_rgba(239,68,68,0.65)]"
+                          : "border-zinc-700 bg-[#0a0a0e]"
+                    }`}>
+                      {marco.estado === "concluido" && (
+                        <svg viewBox="0 0 20 20" fill="none" className="h-2.5 w-2.5" aria-hidden="true">
+                          <path d="m4 10 3.5 3.5L16 5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={`text-[9px] font-black uppercase tracking-widest md:text-[10px] ${
+                          marco.estado === "atual" ? "text-red-400" : marco.estado === "concluido" ? "text-emerald-400" : "text-zinc-500"
+                        }`}>
+                          {marco.titulo}
+                        </span>
+                        {marco.estado === "atual" && (
+                          <span className="rounded bg-red-500/15 px-1.5 py-0.5 text-[7px] font-black uppercase tracking-widest text-red-300">Agora</span>
+                        )}
+                      </div>
+                      <p className="mt-0.5 text-[10px] font-semibold text-white md:text-[11px]">{marco.periodo}</p>
+                      <p className="mt-0.5 text-[8px] leading-relaxed text-zinc-600 md:text-[9px]">{marco.observacao}</p>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           </div>

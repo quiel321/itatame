@@ -5,40 +5,52 @@ import Link from "next/link";
 import { useEffect, useMemo, useState, useRef } from "react";
 import { CalendarDays, ChevronRight, MapPin, MonitorDot, Search, Trophy } from "lucide-react";
 import { supabase } from "./lib/supabase";
+import { obterEtapaEvento, type TomEtapaEvento } from "./lib/evento-etapas";
 
-function dataOperacional(valor?: string | null, fimDoDia = false) {
-  if (!valor) return null;
-  const somenteData = /^\d{4}-\d{2}-\d{2}$/.test(valor);
-  const data = new Date(somenteData ? `${valor}T${fimDoDia ? '23:59:59' : '00:00:00'}` : valor);
-  return Number.isNaN(data.getTime()) ? null : data;
-}
-
-function etapaInscricao(evento: any) {
-  const agora = new Date();
-  const inicio = dataOperacional(evento.data_inicio_inscricoes);
-  const fim = dataOperacional(evento.data_fim_inscricoes, true);
-  const status = String(evento.status || '').toUpperCase();
-  const formatar = (data: Date) => data.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-
-  if (status === 'ENCERRADO' || (fim && agora > fim)) {
-    return { titulo: 'Inscrições encerradas', detalhe: 'Consulte os detalhes do evento', classe: 'bg-zinc-800 text-zinc-300' };
-  }
-  if ((inicio && agora < inicio) || (!inicio && status === 'EM BREVE')) {
-    return { titulo: 'Inscrições em breve', detalhe: inicio ? `Abertura em ${formatar(inicio)}` : 'Acompanhe a abertura', classe: 'bg-cyan-600 text-black' };
-  }
-
-  const lotes = [
-    { numero: 1, limite: dataOperacional(evento.lote1_data_fim, true) },
-    { numero: 2, limite: dataOperacional(evento.lote2_data_fim, true) },
-    { numero: 3, limite: dataOperacional(evento.lote3_data_fim, true) },
-  ].filter((lote): lote is { numero: number; limite: Date } => Boolean(lote.limite));
-  const loteAtual = lotes.find((lote) => agora <= lote.limite);
-
-  if (loteAtual) {
-    return { titulo: `Inscrever-se · ${loteAtual.numero}º lote`, detalhe: `Condição válida até ${formatar(loteAtual.limite)}`, classe: 'bg-emerald-600 text-black' };
-  }
-  return { titulo: 'Inscreva-se agora', detalhe: fim ? `Inscrições até ${formatar(fim)}` : 'Garanta sua vaga', classe: 'bg-red-600 text-white' };
-}
+const estiloEtapa: Record<TomEtapaEvento, { borda: string; badge: string; barra: string; acao: string }> = {
+  cyan: {
+    borda: "hover:border-cyan-500/40",
+    badge: "border-cyan-400/30 bg-cyan-500/15 text-cyan-300",
+    barra: "bg-cyan-400",
+    acao: "border-cyan-500/20 bg-cyan-500/10 text-cyan-200",
+  },
+  emerald: {
+    borda: "hover:border-emerald-500/40",
+    badge: "border-emerald-400/30 bg-emerald-500/15 text-emerald-300",
+    barra: "bg-emerald-400",
+    acao: "border-emerald-500/20 bg-emerald-500/10 text-emerald-200",
+  },
+  amber: {
+    borda: "hover:border-amber-500/40",
+    badge: "border-amber-400/30 bg-amber-500/15 text-amber-300",
+    barra: "bg-amber-400",
+    acao: "border-amber-500/20 bg-amber-500/10 text-amber-200",
+  },
+  violet: {
+    borda: "hover:border-violet-500/40",
+    badge: "border-violet-400/30 bg-violet-500/15 text-violet-300",
+    barra: "bg-violet-400",
+    acao: "border-violet-500/20 bg-violet-500/10 text-violet-200",
+  },
+  blue: {
+    borda: "hover:border-blue-500/40",
+    badge: "border-blue-400/30 bg-blue-500/15 text-blue-300",
+    barra: "bg-blue-400",
+    acao: "border-blue-500/20 bg-blue-500/10 text-blue-200",
+  },
+  red: {
+    borda: "hover:border-red-500/40",
+    badge: "border-red-400/30 bg-red-500/15 text-red-300",
+    barra: "bg-red-500",
+    acao: "border-red-500/20 bg-red-500/10 text-red-200",
+  },
+  zinc: {
+    borda: "hover:border-white/20",
+    badge: "border-white/15 bg-zinc-700/70 text-zinc-200",
+    barra: "bg-zinc-500",
+    acao: "border-white/10 bg-zinc-800 text-zinc-300",
+  },
+};
 
 export default function Home() {
   const [eventos, setEventos] = useState<any[]>([]);
@@ -64,15 +76,6 @@ export default function Home() {
       });
     }
   }, []);
-
-  const getCorTema = (status: string) => {
-    const s = status?.toUpperCase() || "ABERTO";
-    if (s === "OFICIAL") return "red";
-    if (s === "ABERTO") return "green";
-    if (s === "EM BREVE") return "cyan";
-    if (s === "ENCERRADO") return "zinc";
-    return "green";
-  };
 
   const formatarData = (dataStr: string) => {
     if (!dataStr) return "Data a definir";
@@ -202,23 +205,19 @@ export default function Home() {
           )}
 
           {eventosFiltrados.map((evento) => {
-            const cor = getCorTema(evento.status);
-            const statusTexto = evento.status?.toUpperCase() || "ABERTO";
-            const borderClass = cor === "red" ? "hover:border-red-500/40" : cor === "green" ? "hover:border-emerald-500/40" : cor === "cyan" ? "hover:border-cyan-500/40" : "hover:border-white/20";
-            const badgeClass = cor === "red" ? "bg-red-600 text-white" : cor === "green" ? "bg-emerald-600 text-black" : cor === "cyan" ? "bg-cyan-600 text-black" : "bg-zinc-700 text-white";
-            const btnClass = cor === "red" ? "bg-red-600 hover:bg-red-500 text-white" : cor === "green" ? "bg-emerald-600 hover:bg-emerald-500 text-white" : cor === "cyan" ? "bg-cyan-600 hover:bg-cyan-500 text-white" : "bg-zinc-800 hover:bg-zinc-700 text-zinc-300";
-            const etapa = etapaInscricao(evento);
+            const etapa = obterEtapaEvento(evento);
+            const estilo = estiloEtapa[etapa.tom];
 
             return (
               <Link 
                 href={`/evento/${evento.id}`} 
                 key={evento.id}
-                className={`group flex flex-col bg-[#0a0a0e] border border-white/10 rounded-3xl overflow-hidden transition-all duration-500 shadow-xl hover:shadow-[0_10px_40px_rgba(0,0,0,0.5)] hover:-translate-y-1 ${borderClass}`}
+                className={`group flex flex-col bg-[#0a0a0e] border border-white/10 rounded-3xl overflow-hidden transition-all duration-500 shadow-xl hover:shadow-[0_10px_40px_rgba(0,0,0,0.5)] hover:-translate-y-1 ${estilo.borda}`}
               >
                 {/* Banner Largo do Evento */}
                 <div className="relative h-48 md:h-56 overflow-hidden bg-black">
-                  <div className={`absolute top-4 left-4 z-20 rounded-lg px-3 py-1.5 text-[9px] font-black uppercase tracking-widest shadow-lg ${badgeClass}`}>
-                     {statusTexto}
+                  <div className={`absolute top-4 left-4 z-20 rounded-lg border px-3 py-1.5 text-[9px] font-black uppercase tracking-widest shadow-lg backdrop-blur-md ${estilo.badge}`}>
+                     {etapa.titulo}
                   </div>
                   <img 
                     src={evento.banner_url || "/arena.png"} 
@@ -247,10 +246,20 @@ export default function Home() {
                     )}
                   </div>
 
-                  <div className={`flex w-full items-center justify-center gap-2 rounded-xl py-3 text-center transition-colors ${etapa.classe || btnClass}`}>
+                  <div className="mb-3">
+                    <div className="mb-1.5 flex items-center justify-between text-[8px] font-black uppercase tracking-[0.16em] text-zinc-500">
+                      <span>{etapa.indice === 0 ? "Preparação" : `Etapa ${etapa.indice} de ${etapa.totalEtapas}`}</span>
+                      <span>{etapa.progresso}%</span>
+                    </div>
+                    <div className="h-1 overflow-hidden rounded-full bg-white/5">
+                      <div className={`h-full rounded-full transition-all ${estilo.barra}`} style={{ width: `${etapa.progresso}%` }} />
+                    </div>
+                  </div>
+
+                  <div className={`flex w-full items-center justify-center gap-2 rounded-xl border py-3 text-center transition-colors ${estilo.acao}`}>
                     <span className="flex flex-col">
                       <strong className="text-[10px] font-black uppercase tracking-widest">{etapa.titulo}</strong>
-                      <small className="mt-0.5 text-[8px] font-bold uppercase tracking-wider opacity-75">{etapa.detalhe}</small>
+                      <small className="mt-0.5 text-[8px] font-bold tracking-wide opacity-75">{etapa.detalhe}</small>
                     </span>
                     <ChevronRight size={14} />
                   </div>

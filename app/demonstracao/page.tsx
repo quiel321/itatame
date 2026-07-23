@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { BellRing, CalendarDays, CheckCircle2, ChevronRight, ClipboardCheck, Clock, CreditCard, FileText, Medal, MonitorDot, Radio, ShieldCheck, Smartphone, Swords, Trophy, Users, WalletCards } from "lucide-react";
 
 const whatsappLink = "https://wa.me/5565993059729?text=Olá!%20Quero%20agendar%20uma%20demonstração%20do%20sistema%20iTatame.";
@@ -20,16 +19,16 @@ export default function DemonstracaoPage() {
         <div className="relative z-10 w-full max-w-5xl mx-auto flex flex-col items-center text-center">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-red-500/20 bg-red-500/5 px-2.5 py-1 text-[8px] md:text-[9px] font-extrabold uppercase tracking-[0.2em] text-red-400 backdrop-blur-md mb-4 md:mb-5 shadow-[0_0_15px_rgba(239,68,68,0.1)]">
             <span className="w-1 h-1 rounded-full bg-red-500 animate-pulse"></span>
-            A Nova Geração de Campeonatos
+            Plataforma completa para artes marciais
           </span>
           
           <h1 className="text-3xl sm:text-4xl md:text-[52px] font-extrabold uppercase tracking-tighter leading-[0.95] max-w-3xl drop-shadow-xl">
-            DA INSCRIÇÃO AO PÓDIO.<br/>
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-red-800">TUDO CONECTADO.</span>
+            Sistema de campeonatos de{" "}<br/>
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-red-800">Jiu-Jitsu e lutas.</span>
           </h1>
           
-          <p className="mt-4 md:mt-5 max-w-xl text-[11px] md:text-sm leading-relaxed text-zinc-400 font-medium px-2">
-            Esqueça as planilhas isoladas e a confusão. O iTatame centraliza inscrição, chaves oficiais, operação de arena e painéis ao vivo em uma infraestrutura distribuída, rápida e protegida.
+          <p className="mt-4 md:mt-5 max-w-2xl text-[11px] md:text-sm leading-relaxed text-zinc-400 font-medium px-2">
+            Organize inscrições, pagamentos, checagem, categorias, chaves, chamada de atletas, mesários, placares, ranking e resultados em uma única plataforma para campeonatos de artes marciais.
           </p>
           
           <div className="mt-5 md:mt-6 w-full max-w-[280px] md:max-w-none">
@@ -52,11 +51,39 @@ export default function DemonstracaoPage() {
       <section className="relative px-4 py-8 md:px-6 md:py-16 border-b border-white/5 bg-[#050505]">
         <div className="absolute top-0 right-0 w-[250px] h-[250px] md:w-[400px] md:h-[400px] bg-blue-600/5 blur-[80px] md:blur-[120px] rounded-full pointer-events-none"></div>
         <div className="max-w-5xl mx-auto relative z-10">
-          <Header eyebrow="Visão Geral" title="Tecnologia feita para o dia da competição" text="Elimine a margem de erro manual com comunicação em tempo real, rotinas redundantes e telas desenhadas para operar com rapidez, sem revelar a infraestrutura interna do produto." />
+          <Header eyebrow="Gestão de ponta a ponta" title="Tudo o que um campeonato de luta precisa" text="O iTatame acompanha a competição desde a abertura das inscrições até o pódio, com telas claras para organização, atletas e equipe operacional." />
           <div className="mt-6 md:mt-8 grid gap-3 md:gap-4 md:grid-cols-3">
-            <Feature icon={<WalletCards size={14} />} title="Vendas & Financeiro" items={["Conciliação inteligente", "Lotes automáticos", "Visão financeira centralizada"]} />
-            <Feature icon={<Swords size={14} />} title="Chaveamento Inteligente" items={["Separação anti-equipe", "Triangulares e eliminatórias", "Avanço automático seguro"]} highlight />
-            <Feature icon={<Radio size={14} />} title="Experiência de Arena" items={["Check-in, Chamador e Mesário", "Placar e telão sincronizados", "Alertas progressivos no celular"]} />
+            <Feature icon={<WalletCards size={14} />} title="Inscrições & Financeiro" items={["Lotes e prazos automáticos", "Conciliação de pagamentos", "Visão financeira centralizada"]} />
+            <Feature icon={<Swords size={14} />} title="Chaveamento de Lutas" items={["Triangulares e eliminatórias", "Separação de atletas da mesma equipe", "Avanço seguro até as finais"]} highlight />
+            <Feature icon={<Radio size={14} />} title="Operação de Arena" items={["Check-in, Chamador e Mesário", "Placar e telão sincronizados", "Alertas de luta para o atleta"]} />
+          </div>
+        </div>
+      </section>
+
+      <section className="border-b border-white/5 bg-[#020202] px-4 py-10 md:px-6 md:py-16">
+        <div className="mx-auto grid max-w-5xl gap-6 lg:grid-cols-[0.8fr_1.2fr] lg:items-start">
+          <Header
+            eyebrow="Fluxo oficial"
+            title="Cada fase do evento fica clara"
+            text="O público vê o estado atual e o próximo passo. A organização trabalha com prazos objetivos, reduzindo dúvidas no atendimento e erros de operação."
+          />
+          <div className="grid gap-2 sm:grid-cols-2">
+            {[
+              ["01", "Inscrições abertas", "Lotes, vagas, categorias e pagamentos com prazo visível."],
+              ["02", "Checagem dos atletas", "Revisão de peso, faixa, equipe e categoria antes das chaves."],
+              ["03", "Chaveamento", "Validação dos confrontos após o encerramento das correções."],
+              ["04", "Chaves publicadas", "Atletas consultam adversários, horários e caminho até o pódio."],
+              ["05", "Lutas ao vivo", "Chamador, mesários, placares e resultados trabalham conectados."],
+              ["06", "Resultados oficiais", "Pódios e ranking permanecem disponíveis após o campeonato."],
+            ].map(([numero, titulo, texto]) => (
+              <article key={numero} className="rounded-xl border border-white/5 bg-white/[0.02] p-4">
+                <div className="mb-2 flex items-center gap-2">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-md bg-red-500/10 text-[8px] font-black text-red-400">{numero}</span>
+                  <h2 className="text-[11px] font-extrabold uppercase tracking-wide text-white">{titulo}</h2>
+                </div>
+                <p className="text-[10px] font-medium leading-relaxed text-zinc-500">{texto}</p>
+              </article>
+            ))}
           </div>
         </div>
       </section>
@@ -64,14 +91,14 @@ export default function DemonstracaoPage() {
       {/* 📋 STEP-BY-STEP */}
       <section className="px-4 py-8 md:px-6 md:py-16 bg-[#020202]">
         <div className="max-w-5xl mx-auto">
-          <Header eyebrow="Implantação Express" title="Ao Pódio em 5 Etapas" text="Simples para quem organiza e claro para quem compete. Zero treinamento complexo." />
+          <Header eyebrow="Implantação orientada" title="Do planejamento ao pódio" text="Um fluxo simples para quem organiza e previsível para quem compete." />
           <div className="mt-6 md:mt-8 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 relative">
             <div className="hidden lg:block absolute top-6 left-[10%] right-[10%] h-[1px] bg-gradient-to-r from-red-600/0 via-red-600/30 to-red-600/0"></div>
-            <Step number="01" icon={<FileText size={14} />} title="Setup" text="Lotes e regras." />
+            <Step number="01" icon={<FileText size={14} />} title="Planejamento" text="Categorias, lotes e regras." />
             <Step number="02" icon={<CreditCard size={14} />} title="Inscrições" text="Pix e QR Code." />
-            <Step number="03" icon={<ClipboardCheck size={14} />} title="Checagem" text="Correções de peso." />
-            <Step number="04" icon={<Trophy size={14} />} title="Chaves" text="Sorteio oficial." />
-            <Step number="05" icon={<MonitorDot size={14} />} title="Ginásio" text="Mesários e placar." />
+            <Step number="03" icon={<ClipboardCheck size={14} />} title="Checagem" text="Revisão dos atletas." />
+            <Step number="04" icon={<Trophy size={14} />} title="Chaveamento" text="Confrontos e cronograma." />
+            <Step number="05" icon={<MonitorDot size={14} />} title="Arena" text="Chamadas, placares e pódios." />
           </div>
         </div>
       </section>
@@ -79,11 +106,11 @@ export default function DemonstracaoPage() {
       {/* 📱 MOCKS COMPACTADOS */}
       <section className="relative px-4 py-8 md:px-6 md:py-16 border-t border-white/5 bg-[#050505] overflow-hidden">
         <div className="max-w-5xl mx-auto relative z-10">
-          <Header eyebrow="Telas Principais" title="Controle na Palma da Mão" text="Ambientes focados. O Organizador gere, o Mesário opera e o Atleta compete." />
+          <Header eyebrow="Telas Principais" title="Controle na palma da mão" text="Ambientes focados: o organizador gerencia, a equipe opera e o atleta acompanha tudo pelo celular." />
           <div className="mt-6 md:mt-8 grid gap-3 md:gap-4 md:grid-cols-2">
             <Preview title="Admin Organizador" tag="Gestão Total" accent="red"><OrganizerMock /></Preview>
             <Preview title="Mesa do Mesário" tag="Tatame Mobile" accent="cyan"><StaffMock /></Preview>
-            <Preview title="Painel Ao Vivo" tag="Display p/ TVs" accent="blue"><LiveMock /></Preview>
+            <Preview title="Lutas ao Vivo" tag="Display p/ TVs" accent="blue"><LiveMock /></Preview>
             <Preview title="Perfil Atleta" tag="Alertas & QR Code" accent="green"><AthleteMock /></Preview>
           </div>
         </div>
@@ -97,10 +124,10 @@ export default function DemonstracaoPage() {
             <Trophy size={16} className="text-red-500 md:w-5 md:h-5" />
           </div>
           <h2 className="text-xl md:text-4xl font-extrabold text-white uppercase tracking-tighter leading-tight mb-3 md:mb-4 px-4">
-            A sua Arena mais Inteligente Começa Aqui.
+            Profissionalize o seu próximo campeonato.
           </h2>
           <p className="text-zinc-400 text-[11px] md:text-sm font-medium mb-6 md:mb-8 max-w-lg px-2">
-            O iTatame é a solução líder para profissionalizar competições e acabar com o retrabalho.
+            Conheça o fluxo completo do iTatame para campeonatos de Jiu-Jitsu, No-Gi, Judô e outras artes marciais.
           </p>
           <a href={whatsappLink} target="_blank" rel="noopener noreferrer" className="group inline-flex w-full max-w-[280px] md:w-auto h-11 md:h-12 items-center justify-center gap-2 rounded-xl bg-red-600 px-5 md:px-6 text-[10px] md:text-[11px] font-extrabold uppercase tracking-[0.14em] text-white shadow-[0_0_20px_rgba(239,68,68,0.2)] transition-all hover:bg-red-500 hover:-translate-y-0.5">
             Falar com um Consultor <ChevronRight size={14} className="transition-transform group-hover:translate-x-1" />
