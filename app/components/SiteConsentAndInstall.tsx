@@ -78,7 +78,7 @@ export default function SiteConsentAndInstall() {
 
   useEffect(() => {
     if (!mostrarInstalacao || instalando) return;
-    const timer = window.setTimeout(() => setMostrarInstalacao(false), 5000);
+    const timer = window.setTimeout(() => setMostrarInstalacao(false), 10000);
     return () => window.clearTimeout(timer);
   }, [instalando, mostrarInstalacao]);
 
@@ -153,7 +153,7 @@ export default function SiteConsentAndInstall() {
 
             <div className="mt-2.5 flex items-center justify-between gap-2 text-[8px] font-bold uppercase tracking-wider text-zinc-600">
               <span className="flex items-center gap-1.5"><ShieldCheck size={11} /> Instalação segura</span>
-              <span>Fecha em 5s</span>
+              <span>Fecha em 10s</span>
             </div>
           </div>
         </aside>

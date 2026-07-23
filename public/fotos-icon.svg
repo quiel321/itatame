@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="iTatame Fotos">
+  <rect width="512" height="512" rx="112" fill="#050505"/>
+  <path d="M104 151c0-20 16-36 36-36h42l23-34h102l23 34h42c20 0 36 16 36 36v225c0 20-16 36-36 36H140c-20 0-36-16-36-36V151Z" fill="#ef232d"/>
+  <circle cx="256" cy="258" r="91" fill="#050505"/>
+  <circle cx="256" cy="258" r="55" fill="#22d3ee"/>
+  <circle cx="256" cy="258" r="29" fill="#050505"/>
+  <circle cx="355" cy="163" r="18" fill="#fff"/>
+</svg>

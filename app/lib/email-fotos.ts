@@ -25,7 +25,7 @@ function formatarMoeda(centavos: number | null | undefined) {
 }
 
 function baseUrl() {
-  return process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_SITE_URL || "https://itatame.com.br";
+  return process.env.NEXT_PUBLIC_FOTOS_URL || "https://fotos.itatame.com.br";
 }
 
 export async function enviarEmailPedidoFotosConfirmado(supabase: SupabaseClient, pedidoId: string) {
@@ -70,7 +70,7 @@ export async function enviarEmailPedidoFotosConfirmado(supabase: SupabaseClient,
   const evento = primeiraRelacao(reservado.foto_eventos);
   const itens = reservado.foto_pedido_itens || [];
   const nome = reservado.comprador_nome || email.split("@")[0] || "Cliente";
-  const linkFotos = `${baseUrl()}/fotos/minhas-compras?pedido=${encodeURIComponent(pedidoId)}`;
+  const linkFotos = `${baseUrl()}/minhas-compras?pedido=${encodeURIComponent(pedidoId)}`;
   const remetente = process.env.FOTOS_EMAIL_FROM || "iTatame Fotos <suporte@itatame.com.br>";
 
   const { data, error } = await resend.emails.send({

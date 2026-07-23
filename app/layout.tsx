@@ -9,12 +9,24 @@ const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_BASE_URL || "https://www.itatame.com.br"),
   title: "iTatame - Sistema de Campeonatos",
   description: "A melhor plataforma para gestão, chaves e transmissões ao vivo de campeonatos de lutas.",
+  applicationName: "iTatame",
   openGraph: {
     title: "iTatame - Sistema de Campeonatos",
     description: "Crie eventos, gerencie inscrições, monte chaves e transmita ao vivo. Leve o iTatame para o seu evento!",
+    url: "/",
+    siteName: "iTatame - Sistema de Campeonatos",
+    locale: "pt_BR",
+    type: "website",
     images: ['/capa-compartilhamento.jpg'], 
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "iTatame - Sistema de Campeonatos",
+    description: "Campeonatos, inscrições, chaves, ranking e acompanhamento em tempo real.",
+    images: ["/capa-compartilhamento.jpg"],
   },
 };
 
@@ -83,7 +95,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
                   </li>
                   {/* LINK DO ITATAME FOTOS ADICIONADO AQUI 👇 */}
                   <li>
-                    <Link href="/fotos" className="flex items-center gap-2 text-zinc-400 hover:text-blue-400 text-xs font-bold transition-colors">
+                    <Link href={process.env.NEXT_PUBLIC_FOTOS_URL || "https://fotos.itatame.com.br"} className="flex items-center gap-2 text-zinc-400 hover:text-blue-400 text-xs font-bold transition-colors">
                       iTatame Fotos
                       <span className="bg-blue-500/10 border border-blue-500/30 text-blue-400 text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider">Novo</span>
                     </Link>

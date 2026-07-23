@@ -25,6 +25,7 @@ function LogoFotos() {
 }
 
 export default function FotosNavbar() {
+  const sitePrincipal = process.env.NEXT_PUBLIC_BASE_URL || "https://www.itatame.com.br";
   const [nome, setNome] = useState<string | null>(null);
   const [perfil, setPerfil] = useState<PerfilFotos | null>(null);
   const [menuAberto, setMenuAberto] = useState(false);
@@ -106,7 +107,7 @@ export default function FotosNavbar() {
           <Link href="/fotos/fotografo" className="cursor-pointer hover:text-red-500 transition-colors">Fotógrafo</Link>
           <Link href="/fotos/organizador" className="cursor-pointer hover:text-red-500 transition-colors">Organizador</Link>
           <Link href="/fotos/precos" className="cursor-pointer hover:text-red-500 transition-colors">Preços</Link>
-          <Link href="/fotos" className="cursor-pointer hover:text-white transition-colors">iTatame</Link>
+          <Link href={sitePrincipal} className="cursor-pointer hover:text-white transition-colors">iTatame</Link>
         </nav>
         
         {/* 🔥 BOTÃO ÚNICO INTELIGENTE DESKTOP */}
@@ -156,7 +157,7 @@ export default function FotosNavbar() {
             <Link href="/fotos/fotografo" onClick={fecharMenu} className="cursor-pointer hover:text-red-500 transition-colors border-b border-white/5 pb-4">Área do Fotógrafo</Link>
             <Link href="/fotos/organizador" onClick={fecharMenu} className="cursor-pointer hover:text-red-500 transition-colors border-b border-white/5 pb-4">Para Organizadores</Link>
             <Link href="/fotos/precos" onClick={fecharMenu} className="cursor-pointer hover:text-red-500 transition-colors border-b border-white/5 pb-4">Preços e Condições</Link>
-            <Link href="/fotos" onClick={fecharMenu} className="cursor-pointer hover:text-white transition-colors pb-4">Voltar para o iTatame</Link>
+            <Link href={sitePrincipal} onClick={fecharMenu} className="cursor-pointer hover:text-white transition-colors pb-4">Voltar para o iTatame</Link>
           </nav>
         </div>
       )}

@@ -6,6 +6,7 @@ import Link from "next/link";
 import FotosNavbar from "./FotosNavbar";
 
 export default function FotosShell({ children }: { children: ReactNode }) {
+  const sitePrincipal = process.env.NEXT_PUBLIC_BASE_URL || "https://www.itatame.com.br";
   useEffect(() => {
     document.body.classList.add("fotos-route");
     return () => document.body.classList.remove("fotos-route");
@@ -25,7 +26,7 @@ export default function FotosShell({ children }: { children: ReactNode }) {
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
           
           <div className="flex flex-col items-center md:items-start gap-2">
-            <Link href="/" aria-label="Voltar ao site do Itatame" title="Voltar ao site do Itatame">
+            <Link href={sitePrincipal} aria-label="Voltar ao site do Itatame" title="Voltar ao site do Itatame">
               <img src="/logo.svg" alt="iTatame" className="h-5 md:h-6 w-auto opacity-50 grayscale hover:grayscale-0 hover:opacity-100 transition-all" />
             </Link>
             <p className="text-[9px] text-zinc-600 font-bold uppercase tracking-widest">
@@ -34,7 +35,7 @@ export default function FotosShell({ children }: { children: ReactNode }) {
           </div>
 
           <div className="flex flex-wrap items-center justify-center gap-6 text-[9px] font-black uppercase tracking-widest text-zinc-600">
-            <Link href="/" className="hover:text-red-500 transition-colors">Voltar ao Sistema</Link>
+            <Link href={sitePrincipal} className="hover:text-red-500 transition-colors">Voltar ao Sistema</Link>
             <Link href="/fotos/precos" className="hover:text-white transition-colors">Preços</Link>
             <Link href="/fotos/termos-de-uso" className="hover:text-white transition-colors">Termos de Uso</Link>
             <Link href="/fotos/privacidade" className="hover:text-white transition-colors">Privacidade</Link>
