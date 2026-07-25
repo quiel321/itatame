@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useEffect, useState, useMemo } from "react";
@@ -51,7 +51,7 @@ export default function FotosCompradorPage() {
       }
 
       setResumo({
-        nome: perfil?.nome || auth.user.user_metadata?.nome_completo || auth.user.email?.split("@")[0] || "Atleta",
+        nome: perfil?.nome || auth.user.user_metadata?.nome_completo || auth.user.email?.split("@")[0] || "Cliente",
         email: perfil?.email || auth.user.email || "",
         pedidos: lista.length,
         pendentes: lista.filter((pedido) => pedido.status !== "pago").length,
@@ -70,15 +70,15 @@ export default function FotosCompradorPage() {
   return (
     <FotosShell>
       <main className="min-h-screen bg-[#050505] text-white font-sans relative overflow-x-hidden w-full pb-12">
-        
+
         {/* 🚀 HERO SECTION (Cabeçalho Premium Red - Tamanhos Padronizados) */}
-        <section className="border-b border-white/5 bg-[radial-gradient(circle_at_15%_0%,rgba(239,68,68,0.12),transparent_40%),linear-gradient(180deg,#101014,#050505)] w-full">
+        <section className="border-b border-white/5 bg-[radial-gradient(circle_at_15%_0%,rgba(255,90,31,0.12),transparent_40%),linear-gradient(180deg,#101014,#050505)] w-full">
           <div className="mx-auto max-w-6xl px-4 py-6 md:px-6 md:py-8">
-            
+
             <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between mb-4">
               <div className="min-w-0">
-                <p className="inline-flex items-center gap-1.5 rounded-md border border-red-500/20 bg-red-500/10 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.2em] text-red-400 mb-2 shadow-sm">
-                  <UserRound size={12} /> Painel do Atleta
+                <p className="inline-flex items-center gap-1.5 rounded-md border border-retratt/20 bg-retratt/10 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.2em] text-retratt mb-2 shadow-sm">
+                  <UserRound size={12} /> Painel do Cliente
                 </p>
                 <h1 className="text-2xl font-black uppercase tracking-tight md:text-4xl drop-shadow-sm truncate">
                   {carregando ? "Carregando..." : `Olá, ${primeiroNome}!`}
@@ -87,10 +87,10 @@ export default function FotosCompradorPage() {
                   Acompanhe suas compras, pague pedidos pendentes e baixe suas fotos.
                 </p>
               </div>
-              
+
               {/* Botões Menores e Alinhados para Mobile/Desktop */}
               <div className="flex flex-row items-center gap-2 shrink-0 w-full md:w-auto">
-                <Link href="/fotos" className="cursor-pointer flex-1 md:flex-none inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-red-600 px-4 text-[9px] font-black uppercase tracking-widest text-white hover:bg-red-500 transition-colors shadow-sm">
+                <Link href="/fotos" className="cursor-pointer flex-1 md:flex-none inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-retratt px-4 text-[9px] font-black uppercase tracking-widest text-white hover:bg-retratt transition-colors shadow-sm">
                   Encontrar fotos <Images size={12} className="shrink-0" />
                 </Link>
                 <button onClick={deslogar} className="cursor-pointer flex-1 md:flex-none inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/5 px-4 text-[9px] font-black uppercase tracking-widest text-zinc-300 hover:bg-white/10 hover:text-white transition-all shadow-sm">
@@ -101,12 +101,12 @@ export default function FotosCompradorPage() {
 
             {/* 📊 GRID DE RESUMO (Glassmorphism Padronizado) */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6">
-              
-              <div className="rounded-xl border border-red-500/20 bg-red-500/5 backdrop-blur-sm p-4 flex flex-col justify-between hover:border-red-500/30 transition-colors">
+
+              <div className="rounded-xl border border-retratt/20 bg-retratt/5 backdrop-blur-sm p-4 flex flex-col justify-between hover:border-retratt/30 transition-colors">
                 <div className="flex items-center justify-between mb-2">
-                  <p className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-zinc-400"><ShoppingCart size={12} className="text-red-400" /> Carrinho</p>
+                  <p className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-zinc-400"><ShoppingCart size={12} className="text-retratt" /> Carrinho</p>
                 </div>
-                <p className="text-2xl font-black text-red-400 leading-none">{carregando ? "-" : itensCarrinho}</p>
+                <p className="text-2xl font-black text-retratt leading-none">{carregando ? "-" : itensCarrinho}</p>
               </div>
 
               <div className="rounded-xl border border-white/5 bg-[#0a0a0e]/80 backdrop-blur-sm p-4 flex flex-col justify-between hover:border-white/10 transition-colors">
@@ -118,16 +118,16 @@ export default function FotosCompradorPage() {
 
               <div className="rounded-xl border border-white/5 bg-[#0a0a0e]/80 backdrop-blur-sm p-4 flex flex-col justify-between hover:border-white/10 transition-colors">
                 <div className="flex items-center justify-between mb-2">
-                  <p className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-zinc-500"><AlertCircle size={12} className="text-amber-400" /> Aguardando</p>
+                  <p className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-zinc-500"><AlertCircle size={12} className="text-retratt" /> Aguardando</p>
                 </div>
-                <p className="text-2xl font-black text-amber-400 leading-none">{carregando ? "-" : resumo.pendentes}</p>
+                <p className="text-2xl font-black text-retratt leading-none">{carregando ? "-" : resumo.pendentes}</p>
               </div>
 
               <div className="rounded-xl border border-white/5 bg-[#0a0a0e]/80 backdrop-blur-sm p-4 flex flex-col justify-between hover:border-white/10 transition-colors">
                 <div className="flex items-center justify-between mb-2">
-                  <p className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-zinc-500"><Download size={12} className="text-cyan-400" /> Liberadas</p>
+                  <p className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-zinc-500"><Download size={12} className="text-retratt" /> Liberadas</p>
                 </div>
-                <p className="text-2xl font-black text-cyan-400 leading-none">{carregando ? "-" : resumo.fotosLiberadas}</p>
+                <p className="text-2xl font-black text-retratt leading-none">{carregando ? "-" : resumo.fotosLiberadas}</p>
               </div>
 
             </div>
@@ -135,10 +135,10 @@ export default function FotosCompradorPage() {
         </section>
 
         <section className="mx-auto max-w-6xl px-4 py-6 md:px-6 space-y-5">
-          
+
           {/* ⚡ ATALHOS RÁPIDOS */}
           <div className="grid gap-3 sm:gap-4 md:grid-cols-2">
-            
+
             <Link href="/fotos/minhas-compras" className="group flex flex-col cursor-pointer rounded-2xl border border-white/5 bg-[#0a0a0e] p-5 transition-all hover:border-white/10 hover:bg-[#111] shadow-sm">
               <div className="w-10 h-10 rounded-lg bg-white/5 flex items-center justify-center text-white mb-4 border border-white/10 group-hover:scale-110 transition-transform">
                 <History size={16} />
@@ -150,20 +150,20 @@ export default function FotosCompradorPage() {
               </div>
             </Link>
 
-            <Link href="/fotos/carrinho" className="group flex flex-col cursor-pointer rounded-2xl border border-red-500/20 bg-red-500/[0.02] p-5 transition-all hover:border-red-500/30 hover:bg-red-500/[0.04] shadow-sm">
-              <div className="w-10 h-10 rounded-lg bg-red-500/10 flex items-center justify-center text-red-500 mb-4 border border-red-500/20 group-hover:scale-110 transition-transform">
+            <Link href="/fotos/carrinho" className="group flex flex-col cursor-pointer rounded-2xl border border-retratt/20 bg-retratt/[0.02] p-5 transition-all hover:border-retratt/30 hover:bg-retratt/[0.04] shadow-sm">
+              <div className="w-10 h-10 rounded-lg bg-retratt/10 flex items-center justify-center text-retratt mb-4 border border-retratt/20 group-hover:scale-110 transition-transform">
                 <ShoppingCart size={16} />
               </div>
               <h2 className="text-base font-black uppercase tracking-tight text-white mb-1.5">Seu Carrinho</h2>
               <p className="text-[11px] leading-relaxed text-zinc-400 mb-5 flex-1">Revise as fotos que você separou, aproveite os descontos de combo e finalize sua nova compra com segurança.</p>
-              <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-red-500 group-hover:text-red-400 transition-colors mt-auto">
+              <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-retratt group-hover:text-retratt transition-colors mt-auto">
                 Abrir sacola <ArrowRight size={12} className="transition-transform group-hover:translate-x-1" />
               </div>
             </Link>
 
           </div>
 
-          {/* ⚙️ DADOS CADASTRAIS */}
+          {/* ⚙ï¸ DADOS CADASTRAIS */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-2xl border border-white/5 bg-[#0a0a0e] p-4 shadow-sm mt-2">
             <div className="flex min-w-0 items-center gap-3">
               <div className="w-9 h-9 rounded-full bg-zinc-900 flex items-center justify-center shrink-0 border border-white/10">

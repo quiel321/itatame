@@ -255,7 +255,7 @@ export async function GET(request: Request) {
       pedidosRecentes: recentes,
     }, { headers: { "Cache-Control": "private, no-store, max-age=0" } });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Não foi possível montar o financeiro do Itatame Fotos.";
+    const message = error instanceof Error ? error.message : "Não foi possível montar o financeiro da Retratt.";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

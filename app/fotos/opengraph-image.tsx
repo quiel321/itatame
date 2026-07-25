@@ -1,10 +1,13 @@
-import { ImageResponse } from "next/og";
+﻿import { ImageResponse } from "next/og";
 
-export const alt = "iTatame Fotos - Encontre suas fotos esportivas";
+export const alt = "Retratt - Encontre suas fotos. Reviva seus momentos.";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
 export default function Image() {
+  const fotosUrl = process.env.NEXT_PUBLIC_FOTOS_URL || "https://fotos.itatame.com.br";
+  const logoUrl = new URL("/retratt/logo-white.png", fotosUrl).toString();
+
   return new ImageResponse(
     (
       <div
@@ -14,7 +17,7 @@ export default function Image() {
           display: "flex",
           position: "relative",
           overflow: "hidden",
-          background: "linear-gradient(135deg, #050505 0%, #130607 52%, #020202 100%)",
+          background: "linear-gradient(135deg, #050505 0%, #18100c 52%, #020202 100%)",
           color: "white",
           fontFamily: "Arial, sans-serif",
         }}
@@ -27,7 +30,7 @@ export default function Image() {
             right: -80,
             top: -120,
             borderRadius: 560,
-            background: "rgba(239, 35, 45, 0.20)",
+            background: "rgba(255, 90, 31, 0.22)",
             filter: "blur(12px)",
           }}
         />
@@ -39,7 +42,7 @@ export default function Image() {
             right: 120,
             bottom: -160,
             borderRadius: 360,
-            background: "rgba(6, 182, 212, 0.16)",
+            background: "rgba(255, 90, 31, 0.10)",
           }}
         />
 
@@ -54,32 +57,25 @@ export default function Image() {
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
-            <div style={{ display: "flex", gap: 7, transform: "skewX(-14deg)" }}>
-              <span style={{ width: 18, height: 45, borderRadius: 7, background: "#ef232d" }} />
-              <span style={{ width: 18, height: 45, borderRadius: 7, background: "#ffffff" }} />
-            </div>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 22 }}>
-              <span style={{ fontSize: 54, fontWeight: 900, letterSpacing: -3 }}>iTATAME</span>
-              <span style={{ fontSize: 30, fontWeight: 800, letterSpacing: 12, color: "#ef232d" }}>FOTOS</span>
-            </div>
+            <img src={logoUrl} alt="Retratt" width="320" height="78" style={{ objectFit: "contain" }} />
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", maxWidth: 820 }}>
-            <span style={{ fontSize: 22, fontWeight: 800, letterSpacing: 6, color: "#22d3ee" }}>
-              FOTOGRAFIA ESPORTIVA INTELIGENTE
+            <span style={{ fontSize: 22, fontWeight: 800, letterSpacing: 6, color: "#ff5a1f" }}>
+              FOTOGRAFIA DE EVENTOS, SEM FRONTEIRAS
             </span>
             <div style={{ display: "flex", flexDirection: "column", marginTop: 18, fontSize: 67, lineHeight: 1.02, fontWeight: 900, letterSpacing: -2 }}>
               <span>ENCONTRE SUAS FOTOS.</span>
-              <span style={{ color: "#ef232d" }}>REVIVA SUAS CONQUISTAS.</span>
+              <span style={{ color: "#ff5a1f" }}>REVIVA SEUS MOMENTOS.</span>
             </div>
             <span style={{ marginTop: 26, fontSize: 25, color: "#d4d4d8" }}>
-              Galerias oficiais, busca facial e download digital.
+              Esportes, celebrações, shows e experiências em um só lugar.
             </span>
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 14, fontSize: 19, color: "#a1a1aa" }}>
-            <span style={{ width: 9, height: 9, borderRadius: 9, background: "#22d3ee" }} />
-            fotos.itatame.com.br
+            <span style={{ width: 9, height: 9, borderRadius: 9, background: "#ff5a1f" }} />
+            Tecnologia. Velocidade. Emoção.
           </div>
         </div>
       </div>

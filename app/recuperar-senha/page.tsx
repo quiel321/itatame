@@ -61,7 +61,7 @@ export default function RecuperarSenha() {
       <div className="max-w-md w-full bg-[#0a0a0e] border border-white/10 p-8 rounded-3xl shadow-2xl relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-600 to-red-900"></div>
         
-        <h1 className="text-2xl font-black text-white mb-2 tracking-tight">{origemFotos ? "Recuperar senha do iTatame Fotos" : "Esqueci minha senha"}</h1>
+        <h1 className="text-2xl font-black text-white mb-2 tracking-tight">{origemFotos ? "Recuperar senha da Retratt" : "Esqueci minha senha"}</h1>
         <p className="text-zinc-400 text-xs mb-8">Digite o e-mail cadastrado na sua conta. Vamos enviar um link seguro para criar uma senha nova.</p>
 
         <form onSubmit={handleResetPassword} className="space-y-4">

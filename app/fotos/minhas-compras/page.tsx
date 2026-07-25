@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useEffect, useState, useMemo } from "react";
@@ -60,7 +60,7 @@ export default function FotosMinhasComprasPage() {
       const perfilRes = await supabase.from("foto_compradores").select("nome, email, telefone, perfil_completo").eq("user_id", auth.user.id).maybeSingle();
       const perfilAtual = (perfilRes.data as CompradorPerfil | null) || null;
       const nomeInicial = perfilAtual?.nome || auth.user.user_metadata?.nome_completo || auth.user.user_metadata?.nome || auth.user.email?.split("@")[0] || "";
-      
+
       setPerfil(perfilAtual);
       setPerfilForm({ nome: nomeInicial, telefone: perfilAtual?.telefone || "", });
       const abrirCadastro = new URLSearchParams(window.location.search).get("cadastro") === "1";
@@ -128,7 +128,7 @@ export default function FotosMinhasComprasPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = "itatame-foto.jpg";
+    link.download = "retratt-foto.jpg";
     link.click();
     URL.revokeObjectURL(url);
   }
@@ -160,7 +160,7 @@ export default function FotosMinhasComprasPage() {
 
   const StatusBadge = ({ status }: { status: string | null }) => {
     if (status === "approved" || status === "pago") return <span className="inline-flex items-center gap-1 text-emerald-400 bg-emerald-400/10 border border-emerald-400/20 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest"><CheckCircle2 size={10}/> Pago</span>;
-    if (status === "pending" || status === "pendente") return <span className="inline-flex items-center gap-1 text-amber-400 bg-amber-400/10 border border-amber-400/20 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest"><AlertCircle size={10}/> Pendente</span>;
+    if (status === "pending" || status === "pendente") return <span className="inline-flex items-center gap-1 text-retratt bg-retratt/10 border border-retratt/20 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest"><AlertCircle size={10}/> Pendente</span>;
     return <span className="inline-flex items-center gap-1 text-zinc-400 bg-zinc-400/10 border border-zinc-400/20 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest">{status || "Desconhecido"}</span>;
   };
 
@@ -172,12 +172,12 @@ export default function FotosMinhasComprasPage() {
       <FotosShell>
         <main className="min-h-screen bg-[#050505] flex items-center justify-center p-4">
            <div className="max-w-md w-full bg-[#0a0a0e] border border-white/5 p-8 md:p-10 rounded-3xl text-center shadow-2xl">
-              <AlertCircle size={48} className="mx-auto text-red-500 mb-6 opacity-80" />
+              <AlertCircle size={48} className="mx-auto text-retratt mb-6 opacity-80" />
               <h2 className="text-2xl font-black text-white uppercase tracking-tight mb-3">Acesso Negado</h2>
               <p className="text-xs text-zinc-400 mb-8 leading-relaxed">
                  O e-mail cadastrado pertence a uma conta de <strong className="text-white uppercase">{perfilInvalido}</strong>. Por motivos de segurança e organização, contas profissionais não operam no painel de compras.
               </p>
-              <Link href={perfilInvalido === 'fotógrafo' ? '/fotos/fotografo/dashboard' : '/fotos/admin'} className="flex cursor-pointer justify-center w-full bg-red-600 hover:bg-red-500 text-white font-black uppercase tracking-widest text-[10px] py-4 rounded-xl transition-all shadow-[0_0_20px_rgba(239,68,68,0.2)] mb-3">
+              <Link href={perfilInvalido === 'fotógrafo' ? '/fotos/fotografo/dashboard' : '/fotos/admin'} className="flex cursor-pointer justify-center w-full bg-retratt hover:bg-retratt text-white font-black uppercase tracking-widest text-[10px] py-4 rounded-xl transition-all shadow-[0_0_20px_rgba(255,90,31,0.2)] mb-3">
                  Ir para o Painel Profissional
               </Link>
               <button onClick={deslogar} className="w-full cursor-pointer bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white font-black uppercase tracking-widest text-[10px] py-4 rounded-xl transition-all border border-white/10">
@@ -192,18 +192,18 @@ export default function FotosMinhasComprasPage() {
   return (
     <FotosShell>
       <main className="min-h-screen bg-[#050505] text-white font-sans pb-12">
-        <section className="border-b border-white/5 bg-[radial-gradient(circle_at_15%_0%,rgba(239,68,68,0.12),transparent_40%),linear-gradient(180deg,#101014,#050505)]">
+        <section className="border-b border-white/5 bg-[radial-gradient(circle_at_15%_0%,rgba(255,90,31,0.12),transparent_40%),linear-gradient(180deg,#101014,#050505)]">
           <div className="mx-auto max-w-6xl px-4 py-6 md:px-6 md:py-8">
             <Link href="/fotos" className="cursor-pointer text-[9px] font-black uppercase tracking-[0.25em] text-zinc-500 hover:text-white transition-colors mb-4 inline-block">← Voltar para Eventos</Link>
             <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between mb-4">
               <div>
-                <p className="inline-flex items-center gap-1.5 rounded-md border border-red-500/20 bg-red-500/10 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.2em] text-red-400 mb-2 shadow-sm"><UserRound size={12} /> Minhas Compras</p>
+                <p className="inline-flex items-center gap-1.5 rounded-md border border-retratt/20 bg-retratt/10 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.2em] text-retratt mb-2 shadow-sm"><UserRound size={12} /> Minhas Compras</p>
                 <h1 className="text-2xl font-black uppercase tracking-tight md:text-4xl drop-shadow-sm">Olá, {primeiroNome}!</h1>
-                <p className="mt-1 text-xs text-zinc-400 font-medium">{email ? `${email}` : "Conta iTatame"}</p>
+                <p className="mt-1 text-xs text-zinc-400 font-medium">{email ? `${email}` : "Conta Retratt"}</p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <button onClick={() => setMostrarPerfil(!mostrarPerfil)} className="inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-lg bg-white/5 border border-white/10 px-4 text-[9px] font-black uppercase tracking-widest text-white hover:bg-white/10 transition-colors"><Pencil size={12} /> Perfil</button>
-                <button onClick={deslogar} className="inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-lg border border-red-500/20 bg-red-500/10 px-4 text-[9px] font-black uppercase tracking-widest text-red-500 hover:bg-red-500 hover:text-white transition-all">Sair <LogOut size={12} /></button>
+                <button onClick={deslogar} className="inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-lg border border-retratt/20 bg-retratt/10 px-4 text-[9px] font-black uppercase tracking-widest text-retratt hover:bg-retratt hover:text-white transition-all">Sair <LogOut size={12} /></button>
               </div>
             </div>
 
@@ -211,9 +211,9 @@ export default function FotosMinhasComprasPage() {
               <div className="rounded-xl border border-white/5 bg-[#0a0a0e]/80 backdrop-blur-sm p-4 flex flex-col justify-between hover:border-white/10 transition-colors">
                 <div className="flex items-center justify-between mb-2">
                   <p className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-zinc-500"><ShoppingCart size={12} /> Carrinho</p>
-                  <p className="text-2xl font-black text-red-400 leading-none">{itensCarrinho}</p>
+                  <p className="text-2xl font-black text-retratt leading-none">{itensCarrinho}</p>
                 </div>
-                <Link href="/fotos/carrinho" className="cursor-pointer mt-1 inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-red-400 hover:text-red-300">Ver Sacola <ArrowRight size={10} /></Link>
+                <Link href="/fotos/carrinho" className="cursor-pointer mt-1 inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-retratt hover:text-orange-300">Ver Sacola <ArrowRight size={10} /></Link>
               </div>
               <div className="rounded-xl border border-white/5 bg-[#0a0a0e]/80 backdrop-blur-sm p-4 flex flex-col justify-between hover:border-white/10 transition-colors">
                 <div className="flex items-center justify-between mb-2">
@@ -225,7 +225,7 @@ export default function FotosMinhasComprasPage() {
               <div className="rounded-xl border border-white/5 bg-[#0a0a0e]/80 backdrop-blur-sm p-4 flex flex-col justify-between hover:border-white/10 transition-colors">
                 <div className="flex items-center justify-between mb-2">
                   <p className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-zinc-500"><Download size={12} /> Liberadas</p>
-                  <p className="text-2xl font-black text-cyan-400 leading-none">{fotosLiberadas}</p>
+                  <p className="text-2xl font-black text-retratt leading-none">{fotosLiberadas}</p>
                 </div>
                 <p className="mt-1 text-[9px] font-bold uppercase tracking-widest text-zinc-600">Prontas para baixar</p>
               </div>
@@ -235,25 +235,25 @@ export default function FotosMinhasComprasPage() {
 
         <section className="mx-auto max-w-6xl px-4 py-6 md:px-6">
           {mensagemPagamento && (
-            <p className="mb-4 rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs font-bold text-amber-200">
+            <p className="mb-4 rounded-xl border border-retratt/20 bg-retratt/10 p-3 text-xs font-bold text-orange-200">
               {mensagemPagamento}
             </p>
           )}
           {mostrarPerfil && (
-            <div className="mb-6 rounded-2xl border border-red-500/20 bg-red-500/5 p-5 animate-in fade-in">
+            <div className="mb-6 rounded-2xl border border-retratt/20 bg-retratt/5 p-5 animate-in fade-in">
               <div className="flex items-center justify-between mb-4">
-                <div><h2 className="text-sm font-black uppercase text-white">Dados Cadastrais</h2><p className="text-[9px] font-bold text-red-400 uppercase tracking-widest mt-0.5">Necessário para liberar downloads.</p></div>
+                <div><h2 className="text-sm font-black uppercase text-white">Dados Cadastrais</h2><p className="text-[9px] font-bold text-retratt uppercase tracking-widest mt-0.5">Necessário para liberar downloads.</p></div>
                 <button onClick={() => setMostrarPerfil(false)} className="cursor-pointer h-7 px-3 rounded text-[9px] font-black uppercase bg-white/5 text-zinc-300 hover:bg-white/10">Cancelar</button>
               </div>
               <div className="grid gap-3 sm:grid-cols-2 max-w-xl">
-                <div><label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Nome Completo</label><input value={perfilForm.nome} onChange={(e) => setPerfilForm({ ...perfilForm, nome: e.target.value })} className="cursor-text h-9 w-full rounded-lg border border-white/10 bg-black px-3 text-xs font-bold text-white outline-none focus:border-red-500" placeholder="Seu nome" /></div>
-                <div><label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">WhatsApp</label><input value={perfilForm.telefone} onChange={(e) => setPerfilForm({ ...perfilForm, telefone: e.target.value })} className="cursor-text h-9 w-full rounded-lg border border-white/10 bg-black px-3 text-xs font-bold text-white outline-none focus:border-red-500" placeholder="(00) 00000-0000" /></div>
+                <div><label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Nome Completo</label><input value={perfilForm.nome} onChange={(e) => setPerfilForm({ ...perfilForm, nome: e.target.value })} className="cursor-text h-9 w-full rounded-lg border border-white/10 bg-black px-3 text-xs font-bold text-white outline-none focus:border-retratt" placeholder="Seu nome" /></div>
+                <div><label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">WhatsApp</label><input value={perfilForm.telefone} onChange={(e) => setPerfilForm({ ...perfilForm, telefone: e.target.value })} className="cursor-text h-9 w-full rounded-lg border border-white/10 bg-black px-3 text-xs font-bold text-white outline-none focus:border-retratt" placeholder="(00) 00000-0000" /></div>
               </div>
               <div className="mt-4 flex items-center gap-3">
-                <button type="button" onClick={salvarPerfilComprador} disabled={salvandoPerfil || !perfilForm.nome.trim() || !perfilForm.telefone.trim()} className="cursor-pointer h-9 px-6 rounded-lg bg-red-600 text-[9px] font-black uppercase tracking-widest text-white hover:bg-red-500 disabled:opacity-50">
+                <button type="button" onClick={salvarPerfilComprador} disabled={salvandoPerfil || !perfilForm.nome.trim() || !perfilForm.telefone.trim()} className="cursor-pointer h-9 px-6 rounded-lg bg-retratt text-[9px] font-black uppercase tracking-widest text-white hover:bg-retratt disabled:opacity-50">
                   {salvandoPerfil ? "Salvando..." : "Salvar Dados"}
                 </button>
-                {mensagemPerfil && <span className="text-[9px] font-black uppercase text-red-400">{mensagemPerfil}</span>}
+                {mensagemPerfil && <span className="text-[9px] font-black uppercase text-retratt">{mensagemPerfil}</span>}
               </div>
             </div>
           )}
@@ -261,14 +261,14 @@ export default function FotosMinhasComprasPage() {
           <div className="grid gap-5 lg:grid-cols-[280px_1fr]">
             <div className="space-y-4">
               <div className="rounded-2xl border border-white/5 bg-[#0a0a0e] p-5 shadow-sm">
-                <h2 className="flex items-center gap-1.5 text-xs font-black uppercase text-white mb-4"><UserRound size={14} className="text-red-500" /> Meu Perfil</h2>
+                <h2 className="flex items-center gap-1.5 text-xs font-black uppercase text-white mb-4"><UserRound size={14} className="text-retratt" /> Meu Perfil</h2>
                 <div className="space-y-2">
                   <div className="rounded-xl border border-white/5 bg-[#050505] p-3"><p className="text-[8px] font-black uppercase tracking-widest text-zinc-500">Nome</p><p className="mt-0.5 text-[11px] font-bold text-white truncate">{perfil?.nome || perfilForm.nome || "Não informado"}</p></div>
                   <div className="rounded-xl border border-white/5 bg-[#050505] p-3"><p className="text-[8px] font-black uppercase tracking-widest text-zinc-500">Telefone</p><p className="mt-0.5 text-[11px] font-bold text-white truncate">{perfil?.telefone || "Não informado"}</p></div>
                 </div>
               </div>
               <div className="rounded-2xl border border-white/5 bg-[#0a0a0e] p-5 text-center shadow-sm">
-                 <div className="w-10 h-10 mx-auto rounded-full bg-cyan-500/10 flex items-center justify-center text-cyan-400 mb-3 border border-cyan-500/20"><PackageOpen size={16} /></div>
+                 <div className="w-10 h-10 mx-auto rounded-full bg-retratt/10 flex items-center justify-center text-retratt mb-3 border border-retratt/20"><PackageOpen size={16} /></div>
                  <h3 className="text-[11px] font-black uppercase text-white mb-1.5">Faltou algo?</h3>
                  <p className="text-[9px] font-medium text-zinc-400 mb-4 leading-relaxed">Volte para a galeria oficial e encontre mais fotos suas.</p>
                  <Link href="/fotos" className="cursor-pointer w-full inline-block py-2.5 rounded-lg bg-white/5 hover:bg-white/10 text-white text-[9px] font-black uppercase tracking-widest border border-white/10 transition-colors">Explorar Galerias</Link>
@@ -296,7 +296,7 @@ export default function FotosMinhasComprasPage() {
                         <div className="flex items-center sm:flex-col sm:items-end justify-between gap-3 sm:gap-1.5">
                           <p className="text-base font-black text-white">{formatarPrecoFotos(pedido.total_centavos)}</p>
                           {pedido.status !== "pago" && (
-                            <button type="button" onClick={() => verificarPagamento(pedido.id)} disabled={verificandoPedido === pedido.id} className="cursor-pointer rounded-lg bg-amber-400 px-3 py-1.5 text-[8px] font-black uppercase tracking-widest text-black hover:bg-amber-300 disabled:cursor-wait disabled:opacity-60">
+                            <button type="button" onClick={() => verificarPagamento(pedido.id)} disabled={verificandoPedido === pedido.id} className="cursor-pointer rounded-lg bg-retratt px-3 py-1.5 text-[8px] font-black uppercase tracking-widest text-black hover:bg-retratt disabled:cursor-wait disabled:opacity-60">
                               {verificandoPedido === pedido.id ? "Verificando..." : "Verificar pagamento"}
                             </button>
                           )}
@@ -327,7 +327,7 @@ export default function FotosMinhasComprasPage() {
                                      </div>
                                      <p className="truncate text-[10px] font-black uppercase text-white">{foto?.titulo || "Foto"}</p>
                                   </div>
-                                  <button disabled={!item.download_liberado || baixandoItem === item.id} onClick={() => baixarFoto(item.id)} className={`cursor-pointer inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md px-3 text-[8px] font-black uppercase tracking-widest transition-all ${item.download_liberado ? "bg-cyan-500 text-black hover:bg-cyan-400" : "bg-zinc-900 text-zinc-600 border border-white/5 disabled:cursor-not-allowed"}`}>
+                                  <button disabled={!item.download_liberado || baixandoItem === item.id} onClick={() => baixarFoto(item.id)} className={`cursor-pointer inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md px-3 text-[8px] font-black uppercase tracking-widest transition-all ${item.download_liberado ? "bg-retratt text-black hover:bg-retratt" : "bg-zinc-900 text-zinc-600 border border-white/5 disabled:cursor-not-allowed"}`}>
                                     <Download size={12} /> <span className="hidden sm:inline">{baixandoItem === item.id ? "Processando" : (item.download_liberado ? "Baixar" : "Aguardando")}</span>
                                   </button>
                                 </div>

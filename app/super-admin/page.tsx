@@ -220,7 +220,7 @@ export default function SuperAdminMasterPage() {
               <Banknote className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-sm md:text-base font-black text-white group-hover:text-cyan-300 transition-colors">Financeiro Itatame Fotos</h3>
+              <h3 className="text-sm md:text-base font-black text-white group-hover:text-orange-300 transition-colors">Financeiro Retratt</h3>
               <p className="text-zinc-500 text-[9px] md:text-[10px] font-medium mt-1 leading-relaxed">Comissões, royalties, galerias e repasses.</p>
             </div>
           </Link>

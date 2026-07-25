@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useEffect, useState, useRef } from "react";
@@ -33,18 +33,18 @@ function formatarMoeda(valorCentavos?: number | null) {
 
 export default function FotosAdminPage() {
   const router = useRouter();
-  
+
   // 🔥 HOOKS NO TOPO ABSOLUTO
   const [userId, setUserId] = useState<string | null>(null);
   const [email, setEmail] = useState<string | null>(null);
   const [totais, setTotais] = useState<Totais>({ eventos: 0, albuns: 0, fotos: 0, pedidos: 0 });
   const [eventosBase, setEventosBase] = useState<EventoBase[]>([]);
   const [fotoEventos, setFotoEventos] = useState<FotoEventoAdmin[]>([]);
-  
+
   const [organizador, setOrganizador] = useState<OrganizadorFinanceiro | null>(null);
   const [slugPublico, setSlugPublico] = useState<string | null>(null);
   const [orgForm, setOrgForm] = useState({ nome: "", email: "", telefone: "", documento: "", tipo_entidade: "empresa", academia: "", cidade: "", estado: "" });
-  
+
   const [mostrarCriarGaleria, setMostrarCriarGaleria] = useState(false);
   const [isManual, setIsManual] = useState(false); // Alterna entre Vincular Evento ou Galeria Avulsa
   const [manualForm, setManualForm] = useState({ nome: "", cidade: "", estado: "", dataEvento: "" });
@@ -55,7 +55,7 @@ export default function FotosAdminPage() {
   const [preco, setPreco] = useState("15,00");
   const [comboQtd, setComboQtd] = useState("3");
   const [comboPercentual, setComboPercentual] = useState("20");
-  
+
   const [regrasCombo, setRegrasCombo] = useState<Record<string, { qtd: string; percentual: string }>>({});
   const [emailFotografo, setEmailFotografo] = useState<Record<string, string>>({});
   const [credenciandoEvento, setCredenciandoEvento] = useState<string | null>(null);
@@ -68,12 +68,12 @@ export default function FotosAdminPage() {
   const [fotografosPorGaleria, setFotografosPorGaleria] = useState<Record<string, FotografoCredenciado[]>>({});
   const [royaltyForm, setRoyaltyForm] = useState<Record<string, string>>({});
   const [salvandoRoyalty, setSalvandoRoyalty] = useState<string | null>(null);
-  
+
   const [mensagem, setMensagem] = useState("");
   const [salvandoPerfil, setSalvandoPerfil] = useState(false);
   const [mostrarFormularioPerfil, setMostrarFormularioPerfil] = useState(false);
   const [carregando, setCarregando] = useState(true);
-  
+
   const [perfilInvalido, setPerfilInvalido] = useState<'fotógrafo' | null>(null);
   const [contaNaoExiste, setContaNaoExiste] = useState(false);
 
@@ -108,7 +108,7 @@ export default function FotosAdminPage() {
       setEmail(user.email || null);
 
       const org = await supabase.from("organizadores").select("nome, email, telefone, documento, tipo_entidade, academia, perfil_completo, mp_connected_at, mp_user_id").eq("user_id", user.id).maybeSingle();
-      
+
       if (!org.data) {
         setContaNaoExiste(true);
         setCarregando(false);
@@ -175,7 +175,7 @@ export default function FotosAdminPage() {
           }
       }
       if (!eventoSelecionado && listaBase[0]?.id) setEventoSelecionado(String(listaBase[0].id));
-      
+
       setCarregando(false);
     }
 
@@ -194,11 +194,11 @@ export default function FotosAdminPage() {
 
     const nomeMetadata = auth.user.user_metadata?.nome_completo || auth.user.user_metadata?.nome || auth.user.email?.split("@")[0] || "Organizador";
     await supabase.from("organizadores").insert({ user_id: auth.user.id, nome: nomeMetadata, email: auth.user.email, status: "ativo" });
-    
+
     const slugFormatado = nomeMetadata.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') + '-' + Math.floor(Math.random() * 1000);
     await supabase.from("foto_organizadores").insert({ id: auth.user.id, nome: nomeMetadata, slug: slugFormatado });
 
-    window.location.reload(); 
+    window.location.reload();
   }
 
   function precoCentavos() {
@@ -270,7 +270,7 @@ export default function FotosAdminPage() {
 
     if (isManual) {
       if (!manualForm.nome.trim()) { setMensagem("Digite o nome da galeria avulsa."); setCriandoGaleria(false); return; }
-      
+
       let capaUrl: string | null = null;
       if (manualCapa) {
         const form = new FormData();
@@ -301,7 +301,7 @@ export default function FotosAdminPage() {
         setCriandoGaleria(false);
         return;
       }
-      
+
       window.location.reload();
       return;
     }
@@ -317,9 +317,9 @@ export default function FotosAdminPage() {
       method: "POST", headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session.access_token}` },
       body: JSON.stringify({ eventoId: evento.id, precoCentavos: precoCentavos(), descontoComboQtd: comboQtdNumero(), descontoComboPercentual: comboPercentualNumero(), }),
     });
-    
+
     if (!response.ok) { setMensagem("Falha ao criar a galeria. Tente novamente."); setCriandoGaleria(false); return; }
-    
+
     window.location.reload();
   }
 
@@ -422,9 +422,9 @@ export default function FotosAdminPage() {
 
   async function excluirGaleria(galeriaId: string) {
     if (!confirm("Tem certeza que deseja excluir esta galeria? Atenção: Se houverem fotos vendidas nela, esta ação pode causar erros no sistema. Prossiga apenas se tiver certeza.")) return;
-    
+
     const { error } = await supabase.from("foto_eventos").delete().eq("id", galeriaId);
-    
+
     if (error) {
        alert("Erro ao excluir galeria. Pode haver fotos vinculadas a ela.");
     } else {
@@ -433,7 +433,7 @@ export default function FotosAdminPage() {
   }
 
   if (carregando) {
-     return <FotosShell><main className="min-h-screen bg-[#050505] flex items-center justify-center"><Loader2 size={32} className="text-amber-500 animate-spin"/></main></FotosShell>;
+     return <FotosShell><main className="min-h-screen bg-[#050505] flex items-center justify-center"><Loader2 size={32} className="text-retratt animate-spin"/></main></FotosShell>;
   }
 
   if (perfilInvalido === 'fotógrafo') {
@@ -441,12 +441,12 @@ export default function FotosAdminPage() {
       <FotosShell>
         <main className="min-h-screen bg-[#050505] flex items-center justify-center p-4">
            <div className="max-w-md w-full bg-[#0a0a0e] border border-white/5 p-8 md:p-10 rounded-3xl text-center shadow-2xl">
-              <AlertCircle size={48} className="mx-auto text-red-500 mb-6 opacity-80" />
+              <AlertCircle size={48} className="mx-auto text-retratt mb-6 opacity-80" />
               <h2 className="text-2xl font-black text-white uppercase tracking-tight mb-3">Acesso Negado</h2>
               <p className="text-xs text-zinc-400 mb-8 leading-relaxed">
                  Esta é uma conta de <strong className="text-white uppercase">Fotógrafo</strong>. Painéis organizadores são restritos aos donos dos eventos.
               </p>
-              <Link href="/fotos/fotografo/dashboard" className="flex justify-center w-full bg-cyan-500 hover:bg-cyan-400 text-black font-black uppercase tracking-widest text-[10px] py-4 rounded-xl transition-all shadow-[0_0_20px_rgba(6,182,212,0.2)] mb-3">
+              <Link href="/fotos/fotografo/dashboard" className="flex justify-center w-full bg-retratt hover:bg-retratt text-black font-black uppercase tracking-widest text-[10px] py-4 rounded-xl transition-all shadow-[0_0_20px_rgba(255,90,31,0.2)] mb-3">
                  Ir para meu Painel de Fotógrafo
               </Link>
               <button onClick={deslogar} className="w-full cursor-pointer bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white font-black uppercase tracking-widest text-[10px] py-4 rounded-xl transition-all border border-white/10">
@@ -463,12 +463,12 @@ export default function FotosAdminPage() {
        <FotosShell>
          <main className="min-h-screen bg-[#050505] flex items-center justify-center p-4">
             <div className="max-w-md w-full bg-[#0a0a0e] border border-white/5 p-8 md:p-10 rounded-3xl text-center shadow-2xl">
-               <Trophy size={48} className="mx-auto text-amber-500 mb-6 opacity-80" />
+               <Trophy size={48} className="mx-auto text-retratt mb-6 opacity-80" />
                <h2 className="text-2xl font-black text-white uppercase tracking-tight mb-3">Painel Organizador</h2>
                <p className="text-xs text-zinc-400 mb-8 leading-relaxed">
                   Não encontramos um perfil de Organizador vinculado ao e-mail <strong className="text-white">{email}</strong>. Deseja registrar-se como Organizador agora para gerenciar seus eventos?
                </p>
-               <button onClick={criarContaOrganizador} className="w-full cursor-pointer bg-amber-500 hover:bg-amber-400 text-black font-black uppercase tracking-widest text-[10px] py-4 rounded-xl transition-all shadow-[0_0_20px_rgba(245,158,11,0.2)] mb-3">
+               <button onClick={criarContaOrganizador} className="w-full cursor-pointer bg-retratt hover:bg-retratt text-black font-black uppercase tracking-widest text-[10px] py-4 rounded-xl transition-all shadow-[0_0_20px_rgba(255,90,31,0.2)] mb-3">
                   Sim, Quero Criar Galerias
                </button>
                <Link href="/fotos/comprador" className="flex justify-center w-full bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white font-black uppercase tracking-widest text-[10px] py-4 rounded-xl transition-all border border-white/10">
@@ -483,13 +483,13 @@ export default function FotosAdminPage() {
   return (
     <FotosShell>
       <main className="min-h-screen bg-[#050505] text-white font-sans relative overflow-x-hidden w-full">
-        
-        <section className="border-b border-white/5 bg-[radial-gradient(circle_at_85%_0%,rgba(245,158,11,0.15),transparent_40%),linear-gradient(180deg,#0a0a0e,#050505)] w-full">
+
+        <section className="border-b border-white/5 bg-[radial-gradient(circle_at_85%_0%,rgba(255,90,31,0.15),transparent_40%),linear-gradient(180deg,#0a0a0e,#050505)] w-full">
           <div className="mx-auto max-w-7xl px-4 py-8 md:px-8 md:py-12">
-            
+
             <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between mb-10">
               <div className="min-w-0">
-                <p className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-[9px] font-black uppercase tracking-[0.24em] text-amber-500 mb-4 shadow-[0_0_15px_rgba(245,158,11,0.1)]">
+                <p className="inline-flex items-center gap-1.5 rounded-full border border-retratt/20 bg-retratt/10 px-3 py-1 text-[9px] font-black uppercase tracking-[0.24em] text-retratt mb-4 shadow-[0_0_15px_rgba(255,90,31,0.1)]">
                   <Trophy size={12} /> Painel Administrativo
                 </p>
                 <h1 className="text-3xl sm:text-4xl md:text-5xl font-black uppercase tracking-tight leading-none drop-shadow-md break-words">
@@ -499,15 +499,15 @@ export default function FotosAdminPage() {
                   Ative as suas galerias, defina os royalties dos fotógrafos credenciados e acompanhe cada venda.
                 </p>
               </div>
-              
+
               <div className="flex flex-col sm:flex-row w-full sm:w-auto items-stretch sm:items-center gap-3">
                 {slugPublico && (
-                  <Link href={`/fotos/organizador/${slugPublico}`} className="inline-flex h-11 w-full sm:w-auto cursor-pointer items-center justify-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-5 text-[10px] font-black uppercase tracking-widest text-amber-400 transition-colors hover:bg-amber-500 hover:text-black">
+                  <Link href={`/fotos/organizador/${slugPublico}`} className="inline-flex h-11 w-full sm:w-auto cursor-pointer items-center justify-center gap-2 rounded-xl border border-retratt/30 bg-retratt/10 px-5 text-[10px] font-black uppercase tracking-widest text-retratt transition-colors hover:bg-retratt hover:text-black">
                     Minha página pública <ArrowRight size={14} className="shrink-0" />
                   </Link>
                 )}
                 {userId && (
-                   <button onClick={deslogar} className="inline-flex h-11 w-full sm:w-auto cursor-pointer items-center justify-center gap-2 rounded-xl border border-red-500/20 bg-red-500/10 px-6 text-[10px] font-black uppercase tracking-widest text-red-500 hover:bg-red-500 hover:text-white transition-all shadow-sm">
+                   <button onClick={deslogar} className="inline-flex h-11 w-full sm:w-auto cursor-pointer items-center justify-center gap-2 rounded-xl border border-retratt/20 bg-retratt/10 px-6 text-[10px] font-black uppercase tracking-widest text-retratt hover:bg-retratt hover:text-white transition-all shadow-sm">
                      Sair <LogOut size={14} className="shrink-0" />
                    </button>
                 )}
@@ -516,9 +516,9 @@ export default function FotosAdminPage() {
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
               {[
-                [Store, "Galerias", totais.eventos, "text-amber-400"],
+                [Store, "Galerias", totais.eventos, "text-retratt"],
                 [FolderPlus, "Álbuns", totais.albuns, "text-white"],
-                [ImagePlus, "Fotos", totais.fotos, "text-cyan-400"],
+                [ImagePlus, "Fotos", totais.fotos, "text-retratt"],
                 [Wallet, "Vendas", totais.pedidos, "text-emerald-400"],
               ].map(([Icon, label, valor, cor]) => {
                 const IconComponent = Icon as typeof Camera;
@@ -536,16 +536,16 @@ export default function FotosAdminPage() {
         </section>
 
         <section className="mx-auto grid max-w-7xl gap-6 px-4 py-8 md:grid-cols-[1fr_400px] md:px-8 w-full">
-          
+
           <div className="space-y-6 w-full min-w-0">
             {/* 🔥 NOVO: PUBLICAR GALERIA EXPANSÍVEL E RESPONSIVO COM OPÇÃO MANUAL */}
-            <div className="rounded-3xl border border-amber-500/20 bg-amber-500/[0.02] overflow-hidden shadow-xl transition-all duration-300">
-              <div 
+            <div className="rounded-3xl border border-retratt/20 bg-retratt/[0.02] overflow-hidden shadow-xl transition-all duration-300">
+              <div
                 onClick={() => setMostrarCriarGaleria(!mostrarCriarGaleria)}
-                className="flex items-center justify-between p-5 md:p-8 cursor-pointer hover:bg-amber-500/[0.05] transition-colors gap-4"
+                className="flex items-center justify-between p-5 md:p-8 cursor-pointer hover:bg-retratt/[0.05] transition-colors gap-4"
               >
                 <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
-                   <div className="w-10 h-10 sm:w-12 sm:h-12 shrink-0 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500">
+                   <div className="w-10 h-10 sm:w-12 sm:h-12 shrink-0 rounded-xl bg-retratt/10 border border-retratt/20 flex items-center justify-center text-retratt">
                       <FolderPlus size={20} />
                    </div>
                    <div className="min-w-0 flex-1">
@@ -553,27 +553,27 @@ export default function FotosAdminPage() {
                       <p className="text-[9px] sm:text-[10px] font-bold text-zinc-500 uppercase tracking-widest mt-0.5 truncate">Ative a loja de fotos do seu evento</p>
                    </div>
                 </div>
-                <div className={`w-10 h-10 shrink-0 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 transition-transform duration-300 ${mostrarCriarGaleria ? "rotate-45" : ""}`}>
+                <div className={`w-10 h-10 shrink-0 rounded-full bg-retratt/10 border border-retratt/20 flex items-center justify-center text-retratt transition-transform duration-300 ${mostrarCriarGaleria ? "rotate-45" : ""}`}>
                    <Plus size={20} />
                 </div>
               </div>
 
               {mostrarCriarGaleria && (
                 <div className="px-5 pb-5 md:px-8 md:pb-8 border-t border-white/5 pt-5 sm:pt-6 animate-in slide-in-from-top-4 fade-in duration-300 bg-black/20">
-                  
+
                   {/* Toggle: Evento do Sistema vs Evento Manual */}
                   <div className="flex gap-2 mb-6 bg-black/50 p-1.5 rounded-xl border border-white/5 w-fit">
-                    <button 
+                    <button
                       type="button"
-                      onClick={() => setIsManual(false)} 
-                      className={`px-4 py-2.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${!isManual ? 'bg-amber-500 text-black shadow-md' : 'text-zinc-500 hover:text-white'}`}
+                      onClick={() => setIsManual(false)}
+                      className={`px-4 py-2.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${!isManual ? 'bg-retratt text-black shadow-md' : 'text-zinc-500 hover:text-white'}`}
                     >
                       Vincular Evento Oficial
                     </button>
-                    <button 
+                    <button
                       type="button"
-                      onClick={() => setIsManual(true)} 
-                      className={`px-4 py-2.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${isManual ? 'bg-amber-500 text-black shadow-md' : 'text-zinc-500 hover:text-white'}`}
+                      onClick={() => setIsManual(true)}
+                      className={`px-4 py-2.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${isManual ? 'bg-retratt text-black shadow-md' : 'text-zinc-500 hover:text-white'}`}
                     >
                       Criar Galeria Avulsa
                     </button>
@@ -583,7 +583,7 @@ export default function FotosAdminPage() {
                     {!isManual ? (
                       <div>
                         <label className="ml-1 mb-1.5 block text-[8px] font-black uppercase tracking-[0.2em] text-zinc-500">Evento Cadastrado</label>
-                        <select value={eventoSelecionado} onChange={(e) => setEventoSelecionado(e.target.value)} className="h-12 sm:h-14 w-full cursor-pointer rounded-2xl border border-white/5 bg-[#050505] px-4 text-xs font-bold text-white outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/50">
+                        <select value={eventoSelecionado} onChange={(e) => setEventoSelecionado(e.target.value)} className="h-12 sm:h-14 w-full cursor-pointer rounded-2xl border border-white/5 bg-[#050505] px-4 text-xs font-bold text-white outline-none focus:border-retratt/50 focus:ring-1 focus:ring-retratt/50">
                           <option value="">Escolha um evento do sistema...</option>
                           {eventosBase.map((evento) => <option key={evento.id} value={evento.id}>{evento.nome}</option>)}
                         </select>
@@ -592,23 +592,23 @@ export default function FotosAdminPage() {
                       <div className="grid gap-3 sm:grid-cols-2">
                          <div className="sm:col-span-2">
                            <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Nome da Galeria Avulsa</label>
-                           <input value={manualForm.nome} onChange={(e) => setManualForm({ ...manualForm, nome: e.target.value })} className="h-12 w-full rounded-xl border border-white/10 bg-[#050505] px-4 text-xs font-bold text-white outline-none focus:border-amber-500/50" placeholder="Ex: Open de Verão" />
+                           <input value={manualForm.nome} onChange={(e) => setManualForm({ ...manualForm, nome: e.target.value })} className="h-12 w-full rounded-xl border border-white/10 bg-[#050505] px-4 text-xs font-bold text-white outline-none focus:border-retratt/50" placeholder="Ex: Open de Verão" />
                          </div>
                          <div>
                            <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Cidade</label>
-                           <input value={manualForm.cidade} onChange={(e) => setManualForm({ ...manualForm, cidade: e.target.value })} className="h-12 w-full rounded-xl border border-white/10 bg-[#050505] px-4 text-xs font-bold text-white outline-none focus:border-amber-500/50" placeholder="Sua cidade" />
+                           <input value={manualForm.cidade} onChange={(e) => setManualForm({ ...manualForm, cidade: e.target.value })} className="h-12 w-full rounded-xl border border-white/10 bg-[#050505] px-4 text-xs font-bold text-white outline-none focus:border-retratt/50" placeholder="Sua cidade" />
                          </div>
                          <div>
                            <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Estado (UF)</label>
-                           <input value={manualForm.estado} onChange={(e) => setManualForm({ ...manualForm, estado: e.target.value })} maxLength={2} className="h-12 w-full rounded-xl border border-white/10 bg-[#050505] px-4 text-xs font-bold text-white uppercase outline-none focus:border-amber-500/50" placeholder="Ex: SP" />
+                           <input value={manualForm.estado} onChange={(e) => setManualForm({ ...manualForm, estado: e.target.value })} maxLength={2} className="h-12 w-full rounded-xl border border-white/10 bg-[#050505] px-4 text-xs font-bold text-white uppercase outline-none focus:border-retratt/50" placeholder="Ex: SP" />
                          </div>
                          <div>
                            <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Data do Evento</label>
-                           <input type="date" value={manualForm.dataEvento} onChange={(e) => setManualForm({ ...manualForm, dataEvento: e.target.value })} className="h-12 w-full rounded-xl border border-white/10 bg-[#050505] px-4 text-xs font-bold text-white outline-none focus:border-amber-500/50" />
+                           <input type="date" value={manualForm.dataEvento} onChange={(e) => setManualForm({ ...manualForm, dataEvento: e.target.value })} className="h-12 w-full rounded-xl border border-white/10 bg-[#050505] px-4 text-xs font-bold text-white outline-none focus:border-retratt/50" />
                          </div>
                          <div>
                            <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Foto de Capa</label>
-                           <label className="flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-white/15 bg-[#050505] hover:border-amber-500/50 transition-all text-[9px] font-black uppercase tracking-widest text-zinc-400 hover:text-amber-400">
+                           <label className="flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-white/15 bg-[#050505] hover:border-retratt/50 transition-all text-[9px] font-black uppercase tracking-widest text-zinc-400 hover:text-retratt">
                              <UploadCloud size={14} className="shrink-0" /> <span className="truncate max-w-[150px]">{manualCapa ? manualCapa.name : "Adicionar Capa"}</span>
                              <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => setManualCapa(e.target.files?.[0] || null)} />
                            </label>
@@ -620,18 +620,18 @@ export default function FotosAdminPage() {
                       <label className="ml-1 mb-1.5 block text-[8px] font-black uppercase tracking-[0.2em] text-zinc-500">Preço Padrão (Por Foto)</label>
                       <div className="relative">
                          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 font-black text-xs">R$</span>
-                         <input value={preco} onChange={(e) => setPreco(e.target.value)} className="h-12 sm:h-14 w-full rounded-2xl border border-white/5 bg-[#050505] pl-10 pr-4 text-xs font-bold text-white outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/50" />
+                         <input value={preco} onChange={(e) => setPreco(e.target.value)} className="h-12 sm:h-14 w-full rounded-2xl border border-white/5 bg-[#050505] pl-10 pr-4 text-xs font-bold text-white outline-none focus:border-retratt/50 focus:ring-1 focus:ring-retratt/50" />
                       </div>
                     </div>
 
                     <div className="grid gap-4 sm:grid-cols-2 bg-white/5 p-4 rounded-2xl border border-white/5">
                       <div>
                         <label className="mb-1.5 block text-[9px] font-black uppercase tracking-[0.2em] text-zinc-400">Combo a partir de</label>
-                        <input value={comboQtd} onChange={(e) => setComboQtd(e.target.value)} inputMode="numeric" className="h-11 sm:h-12 w-full rounded-xl border border-white/5 bg-[#050505] px-3 text-xs font-bold text-white outline-none focus:border-amber-500/50" placeholder="3 fotos" />
+                        <input value={comboQtd} onChange={(e) => setComboQtd(e.target.value)} inputMode="numeric" className="h-11 sm:h-12 w-full rounded-xl border border-white/5 bg-[#050505] px-3 text-xs font-bold text-white outline-none focus:border-retratt/50" placeholder="3 fotos" />
                       </div>
                       <div>
                         <label className="mb-1.5 block text-[9px] font-black uppercase tracking-[0.2em] text-zinc-400">Desconto do Combo (%)</label>
-                        <input value={comboPercentual} onChange={(e) => setComboPercentual(e.target.value)} inputMode="decimal" className="h-11 sm:h-12 w-full rounded-xl border border-white/5 bg-[#050505] px-3 text-xs font-bold text-white outline-none focus:border-amber-500/50" placeholder="20" />
+                        <input value={comboPercentual} onChange={(e) => setComboPercentual(e.target.value)} inputMode="decimal" className="h-11 sm:h-12 w-full rounded-xl border border-white/5 bg-[#050505] px-3 text-xs font-bold text-white outline-none focus:border-retratt/50" placeholder="20" />
                       </div>
                     </div>
 
@@ -639,12 +639,12 @@ export default function FotosAdminPage() {
                       <button type="button" onClick={() => setMostrarCriarGaleria(false)} className="h-11 w-full sm:w-auto cursor-pointer rounded-xl border border-white/10 bg-transparent px-6 text-[10px] font-black uppercase tracking-widest text-white hover:bg-white/5 transition-colors">
                          Cancelar
                       </button>
-                      <button onClick={publicarGaleria} disabled={criandoGaleria} className="h-11 w-full sm:w-auto cursor-pointer flex items-center justify-center gap-2 rounded-xl bg-amber-500 px-8 text-[10px] font-black uppercase tracking-widest text-black hover:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-[0_0_15px_rgba(245,158,11,0.2)]">
-                        {criandoGaleria ? <Loader2 size={14} className="animate-spin shrink-0"/> : <Check size={14} className="shrink-0" />} 
+                      <button onClick={publicarGaleria} disabled={criandoGaleria} className="h-11 w-full sm:w-auto cursor-pointer flex items-center justify-center gap-2 rounded-xl bg-retratt px-8 text-[10px] font-black uppercase tracking-widest text-black hover:bg-retratt disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-[0_0_15px_rgba(255,90,31,0.2)]">
+                        {criandoGaleria ? <Loader2 size={14} className="animate-spin shrink-0"/> : <Check size={14} className="shrink-0" />}
                         {criandoGaleria ? "Criando..." : "Criar Galeria"}
                       </button>
                     </div>
-                    
+
                     {mensagem && (
                        <div className="mt-4 text-[11px] font-bold text-emerald-400 text-center sm:text-right flex items-center justify-center sm:justify-end gap-1.5">
                          <CheckCircle2 size={14}/> {mensagem}
@@ -657,10 +657,10 @@ export default function FotosAdminPage() {
 
             <div className="rounded-3xl border border-white/5 bg-[#0a0a0e] p-5 sm:p-6 md:p-8 shadow-xl">
               <div className="flex items-center gap-3 mb-6 border-b border-white/5 pb-4">
-                 <BarChart3 size={20} className="text-cyan-500" />
+                 <BarChart3 size={20} className="text-retratt" />
                  <h2 className="text-lg font-black uppercase tracking-tight text-white">Galerias Ativas</h2>
               </div>
-              
+
               <div className="space-y-4">
                 {fotoEventos.length === 0 ? (
                   <div className="rounded-2xl border border-dashed border-white/10 bg-[#050505] p-10 text-center">
@@ -668,7 +668,7 @@ export default function FotosAdminPage() {
                   </div>
                 ) : fotoEventos.map((evento) => (
                   <div key={evento.id} className="rounded-2xl border border-white/5 bg-[#050505] p-4 sm:p-5 hover:border-white/10 transition-colors">
-                    
+
                     {/* 🔥 Informações Principais (Protegido contra textos grandes) */}
                     <div className="flex flex-col sm:flex-row gap-4 sm:items-center justify-between mb-5">
                        <div className="flex-1 min-w-0">
@@ -676,13 +676,13 @@ export default function FotosAdminPage() {
                           <div className="flex flex-wrap gap-2">
                              <span className="inline-flex items-center gap-1 bg-white/5 text-zinc-400 border border-white/10 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest shrink-0">{formatarMoeda(evento.preco_padrao_centavos)} / foto</span>
                              <span className="inline-flex items-center gap-1 border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[8px] font-black uppercase tracking-widest text-emerald-400 shrink-0">{vendasPorGaleria[evento.id] || 0} fotos vendidas</span>
-                             <span className="inline-flex items-center gap-1 border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[8px] font-black uppercase tracking-widest text-amber-400 shrink-0">{formatarMoeda(royaltiesPorGaleria[evento.id])} em royalties</span>
+                             <span className="inline-flex items-center gap-1 border border-retratt/20 bg-retratt/10 px-2 py-0.5 text-[8px] font-black uppercase tracking-widest text-retratt shrink-0">{formatarMoeda(royaltiesPorGaleria[evento.id])} em royalties</span>
                           </div>
                        </div>
-                       
+
                        {/* Botões Responsivos */}
                        <div className="flex flex-row items-center gap-2 shrink-0 mt-1 sm:mt-0">
-                          <button type="button" onClick={() => { setEditandoGaleria(evento.id); setEdicaoGaleria({ nome: evento.nome, capa_url: evento.capa_url || "", status: evento.status || "publicado" }); }} className="cursor-pointer flex-1 sm:flex-none inline-flex h-9 sm:h-9 items-center justify-center gap-1.5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 sm:px-4 text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-amber-400 hover:bg-amber-500 hover:text-black transition-colors">
+                          <button type="button" onClick={() => { setEditandoGaleria(evento.id); setEdicaoGaleria({ nome: evento.nome, capa_url: evento.capa_url || "", status: evento.status || "publicado" }); }} className="cursor-pointer flex-1 sm:flex-none inline-flex h-9 sm:h-9 items-center justify-center gap-1.5 rounded-xl border border-retratt/30 bg-retratt/10 px-3 sm:px-4 text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-retratt hover:bg-retratt hover:text-black transition-colors">
                             <Pencil size={12} className="shrink-0"/> Editar
                           </button>
                           <Link href={`/fotos/evento/${evento.id}`} className="cursor-pointer flex-1 sm:flex-none inline-flex h-9 sm:h-9 items-center justify-center gap-1.5 rounded-xl bg-white/10 px-3 sm:px-4 text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-white hover:bg-white hover:text-black transition-colors">
@@ -692,35 +692,35 @@ export default function FotosAdminPage() {
                     </div>
 
                       {editandoGaleria === evento.id && (
-                      <div className="mt-4 sm:mt-6 mb-2 rounded-2xl border border-amber-500/30 bg-[#050505] overflow-hidden shadow-[0_0_30px_rgba(245,158,11,0.05)] animate-in slide-in-from-top-2 fade-in duration-200">
+                      <div className="mt-4 sm:mt-6 mb-2 rounded-2xl border border-retratt/30 bg-[#050505] overflow-hidden shadow-[0_0_30px_rgba(255,90,31,0.05)] animate-in slide-in-from-top-2 fade-in duration-200">
                         {/* Header do Container */}
-                        <div className="flex items-center justify-between border-b border-white/5 bg-amber-500/[0.02] px-4 sm:px-5 py-3 sm:py-4">
+                        <div className="flex items-center justify-between border-b border-white/5 bg-retratt/[0.02] px-4 sm:px-5 py-3 sm:py-4">
                            <div className="flex items-center gap-2">
-                              <Pencil size={16} className="text-amber-500 shrink-0" />
+                              <Pencil size={16} className="text-retratt shrink-0" />
                               <h3 className="text-xs sm:text-sm font-black uppercase tracking-tight text-white">Editar Galeria</h3>
                            </div>
                            <button type="button" onClick={() => setEditandoGaleria(null)} className="cursor-pointer text-zinc-500 hover:text-white transition-colors p-1">
                               <X size={16} className="shrink-0" />
                            </button>
                         </div>
-                        
+
                         {/* Corpo do Formulário */}
                         <div className="p-4 sm:p-5 grid gap-3 sm:gap-4 sm:grid-cols-2">
                            <div className="sm:col-span-2">
                               <label className="mb-1.5 ml-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Nome da Galeria</label>
-                              <input 
-                                value={edicaoGaleria.nome} 
-                                onChange={(e) => setEdicaoGaleria({ ...edicaoGaleria, nome: e.target.value })} 
-                                className="h-11 sm:h-12 w-full rounded-xl border border-white/10 bg-black px-4 text-xs font-bold text-white outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/50 transition-all" 
+                              <input
+                                value={edicaoGaleria.nome}
+                                onChange={(e) => setEdicaoGaleria({ ...edicaoGaleria, nome: e.target.value })}
+                                className="h-11 sm:h-12 w-full rounded-xl border border-white/10 bg-black px-4 text-xs font-bold text-white outline-none focus:border-retratt focus:ring-1 focus:ring-retratt/50 transition-all"
                               />
                            </div>
 
                            <div>
                               <label className="mb-1.5 ml-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Visibilidade</label>
-                              <select 
-                                value={edicaoGaleria.status} 
-                                onChange={(e) => setEdicaoGaleria({ ...edicaoGaleria, status: e.target.value })} 
-                                className="h-11 sm:h-12 w-full cursor-pointer rounded-xl border border-white/10 bg-black px-4 text-xs font-bold text-white outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/50 transition-all"
+                              <select
+                                value={edicaoGaleria.status}
+                                onChange={(e) => setEdicaoGaleria({ ...edicaoGaleria, status: e.target.value })}
+                                className="h-11 sm:h-12 w-full cursor-pointer rounded-xl border border-white/10 bg-black px-4 text-xs font-bold text-white outline-none focus:border-retratt focus:ring-1 focus:ring-retratt/50 transition-all"
                               >
                                  <option value="publicado">🟢 Publicada (Visível)</option>
                                  <option value="rascunho">🟠 Rascunho (Oculta)</option>
@@ -730,13 +730,13 @@ export default function FotosAdminPage() {
 
                            <div>
                               <label className="mb-1.5 ml-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Foto de Capa</label>
-                              <label className="flex h-11 sm:h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-white/15 bg-black hover:border-amber-500/50 hover:bg-amber-500/5 transition-all text-[9px] font-black uppercase tracking-widest text-zinc-400 hover:text-amber-400">
+                              <label className="flex h-11 sm:h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-white/15 bg-black hover:border-retratt/50 hover:bg-retratt/5 transition-all text-[9px] font-black uppercase tracking-widest text-zinc-400 hover:text-retratt">
                                  <UploadCloud size={14} className="shrink-0" /> <span className="truncate max-w-[200px] sm:max-w-none">Alterar Imagem</span>
-                                 <input 
-                                   type="file" 
-                                   accept="image/jpeg,image/png,image/webp" 
-                                   className="hidden" 
-                                   onChange={(e) => { const file = e.target.files?.[0]; if (file) void enviarCapaGaleria(file); }} 
+                                 <input
+                                   type="file"
+                                   accept="image/jpeg,image/png,image/webp"
+                                   className="hidden"
+                                   onChange={(e) => { const file = e.target.files?.[0]; if (file) void enviarCapaGaleria(file); }}
                                  />
                               </label>
                            </div>
@@ -750,28 +750,28 @@ export default function FotosAdminPage() {
                            {/* Botões de Ação */}
                            <div className="sm:col-span-2 flex flex-col sm:flex-row items-stretch sm:items-center justify-between mt-3 sm:mt-4 pt-4 sm:pt-5 border-t border-white/5 gap-3 sm:gap-4">
                               {/* Botão Excluir na Esquerda */}
-                              <button 
-                                type="button" 
-                                onClick={() => excluirGaleria(evento.id)} 
-                                className="h-11 w-full sm:w-auto cursor-pointer flex items-center justify-center gap-2 rounded-xl border border-red-500/20 bg-red-500/5 px-5 text-[10px] font-black uppercase tracking-widest text-red-500 hover:bg-red-500 hover:text-white transition-colors order-2 sm:order-1"
+                              <button
+                                type="button"
+                                onClick={() => excluirGaleria(evento.id)}
+                                className="h-11 w-full sm:w-auto cursor-pointer flex items-center justify-center gap-2 rounded-xl border border-retratt/20 bg-retratt/5 px-5 text-[10px] font-black uppercase tracking-widest text-retratt hover:bg-retratt hover:text-white transition-colors order-2 sm:order-1"
                               >
                                  <Trash2 size={14} className="shrink-0" /> Excluir
                               </button>
 
                               {/* Salvar e Cancelar na Direita */}
                               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 order-1 sm:order-2">
-                                 <button 
-                                   type="button" 
-                                   onClick={() => setEditandoGaleria(null)} 
+                                 <button
+                                   type="button"
+                                   onClick={() => setEditandoGaleria(null)}
                                    className="h-11 w-full sm:w-auto cursor-pointer rounded-xl border border-white/10 bg-transparent px-6 text-[10px] font-black uppercase tracking-widest text-white hover:bg-white/5 transition-colors"
                                  >
                                     Cancelar
                                  </button>
-                                 <button 
-                                   type="button" 
-                                   onClick={salvarEdicaoGaleria} 
-                                   disabled={salvandoGaleria || !edicaoGaleria.nome.trim()} 
-                                   className="h-11 w-full sm:w-auto cursor-pointer flex items-center justify-center gap-2 rounded-xl bg-amber-500 px-8 text-[10px] font-black uppercase tracking-widest text-black hover:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-[0_0_15px_rgba(245,158,11,0.2)]"
+                                 <button
+                                   type="button"
+                                   onClick={salvarEdicaoGaleria}
+                                   disabled={salvandoGaleria || !edicaoGaleria.nome.trim()}
+                                   className="h-11 w-full sm:w-auto cursor-pointer flex items-center justify-center gap-2 rounded-xl bg-retratt px-8 text-[10px] font-black uppercase tracking-widest text-black hover:bg-retratt disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-[0_0_15px_rgba(255,90,31,0.2)]"
                                  >
                                     {salvandoGaleria ? <Loader2 size={14} className="animate-spin shrink-0" /> : <Check size={14} className="shrink-0" />}
                                     {salvandoGaleria ? "Salvando..." : "Salvar Alterações"}
@@ -781,17 +781,17 @@ export default function FotosAdminPage() {
                         </div>
                       </div>
                     )}
-                    
+
                     <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto] bg-white/[0.02] p-3 rounded-xl border border-white/5 items-end">
                       <div>
                          <label className="text-[8px] font-black uppercase tracking-widest text-zinc-500 ml-1 mb-1 block">Fotos p/ Combo</label>
-                         <input value={regrasCombo[evento.id]?.qtd || "3"} onChange={(e) => setRegrasCombo((atual) => ({ ...atual, [evento.id]: { ...(atual[evento.id] || { percentual: "20" }), qtd: e.target.value } }))} inputMode="numeric" className="h-10 w-full rounded-lg border border-white/5 bg-black px-3 text-[11px] font-bold text-white outline-none focus:border-cyan-500/50" />
+                         <input value={regrasCombo[evento.id]?.qtd || "3"} onChange={(e) => setRegrasCombo((atual) => ({ ...atual, [evento.id]: { ...(atual[evento.id] || { percentual: "20" }), qtd: e.target.value } }))} inputMode="numeric" className="h-10 w-full rounded-lg border border-white/5 bg-black px-3 text-[11px] font-bold text-white outline-none focus:border-retratt/50" />
                       </div>
                       <div>
                          <label className="text-[8px] font-black uppercase tracking-widest text-zinc-500 ml-1 mb-1 block">% Desconto</label>
-                         <input value={regrasCombo[evento.id]?.percentual || "20"} onChange={(e) => setRegrasCombo((atual) => ({ ...atual, [evento.id]: { ...(atual[evento.id] || { qtd: "3" }), percentual: e.target.value } }))} inputMode="decimal" className="h-10 w-full rounded-lg border border-white/5 bg-black px-3 text-[11px] font-bold text-white outline-none focus:border-cyan-500/50" />
+                         <input value={regrasCombo[evento.id]?.percentual || "20"} onChange={(e) => setRegrasCombo((atual) => ({ ...atual, [evento.id]: { ...(atual[evento.id] || { qtd: "3" }), percentual: e.target.value } }))} inputMode="decimal" className="h-10 w-full rounded-lg border border-white/5 bg-black px-3 text-[11px] font-bold text-white outline-none focus:border-retratt/50" />
                       </div>
-                      <button type="button" onClick={() => salvarRegraCombo(evento.id)} className="h-10 cursor-pointer rounded-lg bg-cyan-500/10 border border-cyan-500/30 px-5 text-[9px] font-black uppercase tracking-widest text-cyan-400 hover:bg-cyan-500 hover:text-black transition-colors">
+                      <button type="button" onClick={() => salvarRegraCombo(evento.id)} className="h-10 cursor-pointer rounded-lg bg-retratt/10 border border-retratt/30 px-5 text-[9px] font-black uppercase tracking-widest text-retratt hover:bg-retratt hover:text-black transition-colors">
                         Atualizar
                       </button>
                     </div>
@@ -803,13 +803,13 @@ export default function FotosAdminPage() {
                             {fotografosPorGaleria[evento.id].map((fotografo) => {
                               const chave = chaveRoyalty(evento.id, fotografo.id);
                               return (
-                                <div key={fotografo.id} className="grid min-h-[104px] gap-4 rounded-2xl border border-cyan-500/20 bg-cyan-500/[0.06] p-4 sm:grid-cols-[minmax(0,1fr)_240px] sm:items-center sm:p-5">
+                                <div key={fotografo.id} className="grid min-h-[104px] gap-4 rounded-2xl border border-retratt/20 bg-retratt/[0.06] p-4 sm:grid-cols-[minmax(0,1fr)_240px] sm:items-center sm:p-5">
                                   <div className="flex min-w-0 items-center gap-3">
                                     {fotografo.foto_url ? (
-                                      <img src={fotografo.foto_url} alt={`Perfil de ${fotografo.nome || "fotógrafo"}`} className="h-12 w-12 shrink-0 rounded-full border border-cyan-500/20 object-cover shadow-[0_0_18px_rgba(6,182,212,0.12)]" />
+                                      <img src={fotografo.foto_url} alt={`Perfil de ${fotografo.nome || "fotógrafo"}`} className="h-12 w-12 shrink-0 rounded-full border border-retratt/20 object-cover shadow-[0_0_18px_rgba(255,90,31,0.12)]" />
                                     ) : (
-                                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-cyan-500/20 bg-cyan-500/10">
-                                        <Camera size={18} className="text-cyan-400" />
+                                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-retratt/20 bg-retratt/10">
+                                        <Camera size={18} className="text-retratt" />
                                       </div>
                                     )}
                                     <div className="min-w-0">
@@ -818,7 +818,7 @@ export default function FotosAdminPage() {
                                     </div>
                                   </div>
                                   <div>
-                                    <label className="mb-1.5 block text-[8px] font-black uppercase tracking-widest text-amber-400">Seu royalty nas próximas vendas (0% a 15%)</label>
+                                    <label className="mb-1.5 block text-[8px] font-black uppercase tracking-widest text-retratt">Seu royalty nas próximas vendas (0% a 15%)</label>
                                     <div className="flex gap-2">
                                       <div className="relative min-w-0 flex-1">
                                         <input
@@ -830,7 +830,7 @@ export default function FotosAdminPage() {
                                           onChange={(e) => setRoyaltyForm((atual) => ({ ...atual, [chave]: e.target.value }))}
                                           inputMode="decimal"
                                           aria-label={`Royalty do fotógrafo ${fotografo.nome || "credenciado"}`}
-                                          className="h-11 w-full rounded-xl border border-amber-500/20 bg-black px-3 pr-7 text-[11px] font-black text-white outline-none focus:border-amber-500"
+                                          className="h-11 w-full rounded-xl border border-retratt/20 bg-black px-3 pr-7 text-[11px] font-black text-white outline-none focus:border-retratt"
                                         />
                                         <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-black text-zinc-500">%</span>
                                       </div>
@@ -838,12 +838,12 @@ export default function FotosAdminPage() {
                                         type="button"
                                         onClick={() => salvarRoyaltyFotografo(evento.id, fotografo.id)}
                                         disabled={salvandoRoyalty === chave}
-                                        className="h-11 cursor-pointer rounded-xl bg-amber-500 px-5 text-[8px] font-black uppercase tracking-widest text-black hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+                                        className="h-11 cursor-pointer rounded-xl bg-retratt px-5 text-[8px] font-black uppercase tracking-widest text-black hover:bg-retratt disabled:cursor-not-allowed disabled:opacity-50"
                                       >
                                         {salvandoRoyalty === chave ? "Salvando" : "Salvar"}
                                       </button>
                                     </div>
-                                    <p className="mt-1.5 text-[7px] leading-relaxed text-zinc-500">O Itatame retém 9,5% em toda venda. Este royalty é adicional e será mostrado ao fotógrafo.</p>
+                                    <p className="mt-1.5 text-[7px] leading-relaxed text-zinc-500">A Retratt retém 9,5% em toda venda. Este royalty é adicional e será mostrado ao fotógrafo.</p>
                                   </div>
                                 </div>
                               );
@@ -860,14 +860,14 @@ export default function FotosAdminPage() {
                           value={emailFotografo[evento.id] || ""}
                           onChange={(e) => setEmailFotografo((atual) => ({ ...atual, [evento.id]: e.target.value }))}
                           placeholder="fotografo@email.com"
-                          className="h-10 w-full rounded-lg border border-white/5 bg-black px-3 text-[11px] font-bold text-white outline-none focus:border-amber-500/50"
+                          className="h-10 w-full rounded-lg border border-white/5 bg-black px-3 text-[11px] font-bold text-white outline-none focus:border-retratt/50"
                         />
                       </div>
                       <button
                         type="button"
                         disabled={credenciandoEvento === evento.id}
                         onClick={() => credenciarFotografo(evento.id)}
-                        className="h-10 w-full sm:w-auto cursor-pointer rounded-lg border border-amber-500/30 bg-amber-500/10 px-5 text-[9px] font-black uppercase tracking-widest text-amber-400 transition-colors hover:bg-amber-500 hover:text-black disabled:cursor-not-allowed disabled:opacity-50"
+                        className="h-10 w-full sm:w-auto cursor-pointer rounded-lg border border-retratt/30 bg-retratt/10 px-5 text-[9px] font-black uppercase tracking-widest text-retratt transition-colors hover:bg-retratt hover:text-black disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {credenciandoEvento === evento.id ? "Credenciando..." : "Credenciar"}
                       </button>
@@ -895,11 +895,11 @@ export default function FotosAdminPage() {
                   </button>
                </div>
             ) : (
-               <div className="rounded-3xl border border-amber-500/30 bg-amber-500/5 shadow-[0_0_30px_rgba(245,158,11,0.05)] p-5 sm:p-6 md:p-8">
+               <div className="rounded-3xl border border-retratt/30 bg-retratt/5 shadow-[0_0_30px_rgba(255,90,31,0.05)] p-5 sm:p-6 md:p-8">
                  <div className="flex flex-col sm:flex-row sm:items-start justify-between mb-6 gap-4">
                     <div>
                        <h2 className="text-base font-black uppercase tracking-tight text-white md:text-lg">Dados do Organizador</h2>
-                       <p className="text-[10px] font-bold text-amber-500/80 uppercase tracking-widest mt-1">
+                       <p className="text-[10px] font-bold text-retratt/80 uppercase tracking-widest mt-1">
                          {perfilPendente ? "Precisamos dos dados para repasse" : "Atualizar Informações"}
                        </p>
                     </div>
@@ -914,14 +914,14 @@ export default function FotosAdminPage() {
                    <div className="grid gap-3 sm:grid-cols-2 mb-4 bg-black/40 p-4 rounded-2xl border border-white/5">
                      <div>
                         <input type="file" accept="image/*" className="hidden" ref={avatarInputRef} onChange={(e) => handleImageUpload(e, 'avatar')} />
-                        <button onClick={() => avatarInputRef.current?.click()} disabled={fazendoUpload === 'avatar'} className="w-full h-10 rounded-lg border border-dashed border-white/20 hover:border-amber-500 bg-white/5 flex items-center justify-center gap-2 text-[9px] font-black uppercase tracking-widest text-zinc-400 hover:text-amber-500 transition-all cursor-pointer">
+                        <button onClick={() => avatarInputRef.current?.click()} disabled={fazendoUpload === 'avatar'} className="w-full h-10 rounded-lg border border-dashed border-white/20 hover:border-retratt bg-white/5 flex items-center justify-center gap-2 text-[9px] font-black uppercase tracking-widest text-zinc-400 hover:text-retratt transition-all cursor-pointer">
                           {fazendoUpload === 'avatar' ? <Loader2 size={12} className="animate-spin" /> : <Camera size={12} />}
                           {fazendoUpload === 'avatar' ? 'A carregar...' : 'Logo do Organizador'}
                         </button>
                      </div>
                      <div>
                         <input type="file" accept="image/*" className="hidden" ref={capaInputRef} onChange={(e) => handleImageUpload(e, 'capa')} />
-                        <button onClick={() => capaInputRef.current?.click()} disabled={fazendoUpload === 'capa'} className="w-full h-10 rounded-lg border border-dashed border-white/20 hover:border-amber-500 bg-white/5 flex items-center justify-center gap-2 text-[9px] font-black uppercase tracking-widest text-zinc-400 hover:text-amber-500 transition-all cursor-pointer">
+                        <button onClick={() => capaInputRef.current?.click()} disabled={fazendoUpload === 'capa'} className="w-full h-10 rounded-lg border border-dashed border-white/20 hover:border-retratt bg-white/5 flex items-center justify-center gap-2 text-[9px] font-black uppercase tracking-widest text-zinc-400 hover:text-retratt transition-all cursor-pointer">
                           {fazendoUpload === 'capa' ? <Loader2 size={12} className="animate-spin" /> : <UploadCloud size={12} />}
                           {fazendoUpload === 'capa' ? 'A carregar...' : 'Banner (Vitrine)'}
                         </button>
@@ -931,35 +931,35 @@ export default function FotosAdminPage() {
                    <div className="grid gap-3 sm:grid-cols-2">
                      <div className="sm:col-span-2">
                         <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Nome ou Razão Social</label>
-                        <input value={orgForm.nome} onChange={(e) => setOrgForm({ ...orgForm, nome: e.target.value })} className="h-11 w-full rounded-xl border border-white/10 bg-[#050505] px-3 text-xs font-bold text-white outline-none focus:border-amber-500" placeholder="Ex: Viva Bem Eventos" />
+                        <input value={orgForm.nome} onChange={(e) => setOrgForm({ ...orgForm, nome: e.target.value })} className="h-11 w-full rounded-xl border border-white/10 bg-[#050505] px-3 text-xs font-bold text-white outline-none focus:border-retratt" placeholder="Ex: Viva Bem Eventos" />
                      </div>
-                     
+
                      <div className="sm:col-span-2">
                         <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">E-mail</label>
-                        <input value={orgForm.email} onChange={(e) => setOrgForm({ ...orgForm, email: e.target.value })} type="email" className="h-11 w-full rounded-xl border border-white/10 bg-[#050505] px-3 text-xs font-bold text-white outline-none focus:border-amber-500" placeholder="seu@email.com" />
+                        <input value={orgForm.email} onChange={(e) => setOrgForm({ ...orgForm, email: e.target.value })} type="email" className="h-11 w-full rounded-xl border border-white/10 bg-[#050505] px-3 text-xs font-bold text-white outline-none focus:border-retratt" placeholder="seu@email.com" />
                      </div>
 
                      <div>
                         <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">WhatsApp</label>
-                        <input value={orgForm.telefone} onChange={(e) => setOrgForm({ ...orgForm, telefone: e.target.value })} className="h-11 w-full rounded-xl border border-white/10 bg-[#050505] px-3 text-xs font-bold text-white outline-none focus:border-amber-500" placeholder="(00) 00000-0000" />
+                        <input value={orgForm.telefone} onChange={(e) => setOrgForm({ ...orgForm, telefone: e.target.value })} className="h-11 w-full rounded-xl border border-white/10 bg-[#050505] px-3 text-xs font-bold text-white outline-none focus:border-retratt" placeholder="(00) 00000-0000" />
                      </div>
                      <div>
                         <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">CPF ou CNPJ</label>
-                        <input value={orgForm.documento} onChange={(e) => setOrgForm({ ...orgForm, documento: e.target.value })} className="h-11 w-full rounded-xl border border-white/10 bg-[#050505] px-3 text-xs font-bold text-white outline-none focus:border-amber-500" placeholder="000.000.000-00" />
+                        <input value={orgForm.documento} onChange={(e) => setOrgForm({ ...orgForm, documento: e.target.value })} className="h-11 w-full rounded-xl border border-white/10 bg-[#050505] px-3 text-xs font-bold text-white outline-none focus:border-retratt" placeholder="000.000.000-00" />
                      </div>
 
                      <div>
                         <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Cidade</label>
-                        <input value={orgForm.cidade} onChange={(e) => setOrgForm({ ...orgForm, cidade: e.target.value })} className="h-11 w-full rounded-xl border border-white/10 bg-[#050505] px-3 text-xs font-bold text-white outline-none focus:border-amber-500" placeholder="Sua cidade" />
+                        <input value={orgForm.cidade} onChange={(e) => setOrgForm({ ...orgForm, cidade: e.target.value })} className="h-11 w-full rounded-xl border border-white/10 bg-[#050505] px-3 text-xs font-bold text-white outline-none focus:border-retratt" placeholder="Sua cidade" />
                      </div>
                      <div>
                         <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Estado (UF)</label>
-                        <input value={orgForm.estado} onChange={(e) => setOrgForm({ ...orgForm, estado: e.target.value })} className="h-11 w-full rounded-xl border border-white/10 bg-[#050505] px-3 text-xs font-bold text-white outline-none focus:border-amber-500" placeholder="Ex: MT" maxLength={2} />
+                        <input value={orgForm.estado} onChange={(e) => setOrgForm({ ...orgForm, estado: e.target.value })} className="h-11 w-full rounded-xl border border-white/10 bg-[#050505] px-3 text-xs font-bold text-white outline-none focus:border-retratt" placeholder="Ex: MT" maxLength={2} />
                      </div>
 
                      <div className="sm:col-span-2">
                         <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Tipo de Negócio</label>
-                        <select value={orgForm.tipo_entidade} onChange={(e) => setOrgForm({ ...orgForm, tipo_entidade: e.target.value })} className="h-11 w-full cursor-pointer rounded-xl border border-white/10 bg-[#050505] px-3 text-xs font-bold text-white outline-none focus:border-amber-500">
+                        <select value={orgForm.tipo_entidade} onChange={(e) => setOrgForm({ ...orgForm, tipo_entidade: e.target.value })} className="h-11 w-full cursor-pointer rounded-xl border border-white/10 bg-[#050505] px-3 text-xs font-bold text-white outline-none focus:border-retratt">
                           <option value="empresa">Empresa (CNPJ)</option>
                           <option value="associacao">Federação / Associação</option>
                           <option value="academia">Academia</option>
@@ -969,7 +969,7 @@ export default function FotosAdminPage() {
                    </div>
 
                    <div className="mt-6">
-                     <button type="button" onClick={salvarPerfilOrganizador} disabled={salvandoPerfil || !orgForm.nome.trim() || !orgForm.telefone.trim()} className="h-12 w-full cursor-pointer items-center justify-center rounded-xl bg-amber-500 text-[11px] font-black uppercase tracking-widest text-black hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50 transition-all shadow-[0_0_15px_rgba(245,158,11,0.2)]">
+                     <button type="button" onClick={salvarPerfilOrganizador} disabled={salvandoPerfil || !orgForm.nome.trim() || !orgForm.telefone.trim()} className="h-12 w-full cursor-pointer items-center justify-center rounded-xl bg-retratt text-[11px] font-black uppercase tracking-widest text-black hover:bg-retratt disabled:cursor-not-allowed disabled:opacity-50 transition-all shadow-[0_0_15px_rgba(255,90,31,0.2)]">
                        {salvandoPerfil ? "A Processar..." : "Salvar Dados"}
                      </button>
                    </div>
@@ -980,23 +980,23 @@ export default function FotosAdminPage() {
             {/* MERCADO PAGO / FINANCEIRO */}
             <div className="rounded-3xl border border-white/5 bg-[#0a0a0e] p-5 sm:p-6 md:p-8 shadow-xl mt-6">
               <div className="flex items-center gap-3 mb-5 sm:mb-6 border-b border-white/5 pb-4">
-                 <Wallet size={20} className="text-amber-400 shrink-0" />
+                 <Wallet size={20} className="text-retratt shrink-0" />
                  <h2 className="text-lg font-black uppercase tracking-tight text-white truncate">Royalties</h2>
               </div>
-               
+
               <div className="space-y-4">
-                <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4 sm:p-5">
+                <div className="rounded-2xl border border-retratt/20 bg-retratt/5 p-4 sm:p-5">
                   <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Royalties gerados nas vendas pagas</p>
-                  <p className="mt-2 text-3xl font-black text-amber-400">{formatarMoeda(royaltiesTotalCentavos)}</p>
+                  <p className="mt-2 text-3xl font-black text-retratt">{formatarMoeda(royaltiesTotalCentavos)}</p>
                   <p className="mt-3 text-[10px] leading-relaxed text-zinc-400">
-                    Cada venda continua sendo processada na conta do fotógrafo. Seu royalty é separado junto da comissão do Itatame e fica registrado para repasse após a liberação financeira.
+                    Cada venda continua sendo processada na conta do fotógrafo. Seu royalty é separado junto da comissão da Retratt e fica registrado para repasse após a liberação financeira.
                   </p>
                 </div>
 
                 <div className="rounded-2xl border border-white/5 bg-black/40 p-4 sm:p-5">
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Controle por galeria</p>
-                    <span className="text-[8px] font-black uppercase tracking-widest text-amber-400">Somente vendas pagas</span>
+                    <span className="text-[8px] font-black uppercase tracking-widest text-retratt">Somente vendas pagas</span>
                   </div>
                   {fotoEventos.length ? (
                     <div className="space-y-2">
@@ -1006,7 +1006,7 @@ export default function FotosAdminPage() {
                             <p className="truncate text-[10px] font-black text-white">{evento.nome}</p>
                             <p className="mt-0.5 text-[8px] font-bold uppercase tracking-widest text-zinc-600">Royalty acumulado</p>
                           </div>
-                          <span className="shrink-0 text-xs font-black text-amber-400">{formatarMoeda(royaltiesPorGaleria[evento.id] || 0)}</span>
+                          <span className="shrink-0 text-xs font-black text-retratt">{formatarMoeda(royaltiesPorGaleria[evento.id] || 0)}</span>
                         </div>
                       ))}
                     </div>
@@ -1017,9 +1017,9 @@ export default function FotosAdminPage() {
                 </div>
 
                 {contaSistemaConectada && (
-                  <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-3 text-[9px] leading-relaxed text-cyan-100/70">
-                    <strong className="block font-black uppercase tracking-widest text-cyan-400">Conta do sistema de campeonatos preservada</strong>
-                    O Mercado Pago já vinculado continua exclusivo para inscrições e não é usado como recebedor nas vendas do Itatame Fotos.
+                  <div className="rounded-xl border border-retratt/20 bg-retratt/5 p-3 text-[9px] leading-relaxed text-orange-100/70">
+                    <strong className="block font-black uppercase tracking-widest text-retratt">Conta do sistema de campeonatos preservada</strong>
+                    O Mercado Pago já vinculado continua exclusivo para inscrições e não é usado como recebedor nas vendas da Retratt.
                   </div>
                 )}
 

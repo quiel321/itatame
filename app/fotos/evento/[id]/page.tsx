@@ -18,13 +18,13 @@ function fotoPreviewSrc(foto: FotoArquivo) {
 export default function FotosEventoPage() {
   const params = useParams<{ id: string }>();
   const eventoId = params.id;
-  const [evento, setEvento] = useState<any>(null); 
+  const [evento, setEvento] = useState<any>(null);
   const [albuns, setAlbuns] = useState<FotoAlbum[]>([]);
   const [fotos, setFotos] = useState<FotoArquivo[]>([]);
   const [albumAtivo, setAlbumAtivo] = useState("todos");
   const [busca, setBusca] = useState("");
   const [carregando, setCarregando] = useState(true);
-  
+
   const [carrinho, setCarrinho] = useState<string[]>([]);
   const [carrinhoCarregado, setCarrinhoCarregado] = useState(false);
   const [fotoSelecionada, setFotoSelecionada] = useState<FotoArquivo | null>(null);
@@ -196,7 +196,7 @@ export default function FotosEventoPage() {
   }, [fotos, albumAtivo, busca]);
 
   const toggleCarrinho = (id: string, e?: React.MouseEvent) => {
-    if (e) e.stopPropagation(); 
+    if (e) e.stopPropagation();
     setCarrinho(prev => prev.includes(id) ? prev.filter(fotoId => fotoId !== id) : [...prev, id]);
   };
 
@@ -228,9 +228,9 @@ export default function FotosEventoPage() {
   return (
     <FotosShell>
       <main data-foto-protegida className="min-h-screen bg-[#020202] text-white font-sans pb-28 relative print:hidden">
-        
+
         <div className="max-w-screen-2xl mx-auto px-2 md:px-4">
-          
+
           <section className="mt-4 mb-4 overflow-hidden rounded-2xl border border-white/10 bg-[#0a0a0e] shadow-2xl relative">
             <div className="relative min-h-[220px] md:min-h-[260px] px-4 py-6 md:px-8 md:py-8 flex flex-col">
               <div className="absolute inset-0 opacity-40">
@@ -243,11 +243,11 @@ export default function FotosEventoPage() {
               </div>
 
               <div className="relative z-10 max-w-4xl flex flex-col h-full justify-center">
-                
+
                 <Link href="/fotos" className="inline-flex cursor-pointer items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 hover:text-white transition-colors mb-5 w-fit">
                   <ChevronLeft size={14} /> Voltar aos eventos
                 </Link>
-                
+
                 {/* 🔥 IDENTIFICAÇÃO DO AUTOR DA GALERIA */}
                 <div className="mb-3">
                    {evento?.tipo_autor === "organizador" && evento?.autor_slug ? (
@@ -260,11 +260,11 @@ export default function FotosEventoPage() {
                           </span>
                        </Link>
                    ) : (
-                       <div className="inline-flex items-center gap-2.5 bg-cyan-500/10 border border-cyan-500/20 rounded-full pr-4 pl-1 py-1 backdrop-blur-md w-fit">
-                          <div className="w-6 h-6 rounded-full bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center text-[9px] font-black text-cyan-400">
+                       <div className="inline-flex items-center gap-2.5 bg-retratt/10 border border-retratt/20 rounded-full pr-4 pl-1 py-1 backdrop-blur-md w-fit">
+                          <div className="w-6 h-6 rounded-full bg-retratt/20 border border-retratt/30 flex items-center justify-center text-[9px] font-black text-retratt">
                              <Camera size={12} />
                           </div>
-                          <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-widest">
+                          <span className="text-[10px] font-bold text-retratt uppercase tracking-widest">
                              Por: {evento?.autor_nome}
                           </span>
                        </div>
@@ -272,18 +272,18 @@ export default function FotosEventoPage() {
                 </div>
 
                 <h1 className="mt-1 max-w-3xl text-3xl font-black uppercase tracking-tight leading-none text-white md:text-5xl">
-                  {evento?.nome || "Evento iTatame Fotos"}
+                  {evento?.nome || "Evento Retratt"}
                 </h1>
 
                 <div className="mt-5 flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-wider text-zinc-200">
                   {evento?.data_evento && (
                     <span className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-black/50 backdrop-blur-md px-3 py-2">
-                      <CalendarDays size={14} className="text-cyan-400" /> {formatarData(evento.data_evento)}
+                      <CalendarDays size={14} className="text-retratt" /> {formatarData(evento.data_evento)}
                     </span>
                   )}
                   {(evento?.cidade || evento?.local) && (
                     <span className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-black/50 backdrop-blur-md px-3 py-2">
-                      <MapPin size={14} className="text-red-500" /> {[evento.local, evento.cidade, evento.estado].filter(Boolean).join(" - ")}
+                      <MapPin size={14} className="text-retratt" /> {[evento.local, evento.cidade, evento.estado].filter(Boolean).join(" - ")}
                     </span>
                   )}
                   <span className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-black/50 backdrop-blur-md px-3 py-2">
@@ -293,9 +293,9 @@ export default function FotosEventoPage() {
               </div>
             </div>
           </section>
-          
+
           <div className="sticky top-[60px] md:top-[80px] z-40 mb-6 bg-[#0a0a0e]/90 backdrop-blur-xl border border-white/10 p-2 md:p-3 rounded-2xl flex flex-col md:flex-row gap-3 shadow-2xl">
-            
+
             <BuscaFacial
               eventoId={eventoId}
               triggerLabel="Pesquisa facial"
@@ -304,12 +304,12 @@ export default function FotosEventoPage() {
 
             <div className="w-[1px] h-8 bg-white/5 hidden md:block self-center"></div>
 
-            <div className="flex-1 flex items-center bg-black/60 border border-white/5 rounded-xl px-4 py-2.5 focus-within:border-cyan-500/40 transition-colors cursor-text">
+            <div className="flex-1 flex items-center bg-black/60 border border-white/5 rounded-xl px-4 py-2.5 focus-within:border-retratt/40 transition-colors cursor-text">
               <Search size={16} className="text-zinc-500 mr-2 shrink-0" />
-              <input 
-                value={busca} 
-                onChange={(e) => setBusca(e.target.value)} 
-                placeholder="Buscar por nome do atleta, academia ou número..." 
+              <input
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                placeholder="Buscar por nome, equipe, referência ou número..."
                 className="w-full bg-transparent border-none text-xs text-white outline-none placeholder:text-zinc-600 font-medium"
               />
             </div>
@@ -318,17 +318,17 @@ export default function FotosEventoPage() {
               <div className="flex items-center gap-1.5 px-3 text-zinc-600 text-[9px] font-black uppercase tracking-widest shrink-0 border-r border-white/10 mr-1">
                 <Filter size={14} /> Álbuns
               </div>
-              <button 
-                onClick={() => setAlbumAtivo("todos")} 
-                className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all cursor-pointer shrink-0 ${albumAtivo === "todos" ? 'bg-cyan-500 text-black shadow-md shadow-cyan-900/30' : 'bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white'}`}
+              <button
+                onClick={() => setAlbumAtivo("todos")}
+                className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all cursor-pointer shrink-0 ${albumAtivo === "todos" ? 'bg-retratt text-black shadow-md shadow-orange-950/30' : 'bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white'}`}
               >
                 Todas ({fotos.length})
               </button>
               {albuns.map(album => (
-                <button 
+                <button
                   key={album.id}
                   onClick={() => setAlbumAtivo(album.id)}
-                  className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all cursor-pointer shrink-0 ${albumAtivo === album.id ? 'bg-cyan-500 text-black shadow-md shadow-cyan-900/30' : 'bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white'}`}
+                  className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all cursor-pointer shrink-0 ${albumAtivo === album.id ? 'bg-retratt text-black shadow-md shadow-orange-950/30' : 'bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white'}`}
                 >
                   {album.titulo}
                 </button>
@@ -336,14 +336,14 @@ export default function FotosEventoPage() {
             </div>
           </div>
 
-          <div className="mb-6 rounded-3xl bg-gradient-to-r from-[#1a0505] via-red-950/20 to-[#0a0a0e] border border-red-500/20 p-5 md:p-6 flex flex-col md:flex-row items-center justify-between gap-5 shadow-lg shadow-red-900/10">
+          <div className="mb-6 rounded-3xl bg-gradient-to-r from-[#18100c] via-orange-950/20 to-[#0a0a0e] border border-retratt/20 p-5 md:p-6 flex flex-col md:flex-row items-center justify-between gap-5 shadow-lg shadow-orange-950/10">
              <div className="flex items-center gap-4 text-center md:text-left">
-                <div className="hidden sm:flex w-12 h-12 rounded-full bg-red-500/10 text-red-500 items-center justify-center shrink-0 border border-red-500/20">
+                <div className="hidden sm:flex w-12 h-12 rounded-full bg-retratt/10 text-retratt items-center justify-center shrink-0 border border-retratt/20">
                    <Percent size={24} />
                 </div>
                 <div>
                    <h3 className="text-lg md:text-xl font-black uppercase tracking-tight text-white mb-1">
-                      Leve mais, <span className="text-red-500">Pague menos</span>
+                      Leve mais, <span className="text-retratt">Pague menos</span>
                    </h3>
                    <p className="text-[11px] text-zinc-400 font-medium uppercase tracking-widest">
                       Economize até 20% comprando pacotes no carrinho.
@@ -355,9 +355,9 @@ export default function FotosEventoPage() {
                    <p className="text-xl font-black text-white">10<span className="text-xs text-zinc-500">%</span></p>
                    <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500 mt-1">2 fotos</p>
                 </div>
-                <div className="flex-1 md:flex-none bg-red-500/10 border border-red-500/30 rounded-2xl px-5 py-3 text-center shadow-[0_0_15px_rgba(239,68,68,0.1)]">
-                   <p className="text-xl font-black text-red-400">20<span className="text-xs text-red-500/50">%</span></p>
-                   <p className="text-[9px] font-black uppercase tracking-widest text-red-400 mt-1">3+ fotos</p>
+                <div className="flex-1 md:flex-none bg-retratt/10 border border-retratt/30 rounded-2xl px-5 py-3 text-center shadow-[0_0_15px_rgba(255,90,31,0.1)]">
+                   <p className="text-xl font-black text-retratt">20<span className="text-xs text-retratt/50">%</span></p>
+                   <p className="text-[9px] font-black uppercase tracking-widest text-retratt mt-1">3+ fotos</p>
                 </div>
              </div>
           </div>
@@ -376,32 +376,32 @@ export default function FotosEventoPage() {
             <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 xl2:grid-cols-7 gap-2 md:gap-3">
               {fotosFiltradas.map((foto) => {
                 const noCarrinho = carrinho.includes(String(foto.id));
-                
+
                 return (
-                  <article 
-                    key={foto.id} 
+                  <article
+                    key={foto.id}
                     onClick={() => {
                       setFotoOrigemIa(false);
                       setFotoSelecionada(foto);
                     }}
-                    className="group relative aspect-[4/5] rounded-2xl overflow-hidden bg-[#111] border border-white/5 shadow-md cursor-pointer transition-all duration-300 hover:shadow-cyan-900/20 hover:border-cyan-500/30"
+                    className="group relative aspect-[4/5] rounded-2xl overflow-hidden bg-[#111] border border-white/5 shadow-md cursor-pointer transition-all duration-300 hover:shadow-orange-950/20 hover:border-retratt/30"
                   >
-                    
+
                     {foto.r2_thumb_key || foto.r2_preview_key ? (
                       <img
                         data-foto-protegida-imagem
-                        src={fotoPreviewSrc(foto)} 
-                        alt={foto.titulo || "Foto do evento"} 
-                        className={`w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105 ${noCarrinho ? 'opacity-40 grayscale-[60%]' : 'opacity-90'}`} 
-                        loading="lazy" 
+                        src={fotoPreviewSrc(foto)}
+                        alt={foto.titulo || "Foto do evento"}
+                        className={`w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105 ${noCarrinho ? 'opacity-40 grayscale-[60%]' : 'opacity-90'}`}
+                        loading="lazy"
                       />
                     ) : (
-                      <div className="flex h-full items-center justify-center px-4 text-center text-[9px] font-black uppercase tracking-[0.2em] text-zinc-700 bg-zinc-950">iTatame</div>
+                      <div className="flex h-full items-center justify-center px-4 text-center text-[9px] font-black uppercase tracking-[0.2em] text-zinc-700 bg-zinc-950">Retratt</div>
                     )}
 
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.15] group-hover:opacity-[0.25] transition-opacity select-none z-10">
                       <span className="text-xl md:text-2xl font-black uppercase tracking-[0.3em] rotate-[-30deg]">
-                        <span className="text-white drop-shadow-md">i</span><span className="text-red-500 drop-shadow-md">Tatame</span>
+                        <span className="text-retratt drop-shadow-md">R</span><span className="text-white drop-shadow-md">ETRATT</span>
                       </span>
                     </div>
 
@@ -421,12 +421,12 @@ export default function FotosEventoPage() {
 
                     <div className="absolute bottom-2 left-2 right-2 flex flex-col gap-1.5 z-30 md:opacity-0 md:group-hover:opacity-100 md:group-hover:translate-y-0 md:translate-y-2 transition-all duration-300">
                       <p className="line-clamp-1 text-[9px] font-bold uppercase tracking-tight text-white truncate hidden md:block px-1 mb-1">{foto.titulo || "Foto do evento"}</p>
-                      
+
                       <div className="flex items-center justify-between gap-1.5 backdrop-blur-sm bg-black/60 rounded-xl p-1 border border-white/10 md:bg-white/95 md:text-black md:border-transparent">
-                          <span className="text-[10px] md:text-[11px] font-black text-cyan-400 md:text-black md:pl-2 pr-1">{formatarPrecoFotos(foto.preco_centavos)}</span>
-                          <button 
+                          <span className="text-[10px] md:text-[11px] font-black text-retratt md:text-black md:pl-2 pr-1">{formatarPrecoFotos(foto.preco_centavos)}</span>
+                          <button
                             onClick={(e) => toggleCarrinho(String(foto.id), e)}
-                            className={`cursor-pointer px-3 py-2 rounded-lg text-[8px] md:text-[9px] font-black uppercase tracking-widest transition-all ${noCarrinho ? 'bg-green-500 text-white' : 'bg-cyan-500 text-black hover:bg-cyan-400 md:bg-black/90 md:text-white md:hover:bg-black'}`}
+                            className={`cursor-pointer px-3 py-2 rounded-lg text-[8px] md:text-[9px] font-black uppercase tracking-widest transition-all ${noCarrinho ? 'bg-green-500 text-white' : 'bg-retratt text-black hover:bg-retratt md:bg-black/90 md:text-white md:hover:bg-black'}`}
                           >
                             {noCarrinho ? <CheckCircle2 size={12}/> : "Carrinho"}
                           </button>
@@ -439,17 +439,17 @@ export default function FotosEventoPage() {
           )}
 
           {carrinho.length > 0 && (
-            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[95%] max-w-sm bg-[#16161e]/95 backdrop-blur-xl border border-cyan-500/30 p-2.5 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.9),0_0_30px_rgba(6,182,212,0.2)] flex items-center justify-between z-40 animate-in slide-in-from-bottom-10 fade-in duration-300">
+            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[95%] max-w-sm bg-[#16161e]/95 backdrop-blur-xl border border-retratt/30 p-2.5 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.9),0_0_30px_rgba(255,90,31,0.2)] flex items-center justify-between z-40 animate-in slide-in-from-bottom-10 fade-in duration-300">
               <div className="flex items-center gap-3 pl-2">
                 <div className="w-10 h-10 bg-black/40 rounded-xl flex items-center justify-center border border-white/10 text-white shrink-0">
                   <ImageIcon size={18} />
                 </div>
                 <div>
                   <p className="text-white text-[9px] font-black uppercase tracking-widest">{carrinho.length} {carrinho.length === 1 ? 'Foto' : 'Fotos'}</p>
-                  <p className="text-cyan-400 text-xs font-black mt-0.5">{formatarPrecoFotos(valorTotalCarrinho)}</p>
+                  <p className="text-retratt text-xs font-black mt-0.5">{formatarPrecoFotos(valorTotalCarrinho)}</p>
                 </div>
               </div>
-              <Link href="/fotos/carrinho" className="bg-red-600 hover:bg-red-500 text-white px-6 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer shadow-lg shadow-red-950/20 hover:scale-105">
+              <Link href="/fotos/carrinho" className="bg-retratt hover:bg-retratt text-white px-6 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer shadow-lg shadow-orange-950/20 hover:scale-105">
                 Finalizar compra
               </Link>
             </div>
@@ -461,7 +461,7 @@ export default function FotosEventoPage() {
         {fotoSelecionada && (
           <div className="fixed inset-0 z-[200] bg-black/95 backdrop-blur-md flex items-center justify-center p-2 md:p-4 animate-in fade-in duration-300" onClick={fecharFotoSelecionada}>
             <div className="relative w-full max-w-7xl h-full flex flex-col md:flex-row gap-4 items-center justify-center" onClick={(e) => e.stopPropagation()}>
-              
+
               <button onClick={fecharFotoSelecionada} className="absolute top-2 right-2 md:top-4 md:right-4 z-50 cursor-pointer text-white bg-black/60 hover:bg-black p-2.5 rounded-full backdrop-blur-sm border border-white/10 transition-colors" aria-label="Fechar foto">
                 <X size={20} />
               </button>
@@ -469,15 +469,15 @@ export default function FotosEventoPage() {
               <div className="relative flex-1 h-[70vh] md:h-full w-full flex items-center justify-center overflow-hidden rounded-3xl bg-[#050505] border border-white/5 shadow-2xl">
                 <img
                   data-foto-protegida-imagem
-                  src={fotoPreviewSrc(fotoSelecionada)} 
-                  alt={fotoSelecionada.titulo || "Foto do evento"} 
-                  className="w-auto h-auto max-w-full max-h-full object-contain select-none pointer-events-none" 
-                  loading="lazy" 
+                  src={fotoPreviewSrc(fotoSelecionada)}
+                  alt={fotoSelecionada.titulo || "Foto do evento"}
+                  className="w-auto h-auto max-w-full max-h-full object-contain select-none pointer-events-none"
+                  loading="lazy"
                 />
-                
+
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.15] select-none z-10">
                   <span className="text-4xl md:text-6xl font-black uppercase tracking-[0.3em] rotate-[-25deg]">
-                    <span className="text-white drop-shadow-lg">i</span><span className="text-red-500 drop-shadow-lg">Tatame</span>
+                    <span className="text-retratt drop-shadow-lg">R</span><span className="text-white drop-shadow-lg">ETRATT</span>
                   </span>
                 </div>
 
@@ -495,7 +495,7 @@ export default function FotosEventoPage() {
                     <ScanFace size={14} /> Encontrada pela busca facial
                   </div>
                 )}
-                
+
                 <div className="flex items-center gap-3.5">
                     <div className="w-12 h-12 rounded-2xl bg-zinc-900 flex items-center justify-center text-zinc-500 border border-white/5 shrink-0 shadow-inner">
                         <ImageIcon size={20}/>
@@ -509,9 +509,9 @@ export default function FotosEventoPage() {
                 <div className="w-full h-[1px] bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
 
                 <div className="flex flex-col gap-4">
-                    
+
                     <div className="flex items-center gap-3 bg-white/[0.02] border border-white/5 rounded-2xl p-3 transition-colors hover:bg-white/[0.04]">
-                        <div className="w-9 h-9 rounded-xl bg-red-500/10 flex items-center justify-center text-red-500 shrink-0 border border-red-500/20">
+                        <div className="w-9 h-9 rounded-xl bg-retratt/10 flex items-center justify-center text-retratt shrink-0 border border-retratt/20">
                             <Camera size={16} />
                         </div>
                         <div className="min-w-0 flex-1">
@@ -524,42 +524,42 @@ export default function FotosEventoPage() {
 
                     <div className="flex flex-wrap items-center gap-2">
                         <span className="bg-white/5 text-zinc-400 text-[9px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg border border-white/10 flex items-center gap-1.5">
-                           <ShieldCheck size={12} className="text-emerald-500/70"/> Jiu-Jitsu
+                           <ShieldCheck size={12} className="text-emerald-500/70"/> Evento oficial
                         </span>
                         {evento && (
                            <span className="bg-white/5 text-zinc-400 text-[9px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg border border-white/10 flex items-center gap-1.5">
-                              <CalendarDays size={12} className="text-cyan-500/70"/> {formatarData(evento.data_evento)}
+                              <CalendarDays size={12} className="text-retratt/70"/> {formatarData(evento.data_evento)}
                            </span>
                         )}
                     </div>
                 </div>
-                
+
                 <div className="mt-auto flex flex-col gap-4">
                   <div className="flex items-end justify-between bg-[#050505] p-4 rounded-2xl border border-white/5">
                       <p className="text-[10px] text-zinc-500 font-black uppercase tracking-widest">Valor da Foto</p>
-                      <p className="text-3xl font-black text-cyan-400 tracking-tight leading-none pr-1">{formatarPrecoFotos(fotoSelecionada.preco_centavos)}</p>
+                      <p className="text-3xl font-black text-retratt tracking-tight leading-none pr-1">{formatarPrecoFotos(fotoSelecionada.preco_centavos)}</p>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3 w-full">
-                    
+
                     {carrinho.includes(String(fotoSelecionada.id)) ? (
                        <button onClick={(e) => toggleCarrinho(String(fotoSelecionada.id), e)} className="w-full cursor-pointer py-3.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-colors flex items-center justify-center gap-1.5 shadow-[0_0_15px_rgba(16,185,129,0.2)]">
                          <CheckCircle2 size={14}/> Na Sacola
                        </button>
                     ) : (
-                      <button onClick={(e) => toggleCarrinho(String(fotoSelecionada.id), e)} className="w-full cursor-pointer py-3.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 shadow-[0_0_15px_rgba(6,182,212,0.2)]">
+                      <button onClick={(e) => toggleCarrinho(String(fotoSelecionada.id), e)} className="w-full cursor-pointer py-3.5 rounded-xl bg-retratt hover:bg-retratt text-black text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 shadow-[0_0_15px_rgba(255,90,31,0.2)]">
                         <ShoppingCart size={14}/> Adicionar
                       </button>
                     )}
-                    
-                    <Link 
-                      href="/fotos/carrinho" 
+
+                    <Link
+                      href="/fotos/carrinho"
                       onClick={(e) => {
                         if (!carrinho.includes(String(fotoSelecionada.id))) {
                           toggleCarrinho(String(fotoSelecionada.id));
                         }
-                      }} 
-                      className="w-full cursor-pointer py-3.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 shadow-[0_0_15px_rgba(239,68,68,0.2)] text-center"
+                      }}
+                      className="w-full cursor-pointer py-3.5 rounded-xl bg-retratt hover:bg-retratt text-white text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 shadow-[0_0_15px_rgba(255,90,31,0.2)] text-center"
                     >
                       Finalizar
                     </Link>

@@ -43,7 +43,7 @@ export async function POST(request: Request) {
     if (!resultado) return NextResponse.json({ success: true, message: "Pedido não localizado." });
     return NextResponse.json({ success: true, status: resultado.status });
   } catch (error) {
-    console.error("Webhook iTatame Fotos:", error);
+    console.error("Webhook Retratt:", error);
     return NextResponse.json({ success: false }, { status: 401 });
   }
 }

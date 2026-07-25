@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -151,7 +151,7 @@ export default function FotosCarrinhoPage() {
             // Agora puxamos pelo apelido exato que demos na query acima!
             const evento = primeiraRelacao(foto.evento_dados);
             const fotografo = primeiraRelacao(foto.fotografo_dados);
-            
+
             return {
               id: String(foto.id),
               evento: evento?.nome || "Evento Oficial",
@@ -315,7 +315,7 @@ export default function FotosCarrinhoPage() {
   return (
     <FotosShell>
       <main className="relative min-h-screen overflow-hidden bg-[#050505] pb-24 font-sans text-white">
-        <div className="pointer-events-none absolute right-0 top-0 h-[500px] w-[500px] rounded-full bg-red-600/10 blur-[150px]" />
+        <div className="pointer-events-none absolute right-0 top-0 h-[500px] w-[500px] rounded-full bg-retratt/10 blur-[150px]" />
 
         <header className="sticky top-0 z-40 border-b border-white/5 bg-[#0a0a0e]/80 py-5 backdrop-blur-md">
           <div className="mx-auto flex max-w-7xl items-center justify-between px-4 md:px-8">
@@ -342,7 +342,7 @@ export default function FotosCarrinhoPage() {
 
           {carregandoCart ? (
             <div className="flex flex-col items-center justify-center py-32">
-              <Loader2 size={40} className="mb-4 animate-spin text-red-500" />
+              <Loader2 size={40} className="mb-4 animate-spin text-retratt" />
               <p className="text-sm font-black uppercase tracking-widest text-zinc-400">Buscando as suas fotos...</p>
             </div>
           ) : fotos.length === 0 ? (
@@ -352,7 +352,7 @@ export default function FotosCarrinhoPage() {
               </div>
               <h2 className="mb-2 text-xl font-black uppercase tracking-tight text-white">Carrinho vazio</h2>
               <p className="mb-8 text-xs font-medium text-zinc-500">Você ainda não separou as suas memórias de glória.</p>
-              <Link href="/fotos" className="cursor-pointer rounded-xl bg-red-600 px-8 py-4 text-[10px] font-black uppercase tracking-widest text-white shadow-[0_0_30px_rgba(239,68,68,0.25)] transition-all hover:scale-105 hover:bg-red-500">
+              <Link href="/fotos" className="cursor-pointer rounded-xl bg-retratt px-8 py-4 text-[10px] font-black uppercase tracking-widest text-white shadow-[0_0_30px_rgba(255,90,31,0.25)] transition-all hover:scale-105 hover:bg-retratt">
                 Encontrar minhas fotos
               </Link>
             </div>
@@ -360,15 +360,15 @@ export default function FotosCarrinhoPage() {
             <div className="grid items-start gap-6 md:gap-8 lg:grid-cols-[1fr_380px]">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 {fotos.map((foto) => (
-                  <div key={foto.id} className="group relative rounded-xl border border-white/5 bg-[#0a0a0e] p-2.5 transition-all duration-300 hover:border-red-500/30 hover:bg-red-500/5 hover:shadow-[0_10px_40px_rgba(239,68,68,0.05)]">
+                  <div key={foto.id} className="group relative rounded-xl border border-white/5 bg-[#0a0a0e] p-2.5 transition-all duration-300 hover:border-retratt/30 hover:bg-retratt/5 hover:shadow-[0_10px_40px_rgba(255,90,31,0.05)]">
                     <div className="relative mb-3 aspect-square overflow-hidden rounded-lg bg-zinc-900">
                       <img src={foto.imagem} alt="Foto" className="h-full w-full object-cover opacity-90 transition-transform duration-700 group-hover:scale-110 group-hover:opacity-100" />
                       <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 transition-opacity group-hover:opacity-100">
-                        <span className="rotate-[-25deg] text-[10px] font-black uppercase tracking-[0.3em] text-white/60 mix-blend-overlay">iTatame Fotos</span>
+                        <span className="rotate-[-25deg] text-[10px] font-black uppercase tracking-[0.3em] text-white/60 mix-blend-overlay">Retratt</span>
                       </div>
 
                       {etapa === "carrinho" && (
-                        <button onClick={() => removerFoto(foto.id)} className="absolute right-2 top-2 cursor-pointer rounded-lg bg-red-600/95 p-2.5 text-white opacity-100 shadow-lg backdrop-blur-md transition-all duration-300 hover:bg-red-500 md:right-3 md:top-3 md:bg-black/60 md:opacity-0 md:group-hover:opacity-100 md:hover:bg-red-600" title="Remover foto" aria-label="Remover foto do carrinho">
+                        <button onClick={() => removerFoto(foto.id)} className="absolute right-2 top-2 cursor-pointer rounded-lg bg-retratt/95 p-2.5 text-white opacity-100 shadow-lg backdrop-blur-md transition-all duration-300 hover:bg-retratt md:right-3 md:top-3 md:bg-black/60 md:opacity-0 md:group-hover:opacity-100 md:hover:bg-retratt" title="Remover foto" aria-label="Remover foto do carrinho">
                           <Trash2 size={14} />
                         </button>
                       )}
@@ -376,7 +376,7 @@ export default function FotosCarrinhoPage() {
 
                     <div className="flex items-end justify-between px-1">
                       <div className="min-w-0">
-                        <p className="mb-1 truncate text-[8px] font-black uppercase tracking-[0.2em] text-red-500">{foto.evento}</p>
+                        <p className="mb-1 truncate text-[8px] font-black uppercase tracking-[0.2em] text-retratt">{foto.evento}</p>
                         <p className="truncate text-xs font-bold uppercase tracking-wider text-white">{foto.fotografo}</p>
                       </div>
                       <p className="text-sm font-black text-white">{formatarPrecoFotos(foto.precoCentavos)}</p>
@@ -387,9 +387,9 @@ export default function FotosCarrinhoPage() {
 
               <div className="sticky top-28">
                 <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0a0a0e]/90 p-5 shadow-2xl backdrop-blur-xl md:p-6">
-                  <div className="absolute left-0 top-0 h-1 w-full bg-gradient-to-r from-red-600 to-orange-500" />
+                  <div className="absolute left-0 top-0 h-1 w-full bg-gradient-to-r from-retratt to-orange-500" />
                   <h3 className="mb-6 flex items-center gap-2 text-sm font-black uppercase tracking-widest text-white">
-                    <Wallet size={16} className="text-red-500" /> Resumo
+                    <Wallet size={16} className="text-retratt" /> Resumo
                   </h3>
 
                   {etapa === "carrinho" && (
@@ -438,14 +438,14 @@ export default function FotosCarrinhoPage() {
                   </div>
 
                   {etapa === "carrinho" && (
-                    <button onClick={handleGerarPix} className="flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-red-600 text-[10px] font-black uppercase tracking-widest text-white shadow-[0_0_30px_rgba(239,68,68,0.25)] transition-all hover:scale-[1.02] hover:bg-red-500">
+                    <button onClick={handleGerarPix} className="flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-retratt text-[10px] font-black uppercase tracking-widest text-white shadow-[0_0_30px_rgba(255,90,31,0.25)] transition-all hover:scale-[1.02] hover:bg-retratt">
                       <QrCode size={16} /> Escolher forma de pagamento
                     </button>
                   )}
 
                   {etapa === "preparando" && (
                     <button disabled className="flex h-14 w-full cursor-wait items-center justify-center gap-3 rounded-2xl border border-white/5 bg-zinc-900 text-[11px] font-black uppercase tracking-widest text-zinc-500">
-                      <Loader2 size={18} className="animate-spin text-red-500" /> Preparando checkout...
+                      <Loader2 size={18} className="animate-spin text-retratt" /> Preparando checkout...
                     </button>
                   )}
 
@@ -467,7 +467,7 @@ export default function FotosCarrinhoPage() {
                   )}
 
                   {mensagemPagamento && (
-                    <p className={`mt-4 rounded-xl border p-3 text-center text-[10px] font-bold ${etapa === "pago" ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" : "border-amber-500/20 bg-amber-500/10 text-amber-200"}`}>
+                    <p className={`mt-4 rounded-xl border p-3 text-center text-[10px] font-bold ${etapa === "pago" ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" : "border-retratt/20 bg-retratt/10 text-orange-200"}`}>
                       {mensagemPagamento}
                     </p>
                   )}

@@ -61,7 +61,7 @@ export async function POST(request: Request) {
         email: compradorEmail,
       },
       transaction_amount: Number(pedido.total_centavos) / 100,
-      description: "Compra de fotos iTatame",
+      description: "Compra de fotos Retratt",
       external_reference: `foto_pedido:${pedido.id}`,
       application_fee: (
         Number(pedido.comissao_itatame_centavos) + Number(pedido.comissao_organizador_centavos || 0)

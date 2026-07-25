@@ -26,7 +26,7 @@ export async function GET(request: Request) {
     if (!pedido) return NextResponse.json({ error: "Pedido não encontrado." }, { status: 404 });
     return NextResponse.json(pedido);
   } catch (error) {
-    console.error("Consulta de pagamento iTatame Fotos:", error);
+    console.error("Consulta de pagamento Retratt:", error);
     const { data: pedido } = await supabase
       .from("foto_pedidos")
       .select("id, status, provedor_status_detail, pago_em")

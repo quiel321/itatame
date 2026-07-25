@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+﻿import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Navbar from "./components/Navbar";
@@ -38,7 +38,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <Navbar />
         <SiteConsentAndInstall />
 
-       {/* 🛡️ PROTEÇÃO RESTAURADA: Mantém o Login, Ranking e outras páginas abaixo da Navbar */}
+       {/* 🛡ï¸ PROTEÇÃO RESTAURADA: Mantém o Login, Ranking e outras páginas abaixo da Navbar */}
         <main className="flex-1 flex flex-col pt-[60px] md:pt-[65px]">
           {children}
         </main>
@@ -96,8 +96,8 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
                   {/* LINK DO ITATAME FOTOS ADICIONADO AQUI 👇 */}
                   <li>
                     <Link href={process.env.NEXT_PUBLIC_FOTOS_URL || "https://fotos.itatame.com.br"} className="flex items-center gap-2 text-zinc-400 hover:text-blue-400 text-xs font-bold transition-colors">
-                      iTatame Fotos
-                      <span className="bg-blue-500/10 border border-blue-500/30 text-blue-400 text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider">Novo</span>
+                      Retratt
+                      <span className="bg-orange-500/10 border border-orange-500/30 text-orange-400 text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider">Novo</span>
                     </Link>
                   </li>
                   <li><Link href="/ppv" className="text-zinc-400 hover:text-white text-xs font-bold transition-colors">Transmissão PPV</Link></li>

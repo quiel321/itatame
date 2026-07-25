@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
@@ -11,10 +11,10 @@ type Perfil = "comprador" | "fotografo" | "organizador";
 
 const perfis = {
   comprador: {
-    titulo: "Atleta / Comprador",
-    texto: "Compre fotos do tatame e guarde as suas memórias.",
+    titulo: "Cliente / Comprador",
+    texto: "Encontre suas fotos de eventos e guarde seus melhores momentos.",
     destino: "/fotos/comprador",
-    textoLogin: "Já tenho conta de Atleta",
+    textoLogin: "Já tenho uma conta",
     icon: Images,
   },
   fotografo: {
@@ -36,33 +36,33 @@ const perfis = {
 // 🔥 TEMAS DINÂMICOS
 const temas = {
   comprador: {
-    badge: "bg-red-500/10 border-red-500/20 text-red-500",
-    activeCard: "border-red-500/50 bg-red-500/10",
-    activeIcon: "text-red-500",
-    glow: "bg-red-600/10",
-    button: "bg-red-600 hover:bg-red-500 text-white shadow-[0_0_20px_rgba(239,68,68,0.2)]",
-    focus: "focus:border-red-500/50 focus:ring-red-500/50",
-    hoverLink: "hover:text-red-400 border-white/5 hover:border-red-500/30 hover:bg-red-500/5 text-zinc-300",
+    badge: "bg-retratt/10 border-retratt/20 text-retratt",
+    activeCard: "border-retratt/50 bg-retratt/10",
+    activeIcon: "text-retratt",
+    glow: "bg-retratt/10",
+    button: "bg-retratt hover:bg-retratt text-white shadow-[0_0_20px_rgba(255,90,31,0.2)]",
+    focus: "focus:border-retratt/50 focus:ring-retratt/50",
+    hoverLink: "hover:text-retratt border-white/5 hover:border-retratt/30 hover:bg-retratt/5 text-zinc-300",
     iconeBtn: <ArrowRight size={16} />
   },
   fotografo: {
-    badge: "bg-cyan-500/10 border-cyan-500/20 text-cyan-400",
-    activeCard: "border-cyan-500/50 bg-cyan-500/10",
-    activeIcon: "text-cyan-400",
-    glow: "bg-cyan-600/10",
-    button: "bg-cyan-500 hover:bg-cyan-400 text-black shadow-[0_0_20px_rgba(6,182,212,0.2)]",
-    focus: "focus:border-cyan-500/50 focus:ring-cyan-500/50",
-    hoverLink: "hover:text-cyan-400 border-white/5 hover:border-cyan-500/30 hover:bg-cyan-500/5 text-zinc-300",
+    badge: "bg-retratt/10 border-retratt/20 text-retratt",
+    activeCard: "border-retratt/50 bg-retratt/10",
+    activeIcon: "text-retratt",
+    glow: "bg-retratt/10",
+    button: "bg-retratt hover:bg-retratt text-black shadow-[0_0_20px_rgba(255,90,31,0.2)]",
+    focus: "focus:border-retratt/50 focus:ring-retratt/50",
+    hoverLink: "hover:text-retratt border-white/5 hover:border-retratt/30 hover:bg-retratt/5 text-zinc-300",
     iconeBtn: <Camera size={16} />
   },
   organizador: {
-    badge: "bg-amber-500/10 border-amber-500/20 text-amber-500",
-    activeCard: "border-amber-500/50 bg-amber-500/10",
-    activeIcon: "text-amber-400",
-    glow: "bg-amber-600/10",
-    button: "bg-amber-500 hover:bg-amber-400 text-black shadow-[0_0_20px_rgba(245,158,11,0.2)]",
-    focus: "focus:border-amber-500/50 focus:ring-amber-500/50",
-    hoverLink: "hover:text-amber-400 border-white/5 hover:border-amber-500/30 hover:bg-amber-500/5 text-zinc-300",
+    badge: "bg-retratt/10 border-retratt/20 text-retratt",
+    activeCard: "border-retratt/50 bg-retratt/10",
+    activeIcon: "text-retratt",
+    glow: "bg-retratt/10",
+    button: "bg-retratt hover:bg-retratt text-black shadow-[0_0_20px_rgba(255,90,31,0.2)]",
+    focus: "focus:border-retratt/50 focus:ring-retratt/50",
+    hoverLink: "hover:text-retratt border-white/5 hover:border-retratt/30 hover:bg-retratt/5 text-zinc-300",
     iconeBtn: <Users size={16} />
   }
 };
@@ -71,11 +71,11 @@ export default function FotosCadastroPage() {
   const router = useRouter();
   const [perfil, setPerfil] = useState<Perfil>("comprador");
   const [destinoManual, setDestinoManual] = useState<string | null>(null);
-  
+
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
-  
+
   const [erro, setErro] = useState("");
   const [carregando, setCarregando] = useState(false);
 
@@ -94,13 +94,13 @@ export default function FotosCadastroPage() {
     e.preventDefault();
     setErro("");
     setCarregando(true);
-    
-    const { data, error } = await supabase.auth.signUp({ 
-      email, 
+
+    const { data, error } = await supabase.auth.signUp({
+      email,
       password: senha,
       options: { data: { nome_completo: nome, foto_perfil: perfil } }
     });
-    
+
     if (error || !data.user) {
       setCarregando(false);
       setErro("Erro ao criar conta. Este e-mail já pode estar em uso.");
@@ -114,20 +114,20 @@ export default function FotosCadastroPage() {
   return (
     <FotosShell>
       <main className="min-h-screen bg-[#050505] text-white flex items-center py-12 relative overflow-hidden font-sans">
-        
+
         <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] md:w-[800px] h-[600px] md:h-[800px] blur-[150px] rounded-full transition-colors duration-700 pointer-events-none ${temaAtual.glow}`}></div>
 
         <section className="relative z-10 w-full max-w-6xl mx-auto px-4 md:px-8 grid gap-10 md:gap-16 md:grid-cols-[1fr_420px] items-center">
-          
+
           <div>
             <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-[0.2em] mb-6 transition-colors duration-500 ${temaAtual.badge}`}>
-              <ShieldCheck size={12} /> Ecossistema iTatame
+              <ShieldCheck size={12} /> Ecossistema Retratt
             </span>
-            
+
             <h1 className="text-3xl md:text-5xl font-black uppercase tracking-tighter leading-[1.05] drop-shadow-2xl mb-5">
-              Junte-se à maior<br className="hidden md:block" /> plataforma de tatames.
+              Junte-se à nova geração<br className="hidden md:block" /> da fotografia de eventos.
             </h1>
-            
+
             <p className="text-zinc-400 text-xs md:text-sm font-medium leading-relaxed mb-10 max-w-lg">
               Crie a sua conta gratuita. O seu perfil será automaticamente configurado para fornecer as melhores ferramentas de acordo com a sua escolha abaixo.
             </p>
@@ -191,7 +191,7 @@ export default function FotosCadastroPage() {
             </div>
 
             {erro && (
-               <div className="mt-5 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-[11px] font-bold text-red-400 text-center flex items-center justify-center gap-2">
+               <div className="mt-5 rounded-xl border border-retratt/30 bg-retratt/10 p-3 text-[11px] font-bold text-retratt text-center flex items-center justify-center gap-2">
                   {erro}
                </div>
             )}

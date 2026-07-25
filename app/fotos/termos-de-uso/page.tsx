@@ -1,16 +1,16 @@
-import type { Metadata } from "next";
+﻿import type { Metadata } from "next";
 import FotosLegalPage from "../_components/FotosLegalPage";
 
 export const metadata: Metadata = {
-  title: "Termos de Uso | Itatame Fotos",
-  description: "Condições de utilização da plataforma Itatame Fotos.",
+  title: "Termos de Uso | Retratt",
+  description: "Condições de utilização da plataforma Retratt.",
 };
 
 const secoes = [
   {
     titulo: "Aceitação e finalidade",
     paragrafos: [
-      "Ao acessar ou utilizar o Itatame Fotos, você declara que leu e concorda com estes termos. A plataforma conecta compradores, fotógrafos e organizadores para publicação, localização, comercialização e entrega de conteúdos de eventos.",
+      "Ao acessar ou utilizar o Retratt, você declara que leu e concorda com estes termos. A plataforma conecta compradores, fotógrafos e organizadores para publicação, localização, comercialização e entrega de conteúdos de eventos.",
     ],
   },
   {
@@ -24,14 +24,14 @@ const secoes = [
   {
     titulo: "Galerias, imagens e propriedade intelectual",
     paragrafos: [
-      "Os direitos autorais permanecem com seus respectivos titulares. O envio de conteúdo concede ao Itatame Fotos autorização técnica para armazenar, processar, gerar prévias, aplicar proteções, exibir e entregar o arquivo conforme necessário à operação da plataforma.",
+      "Os direitos autorais permanecem com seus respectivos titulares. O envio de conteúdo concede à Retratt autorização técnica para armazenar, processar, gerar prévias, aplicar proteções, exibir e entregar o arquivo conforme necessário à operação da plataforma.",
       "É proibido enviar conteúdo ilícito, sem autorização, ofensivo ou que viole direitos de terceiros. Materiais denunciados poderão ser restringidos durante a análise.",
     ],
   },
   {
     titulo: "Preços, taxas e repasses",
     itens: [
-      "A comissão do Itatame Fotos é apresentada antes da utilização comercial e incide conforme as condições publicadas na página de preços.",
+      "A comissão da Retratt é apresentada antes da utilização comercial e incide conforme as condições publicadas na página de preços.",
       "Tarifas financeiras, prazos e meios de pagamento dependem da instituição de pagamento e podem ser descontados separadamente.",
       "Quando houver royalty de organizador, o percentual deverá ser informado ao fotógrafo e registrado nas vendas aplicáveis.",
       "Reembolsos, contestações e estornos podem gerar ajustes nos saldos e repasses das partes envolvidas.",
@@ -63,7 +63,7 @@ export default function TermosDeUsoPage() {
     <FotosLegalPage
       etiqueta="Regras da plataforma"
       titulo="Termos de Uso"
-      introducao="Estas condições organizam a relação entre o Itatame Fotos, compradores, fotógrafos e organizadores. Elas explicam responsabilidades, pagamentos, uso das imagens e funcionamento dos recursos da plataforma."
+      introducao="Estas condições organizam a relação entre o Retratt, compradores, fotógrafos e organizadores. Elas explicam responsabilidades, pagamentos, uso das imagens e funcionamento dos recursos da plataforma."
       secoes={secoes}
     />
   );

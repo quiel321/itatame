@@ -1,9 +1,9 @@
-import type { Metadata } from "next";
+﻿import type { Metadata } from "next";
 import FotosLegalPage from "../_components/FotosLegalPage";
 
 export const metadata: Metadata = {
-  title: "Privacidade | Itatame Fotos",
-  description: "Política de privacidade e proteção de dados do Itatame Fotos.",
+  title: "Privacidade | Retratt",
+  description: "Política de privacidade e proteção de dados da Retratt.",
 };
 
 const secoes = [
@@ -69,7 +69,7 @@ export default function PrivacidadePage() {
     <FotosLegalPage
       etiqueta="Proteção de dados"
       titulo="Privacidade"
-      introducao="Esta política explica como o Itatame Fotos utiliza e protege dados pessoais na operação de galerias, compras, pagamentos, downloads e busca facial, em conformidade com os princípios da legislação brasileira de proteção de dados."
+      introducao="Esta política explica como o Retratt utiliza e protege dados pessoais na operação de galerias, compras, pagamentos, downloads e busca facial, em conformidade com os princípios da legislação brasileira de proteção de dados."
       secoes={secoes}
     />
   );

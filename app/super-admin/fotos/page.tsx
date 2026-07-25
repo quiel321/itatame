@@ -185,7 +185,7 @@ export default function SuperAdminFotosPage() {
             </Link>
             <div>
               <span className="inline-flex items-center gap-2 rounded-md bg-cyan-500/10 px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-cyan-400"><ShieldCheck size={12} /> Controle Master</span>
-              <h1 className="mt-3 text-2xl font-black tracking-tight md:text-4xl">Financeiro Itatame Fotos</h1>
+              <h1 className="mt-3 text-2xl font-black tracking-tight md:text-4xl">Financeiro Retratt</h1>
               <p className="mt-2 max-w-2xl text-[11px] font-medium leading-relaxed text-zinc-500 md:text-xs">Comissões da plataforma, royalties dos organizadores e desempenho de cada galeria calculados exclusivamente sobre pedidos pagos.</p>
             </div>
           </div>

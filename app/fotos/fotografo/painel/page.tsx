@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -105,7 +105,7 @@ async function gerarDerivadosFoto(file: File) {
   const passoY = Math.max(150, height / 4.5);
   for (let y = -height; y <= height; y += passoY) {
     for (let x = -width; x <= width; x += passoX) {
-      ctx.fillText("iTATAME FOTOS", x, y);
+      ctx.fillText("RETRATT", x, y);
     }
   }
   ctx.restore();
@@ -118,7 +118,7 @@ async function gerarDerivadosFoto(file: File) {
   ctx.font = `900 ${Math.max(18, Math.round(width / 32))}px Arial`;
   ctx.textAlign = "left";
   ctx.textBaseline = "middle";
-  ctx.fillText("iTATAME FOTOS - PRÉVIA PROTEGIDA", 22, height - 29);
+  ctx.fillText("RETRATT - PRÉVIA PROTEGIDA", 22, height - 29);
   ctx.restore();
 
   const previewBlob = await canvasParaJpeg(canvas, 0.82);
@@ -428,11 +428,11 @@ export default function PainelFotografoPage() {
   return (
     <FotosShell>
       <main className="min-h-screen bg-[#050505] pb-12 text-white">
-        <section className="border-b border-white/10 bg-[radial-gradient(circle_at_85%_0%,rgba(6,182,212,0.16),transparent_32%),linear-gradient(180deg,#0c0c0f,#050505)]">
+        <section className="border-b border-white/10 bg-[radial-gradient(circle_at_85%_0%,rgba(255,90,31,0.16),transparent_32%),linear-gradient(180deg,#0c0c0f,#050505)]">
           <div className="mx-auto max-w-7xl px-4 py-6 md:px-6 md:py-8">
             <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
               <div>
-                <p className="inline-flex items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.24em] text-cyan-300">
+                <p className="inline-flex items-center gap-2 rounded-full border border-retratt/30 bg-retratt/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.24em] text-retratt">
                   <Camera size={13} /> Área do fotógrafo
                 </p>
                 <h1 className="mt-4 text-3xl font-black uppercase leading-none md:text-5xl">Carregar fotos</h1>
@@ -457,7 +457,7 @@ export default function PainelFotografoPage() {
               </div>
               <div className="rounded-xl border border-white/10 bg-black/50 p-4">
                 <p className="text-[10px] font-black uppercase tracking-wider text-zinc-500">Eventos liberados</p>
-                <p className="mt-1 text-2xl font-black text-cyan-300">{eventos.length}</p>
+                <p className="mt-1 text-2xl font-black text-retratt">{eventos.length}</p>
               </div>
               <div className="rounded-xl border border-white/10 bg-black/50 p-4">
                 <p className="text-[10px] font-black uppercase tracking-wider text-zinc-500">Selecionadas</p>
@@ -473,12 +473,12 @@ export default function PainelFotografoPage() {
 
         <section className="mx-auto grid max-w-7xl gap-4 px-4 py-5 md:grid-cols-[360px_1fr] md:px-6 md:py-6">
           {!email && (
-            <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 p-4 text-sm text-amber-100 md:col-span-2">
+            <div className="rounded-xl border border-retratt/30 bg-orange-950/20 p-4 text-sm text-orange-100 md:col-span-2">
               <div className="flex items-start gap-3">
-                <AlertTriangle className="mt-0.5 shrink-0 text-amber-400" size={18} />
+                <AlertTriangle className="mt-0.5 shrink-0 text-retratt" size={18} />
                 <div>
                   <p className="font-bold">Faça login para enviar fotos.</p>
-                  <p className="mt-1 text-xs text-amber-100/75">Você pode navegar pelo painel, mas o upload exige uma sessão ativa.</p>
+                  <p className="mt-1 text-xs text-orange-100/75">Você pode navegar pelo painel, mas o upload exige uma sessão ativa.</p>
                   <Link href="/fotos/login?perfil=fotografo&next=/fotos/fotografo/dashboard" className="mt-3 inline-flex cursor-pointer items-center gap-2 text-xs font-black uppercase tracking-wider text-white">
                     Entrar agora <ArrowRight size={14} />
                   </Link>
@@ -488,12 +488,12 @@ export default function PainelFotografoPage() {
           )}
 
           {!eventoSelecionado && !carregando && (
-            <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 p-4 text-sm text-amber-100 md:col-span-2">
+            <div className="rounded-xl border border-retratt/30 bg-orange-950/20 p-4 text-sm text-orange-100 md:col-span-2">
               <div className="flex items-start gap-3">
-                <AlertTriangle className="mt-0.5 shrink-0 text-amber-400" size={18} />
+                <AlertTriangle className="mt-0.5 shrink-0 text-retratt" size={18} />
                 <div>
                   <p className="font-bold">Nenhum evento ativo encontrado.</p>
-                  <p className="mt-1 text-xs text-amber-100/75">Peça para a organização liberar uma galeria antes de enviar fotos.</p>
+                  <p className="mt-1 text-xs text-orange-100/75">Peça para a organização liberar uma galeria antes de enviar fotos.</p>
                 </div>
               </div>
             </div>
@@ -502,18 +502,18 @@ export default function PainelFotografoPage() {
           <aside className="space-y-4">
             <div className="rounded-2xl border border-white/10 bg-zinc-950 p-4">
               <div className="mb-4 flex items-center gap-2">
-                <FolderPlus size={18} className="text-cyan-300" />
+                <FolderPlus size={18} className="text-retratt" />
                 <h2 className="text-sm font-black uppercase tracking-wider">Publicação</h2>
               </div>
 
               <label className="text-[10px] font-black uppercase tracking-[0.22em] text-zinc-500">Evento</label>
-              <select value={eventoId} onChange={(e) => setEventoId(e.target.value)} className="mt-2 h-11 w-full cursor-pointer rounded-lg border border-white/10 bg-black px-3 text-xs font-bold outline-none focus:border-cyan-400">
+              <select value={eventoId} onChange={(e) => setEventoId(e.target.value)} className="mt-2 h-11 w-full cursor-pointer rounded-lg border border-white/10 bg-black px-3 text-xs font-bold outline-none focus:border-retratt">
                 <option value="">Selecione o evento</option>
                 {eventos.map((evento) => <option key={evento.id} value={evento.id}>{evento.nome}</option>)}
               </select>
 
               <label className="mt-4 block text-[10px] font-black uppercase tracking-[0.22em] text-zinc-500">Álbum</label>
-              <select value={albumId} onChange={(e) => setAlbumId(e.target.value)} className="mt-2 h-11 w-full cursor-pointer rounded-lg border border-white/10 bg-black px-3 text-xs font-bold outline-none focus:border-cyan-400">
+              <select value={albumId} onChange={(e) => setAlbumId(e.target.value)} className="mt-2 h-11 w-full cursor-pointer rounded-lg border border-white/10 bg-black px-3 text-xs font-bold outline-none focus:border-retratt">
                 <option value="">Selecione o álbum</option>
                 {albuns.map((album) => <option key={album.id} value={album.id}>{album.titulo}</option>)}
               </select>
@@ -521,7 +521,7 @@ export default function PainelFotografoPage() {
               <div className="mt-4 rounded-xl border border-white/10 bg-black p-3">
                 <p className="text-[10px] font-black uppercase tracking-[0.22em] text-zinc-500">Criar álbum rápido</p>
                 <div className="mt-2 flex gap-2">
-                  <input value={novoAlbum} onChange={(e) => setNovoAlbum(e.target.value)} className="h-10 min-w-0 flex-1 rounded-lg border border-white/10 bg-zinc-950 px-3 text-xs outline-none focus:border-cyan-400" placeholder="Ex: Pódio, Tatame 1" />
+                  <input value={novoAlbum} onChange={(e) => setNovoAlbum(e.target.value)} className="h-10 min-w-0 flex-1 rounded-lg border border-white/10 bg-zinc-950 px-3 text-xs outline-none focus:border-retratt" placeholder="Ex: Pódio, Pista, Cerimônia" />
                   <button type="button" onClick={criarAlbum} disabled={!eventoId || !novoAlbum.trim()} className="inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-lg border border-white/10 bg-white/5 text-white hover:bg-white hover:text-black disabled:cursor-not-allowed disabled:opacity-40" aria-label="Criar álbum">
                     <Plus size={16} />
                   </button>
@@ -546,35 +546,35 @@ export default function PainelFotografoPage() {
                 <h2 className="text-lg font-black uppercase">Enviar fotos</h2>
                 <p className="mt-1 text-xs text-zinc-500">Selecione até 500 fotos de uma vez. O sistema otimiza o peso mantendo a resolução de impressão.</p>
               </div>
-              {eventoSelecionado && <p className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-cyan-200">{eventoSelecionado.nome}</p>}
+              {eventoSelecionado && <p className="rounded-full border border-retratt/20 bg-retratt/10 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-orange-200">{eventoSelecionado.nome}</p>}
             </div>
 
             <div className="grid gap-4 lg:grid-cols-[1fr_250px]">
-              <div className="relative flex min-h-[250px] flex-col items-center justify-center rounded-2xl border-2 border-dashed border-white/10 bg-black p-5 text-center transition hover:border-cyan-400/60 hover:bg-cyan-500/5">
+              <div className="relative flex min-h-[250px] flex-col items-center justify-center rounded-2xl border-2 border-dashed border-white/10 bg-black p-5 text-center transition hover:border-retratt/60 hover:bg-retratt/5">
                 <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(e) => void selecionarArquivos(e.target.files)} className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0" />
                 <div className="mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-white/5 text-zinc-500"><CloudUpload size={30} /></div>
                 <p className="text-sm font-black uppercase tracking-wider text-white">Clique ou arraste as fotos</p>
                 <p className="mt-2 max-w-sm text-xs leading-5 text-zinc-500">O sistema aceita lote de até 500 imagens e gera prévia protegida automaticamente.</p>
-                <p className="mt-3 text-[10px] font-black uppercase tracking-wider text-cyan-300">JPG, PNG ou WebP · otimização inteligente até 3MB</p>
+                <p className="mt-3 text-[10px] font-black uppercase tracking-wider text-retratt">JPG, PNG ou WebP · otimização inteligente até 3MB</p>
               </div>
 
               <div className="rounded-2xl border border-white/10 bg-black p-4">
                 <label className="text-[10px] font-black uppercase tracking-[0.22em] text-zinc-500">Preço de venda</label>
                 <div className="relative mt-2">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-zinc-500">R$</span>
-                  <input value={preco} onChange={(e) => setPreco(e.target.value)} className="h-12 w-full rounded-lg border border-white/10 bg-zinc-950 pl-9 pr-3 text-lg font-black outline-none focus:border-cyan-400" />
+                  <input value={preco} onChange={(e) => setPreco(e.target.value)} className="h-12 w-full rounded-lg border border-white/10 bg-zinc-950 pl-9 pr-3 text-lg font-black outline-none focus:border-retratt" />
                 </div>
                 <p className="mt-2 text-xs text-zinc-500">Valor atual: <span className="font-bold text-emerald-300">{valorAtual}</span></p>
                 <p className="mt-3 text-xs text-zinc-500">Lote atual: <span className="font-bold text-white">{arquivos.length}</span> foto(s) · {formatarTamanho(totalBytes)}</p>
 
-                <button type="button" onClick={enviarFotos} disabled={uploadBloqueado} className="mt-4 inline-flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-cyan-400 text-xs font-black uppercase tracking-wider text-black shadow-[0_0_24px_rgba(34,211,238,0.18)] transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500">
+                <button type="button" onClick={enviarFotos} disabled={uploadBloqueado} className="mt-4 inline-flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-retratt text-xs font-black uppercase tracking-wider text-black shadow-[0_0_24px_rgba(255,90,31,0.18)] transition hover:bg-retratt disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500">
                   {otimizando ? <><Loader2 size={16} className="animate-spin" /> Otimizando fotos</> : enviando ? <><Loader2 size={16} className="animate-spin" /> Enviando {uploadAtual}/{arquivos.length}</> : <>Enviar lote</>}
                 </button>
 
                 <div className="mt-4 grid grid-cols-3 gap-2 text-center text-[9px] font-black uppercase tracking-wider text-zinc-500">
-                  <span className={status === "preparando" ? "text-cyan-300" : ""}>Preview</span>
-                  <span className={status === "enviando" ? "text-cyan-300" : ""}>R2</span>
-                  <span className={status === "confirmando" ? "text-cyan-300" : status === "ok" ? "text-emerald-300" : ""}>Banco</span>
+                  <span className={status === "preparando" ? "text-retratt" : ""}>Preview</span>
+                  <span className={status === "enviando" ? "text-retratt" : ""}>R2</span>
+                  <span className={status === "confirmando" ? "text-retratt" : status === "ok" ? "text-emerald-300" : ""}>Banco</span>
                 </div>
               </div>
             </div>
@@ -583,19 +583,19 @@ export default function PainelFotografoPage() {
               <div className="mt-4 rounded-2xl border border-white/10 bg-black p-3">
                 <div className="mb-2 flex items-center justify-between">
                   <p className="text-[10px] font-black uppercase tracking-[0.22em] text-zinc-500">Fotos selecionadas</p>
-                  <button type="button" onClick={() => setArquivos([])} className="cursor-pointer text-[10px] font-black uppercase tracking-wider text-red-400 hover:text-red-300">Limpar</button>
+                  <button type="button" onClick={() => setArquivos([])} className="cursor-pointer text-[10px] font-black uppercase tracking-wider text-retratt hover:text-orange-300">Limpar</button>
                 </div>
                 <div className="max-h-52 space-y-2 overflow-y-auto pr-1">
                   {arquivos.map((arquivo, index) => (
                     <div key={`${arquivo.name}-${index}`} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-zinc-950 px-3 py-2">
                       <div className="min-w-0 flex items-center gap-3">
-                        <ImagePlus size={16} className="shrink-0 text-cyan-300" />
+                        <ImagePlus size={16} className="shrink-0 text-retratt" />
                         <div className="min-w-0">
                           <p className="truncate text-xs font-bold text-white">{arquivo.name}</p>
                           <p className="text-[10px] text-zinc-500">{formatarTamanho(arquivo.size)}</p>
                         </div>
                       </div>
-                      <button type="button" onClick={() => removerArquivo(arquivo.name, index)} className="cursor-pointer rounded-lg border border-white/10 p-2 text-zinc-500 hover:border-red-500/40 hover:text-red-300" aria-label="Remover foto">
+                      <button type="button" onClick={() => removerArquivo(arquivo.name, index)} className="cursor-pointer rounded-lg border border-white/10 p-2 text-zinc-500 hover:border-retratt/40 hover:text-orange-300" aria-label="Remover foto">
                         <Trash2 size={14} />
                       </button>
                     </div>
@@ -605,7 +605,7 @@ export default function PainelFotografoPage() {
             )}
 
             {mensagem && (
-              <div className={`mt-4 flex items-start gap-3 rounded-xl border p-4 text-xs font-bold ${status === "erro" ? "border-red-500/30 bg-red-500/10 text-red-200" : status === "ok" ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200" : "border-cyan-500/30 bg-cyan-500/10 text-cyan-100"}`}>
+              <div className={`mt-4 flex items-start gap-3 rounded-xl border p-4 text-xs font-bold ${status === "erro" ? "border-retratt/30 bg-retratt/10 text-red-200" : status === "ok" ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200" : "border-retratt/30 bg-retratt/10 text-orange-100"}`}>
                 {status === "erro" ? <AlertTriangle size={18} /> : status === "ok" ? <CheckCircle2 size={18} /> : enviando ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
                 <span>{mensagem}</span>
               </div>

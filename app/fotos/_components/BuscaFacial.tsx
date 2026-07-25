@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { ChangeEvent, useEffect, useRef, useState } from "react";
@@ -167,7 +167,7 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
       <button
         type="button"
         onClick={abrirBusca}
-        className={triggerClassName || "flex h-12 shrink-0 items-center justify-center gap-2 rounded-xl bg-red-600 px-6 text-[10px] font-black uppercase tracking-widest text-white shadow-[0_0_15px_rgba(239,68,68,0.3)] transition-all hover:bg-red-500 md:h-14 md:text-[11px]"}
+        className={triggerClassName || "flex h-12 shrink-0 items-center justify-center gap-2 rounded-xl bg-retratt px-6 text-[10px] font-black uppercase tracking-widest text-white shadow-[0_0_15px_rgba(255,90,31,0.3)] transition-all hover:bg-retratt md:h-14 md:text-[11px]"}
       >
         <ScanFace size={16} /> {triggerLabel || "Buscar por face"}
       </button>
@@ -178,7 +178,7 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
             <div className="flex max-h-[calc(100dvh-1rem)] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#09090b] shadow-2xl sm:max-h-[calc(100dvh-2rem)] md:rounded-3xl">
             <div className="z-10 flex shrink-0 items-center justify-between gap-3 border-b border-white/10 bg-[#09090b] px-4 py-3 md:px-5 md:py-4">
               <div>
-                <p className="flex items-center gap-1.5 text-[8px] font-black uppercase tracking-[0.18em] text-red-400 md:text-[9px]"><ScanFace size={13} /> Busca facial inteligente</p>
+                <p className="flex items-center gap-1.5 text-[8px] font-black uppercase tracking-[0.18em] text-retratt md:text-[9px]"><ScanFace size={13} /> Busca facial inteligente</p>
                 <h2 className="mt-1 text-base font-black uppercase leading-tight sm:text-lg md:text-xl">Encontre todas as suas fotos</h2>
               </div>
               <button type="button" onClick={() => setAberto(false)} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 text-zinc-400 hover:bg-white hover:text-black" aria-label="Fechar"><X size={18} /></button>
@@ -191,7 +191,7 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
                     <img src={preview} alt="Selfie selecionada" className="h-[180px] w-full object-cover sm:h-[210px] md:h-[240px]" />
                   ) : (
                     <div className="flex h-[180px] flex-col items-center justify-center p-4 text-center text-zinc-500 sm:h-[210px] md:h-[240px]">
-                      <ScanFace size={44} className="mb-3 text-red-500/60" />
+                      <ScanFace size={44} className="mb-3 text-retratt/60" />
                       <p className="text-[10px] font-black uppercase tracking-wider text-white">Use uma foto nítida e de frente</p>
                       <p className="mt-2 max-w-[230px] text-[10px] leading-4">Boa iluminação, sem óculos escuros e somente o seu rosto em destaque.</p>
                     </div>
@@ -201,7 +201,7 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
                 <input ref={inputCamera} type="file" accept="image/jpeg,image/png,image/webp" capture="user" onChange={selecionar} className="hidden" />
                 <input ref={inputGaleria} type="file" accept="image/jpeg,image/png,image/webp" onChange={selecionar} className="hidden" />
                 <div className="grid grid-cols-2 gap-2">
-                  <button type="button" onClick={() => inputCamera.current?.click()} className="flex h-10 items-center justify-center gap-2 rounded-xl bg-red-600 text-[8px] font-black uppercase tracking-wider hover:bg-red-500"><Camera size={14} /> Tirar selfie</button>
+                  <button type="button" onClick={() => inputCamera.current?.click()} className="flex h-10 items-center justify-center gap-2 rounded-xl bg-retratt text-[8px] font-black uppercase tracking-wider hover:bg-retratt"><Camera size={14} /> Tirar selfie</button>
                   <button type="button" onClick={() => inputGaleria.current?.click()} className="flex h-10 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 text-[8px] font-black uppercase tracking-wider hover:bg-white/10"><ImagePlus size={14} /> Galeria</button>
                 </div>
 
@@ -210,17 +210,17 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
                   <span>Autorizo o uso desta imagem somente para localizar minhas fotos. A selfie não será armazenada.</span>
                 </label>
 
-                <button type="button" onClick={() => void buscar()} disabled={!arquivo || !consentiu || buscando} className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-cyan-400 text-[9px] font-black uppercase tracking-widest text-black disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500">
+                <button type="button" onClick={() => void buscar()} disabled={!arquivo || !consentiu || buscando} className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-retratt text-[9px] font-black uppercase tracking-widest text-black disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500">
                   {buscando ? <><Loader2 size={17} className="animate-spin" /> Comparando rostos</> : <><ScanFace size={17} /> Encontrar minhas fotos</>}
                 </button>
                 <p className="flex items-start gap-2 text-[10px] leading-4 text-zinc-500"><ShieldCheck size={14} className="mt-0.5 shrink-0 text-emerald-400" /> A busca inclui resultados fortes, prováveis e possíveis para reduzir a chance de alguma foto ficar de fora.</p>
               </div>
 
               <div className={`${!buscando && resultados === null && !erro ? "hidden md:block" : "block"} min-h-0`}>
-                {erro && <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">{erro}</div>}
+                {erro && <div className="rounded-2xl border border-retratt/30 bg-retratt/10 p-4 text-sm text-red-200">{erro}</div>}
                 {buscando && (
                   <div className="flex min-h-[260px] flex-col items-center justify-center text-center">
-                    <Loader2 size={42} className="animate-spin text-cyan-400" />
+                    <Loader2 size={42} className="animate-spin text-retratt" />
                     <p className="mt-4 text-sm font-black uppercase tracking-wider">{eventoId ? "Procurando nesta galeria" : "Procurando em todas as galerias"}</p>
                     <p className="mt-2 text-xs text-zinc-500">Isso costuma levar apenas alguns segundos.</p>
                   </div>
@@ -254,7 +254,7 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
                         const fotoId = String(foto.id);
                         const noCarrinho = fotosNoCarrinho.includes(fotoId);
                         return (
-                          <article key={foto.id} className={`relative overflow-hidden rounded-xl border bg-black transition-colors ${noCarrinho ? "border-emerald-400 shadow-[0_0_18px_rgba(52,211,153,0.15)]" : "border-white/10 hover:border-cyan-400/50"}`}>
+                          <article key={foto.id} className={`relative overflow-hidden rounded-xl border bg-black transition-colors ${noCarrinho ? "border-emerald-400 shadow-[0_0_18px_rgba(52,211,153,0.15)]" : "border-white/10 hover:border-retratt/50"}`}>
                             <label className={`absolute right-2 top-2 z-20 flex h-9 w-9 cursor-pointer items-center justify-center rounded-xl border backdrop-blur-md ${noCarrinho ? "border-emerald-300 bg-emerald-400 text-black" : "border-white/20 bg-black/70 text-white"}`}>
                               <input
                                 type="checkbox"
@@ -267,11 +267,11 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
                             <Link href={`/fotos/evento/${foto.eventoId}?foto=${encodeURIComponent(foto.id)}&origem=ia`} className="group block">
                               <div className="relative aspect-[4/5] overflow-hidden bg-zinc-950">
                                 <img data-foto-protegida-imagem src={`/api/fotos/arquivo/${foto.id}?tipo=thumb`} alt={foto.titulo || "Foto encontrada"} className={`h-full w-full object-cover transition duration-300 group-hover:scale-105 ${noCarrinho ? "opacity-70" : ""}`} />
-                                <span className={`absolute left-2 top-2 rounded-full px-2 py-1 text-[8px] font-black uppercase tracking-wider ${foto.nivel === "forte" ? "bg-emerald-400 text-black" : foto.nivel === "provavel" ? "bg-cyan-400 text-black" : "bg-amber-400 text-black"}`}>{foto.nivel} · {foto.similaridade.toFixed(0)}%</span>
+                                <span className={`absolute left-2 top-2 rounded-full px-2 py-1 text-[8px] font-black uppercase tracking-wider ${foto.nivel === "forte" ? "bg-emerald-400 text-black" : foto.nivel === "provavel" ? "bg-retratt text-black" : "bg-retratt text-black"}`}>{foto.nivel} · {foto.similaridade.toFixed(0)}%</span>
                               </div>
                               <div className="p-2.5">
-                                <p className="line-clamp-2 text-[9px] font-black uppercase leading-4 text-white">{foto.evento?.nome || "Galeria iTatame Fotos"}</p>
-                                <p className="mt-1 text-[8px] font-black uppercase tracking-wider text-cyan-400">Abrir esta foto</p>
+                                <p className="line-clamp-2 text-[9px] font-black uppercase leading-4 text-white">{foto.evento?.nome || "Galeria Retratt"}</p>
+                                <p className="mt-1 text-[8px] font-black uppercase tracking-wider text-retratt">Abrir esta foto</p>
                               </div>
                             </Link>
                           </article>

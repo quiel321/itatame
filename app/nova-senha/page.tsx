@@ -65,7 +65,7 @@ export default function NovaSenha() {
       <div className="max-w-md w-full bg-[#0a0a0e] border border-white/10 p-8 rounded-3xl shadow-2xl relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-cyan-500 to-cyan-800"></div>
         
-        <h1 className="text-2xl font-black text-white mb-2 tracking-tight">{recuperacaoFotos ? "Nova senha do iTatame Fotos" : "Criar Nova Senha"}</h1>
+        <h1 className="text-2xl font-black text-white mb-2 tracking-tight">{recuperacaoFotos ? "Nova senha da Retratt" : "Criar Nova Senha"}</h1>
         <p className="text-zinc-400 text-xs mb-8">Digite sua nova senha de acesso abaixo. Lembre-se de guardá-la em um local seguro.</p>
 
         <form onSubmit={handleUpdatePassword} className="space-y-4">

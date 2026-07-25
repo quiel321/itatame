@@ -1,4 +1,4 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import {
   ArrowRight,
   BrainCircuit,
@@ -21,7 +21,7 @@ const conteudo = {
     texto: "Uma operação completa para o fotógrafo publicar, proteger, localizar, vender e entregar imagens sem depender de várias ferramentas.",
     destaque: "cyan",
     itens: [
-      { icon: BrainCircuit, titulo: "Busca facial inteligente", texto: "Prévias otimizadas são indexadas por inteligência facial para o atleta localizar suas fotos por selfie em segundos." },
+      { icon: BrainCircuit, titulo: "Busca facial inteligente", texto: "Prévias otimizadas são indexadas por inteligência facial para cada pessoa localizar suas fotos por selfie em segundos." },
       { icon: Cloud, titulo: "Originais em infraestrutura protegida", texto: "O arquivo de venda fica separado da prévia pública, com armazenamento distribuído e entrega do original somente após o pagamento." },
       { icon: Zap, titulo: "Upload inteligente", texto: "Compressão automática, envio em lote, criação de miniaturas e preparação da vitrine sem interromper o fluxo do fotógrafo." },
       { icon: LockKeyhole, titulo: "Venda protegida", texto: "Marca-d’água nas prévias, proteção de visualização e bloqueio de exclusão para arquivos já vinculados a pedidos." },
@@ -32,14 +32,14 @@ const conteudo = {
   organizador: {
     etiqueta: "Operação oficial do evento",
     titulo: "Controle, escala e receita no mesmo painel.",
-    texto: "A galeria nasce conectada ao evento e organiza fotógrafos, royalties, vendas e experiência do atleta em uma única operação.",
+    texto: "A galeria nasce conectada ao evento e organiza fotógrafos, royalties, vendas e experiência do público em uma única operação.",
     destaque: "amber",
     itens: [
-      { icon: Trophy, titulo: "Evento integrado ao iTatame", texto: "Organizadores já cadastrados podem transformar campeonatos do sistema de gestão em galerias oficiais de fotos." },
+      { icon: Trophy, titulo: "Integração opcional com iTatame Eventos", texto: "Organizadores que usam o sistema de gestão podem transformar seus eventos em galerias oficiais sem refazer o cadastro." },
       { icon: Users, titulo: "Equipe credenciada", texto: "Cada fotógrafo publica e administra somente os próprios arquivos, preservando o trabalho dos demais profissionais." },
-      { icon: CreditCard, titulo: "Royalty por fotógrafo", texto: "Defina de 0% a 15% para cada credenciado. O percentual fica registrado em cada nova venda, separado da taxa do Itatame." },
+      { icon: CreditCard, titulo: "Royalty por fotógrafo", texto: "Defina de 0% a 15% para cada credenciado. O percentual fica registrado em cada nova venda, separado da taxa da Retratt." },
       { icon: ShieldCheck, titulo: "Rastreabilidade financeira", texto: "Pedidos, fotos vendidas e royalties são registrados para acompanhamento e repasse após a liberação financeira." },
-      { icon: BrainCircuit, titulo: "IA que reduz a procura", texto: "O atleta usa uma selfie, recebe resultados ordenados por semelhança e pode selecionar várias fotos direto para o carrinho." },
+      { icon: BrainCircuit, titulo: "IA que reduz a procura", texto: "A pessoa usa uma selfie, recebe resultados ordenados por semelhança e pode selecionar várias fotos direto para o carrinho." },
       { icon: Sparkles, titulo: "Página pública profissional", texto: "Capa, perfil, eventos publicados e compartilhamento em uma apresentação limpa, rápida e focada em conversão." },
     ],
   },
@@ -48,10 +48,10 @@ const conteudo = {
 export default function DiferenciaisFotos({ publico }: { publico: keyof typeof conteudo }) {
   const dados = conteudo[publico];
   const amber = dados.destaque === "amber";
-  const corTexto = amber ? "text-amber-400" : "text-cyan-400";
-  const corBorda = amber ? "hover:border-amber-500/30" : "hover:border-cyan-500/30";
-  const corFundo = amber ? "bg-amber-500/10 border-amber-500/20" : "bg-cyan-500/10 border-cyan-500/20";
-  const corBotao = amber ? "bg-amber-500 hover:bg-amber-400" : "bg-cyan-500 hover:bg-cyan-400";
+  const corTexto = amber ? "text-retratt" : "text-retratt";
+  const corBorda = amber ? "hover:border-retratt/30" : "hover:border-retratt/30";
+  const corFundo = amber ? "bg-retratt/10 border-retratt/20" : "bg-retratt/10 border-retratt/20";
+  const corBotao = amber ? "bg-retratt hover:bg-retratt" : "bg-retratt hover:bg-retratt";
 
   return (
     <section className="border-y border-white/5 bg-[#08080b] px-4 py-16 md:px-6 md:py-28">
