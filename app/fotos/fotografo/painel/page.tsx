@@ -166,8 +166,14 @@ export default function PainelFotografoPage() {
   const [status, setStatus] = useState<UploadStatus>("idle");
   const [mensagem, setMensagem] = useState("");
   const [carregando, setCarregando] = useState(true);
+  const [carregandoAlbuns, setCarregandoAlbuns] = useState(false);
+  const [criandoAlbum, setCriandoAlbum] = useState(false);
   const [otimizando, setOtimizando] = useState(false);
+  const [otimizacaoAtual, setOtimizacaoAtual] = useState(0);
+  const [otimizacaoTotal, setOtimizacaoTotal] = useState(0);
   const [uploadAtual, setUploadAtual] = useState(0);
+  const [uploadConcluidas, setUploadConcluidas] = useState(0);
+  const [uploadTotal, setUploadTotal] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   function precoCentavos() {
@@ -226,29 +232,61 @@ export default function PainelFotografoPage() {
       if (!eventoId || !fotografoId) {
         setAlbuns([]);
         setAlbumId("");
+        setCarregandoAlbuns(false);
         return;
       }
 
-      const { data } = await supabase
-        .from("foto_albuns")
-        .select("id, evento_id, fotografo_id, titulo, descricao, capa_url, status")
-        .eq("evento_id", eventoId)
-        .or(`fotografo_id.eq.${fotografoId},fotografo_id.is.null`)
-        .order("ordem", { ascending: true });
+      setCarregandoAlbuns(true);
+      try {
+        const { data, error } = await supabase
+          .from("foto_albuns")
+          .select("id, evento_id, fotografo_id, titulo, descricao, capa_url, status")
+          .eq("evento_id", eventoId)
+          .or(`fotografo_id.eq.${fotografoId},fotografo_id.is.null`)
+          .order("ordem", { ascending: true });
 
-      const lista = (data || []) as FotoAlbum[];
-      setAlbuns(lista);
-      setAlbumId(lista[0]?.id || "");
+        if (error) throw error;
+        const lista = (data || []) as FotoAlbum[];
+        setAlbuns(lista);
+        setAlbumId(lista[0]?.id || "");
+      } catch {
+        setAlbuns([]);
+        setAlbumId("");
+        setStatus("erro");
+        setMensagem("Não foi possível buscar os álbuns desta galeria. Atualize a página e tente novamente.");
+      } finally {
+        setCarregandoAlbuns(false);
+      }
     }
 
     void carregarAlbuns();
   }, [eventoId, fotografoId]);
 
   const eventoSelecionado = useMemo(() => eventos.find((evento) => evento.id === eventoId), [eventos, eventoId]);
+  const albumSelecionado = useMemo(() => albuns.find((album) => album.id === albumId), [albuns, albumId]);
   const valorAtual = formatarPrecoFotos(precoCentavos());
   const enviando = ["preparando", "enviando", "confirmando"].includes(status);
-  const uploadBloqueado = arquivos.length === 0 || !eventoId || !albumId || enviando || otimizando;
+  const uploadBloqueado = !eventoId || carregandoAlbuns || enviando || otimizando || criandoAlbum;
   const totalBytes = arquivos.reduce((total, arquivo) => total + arquivo.size, 0);
+  const progressoPercentual = useMemo(() => {
+    if (status === "ok") return 100;
+    if (otimizando && otimizacaoTotal > 0) {
+      return Math.min(100, Math.round((otimizacaoAtual / otimizacaoTotal) * 100));
+    }
+    if (enviando && uploadTotal > 0) {
+      const avancoDaEtapa = status === "preparando" ? 0.2 : status === "enviando" ? 0.72 : 0.92;
+      return Math.min(99, Math.round(((uploadConcluidas + avancoDaEtapa) / uploadTotal) * 100));
+    }
+    return 0;
+  }, [enviando, otimizacaoAtual, otimizacaoTotal, otimizando, status, uploadConcluidas, uploadTotal]);
+
+  const orientacaoPrincipal = useMemo(() => {
+    if (!eventoId) return "Escolha primeiro onde as fotos serão publicadas.";
+    if (carregandoAlbuns) return "Buscando os álbuns desta galeria...";
+    if (!albumId) return `O álbum “${novoAlbum.trim() || "Geral"}” será criado automaticamente ao enviar.`;
+    if (!arquivos.length) return `Álbum “${albumSelecionado?.titulo || "selecionado"}” pronto. Agora escolha suas fotos.`;
+    return `${arquivos.length} foto(s) pronta(s) para o álbum “${albumSelecionado?.titulo || novoAlbum.trim() || "Geral"}”.`;
+  }, [albumId, albumSelecionado?.titulo, arquivos.length, carregandoAlbuns, eventoId, novoAlbum]);
 
   async function selecionarArquivos(lista: FileList | null) {
     if (!lista) return;
@@ -259,13 +297,19 @@ export default function PainelFotografoPage() {
     let recusados = recebidos.length - lote.length;
 
     setOtimizando(true);
+    setOtimizacaoAtual(0);
+    setOtimizacaoTotal(lote.length);
     setStatus("idle");
     setUploadAtual(0);
+    setUploadConcluidas(0);
+    setUploadTotal(0);
     setMensagem(`Otimizando ${lote.length} foto(s) antes do envio... Isso pode levar alguns instantes dependendo da quantidade.`);
 
-    for (const arquivo of lote) {
+    for (let index = 0; index < lote.length; index += 1) {
+      const arquivo = lote[index];
       if (!TIPOS_PERMITIDOS.has(arquivo.type) || arquivo.size > MAX_SOURCE_BYTES) {
         recusados += 1;
+        setOtimizacaoAtual(index + 1);
         continue;
       }
 
@@ -276,12 +320,15 @@ export default function PainelFotografoPage() {
       } catch {
         recusados += 1;
       }
+      setOtimizacaoAtual(index + 1);
     }
 
     setArquivos(aceitos);
     setStatus("idle");
     setUploadAtual(0);
     setOtimizando(false);
+    setOtimizacaoAtual(0);
+    setOtimizacaoTotal(0);
     if (fileInputRef.current) fileInputRef.current.value = "";
 
     if (recusados > 0) {
@@ -297,41 +344,57 @@ export default function PainelFotografoPage() {
     setArquivos((atuais) => atuais.filter((arquivo, arquivoIndex) => arquivo.name !== nome || arquivoIndex !== index));
   }
 
-  async function criarAlbum() {
-    if (!eventoId || !novoAlbum.trim()) return;
+  async function criarAlbum(): Promise<FotoAlbum | null> {
+    if (!eventoId || !novoAlbum.trim()) return null;
+    setCriandoAlbum(true);
     setMensagem("");
 
     const { data: sessionData } = await supabase.auth.getSession();
     const token = sessionData.session?.access_token;
     if (!token) {
+      setStatus("erro");
       setMensagem("Sua sessão expirou. Faça login novamente.");
-      return;
+      setCriandoAlbum(false);
+      return null;
     }
 
-    const response = await fetch("/api/fotos/criar-album", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ eventoId, titulo: novoAlbum.trim() }),
-    });
-    const payload = await response.json();
-    if (!response.ok) {
-      setMensagem(payload.error || "Não foi possível criar álbum.");
-      return;
-    }
+    try {
+      const response = await fetch("/api/fotos/criar-album", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ eventoId, titulo: novoAlbum.trim() }),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        setStatus("erro");
+        setMensagem(payload.error || "Não foi possível criar álbum.");
+        return null;
+      }
 
-    const album = payload.album as FotoAlbum;
-    setAlbuns((atual) => [...atual, album]);
-    setAlbumId(album.id);
-    setNovoAlbum("Geral");
+      const album = payload.album as FotoAlbum;
+      setAlbuns((atual) => [...atual, album]);
+      setAlbumId(album.id);
+      setNovoAlbum("Geral");
+      setStatus("idle");
+      setMensagem(`Álbum “${album.titulo}” criado. Você já pode enviar as fotos.`);
+      return album;
+    } catch (error: unknown) {
+      setStatus("erro");
+      setMensagem(error instanceof Error ? error.message : "Não foi possível criar o álbum. Tente novamente.");
+      return null;
+    } finally {
+      setCriandoAlbum(false);
+    }
   }
 
-  async function enviarUmaFoto(arquivo: File, token: string) {
+  async function enviarUmaFoto(arquivo: File, token: string, destinoAlbumId: string) {
+    setStatus("preparando");
     const uploadResponse = await fetch("/api/fotos/upload-url", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({
         eventoId,
-        albumId,
+        albumId: destinoAlbumId,
         fileName: arquivo.name,
         contentType: arquivo.type,
         size: arquivo.size,
@@ -357,6 +420,7 @@ export default function PainelFotografoPage() {
     }
 
     const { previewBlob, miniaturaIa } = await gerarDerivadosFoto(arquivo);
+    setStatus("enviando");
     const iaResponse = await enviarArquivo(miniaturaIa, "ia", "image/jpeg");
     if (!iaResponse.ok) {
       const detalhe = await iaResponse.json().catch(() => null);
@@ -375,6 +439,7 @@ export default function PainelFotografoPage() {
       throw new Error(detalhe?.error || "Falha ao enviar a foto original para o R2.");
     }
 
+    setStatus("confirmando");
     const confirmarResponse = await fetch("/api/fotos/confirmar-upload", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -384,9 +449,10 @@ export default function PainelFotografoPage() {
     if (!confirmarResponse.ok) throw new Error(confirmarData.error || "Upload feito, mas não confirmado no banco.");
   }
 
-  async function enviarFotos() {
-    if (!arquivos.length || !eventoId || !albumId) {
-      setMensagem("Selecione o evento, o álbum e pelo menos uma foto antes de enviar.");
+  async function enviarFotos(destinoAlbumId: string) {
+    if (!arquivos.length || !eventoId || !destinoAlbumId) {
+      setStatus("erro");
+      setMensagem("Escolha a galeria e pelo menos uma foto antes de enviar.");
       return;
     }
 
@@ -400,20 +466,20 @@ export default function PainelFotografoPage() {
     let concluidas = 0;
     try {
       setMensagem("");
+      setUploadTotal(arquivos.length);
+      setUploadConcluidas(0);
       for (let index = 0; index < arquivos.length; index++) {
         setUploadAtual(index + 1);
-        setStatus("preparando");
         setMensagem(`Preparando ${index + 1}/${arquivos.length}: ${arquivos[index].name}`);
-        setStatus("enviando");
-        await enviarUmaFoto(arquivos[index], token);
+        await enviarUmaFoto(arquivos[index], token, destinoAlbumId);
         concluidas += 1;
-        setStatus("confirmando");
+        setUploadConcluidas(concluidas);
       }
 
       setArquivos([]);
       if (fileInputRef.current) fileInputRef.current.value = "";
       setStatus("ok");
-      setMensagem("Todas as fotos foram publicadas com sucesso.");
+      setMensagem(`${concluidas} foto(s) publicada(s) com sucesso. Elas já estão disponíveis na galeria.`);
     } catch (error: unknown) {
       let detalhe = error instanceof Error ? error.message : "Erro desconhecido ao enviar fotos.";
       if (concluidas > 0) {
@@ -423,6 +489,27 @@ export default function PainelFotografoPage() {
       setStatus("erro");
       setMensagem(detalhe);
     }
+  }
+
+  async function iniciarEnvio() {
+    if (!eventoId) {
+      setStatus("erro");
+      setMensagem("Escolha a galeria onde deseja publicar as fotos.");
+      return;
+    }
+    if (!arquivos.length) {
+      fileInputRef.current?.click();
+      return;
+    }
+
+    let destinoAlbumId = albumId;
+    if (!destinoAlbumId) {
+      const albumCriado = await criarAlbum();
+      if (!albumCriado) return;
+      destinoAlbumId = albumCriado.id;
+    }
+
+    await enviarFotos(destinoAlbumId);
   }
 
   return (
@@ -503,39 +590,45 @@ export default function PainelFotografoPage() {
             <div className="rounded-2xl border border-white/10 bg-zinc-950 p-4">
               <div className="mb-4 flex items-center gap-2">
                 <FolderPlus size={18} className="text-retratt" />
-                <h2 className="text-sm font-black uppercase tracking-wider">Publicação</h2>
+                <div>
+                  <p className="text-[9px] font-black uppercase tracking-[0.22em] text-retratt">Passo 1</p>
+                  <h2 className="text-sm font-black uppercase tracking-wider">Onde publicar?</h2>
+                </div>
               </div>
 
-              <label className="text-[10px] font-black uppercase tracking-[0.22em] text-zinc-500">Evento</label>
+              <label className="text-[10px] font-black uppercase tracking-[0.22em] text-zinc-500">Galeria do evento</label>
               <select value={eventoId} onChange={(e) => setEventoId(e.target.value)} className="mt-2 h-11 w-full cursor-pointer rounded-lg border border-white/10 bg-black px-3 text-xs font-bold outline-none focus:border-retratt">
-                <option value="">Selecione o evento</option>
+                <option value="">Escolha uma galeria</option>
                 {eventos.map((evento) => <option key={evento.id} value={evento.id}>{evento.nome}</option>)}
               </select>
 
               <label className="mt-4 block text-[10px] font-black uppercase tracking-[0.22em] text-zinc-500">Álbum</label>
-              <select value={albumId} onChange={(e) => setAlbumId(e.target.value)} className="mt-2 h-11 w-full cursor-pointer rounded-lg border border-white/10 bg-black px-3 text-xs font-bold outline-none focus:border-retratt">
-                <option value="">Selecione o álbum</option>
+              <select value={albumId} onChange={(e) => setAlbumId(e.target.value)} disabled={!eventoId || carregandoAlbuns} className="mt-2 h-11 w-full cursor-pointer rounded-lg border border-white/10 bg-black px-3 text-xs font-bold outline-none focus:border-retratt disabled:cursor-wait disabled:text-zinc-600">
+                <option value="">{carregandoAlbuns ? "Buscando álbuns..." : albuns.length ? "Escolha um álbum" : "Nenhum álbum criado"}</option>
                 {albuns.map((album) => <option key={album.id} value={album.id}>{album.titulo}</option>)}
               </select>
 
-              <div className="mt-4 rounded-xl border border-white/10 bg-black p-3">
-                <p className="text-[10px] font-black uppercase tracking-[0.22em] text-zinc-500">Criar álbum rápido</p>
-                <div className="mt-2 flex gap-2">
+              <div className={`mt-4 rounded-xl border p-3 ${!carregandoAlbuns && eventoId && !albuns.length ? "border-retratt/40 bg-retratt/10" : "border-white/10 bg-black"}`}>
+                <p className="text-[10px] font-black uppercase tracking-[0.22em] text-zinc-400">{albuns.length ? "Criar outro álbum" : "Dê um nome ao primeiro álbum"}</p>
+                {!carregandoAlbuns && eventoId && !albuns.length && (
+                  <p className="mt-2 text-xs leading-5 text-orange-100/75">Pode continuar tranquilo: se você não criar agora, faremos isso automaticamente ao enviar.</p>
+                )}
+                <div className="mt-3 flex flex-col gap-2">
                   <input value={novoAlbum} onChange={(e) => setNovoAlbum(e.target.value)} className="h-10 min-w-0 flex-1 rounded-lg border border-white/10 bg-zinc-950 px-3 text-xs outline-none focus:border-retratt" placeholder="Ex: Pódio, Pista, Cerimônia" />
-                  <button type="button" onClick={criarAlbum} disabled={!eventoId || !novoAlbum.trim()} className="inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-lg border border-white/10 bg-white/5 text-white hover:bg-white hover:text-black disabled:cursor-not-allowed disabled:opacity-40" aria-label="Criar álbum">
-                    <Plus size={16} />
+                  <button type="button" onClick={() => void criarAlbum()} disabled={!eventoId || !novoAlbum.trim() || criandoAlbum || carregandoAlbuns} className="inline-flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-retratt/30 bg-retratt/10 px-4 text-[10px] font-black uppercase tracking-wider text-retratt hover:bg-retratt hover:text-black disabled:cursor-not-allowed disabled:opacity-40">
+                    {criandoAlbum ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
+                    {criandoAlbum ? "Criando álbum..." : "Criar e selecionar álbum"}
                   </button>
                 </div>
               </div>
             </div>
 
             <div className="rounded-2xl border border-white/10 bg-zinc-950 p-4">
-              <p className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-white"><ShieldCheck size={16} className="text-emerald-400" /> Regras do envio</p>
+              <p className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-white"><ShieldCheck size={16} className="text-emerald-400" /> Pode deixar com a gente</p>
               <div className="mt-3 space-y-2 text-xs text-zinc-400">
-                <p>1. Lotes maiores podem demorar alguns segundos na preparação inicial.</p>
-                <p>2. JPG, PNG ou WebP, com qualidade alta para venda.</p>
-                <p>3. Fotos grandes são comprimidas automaticamente até 3MB.</p>
-                <p>4. A loja mostra apenas a prévia com a marca d&apos;água automática.</p>
+                <p>✓ Fotos grandes continuam sendo otimizadas automaticamente até 3MB.</p>
+                <p>✓ Criamos a prévia protegida e a miniatura para busca facial.</p>
+                <p>✓ A foto original fica reservada para a entrega após a compra.</p>
               </div>
             </div>
           </aside>
@@ -543,19 +636,34 @@ export default function PainelFotografoPage() {
           <div className="rounded-2xl border border-white/10 bg-zinc-950 p-4 md:p-5">
             <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="text-lg font-black uppercase">Enviar fotos</h2>
-                <p className="mt-1 text-xs text-zinc-500">Selecione até 500 fotos de uma vez. O sistema otimiza o peso mantendo a resolução de impressão.</p>
+                <p className="text-[9px] font-black uppercase tracking-[0.22em] text-retratt">Passo 2</p>
+                <h2 className="mt-1 text-lg font-black uppercase">Escolha e publique</h2>
+                <p className="mt-1 text-xs text-zinc-500">Você escolhe as imagens; a Retratt prepara e publica todo o lote.</p>
               </div>
               {eventoSelecionado && <p className="rounded-full border border-retratt/20 bg-retratt/10 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-orange-200">{eventoSelecionado.nome}</p>}
             </div>
 
+            <div className={`mb-4 flex items-start gap-3 rounded-xl border p-3 ${!albumId && eventoId ? "border-retratt/30 bg-retratt/10" : "border-white/10 bg-black/60"}`}>
+              {carregandoAlbuns ? <Loader2 size={18} className="mt-0.5 shrink-0 animate-spin text-retratt" /> : albumId ? <CheckCircle2 size={18} className="mt-0.5 shrink-0 text-emerald-400" /> : <FolderPlus size={18} className="mt-0.5 shrink-0 text-retratt" />}
+              <div>
+                <p className="text-xs font-bold text-white">{orientacaoPrincipal}</p>
+                {!albumId && eventoId && !carregandoAlbuns && <p className="mt-1 text-[10px] leading-4 text-orange-100/65">Nada ficará travado: o botão de publicação resolve essa etapa para você.</p>}
+              </div>
+            </div>
+
             <div className="grid gap-4 lg:grid-cols-[1fr_250px]">
-              <div className="relative flex min-h-[250px] flex-col items-center justify-center rounded-2xl border-2 border-dashed border-white/10 bg-black p-5 text-center transition hover:border-retratt/60 hover:bg-retratt/5">
-                <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(e) => void selecionarArquivos(e.target.files)} className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0" />
-                <div className="mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-white/5 text-zinc-500"><CloudUpload size={30} /></div>
-                <p className="text-sm font-black uppercase tracking-wider text-white">Clique ou arraste as fotos</p>
-                <p className="mt-2 max-w-sm text-xs leading-5 text-zinc-500">O sistema aceita lote de até 500 imagens e gera prévia protegida automaticamente.</p>
-                <p className="mt-3 text-[10px] font-black uppercase tracking-wider text-retratt">JPG, PNG ou WebP · otimização inteligente até 3MB</p>
+              <div className={`relative flex min-h-[250px] flex-col items-center justify-center rounded-2xl border-2 border-dashed bg-black p-5 text-center transition ${arquivos.length ? "border-emerald-500/30" : "border-white/10 hover:border-retratt/60 hover:bg-retratt/5"}`}>
+                <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={otimizando || enviando} onChange={(e) => void selecionarArquivos(e.target.files)} className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0 disabled:cursor-wait" />
+                <div className={`mb-3 flex h-16 w-16 items-center justify-center rounded-full ${arquivos.length ? "bg-emerald-500/10 text-emerald-400" : "bg-white/5 text-zinc-500"}`}>
+                  {otimizando ? <Loader2 size={30} className="animate-spin text-retratt" /> : arquivos.length ? <CheckCircle2 size={30} /> : <CloudUpload size={30} />}
+                </div>
+                <p className="text-sm font-black uppercase tracking-wider text-white">
+                  {otimizando ? `Preparando ${otimizacaoAtual} de ${otimizacaoTotal}` : arquivos.length ? `${arquivos.length} foto(s) pronta(s)` : "Clique ou arraste suas fotos"}
+                </p>
+                <p className="mt-2 max-w-sm text-xs leading-5 text-zinc-500">
+                  {arquivos.length ? "Clique novamente para trocar o lote ou revise a lista logo abaixo." : "Escolha até 500 imagens. Você verá o andamento de cada etapa antes da publicação."}
+                </p>
+                <p className="mt-3 text-[10px] font-black uppercase tracking-wider text-retratt">JPG, PNG ou WebP · até 3MB após otimização</p>
               </div>
 
               <div className="rounded-2xl border border-white/10 bg-black p-4">
@@ -567,14 +675,26 @@ export default function PainelFotografoPage() {
                 <p className="mt-2 text-xs text-zinc-500">Valor atual: <span className="font-bold text-emerald-300">{valorAtual}</span></p>
                 <p className="mt-3 text-xs text-zinc-500">Lote atual: <span className="font-bold text-white">{arquivos.length}</span> foto(s) · {formatarTamanho(totalBytes)}</p>
 
-                <button type="button" onClick={enviarFotos} disabled={uploadBloqueado} className="mt-4 inline-flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-retratt text-xs font-black uppercase tracking-wider text-black shadow-[0_0_24px_rgba(255,90,31,0.18)] transition hover:bg-retratt disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500">
-                  {otimizando ? <><Loader2 size={16} className="animate-spin" /> Otimizando fotos</> : enviando ? <><Loader2 size={16} className="animate-spin" /> Enviando {uploadAtual}/{arquivos.length}</> : <>Enviar lote</>}
+                <button type="button" onClick={() => void iniciarEnvio()} disabled={uploadBloqueado} className="mt-4 inline-flex min-h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-retratt px-3 py-3 text-center text-xs font-black uppercase tracking-wider text-black shadow-[0_0_24px_rgba(255,90,31,0.18)] transition hover:bg-retratt disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500">
+                  {criandoAlbum ? <><Loader2 size={16} className="animate-spin" /> Criando álbum</> : otimizando ? <><Loader2 size={16} className="animate-spin" /> Preparando {otimizacaoAtual}/{otimizacaoTotal}</> : enviando ? <><Loader2 size={16} className="animate-spin" /> Publicando {uploadAtual}/{uploadTotal}</> : !arquivos.length ? <><ImagePlus size={16} /> Escolher fotos</> : !albumId ? <><FolderPlus size={16} /> Criar álbum e publicar</> : <><CloudUpload size={16} /> Publicar {arquivos.length} foto(s)</>}
                 </button>
 
-                <div className="mt-4 grid grid-cols-3 gap-2 text-center text-[9px] font-black uppercase tracking-wider text-zinc-500">
-                  <span className={status === "preparando" ? "text-retratt" : ""}>Preview</span>
-                  <span className={status === "enviando" ? "text-retratt" : ""}>R2</span>
-                  <span className={status === "confirmando" ? "text-retratt" : status === "ok" ? "text-emerald-300" : ""}>Banco</span>
+                {(otimizando || enviando || status === "ok") && (
+                  <div className="mt-4">
+                    <div className="mb-2 flex items-center justify-between text-[10px] font-bold">
+                      <span className="text-zinc-400">{otimizando ? "Preparando imagens" : status === "ok" ? "Publicação concluída" : status === "preparando" ? "Criando prévias" : status === "enviando" ? "Enviando com segurança" : "Finalizando publicação"}</span>
+                      <span className={status === "ok" ? "text-emerald-300" : "text-retratt"}>{progressoPercentual}%</span>
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-white/5">
+                      <div className={`h-full rounded-full transition-[width] duration-300 ${status === "ok" ? "bg-emerald-400" : "bg-retratt"}`} style={{ width: `${progressoPercentual}%` }} />
+                    </div>
+                  </div>
+                )}
+
+                <div className="mt-4 grid grid-cols-3 gap-2 text-center text-[8px] font-black uppercase tracking-wider text-zinc-600">
+                  <span className={status === "preparando" ? "text-retratt" : uploadConcluidas > 0 || status === "ok" ? "text-emerald-400" : ""}>1. Preparar</span>
+                  <span className={status === "enviando" ? "text-retratt" : uploadConcluidas > 0 || status === "ok" ? "text-emerald-400" : ""}>2. Enviar</span>
+                  <span className={status === "confirmando" ? "text-retratt" : status === "ok" ? "text-emerald-400" : ""}>3. Publicar</span>
                 </div>
               </div>
             </div>
