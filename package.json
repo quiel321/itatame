@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "fotos:ia:indexar": "tsx scripts/indexar-fotos-ia.ts",
-    "fotos:ia:verificar": "tsx scripts/verificar-fotos-ia.ts"
+    "fotos:ia:verificar": "tsx scripts/verificar-fotos-ia.ts",
+    "fotos:watermark:retratt": "tsx scripts/atualizar-watermarks-retratt.ts"
   },
   "dependencies": {
     "@aws-sdk/client-rekognition": "^3.1086.0",

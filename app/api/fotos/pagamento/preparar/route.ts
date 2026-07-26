@@ -16,8 +16,8 @@ function primeiraRelacao<T>(valor: T | T[] | null | undefined) {
   return Array.isArray(valor) ? valor[0] : valor;
 }
 
-function baseUrl(request: Request) {
-  return process.env.NEXT_PUBLIC_BASE_URL || new URL(request.url).origin;
+function baseUrl(_request: Request) {
+  return process.env.NEXT_PUBLIC_FOTOS_URL || "https://retratt.com";
 }
 
 function notificationUrl(request: Request, pedidoId: string) {
@@ -32,7 +32,7 @@ export async function POST(request: Request) {
     const token = bearerToken(request);
     if (!token) return NextResponse.json({ error: "Faça login para finalizar a compra." }, { status: 401 });
 
-    const publicKey = process.env.NEXT_PUBLIC_MP_PUBLIC_KEY;
+    const publicKey = process.env.NEXT_PUBLIC_RETRATT_MP_PUBLIC_KEY;
     if (!publicKey) return NextResponse.json({ error: "Mercado Pago não configurado." }, { status: 500 });
 
     const supabase = createSupabaseServerClient();
@@ -170,7 +170,7 @@ export async function POST(request: Request) {
       body: JSON.stringify({
         items: [{
           id: pedido.id,
-          title: `Fotos - ${evento.nome || "Evento iTatame"}`,
+          title: `Retratt - ${evento.nome || "Evento"}`,
           quantity: 1,
           currency_id: "BRL",
           unit_price: totalCentavos / 100,
@@ -202,7 +202,7 @@ export async function POST(request: Request) {
       publicKey,
       preferenceId: String(preference.id),
       pedidoId: pedido.id,
-      eventoNome: evento.nome || "Evento iTatame",
+      eventoNome: evento.nome || "Evento Retratt",
       total: totalCentavos / 100,
       compradorEmail,
       distribuicao: {

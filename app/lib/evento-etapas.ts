@@ -33,8 +33,16 @@ export type EtapaEvento = {
   indice: number;
   totalEtapas: number;
   progresso: number;
+  rotuloProgresso?: string;
   inscricoesAbertas: boolean;
   checagemAberta: boolean;
+};
+
+export type ResumoLutasEvento = {
+  total: number;
+  concluidas: number;
+  emAndamento: number;
+  pendentes: number;
 };
 
 export type EstadoMarco = "concluido" | "atual" | "futuro";
@@ -114,7 +122,11 @@ function criarEtapa(
   };
 }
 
-export function obterEtapaEvento(evento: EventoComEtapas, agora = new Date()): EtapaEvento {
+export function obterEtapaEvento(
+  evento: EventoComEtapas,
+  agora = new Date(),
+  resumoLutas?: ResumoLutasEvento | null,
+): EtapaEvento {
   const status = String(evento.status || "").toUpperCase();
   const inicioInscricoes = dataOperacional(evento.data_inicio_inscricoes);
   const fimInscricoes = fimDasInscricoes(evento);
@@ -125,7 +137,60 @@ export function obterEtapaEvento(evento: EventoComEtapas, agora = new Date()): E
   const inicioEvento = dataOperacional(evento.data_evento);
   const fimEvento = dataOperacional(evento.data_evento, true);
 
-  if (status === "ENCERRADO" || (fimEvento && agora > fimEvento)) {
+  if (resumoLutas && resumoLutas.total > 0) {
+    const concluidas = Math.min(resumoLutas.concluidas, resumoLutas.total);
+    const pendentes = Math.max(0, resumoLutas.total - concluidas - resumoLutas.emAndamento);
+    const progressoLutas = Math.round((concluidas / resumoLutas.total) * 100);
+    const todasConcluidas = concluidas >= resumoLutas.total && resumoLutas.emAndamento === 0;
+
+    if (todasConcluidas) {
+      return {
+        ...criarEtapa(
+          "ENCERRADO",
+          "Evento encerrado",
+          `${concluidas} de ${resumoLutas.total} lutas concluídas`,
+          "Consulte os resultados oficiais",
+          "zinc",
+          6,
+        ),
+        progresso: 100,
+        rotuloProgresso: `Lutas ${concluidas} de ${resumoLutas.total}`,
+      };
+    }
+
+    if (resumoLutas.emAndamento > 0) {
+      return {
+        ...criarEtapa(
+          "LUTAS_AO_VIVO",
+          "Lutas ao vivo",
+          `${resumoLutas.emAndamento} ${resumoLutas.emAndamento === 1 ? "luta acontecendo agora" : "lutas acontecendo agora"}${pendentes > 0 ? ` • ${pendentes} aguardando` : ""}`,
+          "Abra o acompanhamento em tempo real",
+          "red",
+          5,
+        ),
+        progresso: progressoLutas,
+        rotuloProgresso: `Lutas ${concluidas} de ${resumoLutas.total}`,
+      };
+    }
+
+    const operacaoComecou = concluidas > 0 || Boolean(inicioEvento && agora >= inicioEvento);
+    if (operacaoComecou) {
+      return {
+        ...criarEtapa(
+          "LUTAS_AO_VIVO",
+          "Campeonato em andamento",
+          `${concluidas} de ${resumoLutas.total} lutas concluídas${pendentes > 0 ? ` • ${pendentes} aguardando` : ""}`,
+          "Acompanhe chamadas, placares e resultados",
+          "red",
+          5,
+        ),
+        progresso: progressoLutas,
+        rotuloProgresso: `Lutas ${concluidas} de ${resumoLutas.total}`,
+      };
+    }
+  }
+
+  if (status === "ENCERRADO") {
     return criarEtapa(
       "ENCERRADO",
       "Evento encerrado",
@@ -136,11 +201,13 @@ export function obterEtapaEvento(evento: EventoComEtapas, agora = new Date()): E
     );
   }
 
-  if (inicioEvento && fimEvento && agora >= inicioEvento && agora <= fimEvento) {
+  if (inicioEvento && agora >= inicioEvento) {
     return criarEtapa(
       "LUTAS_AO_VIVO",
-      "Lutas ao vivo",
-      "Acompanhe chamadas, placares e resultados",
+      "Campeonato em andamento",
+      fimEvento && agora > fimEvento
+        ? "Aguardando a conclusão oficial das lutas"
+        : "Acompanhe chamadas, placares e resultados",
       "Abra o acompanhamento em tempo real",
       "red",
       5,

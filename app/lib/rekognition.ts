@@ -2,6 +2,7 @@ import {
   CreateCollectionCommand,
   DeleteFacesCommand,
   DescribeCollectionCommand,
+  DetectTextCommand,
   IndexFacesCommand,
   RekognitionClient,
   SearchFacesByImageCommand,
@@ -116,6 +117,30 @@ export async function buscarFotosPorRosto(imageBytes: Buffer | Uint8Array) {
       return [{ fotoId, similarity: Number(match.Similarity || 0) }];
     }),
   };
+}
+
+function variantesNumero(valor: string) {
+  const somenteDigitos = valor.replace(/\D/g, "");
+  if (!somenteDigitos || somenteDigitos.length > 6) return [];
+  const semZeros = somenteDigitos.replace(/^0+(?=\d)/, "");
+  return semZeros === somenteDigitos ? [somenteDigitos] : [somenteDigitos, semZeros];
+}
+
+export async function detectarNumerosDaImagem(imageBytes: Buffer | Uint8Array) {
+  const response = await criarCliente().send(new DetectTextCommand({
+    Image: { Bytes: imageBytes },
+  }));
+  const numeros = new Set<string>();
+
+  for (const deteccao of response.TextDetections || []) {
+    if (deteccao.Type !== "WORD" || Number(deteccao.Confidence || 0) < 80) continue;
+    const texto = String(deteccao.DetectedText || "").trim();
+    for (const trecho of texto.match(/\d{1,6}/g) || []) {
+      variantesNumero(trecho).forEach((numero) => numeros.add(numero));
+    }
+  }
+
+  return [...numeros].slice(0, 50);
 }
 
 export async function excluirRostos(faceIds: string[]) {

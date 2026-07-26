@@ -6,6 +6,7 @@ import { supabase } from "@/app/lib/supabase";
 import { FotoEvento } from "@/app/lib/fotos";
 import FotosShell from "./_components/FotosShell";
 import BuscaFacial from "./_components/BuscaFacial";
+import BuscaPorNumero from "./_components/BuscaPorNumero";
 import { Home, Camera, Search, CalendarDays, MapPin, ArrowRight, ShieldCheck, Images } from "lucide-react";
 
 export default function FotosHomePage() {
@@ -110,7 +111,7 @@ export default function FotosHomePage() {
             </p>
 
             {/* 🔍 BARRA DE PESQUISA (GLASSMORPHISM COMPACTO) */}
-            <div className="w-full max-w-2xl bg-black/60 backdrop-blur-xl border border-white/15 p-2 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.8)] flex flex-col md:flex-row gap-2">
+            <div className="w-full max-w-3xl bg-black/60 backdrop-blur-xl border border-white/15 p-2 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.8)] flex flex-col md:flex-row gap-2">
               <div className="flex-1 flex items-center bg-black/50 border border-white/5 rounded-xl px-4 py-1 h-12 md:h-14 focus-within:border-retratt/50 transition-colors">
                 <Search size={16} className="text-zinc-400 mr-2 shrink-0" />
                 <input
@@ -123,6 +124,7 @@ export default function FotosHomePage() {
                 />
               </div>
               <BuscaFacial />
+              <BuscaPorNumero />
             </div>
 
             <div className="mt-4 flex max-w-2xl flex-wrap items-center justify-center gap-2">

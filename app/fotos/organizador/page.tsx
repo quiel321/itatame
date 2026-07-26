@@ -57,7 +57,13 @@ export default function FotosOrganizadorPage() {
           {/* BACKGROUND FOTO & GRADIENTES */}
           <div className="absolute inset-0 z-0 pointer-events-none">
             {/* 🔥 CORREÇÃO MOBILE: bg-[30%_center] puxa o centro da imagem para a direita no celular */}
-            <div className="absolute inset-y-0 right-0 w-full md:w-[70%] bg-[url('https://loremflickr.com/1920/1080/jiujitsu,championship?lock=88')] bg-cover bg-[30%_center] sm:bg-[40%_center] md:bg-center opacity-[0.35] md:opacity-[0.45] mix-blend-luminosity"></div>
+            <div
+              className="absolute inset-y-0 right-0 w-full bg-[url('https://loremflickr.com/1920/1080/event,crowd?lock=88')] bg-cover bg-[30%_center] opacity-[0.35] mix-blend-luminosity sm:bg-[40%_center] md:w-[78%] md:bg-center md:opacity-[0.45]"
+              style={{
+                WebkitMaskImage: "linear-gradient(to right, transparent 0%, black 22%, black 100%)",
+                maskImage: "linear-gradient(to right, transparent 0%, black 22%, black 100%)",
+              }}
+            />
 
             {/* Máscara de Gradiente: Escuro na esquerda sumindo para a direita */}
             <div className="absolute inset-0 bg-gradient-to-r from-[#050505] via-[#050505]/95 md:via-[#050505]/80 to-transparent z-10"></div>

@@ -66,7 +66,7 @@ export default function FotografoDashboardPage() {
   const mercadoPagoConectado = useMemo(() => Boolean(perfil?.mp_connected_at), [perfil?.mp_connected_at]);
   const perfilPendente = useMemo(() => Boolean(userId && (!perfil?.perfil_completo || !perfil?.telefone || !perfil?.documento)), [userId, perfil]);
   const exibirFormularioPerfil = useMemo(() => Boolean(userId && (perfilPendente || mostrarFormularioPerfil)), [userId, perfilPendente, mostrarFormularioPerfil]);
-  const mpConnectUrl = useMemo(() => userId ? `/api/mercado-pago/connect?perfil=fotografo&user_id=${encodeURIComponent(userId)}&return_to=${encodeURIComponent("/fotos/fotografo/dashboard")}` : "/fotos/login?perfil=fotografo&next=/fotos/fotografo/dashboard", [userId]);
+  const mpConnectUrl = useMemo(() => userId ? `/api/mercado-pago/connect?integracao=retratt&perfil=fotografo&user_id=${encodeURIComponent(userId)}&return_to=${encodeURIComponent("/fotos/fotografo/dashboard")}` : "/fotos/login?perfil=fotografo&next=/fotos/fotografo/dashboard", [userId]);
   const primeiroNome = useMemo(() => nomeExibicao.split(' ')[0], [nomeExibicao]);
 
   useEffect(() => {

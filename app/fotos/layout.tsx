@@ -1,6 +1,6 @@
 ﻿import type { Metadata } from "next";
 
-const fotosUrl = process.env.NEXT_PUBLIC_FOTOS_URL || "https://fotos.itatame.com.br";
+const fotosUrl = process.env.NEXT_PUBLIC_FOTOS_URL || "https://retratt.com";
 
 export const metadata: Metadata = {
   metadataBase: new URL(fotosUrl),

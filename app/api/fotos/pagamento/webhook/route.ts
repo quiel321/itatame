@@ -21,7 +21,7 @@ export async function POST(request: Request) {
     );
     if (!paymentId) return NextResponse.json({ success: true, message: "Pagamento não informado." });
 
-    const secret = process.env.MP_WEBHOOK_SECRET;
+    const secret = process.env.RETRATT_MP_WEBHOOK_SECRET;
     const xSignature = request.headers.get("x-signature");
     const xRequestId = request.headers.get("x-request-id");
     if (secret && xSignature && xRequestId) {

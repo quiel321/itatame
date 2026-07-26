@@ -1,6 +1,6 @@
 import sharp from "sharp";
 import { FOTO_IA_MAX_BYTES, FOTO_IA_MAX_DIMENSAO, fotoIaIndiceStorageKey, fotoIaStorageKey } from "@/app/lib/fotos-ai";
-import { cadastrarRostosDaFoto, excluirRostos } from "@/app/lib/rekognition";
+import { cadastrarRostosDaFoto, detectarNumerosDaImagem, excluirRostos } from "@/app/lib/rekognition";
 import { deleteR2Object, getR2ObjectBytes, putR2Object, tryGetR2ObjectBytes } from "@/app/lib/r2";
 
 type FotoIndiceIa = {
@@ -11,6 +11,7 @@ type FotoIndiceIa = {
   faceIds: string[];
   indexedFaces: number;
   unindexedFaces: string[];
+  detectedNumbers?: string[];
   strategy?: "full" | "full+tiles";
   indexedAt: string;
 };
@@ -122,13 +123,30 @@ export async function indexarMiniaturaIaDoR2(
   options: { force?: boolean; fallbackOriginalKey?: string; fallbackSource?: Buffer } = {},
 ) {
   const existente = await obterIndiceIa(fotoId);
-  if (existente && !options.force) return { ...existente, skipped: true as const };
-
-  if (existente?.faceIds.length) await excluirRostos(existente.faceIds);
+  if (existente && !options.force && Array.isArray(existente.detectedNumbers)) {
+    return { ...existente, skipped: true as const };
+  }
 
   const sourceKey = fotoIaStorageKey(fotoId);
   const imageBytes = await getR2ObjectBytes(sourceKey, FOTO_IA_MAX_BYTES);
-  const resultado = await cadastrarRostosDaFoto(fotoId, imageBytes);
+
+  if (existente && !options.force) {
+    const detectados = await detectarNumerosDaImagem(imageBytes);
+    const atualizado = {
+      ...existente,
+      detectedNumbers: detectados,
+      indexedAt: new Date().toISOString(),
+    };
+    await salvarIndice(atualizado);
+    return { ...atualizado, skipped: false as const };
+  }
+
+  if (existente?.faceIds.length) await excluirRostos(existente.faceIds);
+
+  const [resultado, detectedNumbers] = await Promise.all([
+    cadastrarRostosDaFoto(fotoId, imageBytes),
+    detectarNumerosDaImagem(imageBytes),
+  ]);
   const indice: FotoIndiceIa = {
     fotoId,
     sourceKey,
@@ -137,6 +155,7 @@ export async function indexarMiniaturaIaDoR2(
     faceIds: resultado.faceIds,
     indexedFaces: resultado.indexedFaces,
     unindexedFaces: resultado.unindexedFaces,
+    detectedNumbers,
     strategy: "full",
     indexedAt: new Date().toISOString(),
   };
@@ -157,7 +176,10 @@ export async function prepararEIndexarFotoExistente(
   options: { force?: boolean } = {},
 ) {
   const existente = await obterIndiceIa(foto.id);
-  if (existente && !options.force) return { ...existente, skipped: true as const, thumbnailBytes: null };
+  if (existente && !options.force) {
+    const resultado = await indexarMiniaturaIaDoR2(foto.id, options);
+    return { ...resultado, thumbnailBytes: null };
+  }
 
   const original = await getR2ObjectBytes(foto.r2_original_key, 6 * 1024 * 1024);
   const miniatura = await criarMiniaturaIa(original);

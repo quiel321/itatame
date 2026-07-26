@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { WebhookSignatureValidator } from "mercadopago";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
 import { enviarEmailIngressoConfirmado } from "@/app/lib/email-ingresso";
 
@@ -16,6 +17,19 @@ export async function POST(request: Request) {
 
     if (!paymentId) {
       return NextResponse.json({ success: true, message: "Webhook sem pagamento." });
+    }
+
+    const secret = process.env.MP_WEBHOOK_SECRET;
+    const xSignature = request.headers.get("x-signature");
+    const xRequestId = request.headers.get("x-request-id");
+    if (secret && xSignature && xRequestId) {
+      WebhookSignatureValidator.validate({
+        xSignature,
+        xRequestId,
+        dataId: url.searchParams.get("data.id") || body?.data?.id || body?.id,
+        secret,
+        toleranceSeconds: 300,
+      });
     }
 
     const supabase = createSupabaseServerClient();

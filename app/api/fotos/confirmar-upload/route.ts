@@ -1,5 +1,6 @@
 import { after, NextResponse } from "next/server";
 import { indexarMiniaturaIaDoR2 } from "@/app/lib/fotos-ai-server";
+import { mesclarTagsNumerosIa } from "@/app/lib/fotos-ai";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
 
 export const runtime = "nodejs";
@@ -31,7 +32,7 @@ export async function POST(request: Request) {
       .update({ status: "publicada" })
       .eq("id", fotoId)
       .eq("fotografo_id", fotografo.id)
-      .select("id, status, r2_original_key")
+      .select("id, status, r2_original_key, tags")
       .single();
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -39,7 +40,12 @@ export async function POST(request: Request) {
     after(async () => {
       try {
         const resultado = await indexarMiniaturaIaDoR2(data.id, { fallbackOriginalKey: data.r2_original_key });
-        console.info(`[fotos-ia] ${data.id}: ${resultado.indexedFaces} rosto(s) indexado(s).`);
+        const { error: numerosError } = await supabase
+          .from("foto_arquivos")
+          .update({ tags: mesclarTagsNumerosIa(data.tags, resultado.detectedNumbers || []) })
+          .eq("id", data.id);
+        if (numerosError) throw new Error(numerosError.message);
+        console.info(`[fotos-ia] ${data.id}: ${resultado.indexedFaces} rosto(s), ${(resultado.detectedNumbers || []).length} numero(s).`);
       } catch (indexError: unknown) {
         const detalhe = indexError instanceof Error ? indexError.message : "erro desconhecido";
         console.error(`[fotos-ia] Falha ao indexar ${data.id}: ${detalhe}`);

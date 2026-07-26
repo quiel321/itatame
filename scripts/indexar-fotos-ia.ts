@@ -1,11 +1,12 @@
 import { loadEnvConfig } from "@next/env";
 import { prepararEIndexarFotoExistente } from "../app/lib/fotos-ai-server";
+import { mesclarTagsNumerosIa } from "../app/lib/fotos-ai";
 import { garantirColecaoRostos } from "../app/lib/rekognition";
 import { createSupabaseServerClient } from "../app/lib/supabase-server";
 
 loadEnvConfig(process.cwd());
 
-type FotoPendente = { id: string; r2_original_key: string };
+type FotoPendente = { id: string; r2_original_key: string; tags: string[] | null };
 
 function descreverErro(error: unknown) {
   if (error instanceof Error) {
@@ -30,7 +31,7 @@ async function carregarFotos() {
   for (let inicio = 0; ; inicio += pagina) {
     const { data, error } = await supabase
       .from("foto_arquivos")
-      .select("id, r2_original_key")
+      .select("id, r2_original_key, tags")
       .eq("status", "publicada")
       .not("r2_original_key", "is", null)
       .order("created_at", { ascending: true })
@@ -44,6 +45,7 @@ async function carregarFotos() {
 }
 
 async function main() {
+  const supabase = createSupabaseServerClient();
   const force = process.argv.includes("--force");
   const dryRun = process.argv.includes("--dry-run");
   const onlyArg = process.argv.find((arg) => arg.startsWith("--only="))?.slice("--only=".length);
@@ -72,10 +74,15 @@ async function main() {
       const foto = fotos[indice];
       try {
         const resultado = await prepararEIndexarFotoExistente(foto, { force });
+        const { error: numerosError } = await supabase
+          .from("foto_arquivos")
+          .update({ tags: mesclarTagsNumerosIa(foto.tags, resultado.detectedNumbers || []) })
+          .eq("id", foto.id);
+        if (numerosError) throw new Error(numerosError.message);
         concluidas += 1;
         if (resultado.skipped) puladas += 1;
         rostos += resultado.indexedFaces;
-        console.log(`[fotos-ia] ${concluidas}/${fotos.length} ${foto.id}: ${resultado.skipped ? "ja indexada" : `${resultado.indexedFaces} rosto(s), ${Math.round(Number(resultado.thumbnailBytes || 0) / 1024)} KB`}`);
+        console.log(`[fotos-ia] ${concluidas}/${fotos.length} ${foto.id}: ${resultado.skipped ? "ja indexada" : `${resultado.indexedFaces} rosto(s), ${(resultado.detectedNumbers || []).join(", ") || "sem numeros"}, ${Math.round(Number(resultado.thumbnailBytes || 0) / 1024)} KB`}`);
       } catch (error: unknown) {
         concluidas += 1;
         const mensagem = descreverErro(error);

@@ -37,33 +37,33 @@ const perfis = {
 // 🔥 TEMAS DINÂMICOS
 const temas = {
   comprador: {
-    badge: "bg-retratt/10 border-retratt/20 text-retratt",
-    activeCard: "border-retratt/50 bg-retratt/10",
-    activeIcon: "text-retratt",
-    glow: "bg-retratt/10",
-    button: "bg-retratt hover:bg-retratt text-white shadow-[0_0_20px_rgba(255,90,31,0.2)]",
-    focus: "focus:border-retratt/50 focus:ring-retratt/50",
-    hoverLink: "hover:text-retratt border-white/5 hover:border-retratt/30 hover:bg-retratt/5 text-zinc-300",
+    badge: "bg-red-500/10 border-red-500/20 text-red-500",
+    activeCard: "border-red-500/50 bg-red-500/10",
+    activeIcon: "text-red-500",
+    glow: "bg-red-600/10",
+    button: "bg-red-600 hover:bg-red-500 text-white shadow-[0_0_20px_rgba(239,68,68,0.2)]",
+    focus: "focus:border-red-500/50 focus:ring-red-500/50",
+    hoverLink: "hover:text-red-400 border-white/5 hover:border-red-500/30 hover:bg-red-500/5 text-zinc-300",
     iconeBtn: <ArrowRight size={16} />
   },
   fotografo: {
-    badge: "bg-retratt/10 border-retratt/20 text-retratt",
-    activeCard: "border-retratt/50 bg-retratt/10",
-    activeIcon: "text-retratt",
-    glow: "bg-retratt/10",
-    button: "bg-retratt hover:bg-retratt text-black shadow-[0_0_20px_rgba(255,90,31,0.2)]",
-    focus: "focus:border-retratt/50 focus:ring-retratt/50",
-    hoverLink: "hover:text-retratt border-white/5 hover:border-retratt/30 hover:bg-retratt/5 text-zinc-300",
+    badge: "bg-cyan-500/10 border-cyan-500/20 text-cyan-400",
+    activeCard: "border-cyan-500/50 bg-cyan-500/10",
+    activeIcon: "text-cyan-400",
+    glow: "bg-cyan-600/10",
+    button: "bg-cyan-500 hover:bg-cyan-400 text-black shadow-[0_0_20px_rgba(6,182,212,0.2)]",
+    focus: "focus:border-cyan-500/50 focus:ring-cyan-500/50",
+    hoverLink: "hover:text-cyan-400 border-white/5 hover:border-cyan-500/30 hover:bg-cyan-500/5 text-zinc-300",
     iconeBtn: <Camera size={16} />
   },
   organizador: {
-    badge: "bg-retratt/10 border-retratt/20 text-retratt",
-    activeCard: "border-retratt/50 bg-retratt/10",
-    activeIcon: "text-retratt",
-    glow: "bg-retratt/10",
-    button: "bg-retratt hover:bg-retratt text-black shadow-[0_0_20px_rgba(255,90,31,0.2)]",
-    focus: "focus:border-retratt/50 focus:ring-retratt/50",
-    hoverLink: "hover:text-retratt border-white/5 hover:border-retratt/30 hover:bg-retratt/5 text-zinc-300",
+    badge: "bg-amber-500/10 border-amber-500/20 text-amber-500",
+    activeCard: "border-amber-500/50 bg-amber-500/10",
+    activeIcon: "text-amber-400",
+    glow: "bg-amber-600/10",
+    button: "bg-amber-500 hover:bg-amber-400 text-black shadow-[0_0_20px_rgba(245,158,11,0.2)]",
+    focus: "focus:border-amber-500/50 focus:ring-amber-500/50",
+    hoverLink: "hover:text-amber-400 border-white/5 hover:border-amber-500/30 hover:bg-amber-500/5 text-zinc-300",
     iconeBtn: <Users size={16} />
   }
 };

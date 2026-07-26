@@ -13,8 +13,8 @@ function primeiraRelacao<T>(valor: T | T[] | null | undefined) {
   return Array.isArray(valor) ? valor[0] : valor;
 }
 
-function baseUrl(request: Request) {
-  return process.env.NEXT_PUBLIC_BASE_URL || new URL(request.url).origin;
+function baseUrl(_request: Request) {
+  return process.env.NEXT_PUBLIC_FOTOS_URL || "https://retratt.com";
 }
 
 function notificationUrl(request: Request, pedidoId: string) {

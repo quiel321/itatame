@@ -154,6 +154,7 @@ create index if not exists idx_foto_arquivos_album_id on public.foto_arquivos(al
 create index if not exists idx_foto_arquivos_fotografo_id on public.foto_arquivos(fotografo_id);
 create index if not exists idx_foto_arquivos_excluir_em on public.foto_arquivos(excluir_em);
 create index if not exists idx_foto_arquivos_atleta_id on public.foto_arquivos(atleta_id);
+create index if not exists idx_foto_arquivos_tags on public.foto_arquivos using gin(tags);
 create index if not exists idx_foto_pedidos_comprador on public.foto_pedidos(comprador_user_id, created_at desc);
 create index if not exists idx_foto_pedido_itens_pedido on public.foto_pedido_itens(pedido_id);
 

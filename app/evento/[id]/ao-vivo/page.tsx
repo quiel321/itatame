@@ -221,7 +221,17 @@ function WinnerOverlay({ luta, atletas, onClose }: { luta: LutaAoVivo, atletas: 
 // --- COMPONENTES DA TV (MODO TELÃO) - DESIGN ESPORTIVO LIMPO ---
 // =========================================================================================================
 
-function LutaTvActiveCard({ luta, agora, atletas }: { luta: LutaAoVivo; agora: number; atletas: Record<number, AtletaPerfil> }) {
+function LutaTvActiveCard({
+  luta,
+  agora,
+  atletas,
+  compacto = false,
+}: {
+  luta: LutaAoVivo;
+  agora: number;
+  atletas: Record<number, AtletaPerfil>;
+  compacto?: boolean;
+}) {
   const p1 = parsePontos(luta.pontuacao_atleta_1);
   const p2 = parsePontos(luta.pontuacao_atleta_2);
   const tempoLuta = calcularTempoAoVivo(luta, agora);
@@ -231,22 +241,24 @@ function LutaTvActiveCard({ luta, agora, atletas }: { luta: LutaAoVivo; agora: n
   const renderAtleta = (a: string, e: string | null | undefined, p: Pontuacao, isAzul: boolean, id?: number | null) => {
     const foto = getAtletaPerfil(atletas, id)?.foto_url;
     return (
-      <div className={`relative p-5 rounded-2xl border flex items-center gap-6 shadow-sm ${isAzul ? 'bg-[#0f172a] border-blue-900/50' : 'bg-[#450a0a] border-red-900/50'}`}>
-        <div className={`w-20 h-20 rounded-full overflow-hidden border-2 shrink-0 bg-black ${isAzul ? 'border-blue-500' : 'border-red-500'}`}>
+      <div className={`relative grid min-h-0 grid-cols-[clamp(3.25rem,5vw,4.5rem)_minmax(0,1fr)_auto] items-center rounded-xl border shadow-sm ${compacto ? 'gap-2 p-2.5' : 'gap-3 p-3 lg:gap-4 lg:p-4'} ${isAzul ? 'bg-[#0f172a] border-blue-900/50' : 'bg-[#450a0a] border-red-900/50'}`}>
+        <div className={`aspect-square w-full max-w-[72px] rounded-full overflow-hidden border-2 shrink-0 bg-black ${isAzul ? 'border-blue-500' : 'border-red-500'}`}>
           {foto ? <img src={foto} alt={a} className="w-full h-full object-cover" /> :
-            <div className="w-full h-full flex items-center justify-center text-3xl font-black text-white/50">{a.charAt(0)}</div>
+            <div className="w-full h-full flex items-center justify-center text-2xl font-black text-white/50">{a.charAt(0)}</div>
           }
         </div>
-        <div className="flex-1 min-w-0">
-          <h4 className="text-xl lg:text-3xl font-black uppercase text-white leading-tight mb-2 whitespace-normal break-words line-clamp-2">{a}</h4>
-          <span className={`block text-xs lg:text-sm font-bold uppercase tracking-wider whitespace-normal break-words line-clamp-2 ${isAzul ? 'text-blue-300' : 'text-red-300'}`}>{e || "Sem Equipe"}</span>
+        <div className="min-w-0 self-center">
+          <h4 className={`${compacto ? 'text-base xl:text-lg' : 'text-lg xl:text-2xl'} line-clamp-2 font-black uppercase leading-[1.05] text-white [overflow-wrap:normal] [word-break:normal]`}>{a}</h4>
+          <span className={`mt-1 block truncate text-[9px] font-bold uppercase tracking-wide xl:text-xs ${isAzul ? 'text-blue-300' : 'text-red-300'}`}>{e || "Sem Equipe"}</span>
         </div>
-        <div className="flex items-center gap-4 shrink-0 border-l border-white/10 pl-6">
-          <div className="text-center"><span className="block text-[10px] text-zinc-500 font-bold uppercase">PUN</span><strong className="block text-xl font-black text-pink-500">{p.punicoes}</strong></div>
-          <div className="text-center"><span className="block text-[10px] text-zinc-500 font-bold uppercase">VAN</span><strong className="block text-xl font-black text-yellow-500">{p.vantagens}</strong></div>
-          <div className={`text-center px-6 py-2 rounded-xl ml-2 ${isAzul ? 'bg-blue-600' : 'bg-red-600'}`}>
-            <span className="block text-[10px] text-white/70 font-black uppercase tracking-wider mb-1">PTS</span>
-            <strong className="block text-5xl lg:text-6xl font-black text-white leading-none tabular-nums">{p.pontos}</strong>
+        <div className={`grid shrink-0 grid-cols-[auto_auto] items-center border-l border-white/10 ${compacto ? 'gap-1.5 pl-2' : 'gap-2 pl-3'}`}>
+          <div className="grid grid-cols-2 gap-1.5 text-center">
+            <div><span className="block text-[7px] font-bold uppercase text-zinc-500 xl:text-[9px]">PUN</span><strong className="block text-sm font-black text-pink-500 xl:text-lg">{p.punicoes}</strong></div>
+            <div><span className="block text-[7px] font-bold uppercase text-zinc-500 xl:text-[9px]">VAN</span><strong className="block text-sm font-black text-yellow-500 xl:text-lg">{p.vantagens}</strong></div>
+          </div>
+          <div className={`min-w-[58px] rounded-lg px-2 py-1.5 text-center xl:min-w-[72px] ${isAzul ? 'bg-blue-600' : 'bg-red-600'}`}>
+            <span className="block text-[7px] font-black uppercase tracking-wider text-white/70 xl:text-[9px]">PTS</span>
+            <strong className={`${compacto ? 'text-3xl xl:text-4xl' : 'text-4xl xl:text-5xl'} block font-black leading-none tabular-nums text-white`}>{p.pontos}</strong>
           </div>
         </div>
       </div>
@@ -254,21 +266,21 @@ function LutaTvActiveCard({ luta, agora, atletas }: { luta: LutaAoVivo; agora: n
   };
 
   return (
-    <article className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-white/5 bg-[#0a0a0e] p-4 shadow-2xl lg:p-5">
-      <header className="mb-3 flex items-start justify-between gap-4">
+    <article className={`flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-white/5 bg-[#0a0a0e] shadow-2xl ${compacto ? 'p-3' : 'p-4'}`}>
+      <header className={`flex items-start justify-between ${compacto ? 'mb-2 gap-2' : 'mb-3 gap-3'}`}>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-3 mb-2">
-            <span className="flex items-center justify-center w-3 h-3 rounded-full bg-red-500 animate-pulse shrink-0 shadow-[0_0_10px_rgba(239,68,68,0.8)]"></span>
-            <h2 className="text-2xl lg:text-3xl font-black uppercase text-white tracking-tight">{luta.tatame || "Tatame"} {luta.id_visual ? `- Luta #${luta.id_visual}` : ""}</h2>
+          <div className="mb-1 flex items-center gap-2">
+            <span className="flex h-2.5 w-2.5 shrink-0 animate-pulse items-center justify-center rounded-full bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.8)]"></span>
+            <h2 className={`${compacto ? 'text-lg xl:text-xl' : 'text-xl xl:text-2xl'} line-clamp-2 font-black uppercase leading-tight tracking-tight text-white`}>{luta.tatame || "Tatame"} {luta.id_visual ? `- Luta #${luta.id_visual}` : ""}</h2>
           </div>
-          <p className="text-base lg:text-lg text-zinc-400 font-bold uppercase tracking-widest truncate">{subtituloLuta(luta)}</p>
+          <p className={`${compacto ? 'text-[9px]' : 'text-[10px] xl:text-xs'} line-clamp-2 font-bold uppercase leading-tight tracking-wider text-zinc-400`}>{subtituloLuta(luta)}</p>
         </div>
-        <div className="bg-zinc-900 rounded-2xl px-6 py-3 text-center border border-white/10 shrink-0 min-w-[140px]">
-          <span className="block text-xs font-black uppercase tracking-widest text-zinc-500 mb-1">TEMPO</span>
-          <span className="block text-5xl lg:text-6xl font-black text-white tabular-nums leading-none">{formatarTempo(tempoLuta)}</span>
+        <div className={`shrink-0 rounded-xl border border-white/10 bg-zinc-900 text-center ${compacto ? 'min-w-[96px] px-3 py-2' : 'min-w-[112px] px-4 py-2.5'}`}>
+          <span className="mb-0.5 block text-[8px] font-black uppercase tracking-widest text-zinc-500 xl:text-[10px]">Tempo</span>
+          <span className={`${compacto ? 'text-3xl xl:text-4xl' : 'text-4xl xl:text-5xl'} block font-black leading-none tabular-nums text-white`}>{formatarTempo(tempoLuta)}</span>
         </div>
       </header>
-      <div className="space-y-4 flex-1 flex flex-col justify-center">
+      <div className={`grid min-h-0 flex-1 grid-rows-2 ${compacto ? 'gap-2' : 'gap-3'}`}>
         {renderAtleta(a1, luta.equipe_1, p1, true, luta.atleta_1_id)}
         {renderAtleta(a2, luta.equipe_2, p2, false, luta.atleta_2_id)}
       </div>
@@ -662,8 +674,13 @@ export default function AoVivoPage() {
   // =========================================================================================================
   if (modoTv) {
     return (
-      <main className="grid h-screen w-full grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden bg-[#050505] p-3 font-sans text-white select-none lg:p-5">
-        <style dangerouslySetInnerHTML={{ __html: `body.itatame-telao-ativo > header, body.itatame-telao-ativo > nav { display: none !important; }` }} />
+      <main className="flex h-screen w-full flex-col overflow-hidden bg-[#050505] p-3 font-sans text-white select-none lg:p-5">
+        <style dangerouslySetInnerHTML={{ __html: `
+          body.itatame-telao-ativo > header,
+          body.itatame-telao-ativo > nav,
+          body.itatame-telao-ativo > footer { display: none !important; }
+          body.itatame-telao-ativo > main { padding-top: 0 !important; }
+        ` }} />
 
         {/* CABEÇALHO TV MINIMALISTA */}
         <header className="mb-3 flex items-center justify-between border-b border-white/5 pb-3">
@@ -689,41 +706,36 @@ export default function AoVivoPage() {
         )}
 
         {/* LUTAS ATIVAS (CENTRO DA TELA) */}
-        <section className="flex min-h-0 flex-col justify-center overflow-hidden pb-3">
+        <section className="flex min-h-0 flex-1 flex-col justify-center overflow-hidden pb-3">
           {lutasAtivas.length === 0 ? (
             <div className="flex h-full min-h-48 items-center justify-center rounded-2xl border-2 border-dashed border-zinc-800 bg-[#0a0a0e] p-6">
               <span className="text-2xl font-bold uppercase tracking-widest text-zinc-600 text-center">Aguardando início dos combates...</span>
             </div>
           ) : (
-            <div className={`grid h-full min-h-0 gap-4 ${lutasAtivas.length === 1 ? 'grid-cols-1 max-w-5xl mx-auto w-full' : lutasAtivas.length === 2 ? 'grid-cols-2' : 'grid-cols-2 xl:grid-cols-3'}`}>
-              {lutasAtivas.map((luta) => <LutaTvActiveCard key={luta.id} luta={luta} agora={agora} atletas={atletas} />)}
+            <div className={`grid h-full min-h-0 gap-3 ${
+              lutasAtivas.length === 1
+                ? 'mx-auto w-full max-w-5xl grid-cols-1'
+                : lutasAtivas.length === 2
+                  ? 'grid-cols-2'
+                  : lutasAtivas.length === 3
+                    ? 'grid-cols-3'
+                    : lutasAtivas.length === 4
+                      ? 'grid-cols-2 grid-rows-2'
+                      : 'grid-cols-3 grid-rows-2'
+            }`}>
+              {lutasAtivas.map((luta) => (
+                <LutaTvActiveCard
+                  key={luta.id}
+                  luta={luta}
+                  agora={agora}
+                  atletas={atletas}
+                  compacto={lutasAtivas.length >= 4}
+                />
+              ))}
             </div>
           )}
         </section>
 
-        {/* RODAPÉ DUPLO: FILA (ESQUERDA) E RESULTADOS (DIREITA) */}
-        <footer className="border-t border-white/10 bg-black/80 pt-3 backdrop-blur-md">
-          <div className="mx-auto grid max-w-[1920px] grid-cols-[minmax(0,1fr)_minmax(280px,40%)] items-end gap-5">
-            {/* PRÓXIMAS CHAMADAS */}
-            <div className="min-w-0">
-              <h2 className="mb-2 flex items-center gap-2 px-1 text-xs font-black uppercase tracking-widest text-zinc-400"><Clock size={16} className="text-cyan-500" /> Próximas Chamadas na Fila</h2>
-              <div className="flex gap-4 overflow-x-auto pb-2 invisible-scrollbar">
-                {filaLutas.length === 0 && <p className="text-sm text-zinc-600 font-bold uppercase">Nenhuma luta na fila.</p>}
-                {filaLutas.map((l, index) => <FilaTvLine key={l.id} luta={l} index={index} agora={agora} />)}
-              </div>
-            </div>
-
-            {/* RESULTADOS RECENTES (MINIMIZADO) */}
-            <div className="min-w-0 border-l border-white/10 pl-5">
-              <h2 className="mb-2 flex items-center gap-2 px-1 text-xs font-black uppercase tracking-widest text-zinc-400"><Medal size={16} className="text-emerald-500" /> Resultados Anteriores</h2>
-              <div className="flex gap-4 overflow-x-auto pb-2 invisible-scrollbar">
-                {lutasFinalizadas.length === 0 && <p className="text-sm text-zinc-600 font-bold uppercase">Aguardando resultados oficiais.</p>}
-                {lutasFinalizadas.map((l) => <ResultadoTvLine key={l.id} luta={l} />)}
-              </div>
-            </div>
-          </div>
-        </footer>
-        <style dangerouslySetInnerHTML={{ __html: `.invisible-scrollbar::-webkit-scrollbar { display: none; } .invisible-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }` }} />
         {ultimoResultado && <AvisoResultadoBorda luta={ultimoResultado} />}
       </main>
     );

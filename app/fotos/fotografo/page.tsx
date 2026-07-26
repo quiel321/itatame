@@ -75,7 +75,13 @@ export default function FotografoMarketingPage() {
           {/* BACKGROUND FOTO & GRADIENTES */}
           <div className="absolute inset-0 z-0 pointer-events-none">
             {/* Foto do Fotógrafo (Fixada na metade direita da tela) */}
-            <div className="absolute inset-y-0 right-0 w-full md:w-[70%] bg-[url('https://images.pexels.com/photos/1264210/pexels-photo-1264210.jpeg?auto=compress&cs=tinysrgb&w=1920')] bg-cover bg-[30%_center] sm:bg-[40%_center] md:bg-[left_center] opacity-[0.35] md:opacity-[0.45] mix-blend-luminosity"></div>
+            <div
+              className="absolute inset-y-0 right-0 w-full bg-[url('https://images.pexels.com/photos/1264210/pexels-photo-1264210.jpeg?auto=compress&cs=tinysrgb&w=1920')] bg-cover bg-[30%_center] opacity-[0.35] mix-blend-luminosity sm:bg-[40%_center] md:w-[78%] md:bg-[left_center] md:opacity-[0.45]"
+              style={{
+                WebkitMaskImage: "linear-gradient(to right, transparent 0%, black 22%, black 100%)",
+                maskImage: "linear-gradient(to right, transparent 0%, black 22%, black 100%)",
+              }}
+            />
 
             {/* Máscara de Gradiente: Escuro na esquerda (onde vai o texto) sumindo para a direita */}
             <div className="absolute inset-0 bg-gradient-to-r from-[#050505] via-[#050505]/95 md:via-[#050505]/80 to-transparent z-10"></div>

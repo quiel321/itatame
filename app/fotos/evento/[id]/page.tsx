@@ -4,9 +4,12 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
+import { FOTO_IA_NUMERO_TAG_PREFIX } from "@/app/lib/fotos-ai";
+import { eventoPermiteBuscaPorNumero } from "@/app/lib/fotos-busca-numero";
 import { FotoAlbum, FotoArquivo, formatarPrecoFotos } from "@/app/lib/fotos";
 import FotosShell from "../../_components/FotosShell";
 import BuscaFacial from "../../_components/BuscaFacial";
+import BuscaPorNumero from "../../_components/BuscaPorNumero";
 import { Camera, CalendarDays, CheckCircle2, ChevronLeft, Filter, Image as ImageIcon, MapPin, ScanFace, Search, ShieldCheck, ShoppingCart, X, Building2, Percent } from "lucide-react";
 
 const CARRINHO_FOTOS_KEY = "carrinho_fotos";
@@ -28,7 +31,7 @@ export default function FotosEventoPage() {
   const [carrinho, setCarrinho] = useState<string[]>([]);
   const [carrinhoCarregado, setCarrinhoCarregado] = useState(false);
   const [fotoSelecionada, setFotoSelecionada] = useState<FotoArquivo | null>(null);
-  const [fotoOrigemIa, setFotoOrigemIa] = useState(false);
+  const [fotoOrigemBusca, setFotoOrigemBusca] = useState<"ia" | "numero" | null>(null);
   const temporizadorProtecaoRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -126,9 +129,9 @@ export default function FotosEventoPage() {
 
       // 1. Busca os dados base do evento (🔥 ADICIONADO: 'created_by' no select)
       const [{ data: eventoData }, { data: albunsData }, { data: fotosData }] = await Promise.all([
-        supabase.from("foto_eventos").select("id, nome, slug, local, cidade, estado, data_evento, capa_url, status, vendas_ate, desconto_combo_qtd, desconto_combo_percentual, organizador_user_id, created_by").eq("id", eventoId).maybeSingle(),
+        supabase.from("foto_eventos").select("id, nome, slug, descricao, local, cidade, estado, data_evento, capa_url, status, vendas_ate, desconto_combo_qtd, desconto_combo_percentual, organizador_user_id, created_by").eq("id", eventoId).maybeSingle(),
         supabase.from("foto_albuns").select("id, evento_id, fotografo_id, titulo, descricao, capa_url, status").eq("evento_id", eventoId).eq("status", "publicado").order("ordem", { ascending: true }),
-        supabase.from("foto_arquivos").select("id, evento_id, album_id, fotografo_id, titulo, r2_original_key, r2_preview_key, r2_thumb_key, preview_url, thumb_url, preco_centavos, status, fotografo_dados:fotografos!fotografo_id(nome)").eq("evento_id", eventoId).eq("status", "publicada").order("created_at", { ascending: false }),
+        supabase.from("foto_arquivos").select("id, evento_id, album_id, fotografo_id, titulo, r2_original_key, r2_preview_key, r2_thumb_key, preview_url, thumb_url, preco_centavos, status, tags, fotografo_dados:fotografos!fotografo_id(nome)").eq("evento_id", eventoId).eq("status", "publicada").order("created_at", { ascending: false }),
       ]);
 
       // 2. 🔥 INTELIGÊNCIA DO BANNER CORRIGIDA
@@ -180,7 +183,8 @@ export default function FotosEventoPage() {
 
     const frame = window.requestAnimationFrame(() => {
       setFotoSelecionada(fotoEncontrada);
-      setFotoOrigemIa(parametros.get("origem") === "ia");
+      const origem = parametros.get("origem");
+      setFotoOrigemBusca(origem === "ia" || origem === "numero" ? origem : null);
     });
     return () => window.cancelAnimationFrame(frame);
   }, [fotos]);
@@ -189,7 +193,10 @@ export default function FotosEventoPage() {
     const termo = busca.trim().toLowerCase();
     return fotos.filter((foto) => {
       const bateAlbum = albumAtivo === "todos" || foto.album_id === albumAtivo;
-      const texto = [foto.titulo, foto.id].filter(Boolean).join(" ").toLowerCase();
+      const numeros = (foto.tags || [])
+        .filter((tag) => tag.startsWith(FOTO_IA_NUMERO_TAG_PREFIX))
+        .map((tag) => tag.slice(FOTO_IA_NUMERO_TAG_PREFIX.length));
+      const texto = [foto.titulo, foto.id, ...numeros].filter(Boolean).join(" ").toLowerCase();
       const bateBusca = !termo || texto.includes(termo);
       return bateAlbum && bateBusca;
     });
@@ -204,7 +211,7 @@ export default function FotosEventoPage() {
     if (temporizadorProtecaoRef.current) clearTimeout(temporizadorProtecaoRef.current);
     document.documentElement.classList.remove("fotos-protecao-instantanea");
     setFotoSelecionada(null);
-    setFotoOrigemIa(false);
+    setFotoOrigemBusca(null);
 
     const url = new URL(window.location.href);
     if (url.searchParams.has("foto")) {
@@ -302,6 +309,14 @@ export default function FotosEventoPage() {
               triggerClassName="flex items-center justify-center gap-2.5 bg-black/50 hover:bg-black border border-white/5 rounded-xl px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.1em] text-white shrink-0 cursor-pointer transition-colors"
             />
 
+            {eventoPermiteBuscaPorNumero(evento) && (
+              <BuscaPorNumero
+                eventoId={eventoId}
+                triggerLabel="Número"
+                triggerClassName="flex items-center justify-center gap-2.5 bg-orange-500/10 hover:bg-orange-500 border border-orange-400/20 rounded-xl px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.1em] text-orange-300 hover:text-black shrink-0 cursor-pointer transition-colors"
+              />
+            )}
+
             <div className="w-[1px] h-8 bg-white/5 hidden md:block self-center"></div>
 
             <div className="flex-1 flex items-center bg-black/60 border border-white/5 rounded-xl px-4 py-2.5 focus-within:border-retratt/40 transition-colors cursor-text">
@@ -309,7 +324,7 @@ export default function FotosEventoPage() {
               <input
                 value={busca}
                 onChange={(e) => setBusca(e.target.value)}
-                placeholder="Buscar por nome, equipe, referência ou número..."
+                placeholder={eventoPermiteBuscaPorNumero(evento) ? "Buscar por nome, equipe, referência ou número..." : "Buscar por nome, equipe ou referência..."}
                 className="w-full bg-transparent border-none text-xs text-white outline-none placeholder:text-zinc-600 font-medium"
               />
             </div>
@@ -381,7 +396,7 @@ export default function FotosEventoPage() {
                   <article
                     key={foto.id}
                     onClick={() => {
-                      setFotoOrigemIa(false);
+                      setFotoOrigemBusca(null);
                       setFotoSelecionada(foto);
                     }}
                     className="group relative aspect-[4/5] rounded-2xl overflow-hidden bg-[#111] border border-white/5 shadow-md cursor-pointer transition-all duration-300 hover:shadow-orange-950/20 hover:border-retratt/30"
@@ -490,9 +505,10 @@ export default function FotosEventoPage() {
 
               <div className="w-full md:w-[340px] shrink-0 bg-[#0a0a0e] border border-white/5 rounded-3xl p-5 md:p-6 flex flex-col gap-5 shadow-2xl">
 
-                {fotoOrigemIa && (
+                {fotoOrigemBusca && (
                   <div className="flex items-center gap-2 rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-[9px] font-black uppercase tracking-widest text-emerald-300">
-                    <ScanFace size={14} /> Encontrada pela busca facial
+                    {fotoOrigemBusca === "ia" ? <ScanFace size={14} /> : <Search size={14} />}
+                    Encontrada pela busca {fotoOrigemBusca === "ia" ? "facial" : "por número"}
                   </div>
                 )}
 

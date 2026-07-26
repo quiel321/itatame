@@ -1,4 +1,4 @@
-﻿const fotosUrl = process.env.NEXT_PUBLIC_FOTOS_URL || "https://fotos.itatame.com.br";
+const fotosUrl = process.env.NEXT_PUBLIC_FOTOS_URL || "https://retratt.com";
 const fotosHost = new URL(fotosUrl).host;
 
 export function GET() {

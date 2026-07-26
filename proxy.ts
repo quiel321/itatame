@@ -13,7 +13,9 @@ const FOTOS_HOST_ANTIGO = 'fotos.itatame.com.br';
 const RETRATT_HOST = 'retratt.com';
 
 const RETRATT_URL =
-  process.env.NEXT_PUBLIC_RETRATT_URL || `https://${RETRATT_HOST}`;
+  process.env.NEXT_PUBLIC_FOTOS_URL ||
+  process.env.NEXT_PUBLIC_RETRATT_URL ||
+  `https://${RETRATT_HOST}`;
 
 /**
  * Domínios institucionais do iTatame.

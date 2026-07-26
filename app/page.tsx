@@ -3,9 +3,9 @@
 import Link from "next/link";
 // 1. Adicionado o useRef aqui nas importações
 import { useEffect, useMemo, useState, useRef } from "react";
-import { CalendarDays, ChevronRight, MapPin, MonitorDot, Search, Trophy } from "lucide-react";
+import { CalendarDays, Camera, ChevronRight, Images, MapPin, MonitorDot, Search, Trophy } from "lucide-react";
 import { supabase } from "./lib/supabase";
-import { obterEtapaEvento, type TomEtapaEvento } from "./lib/evento-etapas";
+import { obterEtapaEvento, type ResumoLutasEvento, type TomEtapaEvento } from "./lib/evento-etapas";
 
 const estiloEtapa: Record<TomEtapaEvento, { borda: string; badge: string; barra: string; acao: string }> = {
   cyan: {
@@ -52,8 +52,19 @@ const estiloEtapa: Record<TomEtapaEvento, { borda: string; badge: string; barra:
   },
 };
 
+function proximoResumo(
+  resumos: Record<string, ResumoLutasEvento>,
+  eventoId: string,
+) {
+  if (!resumos[eventoId]) {
+    resumos[eventoId] = { total: 0, concluidas: 0, emAndamento: 0, pendentes: 0 };
+  }
+  return resumos[eventoId];
+}
+
 export default function Home() {
   const [eventos, setEventos] = useState<any[]>([]);
+  const [resumosLutas, setResumosLutas] = useState<Record<string, ResumoLutasEvento>>({});
   const [busca, setBusca] = useState("");
   const [modalidadeFiltro, setModalidadeFiltro] = useState("Todas");
   const [estadoFiltro, setEstadoFiltro] = useState("Todos");
@@ -61,12 +72,50 @@ export default function Home() {
   // 2. Criada a referência para o vídeo
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  async function carregarEventos() {
-    const { data, error } = await supabase.from("eventos").select("*").order("data_evento", { ascending: true });
-    if (!error) setEventos(data || []);
+  async function carregarResumoLutas(eventoIds?: string[]) {
+    let consulta = supabase.from("chaves").select("evento_id, status_luta");
+    if (eventoIds?.length) consulta = consulta.in("evento_id", eventoIds);
+
+    const { data, error } = await consulta;
+    if (error) return;
+
+    const proximos: Record<string, ResumoLutasEvento> = {};
+    for (const luta of data || []) {
+      if (!luta.evento_id) continue;
+      const resumo = proximoResumo(proximos, String(luta.evento_id));
+      resumo.total += 1;
+      if (luta.status_luta === "concluida") resumo.concluidas += 1;
+      else if (luta.status_luta === "em_andamento") resumo.emAndamento += 1;
+      else resumo.pendentes += 1;
+    }
+    setResumosLutas(proximos);
   }
 
-  useEffect(() => { carregarEventos(); }, []);
+  async function carregarEventos() {
+    const { data, error } = await supabase.from("eventos").select("*").order("data_evento", { ascending: true });
+    if (!error) {
+      const proximosEventos = data || [];
+      setEventos(proximosEventos);
+      await carregarResumoLutas(proximosEventos.map((evento) => String(evento.id)));
+    }
+  }
+
+  useEffect(() => {
+    carregarEventos();
+
+    const atualizar = () => { carregarEventos(); };
+    const canal = supabase
+      .channel("home-eventos-tempo-real")
+      .on("postgres_changes", { event: "*", schema: "public", table: "chaves" }, atualizar)
+      .on("postgres_changes", { event: "*", schema: "public", table: "eventos" }, atualizar)
+      .subscribe();
+    const intervalo = window.setInterval(atualizar, 15_000);
+
+    return () => {
+      window.clearInterval(intervalo);
+      supabase.removeChannel(canal);
+    };
+  }, []);
 
   // 3. O motor de arranque: Força o vídeo a reproduzir assim que a página é montada
   useEffect(() => {
@@ -205,7 +254,7 @@ export default function Home() {
           )}
 
           {eventosFiltrados.map((evento) => {
-            const etapa = obterEtapaEvento(evento);
+            const etapa = obterEtapaEvento(evento, new Date(), resumosLutas[String(evento.id)]);
             const estilo = estiloEtapa[etapa.tom];
 
             return (
@@ -248,7 +297,7 @@ export default function Home() {
 
                   <div className="mb-3">
                     <div className="mb-1.5 flex items-center justify-between text-[8px] font-black uppercase tracking-[0.16em] text-zinc-500">
-                      <span>{etapa.indice === 0 ? "Preparação" : `Etapa ${etapa.indice} de ${etapa.totalEtapas}`}</span>
+                      <span>{etapa.rotuloProgresso || (etapa.indice === 0 ? "Preparação" : `Etapa ${etapa.indice} de ${etapa.totalEtapas}`)}</span>
                       <span>{etapa.progresso}%</span>
                     </div>
                     <div className="h-1 overflow-hidden rounded-full bg-white/5">
@@ -268,6 +317,52 @@ export default function Home() {
             );
           })}
         </div>
+
+        <a
+          href={process.env.NEXT_PUBLIC_FOTOS_URL || "https://retratt.com"}
+          className="group relative mt-10 grid min-h-44 overflow-hidden rounded-2xl border border-orange-500/20 bg-[#0b0908] shadow-[0_16px_45px_rgba(0,0,0,0.35)] transition hover:border-orange-400/45 md:grid-cols-[1.15fr_0.85fr]"
+        >
+          <div className="relative z-10 flex flex-col justify-center p-5 sm:p-6 md:py-7 md:pl-8 md:pr-5">
+            <div className="mb-3 flex items-center gap-3">
+              <img src="/retratt/logo-white.png" alt="Retratt" className="h-6 w-auto object-contain sm:h-7" />
+              <span className="hidden h-5 w-px bg-white/10 sm:block" />
+              <span className="hidden text-[8px] font-black uppercase tracking-[0.2em] text-orange-400 sm:inline">
+                Fotografia oficial de eventos
+              </span>
+            </div>
+            <h2 className="max-w-2xl text-xl font-black uppercase leading-tight tracking-tight text-white sm:text-2xl">
+              Seus melhores momentos, <span className="text-orange-500">em um só lugar.</span>
+            </h2>
+            <p className="mt-2 max-w-2xl text-[11px] font-medium leading-relaxed text-zinc-400 sm:text-xs">
+              Encontre suas fotos esportivas por reconhecimento inteligente ou publique e venda seus cliques na Retratt.
+            </p>
+            <span className="mt-4 inline-flex w-fit items-center gap-2 text-[9px] font-black uppercase tracking-widest text-orange-400 transition group-hover:text-orange-300">
+              Conhecer a Retratt <ChevronRight size={14} />
+            </span>
+          </div>
+
+          <div className="relative grid min-h-32 grid-cols-2 overflow-hidden border-t border-white/5 md:min-h-full md:border-l md:border-t-0">
+            <img
+              src={eventosFiltrados[0]?.banner_url || "/arena.png"}
+              alt="Atletas em competição"
+              className="h-full w-full object-cover opacity-65 transition duration-700 group-hover:scale-105 group-hover:opacity-80"
+            />
+            <img
+              src={eventosFiltrados[1]?.banner_url || "/mt-fight.png"}
+              alt="Fotografia esportiva"
+              className="h-full w-full object-cover opacity-65 transition duration-700 group-hover:scale-105 group-hover:opacity-80"
+            />
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#0b0908] via-transparent to-black/10" />
+            <div className="absolute bottom-3 left-3 flex items-center gap-3 rounded-lg border border-white/10 bg-black/70 px-3 py-2 backdrop-blur-md">
+              <span className="flex items-center gap-1.5 text-[8px] font-black uppercase tracking-widest text-white">
+                <Images size={13} className="text-orange-400" /> Encontre
+              </span>
+              <span className="flex items-center gap-1.5 text-[8px] font-black uppercase tracking-widest text-white">
+                <Camera size={13} className="text-orange-400" /> Venda
+              </span>
+            </div>
+          </div>
+        </a>
       </section>
 
       {/* 🤝 PARCEIROS OFICIAIS */}

@@ -5,7 +5,7 @@ export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
 export default function Image() {
-  const fotosUrl = process.env.NEXT_PUBLIC_FOTOS_URL || "https://fotos.itatame.com.br";
+  const fotosUrl = process.env.NEXT_PUBLIC_FOTOS_URL || "https://retratt.com";
   const logoUrl = new URL("/retratt/logo-white.png", fotosUrl).toString();
 
   return new ImageResponse(
@@ -57,7 +57,7 @@ export default function Image() {
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
-            <img src={logoUrl} alt="Retratt" width="320" height="78" style={{ objectFit: "contain" }} />
+            <img src={logoUrl} alt="Retratt" width={320} height={78} style={{ objectFit: "contain" }} />
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", maxWidth: 820 }}>

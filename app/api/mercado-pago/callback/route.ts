@@ -1,10 +1,16 @@
 import crypto from "crypto";
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
+import {
+  detectarIntegracaoMercadoPago,
+  obterConfigMercadoPago,
+  type MercadoPagoIntegracao,
+} from "@/app/lib/mercado-pago-integracao";
 
 type PerfilMercadoPago = "organizador" | "fotografo";
 
 type OAuthState = {
+  integracao?: MercadoPagoIntegracao;
   perfil?: PerfilMercadoPago;
   userId?: string;
   organizadorUserId?: string;
@@ -12,38 +18,38 @@ type OAuthState = {
   ts: number;
 };
 
-function getBaseUrl(request: Request) {
-  const origin = new URL(request.url).origin;
-  return process.env.NEXT_PUBLIC_BASE_URL || origin;
-}
-
-function getRedirectUri(request: Request) {
-  return process.env.MP_REDIRECT_URI || `${getBaseUrl(request)}/api/mercado-pago/callback`;
-}
-
-function getStateSecret() {
-  return process.env.MP_OAUTH_STATE_SECRET || process.env.MP_CLIENT_SECRET || "";
-}
-
 function returnToSeguro(valor: string | null | undefined, perfil: PerfilMercadoPago) {
   if (valor && valor.startsWith("/") && !valor.startsWith("//")) return valor;
   return perfil === "fotografo" ? "/fotos/fotografo/dashboard" : "/admin";
 }
 
-function lerState(state: string | null): OAuthState | null {
+function lerState(state: string | null, request: Request): OAuthState | null {
   if (!state) return null;
   const [body, signature] = state.split(".");
   if (!body || !signature) return null;
 
-  const expected = crypto.createHmac("sha256", getStateSecret()).update(body).digest("base64url");
-  if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return null;
+  try {
+    const payload = JSON.parse(Buffer.from(body, "base64url").toString("utf8")) as OAuthState;
+    const integracao = payload.integracao === "retratt" ? "retratt" : "itatame";
+    const config = obterConfigMercadoPago(request, integracao);
+    if (!config.stateSecret) return null;
 
-  const payload = JSON.parse(Buffer.from(body, "base64url").toString("utf8")) as OAuthState;
-  const quinzeMinutos = 15 * 60 * 1000;
-  const userId = payload.userId || payload.organizadorUserId;
-  if (!userId || Date.now() - payload.ts > quinzeMinutos) return null;
+    const expected = crypto.createHmac("sha256", config.stateSecret).update(body).digest("base64url");
+    const assinaturaRecebida = Buffer.from(signature);
+    const assinaturaEsperada = Buffer.from(expected);
+    if (
+      assinaturaRecebida.length !== assinaturaEsperada.length ||
+      !crypto.timingSafeEqual(assinaturaRecebida, assinaturaEsperada)
+    ) return null;
 
-  return payload;
+    const quinzeMinutos = 15 * 60 * 1000;
+    const userId = payload.userId || payload.organizadorUserId;
+    if (!userId || !payload.ts || Date.now() - payload.ts > quinzeMinutos) return null;
+
+    return { ...payload, integracao };
+  } catch {
+    return null;
+  }
 }
 
 function credenciaisMercadoPago(tokenData: any, expiresAt: string | null) {
@@ -63,8 +69,10 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
   const error = url.searchParams.get("error");
-  const state = lerState(url.searchParams.get("state"));
-  const baseUrl = getBaseUrl(request);
+  const state = lerState(url.searchParams.get("state"), request);
+  const integracao = state?.integracao || detectarIntegracaoMercadoPago(request);
+  const config = obterConfigMercadoPago(request, integracao);
+  const baseUrl = config.baseUrl;
   const perfil = state?.perfil === "fotografo" ? "fotografo" : "organizador";
   const userId = state?.userId || state?.organizadorUserId || "";
   const returnTo = returnToSeguro(state?.returnTo, perfil);
@@ -77,10 +85,7 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${baseUrl}/admin?mp=erro&motivo=oauth_invalido`);
   }
 
-  const clientId = process.env.MP_CLIENT_ID;
-  const clientSecret = process.env.MP_CLIENT_SECRET;
-
-  if (!clientId || !clientSecret) {
+  if (!config.clientId || !config.clientSecret) {
     return NextResponse.redirect(`${baseUrl}${returnTo}?mp=erro&motivo=env_mercado_pago`);
   }
 
@@ -88,11 +93,11 @@ export async function GET(request: Request) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      client_id: clientId,
-      client_secret: clientSecret,
+      client_id: config.clientId,
+      client_secret: config.clientSecret,
       code,
       grant_type: "authorization_code",
-      redirect_uri: getRedirectUri(request),
+      redirect_uri: config.redirectUri,
       test_token: process.env.MP_OAUTH_TEST_TOKEN === "true" ? "true" : "false",
     }),
   });

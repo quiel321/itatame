@@ -25,7 +25,7 @@ function formatarMoeda(centavos: number | null | undefined) {
 }
 
 function baseUrl() {
-  return process.env.NEXT_PUBLIC_FOTOS_URL || "https://fotos.itatame.com.br";
+  return process.env.NEXT_PUBLIC_FOTOS_URL || "https://retratt.com";
 }
 
 export async function enviarEmailPedidoFotosConfirmado(supabase: SupabaseClient, pedidoId: string) {

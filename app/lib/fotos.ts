@@ -37,6 +37,7 @@ export type FotoArquivo = {
   thumb_url: string | null;
   preco_centavos: number;
   status: string | null;
+  tags?: string[] | null;
 };
 
 export const FOTO_STATUS_EVENTO = {

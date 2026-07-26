@@ -95,7 +95,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
                   </li>
                   {/* LINK DO ITATAME FOTOS ADICIONADO AQUI 👇 */}
                   <li>
-                    <Link href={process.env.NEXT_PUBLIC_FOTOS_URL || "https://fotos.itatame.com.br"} className="flex items-center gap-2 text-zinc-400 hover:text-blue-400 text-xs font-bold transition-colors">
+                    <Link href={process.env.NEXT_PUBLIC_FOTOS_URL || "https://retratt.com"} className="flex items-center gap-2 text-zinc-400 hover:text-orange-400 text-xs font-bold transition-colors">
                       Retratt
                       <span className="bg-orange-500/10 border border-orange-500/30 text-orange-400 text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider">Novo</span>
                     </Link>
