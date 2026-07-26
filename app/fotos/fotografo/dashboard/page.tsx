@@ -11,7 +11,7 @@ type FotografoPerfil = { id: string; nome: string | null; email: string | null; 
 type Totais = { fotos: number; albuns: number; eventos: number; vendas: number };
 type PerfilForm = { nome: string; telefone: string; documento: string; cep: string; endereco: string; cidade: string; estado: string; bio: string; };
 
-type GaleriaFreelancer = { id: string; nome: string; cidade?: string | null; estado?: string | null; data_evento?: string | null; preco_padrao_centavos?: number | null; capa_url?: string | null; comissao_organizador_percentual?: number | null; };
+type GaleriaFreelancer = { id: string; nome: string; cidade?: string | null; estado?: string | null; data_evento?: string | null; preco_padrao_centavos?: number | null; capa_url?: string | null; comissao_organizador_percentual?: number | null; created_by?: string | null; };
 type FotoArquivo = {
   id: string;
   evento_id: string;
@@ -124,9 +124,8 @@ export default function FotografoDashboardPage() {
         if (eventosPermitidos.length > 0) {
            const { data } = await supabase
               .from("foto_eventos")
-              .select("id, nome, cidade, estado, data_evento, preco_padrao_centavos, capa_url")
+              .select("id, nome, cidade, estado, data_evento, preco_padrao_centavos, capa_url, created_by")
               .in("id", eventosPermitidos)
-              .neq("created_by", user.id)
               .order("created_at", { ascending: false });
 
            const royaltyPorEvento = new Map(
@@ -135,10 +134,12 @@ export default function FotografoDashboardPage() {
                Number(item.comissao_organizador_percentual || 0),
              ] as const),
            );
-           oficiaisDb = (data || []).map((galeria) => ({
-             ...galeria,
-             comissao_organizador_percentual: royaltyPorEvento.get(String(galeria.id)) || 0,
-           }));
+           oficiaisDb = (data || [])
+             .filter((galeria) => galeria.created_by !== user.id)
+             .map((galeria) => ({
+               ...galeria,
+               comissao_organizador_percentual: royaltyPorEvento.get(String(galeria.id)) || 0,
+             }));
         }
 
         setGaleriasOficiais(oficiaisDb);

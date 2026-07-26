@@ -13,7 +13,7 @@ type FotoEventoAdmin = {
   id: string; nome: string; evento_id?: string | null; status: string | null; capa_url?: string | null; preco_padrao_centavos: number | null; desconto_combo_qtd?: number | null; desconto_combo_percentual?: number | null;
 };
 type OrganizadorFinanceiro = {
-  nome?: string | null; email?: string | null; telefone?: string | null; documento?: string | null; tipo_entidade?: string | null; academia?: string | null; perfil_completo?: boolean | null; mp_connected_at?: string | null; mp_user_id?: string | null;
+  nome?: string | null; email?: string | null; telefone?: string | null; documento?: string | null; tipo_entidade?: string | null; academia?: string | null; perfil_completo?: boolean | null;
 };
 type FotografoCredenciado = {
   id: string;
@@ -81,7 +81,6 @@ export default function FotosAdminPage() {
   const capaInputRef = useRef<HTMLInputElement>(null);
   const [fazendoUpload, setFazendoUpload] = useState<"avatar" | "capa" | null>(null);
 
-  const contaSistemaConectada = Boolean(organizador?.mp_connected_at);
   const perfilPendente = Boolean(userId && (!organizador?.perfil_completo || !organizador?.telefone || !organizador?.documento));
   const exibirFormularioPerfil = Boolean(userId && (perfilPendente || mostrarFormularioPerfil));
   const primeiroNome = orgForm.nome ? orgForm.nome.split(' ')[0] : "Organizador";
@@ -107,7 +106,7 @@ export default function FotosAdminPage() {
       setUserId(user.id);
       setEmail(user.email || null);
 
-      const org = await supabase.from("organizadores").select("nome, email, telefone, documento, tipo_entidade, academia, perfil_completo, mp_connected_at, mp_user_id").eq("user_id", user.id).maybeSingle();
+      const org = await supabase.from("organizadores").select("nome, email, telefone, documento, tipo_entidade, academia, perfil_completo").eq("user_id", user.id).maybeSingle();
 
       if (!org.data) {
         setContaNaoExiste(true);
@@ -1015,13 +1014,6 @@ export default function FotosAdminPage() {
                   )}
                   <p className="mt-3 text-[8px] leading-relaxed text-zinc-600">A alteração do percentual vale para as próximas compras. Vendas anteriores preservam o royalty registrado no momento do pedido.</p>
                 </div>
-
-                {contaSistemaConectada && (
-                  <div className="rounded-xl border border-retratt/20 bg-retratt/5 p-3 text-[9px] leading-relaxed text-orange-100/70">
-                    <strong className="block font-black uppercase tracking-widest text-retratt">Conta do sistema de campeonatos preservada</strong>
-                    O Mercado Pago já vinculado continua exclusivo para inscrições e não é usado como recebedor nas vendas da Retratt.
-                  </div>
-                )}
 
                 <div className="flex items-center justify-center gap-2 text-[9px] font-black uppercase tracking-widest text-zinc-600 mt-6 pt-4 border-t border-white/5">
                    <ShieldCheck size={14} className="shrink-0" /> <span className="truncate">Fotógrafo permanece como recebedor</span>
