@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
 import FotosShell from "../../_components/FotosShell";
-import { ArrowRight, Camera, CheckCircle2, CloudUpload, CreditCard, FolderOpen, ImagePlus, ShieldCheck, Wallet, LogOut, AlertCircle, Store, X, Edit, Calendar, MapPin, Image as ImageIcon, Trash2, Loader2, Check, Plus, Images, Trophy, ChartNoAxesCombined } from "lucide-react";
+import { ArrowRight, Camera, CheckCircle2, ChevronDown, CloudUpload, CreditCard, FolderOpen, ImagePlus, ShieldCheck, Wallet, LogOut, AlertCircle, Store, X, Edit, Calendar, MapPin, Image as ImageIcon, Trash2, Loader2, Check, Plus, Images, Trophy, ChartNoAxesCombined, Video } from "lucide-react";
 
 type FotografoPerfil = { id: string; nome: string | null; email: string | null; foto_url?: string | null; telefone?: string | null; documento?: string | null; cep?: string | null; endereco?: string | null; cidade?: string | null; estado?: string | null; bio?: string | null; perfil_completo?: boolean | null; status: string | null; mp_connected_at?: string | null; mp_user_id?: string | null; };
 type Totais = { fotos: number; albuns: number; eventos: number; vendas: number };
@@ -17,6 +17,7 @@ type FotoArquivo = {
   evento_id: string;
   fotografo_id: string | null;
   titulo: string | null;
+  mime_type?: string | null;
   status: string;
   situacao_pedido: "vendida" | "reservada" | "vinculada" | null;
   quantidade_vendas: number;
@@ -41,9 +42,11 @@ export default function FotografoDashboardPage() {
   const [mostrarFormularioPerfil, setMostrarFormularioPerfil] = useState(false);
   const [perfilForm, setPerfilForm] = useState<PerfilForm>(() => perfilParaForm(null, null));
   const fotoInputRef = useRef<HTMLInputElement>(null);
+  const criarGaleriaRef = useRef<HTMLDivElement>(null);
   const [enviandoFoto, setEnviandoFoto] = useState(false);
 
   const [mostrarCriarGaleria, setMostrarCriarGaleria] = useState(false);
+  const [mostrarDetalhesMp, setMostrarDetalhesMp] = useState(false);
   const [galeriaForm, setGaleriaForm] = useState({ nome: "", cidade: "", estado: "", dataEvento: "", preco: "15,00" });
   const [capaGaleria, setCapaGaleria] = useState<File | null>(null);
   const [criandoGaleria, setCriandoGaleria] = useState(false);
@@ -68,6 +71,20 @@ export default function FotografoDashboardPage() {
   const exibirFormularioPerfil = useMemo(() => Boolean(userId && (perfilPendente || mostrarFormularioPerfil)), [userId, perfilPendente, mostrarFormularioPerfil]);
   const mpConnectUrl = useMemo(() => userId ? `/api/mercado-pago/connect?integracao=retratt&perfil=fotografo&user_id=${encodeURIComponent(userId)}&return_to=${encodeURIComponent("/fotos/fotografo/dashboard")}` : "/fotos/login?perfil=fotografo&next=/fotos/fotografo/dashboard", [userId]);
   const primeiroNome = useMemo(() => nomeExibicao.split(' ')[0], [nomeExibicao]);
+
+  function abrirCriacaoGaleria() {
+    setMostrarCriarGaleria(true);
+    window.setTimeout(() => criarGaleriaRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+  }
+
+  useEffect(() => {
+    const abrirPeloAtalho = () => {
+      if (window.location.hash === "#criar-galeria") abrirCriacaoGaleria();
+    };
+    abrirPeloAtalho();
+    window.addEventListener("hashchange", abrirPeloAtalho);
+    return () => window.removeEventListener("hashchange", abrirPeloAtalho);
+  }, []);
 
   useEffect(() => {
     async function carregar() {
@@ -329,7 +346,7 @@ export default function FotografoDashboardPage() {
 
   async function excluirFotosSelecionadas() {
     if (fotosSelecionadas.length === 0) return;
-    if (!confirm(`Tem certeza que deseja excluir ${fotosSelecionadas.length} foto(s)? Essa ação apagará as fotos do sistema e da nuvem.`)) return;
+    if (!confirm(`Tem certeza que deseja excluir ${fotosSelecionadas.length} mídia(s)? Essa ação apagará os arquivos do sistema e da nuvem.`)) return;
 
     setExcluindoFotos(true);
 
@@ -396,7 +413,7 @@ export default function FotografoDashboardPage() {
              />
           ) : (
              <div className="absolute inset-0 flex flex-col items-center justify-center p-2 text-center bg-[#0a0a0e]">
-                <ImageIcon size={20} className="text-zinc-700 mb-1" />
+                {foto.mime_type?.startsWith("video/") ? <Video size={20} className="mb-1 text-retratt" /> : <ImageIcon size={20} className="text-zinc-700 mb-1" />}
                 <span className="text-[7px] font-black uppercase tracking-widest text-zinc-500 mb-1">
                    {imgError ? "Erro no Link" : "Link Ausente"}
                 </span>
@@ -412,6 +429,8 @@ export default function FotografoDashboardPage() {
                 </span>
              </div>
           )}
+
+          {foto.mime_type?.startsWith("video/") && <span className="pointer-events-none absolute bottom-2 left-2 rounded-md bg-black/80 px-2 py-1 text-[7px] font-black uppercase tracking-wider text-white"><Video size={9} className="mr-1 inline"/> Vídeo</span>}
 
           <div className={`absolute top-2 right-2 w-5 h-5 rounded-md border flex items-center justify-center transition-colors ${protegida ? 'bg-black/75 border-white/30' : isSelected ? 'bg-retratt border-retratt' : 'bg-black/50 border-white/50'}`}>
              {protegida ? <ShieldCheck size={11} className="text-white" /> : isSelected && <Check size={12} className="text-white" />}
@@ -476,29 +495,36 @@ export default function FotografoDashboardPage() {
     );
   };
 
-  if (carregando) return <FotosShell><main className="min-h-screen bg-[#050505] flex items-center justify-center"><Camera size={32} className="text-retratt animate-pulse"/></main></FotosShell>;
+  if (carregando) return <FotosShell area="fotografo"><main className="min-h-screen bg-[#050505] flex items-center justify-center"><Camera size={32} className="text-retratt animate-pulse"/></main></FotosShell>;
 
   return (
-    <FotosShell>
+    <FotosShell area="fotografo">
       <main className="min-h-screen bg-[#050505] text-white font-sans relative overflow-x-hidden w-full">
 
         <section className="border-b border-white/5 bg-[radial-gradient(circle_at_85%_0%,rgba(255,90,31,0.18),transparent_32%),linear-gradient(180deg,#101014,#050505)] w-full">
           <div className="mx-auto max-w-7xl px-4 py-8 md:px-8 md:py-12">
-            <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between mb-10">
-              <div className="min-w-0">
-                <p className="inline-flex items-center gap-1.5 rounded-full border border-retratt/20 bg-retratt/10 px-3 py-1 text-[9px] font-black uppercase tracking-[0.24em] text-retratt mb-4 shadow-[0_0_15px_rgba(255,90,31,0.1)]"><Camera size={12} /> Dashboard do Fotógrafo</p>
-                <h1 className="text-3xl sm:text-4xl md:text-5xl font-black uppercase tracking-tight leading-none drop-shadow-md break-words">Olá, {primeiroNome}!</h1>
-                <p className="mt-3 max-w-xl text-xs md:text-sm leading-relaxed text-zinc-400 font-medium">Acompanhe suas galerias, conecte sua conta de recebimento e envie fotos oficiais para os eventos liberados.</p>
+            <div className="mb-10 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+              <div className="flex min-w-0 items-center gap-4 sm:gap-5">
+                <div className="relative flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border-2 border-retratt/40 bg-retratt/10 shadow-[0_0_24px_rgba(255,90,31,0.16)] sm:h-20 sm:w-20">
+                  {perfil?.foto_url ? <img src={perfil.foto_url} alt={`Foto de ${nomeExibicao}`} className="h-full w-full object-cover" /> : <Camera size={26} className="text-retratt" />}
+                  {perfil?.perfil_completo && <span className="absolute bottom-1 right-1 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-400 text-black"><Check size={12}/></span>}
+                </div>
+                <div className="min-w-0">
+                  <p className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-retratt/20 bg-retratt/10 px-3 py-1 text-[8px] font-black uppercase tracking-[0.2em] text-retratt shadow-[0_0_15px_rgba(255,90,31,0.1)] sm:text-[9px]"><Camera size={12} /> Dashboard do Fotógrafo</p>
+                  <h1 className="break-words text-3xl font-black uppercase leading-none tracking-tight drop-shadow-md sm:text-4xl md:text-5xl">Olá, {primeiroNome}!</h1>
+                  <p className="mt-3 max-w-xl text-xs font-medium leading-relaxed text-zinc-400 md:text-sm">Crie suas galerias, publique mídias e acompanhe vendas e repasses em um só lugar.</p>
+                </div>
               </div>
               <div className="flex flex-col sm:flex-row w-full sm:w-auto items-stretch sm:items-center gap-3">
                 <Link href="/fotos/fotografo/financeiro" className="cursor-pointer inline-flex h-11 w-full sm:w-auto items-center justify-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-5 text-[10px] font-black uppercase tracking-widest text-emerald-300 hover:bg-emerald-400 hover:text-black transition-colors shadow-sm">Financeiro <ChartNoAxesCombined size={14} className="shrink-0" /></Link>
-                <Link href="/fotos/fotografo/painel" className="cursor-pointer inline-flex h-11 w-full sm:w-auto items-center justify-center gap-2 rounded-xl bg-retratt px-5 text-[10px] font-black uppercase tracking-widest text-black hover:bg-retratt transition-colors shadow-sm">Upload de Fotos <CloudUpload size={14} className="shrink-0" /></Link>
+                <Link href="/fotos/fotografo/painel" className="cursor-pointer inline-flex h-11 w-full sm:w-auto items-center justify-center gap-2 rounded-xl bg-retratt px-5 text-[10px] font-black uppercase tracking-widest text-black hover:bg-retratt transition-colors shadow-sm">Criar álbum <CloudUpload size={14} className="shrink-0" /></Link>
+                <button type="button" onClick={abrirCriacaoGaleria} className="cursor-pointer inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-retratt/40 bg-retratt/10 px-5 text-[10px] font-black uppercase tracking-widest text-retratt transition-colors hover:bg-retratt hover:text-black sm:w-auto"><Plus size={14}/> Minha galeria</button>
                 {userId && <button onClick={deslogar} className="cursor-pointer inline-flex h-11 w-full sm:w-auto items-center justify-center gap-2 rounded-xl border border-retratt/20 bg-retratt/10 px-6 text-[10px] font-black uppercase tracking-widest text-retratt hover:bg-retratt hover:text-white transition-all shadow-sm">Sair <LogOut size={14} className="shrink-0" /></button>}
               </div>
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-              {[[ImagePlus, "Fotos Publicadas", totais.fotos, "text-retratt"], [FolderOpen, "Álbuns Criados", totais.albuns, "text-white"], [Store, "Eventos", totais.eventos, "text-retratt"], [Wallet, "Vendas", totais.vendas, "text-emerald-400"]].map(([Icon, label, valor, cor], index) => {
+              {[[ImagePlus, "Mídias Publicadas", totais.fotos, "text-retratt"], [FolderOpen, "Álbuns Criados", totais.albuns, "text-white"], [Store, "Eventos", totais.eventos, "text-retratt"], [Wallet, "Vendas", totais.vendas, "text-emerald-400"]].map(([Icon, label, valor, cor], index) => {
                 const IconComponent = Icon as typeof Camera;
                 return (
                   <div key={index} className="relative overflow-hidden rounded-2xl border border-white/5 bg-[#0a0a0e]/80 backdrop-blur-md p-4 sm:p-5 shadow-lg group hover:border-white/10 transition-colors">
@@ -511,20 +537,27 @@ export default function FotografoDashboardPage() {
           </div>
         </section>
 
-        <section className="mx-auto grid max-w-7xl gap-6 px-4 py-8 md:grid-cols-[1fr_0.8fr] md:px-8 w-full">
+        <section className="mx-auto grid w-full max-w-7xl gap-6 px-4 py-8 md:px-8 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
           <div className="space-y-6 w-full min-w-0">
             {!userId ? null : (
               <>
                 {(!exibirFormularioPerfil && !perfilPendente) ? (
-                   <div className="bg-[#0a0a0e] rounded-3xl p-4 sm:p-5 border border-white/5 shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500 shrink-0"><CheckCircle2 size={20} /></div>
-                        <div><p className="text-sm font-black text-white uppercase tracking-tight">Cadastro Concluído</p><p className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest">Apto a faturar</p></div>
+                   <div id="perfil-fotografo" className="scroll-mt-24 bg-[#0a0a0e] rounded-3xl p-5 sm:p-6 border border-white/5 shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
+                      <div className="flex min-w-0 items-center gap-4">
+                        <div className="relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl border-2 border-retratt/30 bg-retratt/10">
+                          {perfil?.foto_url ? <img src={perfil.foto_url} alt="Foto de perfil" className="h-full w-full object-cover" /> : <Camera size={28} className="text-retratt" />}
+                          <span className="absolute bottom-1 right-1 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-black"><Check size={12}/></span>
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate text-base font-black uppercase tracking-tight text-white">{nomeExibicao}</p>
+                          <p className="mt-1 text-[9px] font-bold uppercase tracking-widest text-emerald-400">Perfil verificado • apto a faturar</p>
+                          <p className="mt-2 line-clamp-2 text-[10px] leading-relaxed text-zinc-500">{perfil?.bio || "Adicione uma apresentação curta para compradores e organizadores conhecerem o seu trabalho."}</p>
+                        </div>
                       </div>
-                      <button onClick={() => setMostrarFormularioPerfil(true)} className="cursor-pointer w-full sm:w-auto px-6 py-2.5 bg-white/5 hover:bg-white/10 text-white text-[9px] font-black uppercase tracking-widest rounded-xl transition-colors border border-white/10 text-center">Editar Perfil</button>
+                      <button onClick={() => setMostrarFormularioPerfil(true)} className="cursor-pointer w-full sm:w-auto px-6 py-3 bg-white/5 hover:bg-white/10 text-white text-[9px] font-black uppercase tracking-widest rounded-xl transition-colors border border-white/10 text-center">Editar foto e perfil</button>
                    </div>
                 ) : (
-                   <div className="rounded-3xl border border-retratt/30 bg-retratt/5 shadow-[0_0_30px_rgba(255,90,31,0.05)] p-5 sm:p-6 md:p-8">
+                   <div id="perfil-fotografo" className="scroll-mt-24 rounded-3xl border border-retratt/30 bg-retratt/5 shadow-[0_0_30px_rgba(255,90,31,0.05)] p-5 sm:p-6 md:p-8">
                      <div className="flex flex-col sm:flex-row sm:items-start justify-between mb-6 gap-4">
                         <div><h2 className="text-base font-black uppercase tracking-tight text-white md:text-lg">Dados do Fotógrafo</h2><p className="text-[10px] font-bold text-retratt/80 uppercase tracking-widest mt-1">{perfilPendente ? "Necessário para repasses" : "Atualizar Informações"}</p></div>
                         {!perfilPendente && (<button onClick={() => setMostrarFormularioPerfil(false)} className="cursor-pointer w-full sm:w-auto inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-white/5 px-4 text-[9px] font-black uppercase tracking-widest hover:bg-white hover:text-black transition-colors">Cancelar</button>)}
@@ -566,38 +599,41 @@ export default function FotografoDashboardPage() {
                     <h2 className="text-lg font-black uppercase tracking-tight text-white mb-6 flex items-center gap-2">
                        <ShieldCheck size={20} className="text-emerald-500 shrink-0"/> Eventos Oficiais
                     </h2>
-                    <p className="text-[10px] text-zinc-400 mb-6 font-medium leading-relaxed">Você foi credenciado para fotografar nestes eventos. Envie suas fotos e gerencie-as através do botão abaixo.</p>
+                    <p className="text-[10px] text-zinc-400 mb-6 font-medium leading-relaxed">Você foi credenciado para produzir estes eventos. Adicione fotos ou vídeos e acompanhe tudo no mesmo painel.</p>
 
                     <div className="space-y-4">
                       {galeriasOficiais.map((galeria) => (
                          <div key={galeria.id} className="rounded-2xl border border-white/5 bg-[#050505] p-4 sm:p-5 hover:border-emerald-500/20 transition-colors">
-                            <div className="flex flex-col sm:flex-row gap-4 sm:items-center justify-between mb-2">
-                               <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
-                                  <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-zinc-900 shrink-0 overflow-hidden border border-white/5 flex items-center justify-center">
+                            <div className="flex min-w-0 items-start gap-4">
+                                  <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/5 bg-zinc-900 sm:h-24 sm:w-24">
                                      {galeria.capa_url ? <img src={galeria.capa_url} className="w-full h-full object-cover" alt="Capa" /> : <Trophy className="text-emerald-500/50" size={24}/>}
                                   </div>
                                   <div className="flex-1 min-w-0">
-                                     <h3 className="text-xs sm:text-sm font-black uppercase text-white truncate">{galeria.nome}</h3>
-                                      <div className="flex flex-wrap sm:flex-nowrap items-center gap-1 sm:gap-3 mt-1 sm:mt-1.5 text-[8px] sm:text-[9px] font-bold uppercase tracking-widest text-zinc-500">
+                                     <h3 className="line-clamp-2 text-sm font-black uppercase leading-snug text-white sm:text-base">{galeria.nome}</h3>
+                                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[9px] font-bold uppercase tracking-wider text-zinc-500">
                                          <span className="flex items-center gap-1 shrink-0"><Calendar size={10} className="shrink-0"/> {galeria.data_evento ? new Date(galeria.data_evento).toLocaleDateString('pt-BR') : "Sem data"}</span>
-                                         <span className="hidden sm:inline-block text-zinc-700">•</span>
-                                         <span className="flex items-center gap-1 truncate"><MapPin size={10} className="shrink-0"/> <span className="truncate">{galeria.cidade || "Local"} / {galeria.estado || "UF"}</span></span>
+                                         <span className="flex min-w-0 items-center gap-1"><MapPin size={10} className="shrink-0"/> <span className="truncate">{galeria.cidade || "Local"} / {galeria.estado || "UF"}</span></span>
                                       </div>
-                                      <p className="mt-2 text-[8px] font-black uppercase tracking-wider text-emerald-400">
-                                        Retratt 9,5% • Organizador {Number(galeria.comissao_organizador_percentual || 0).toLocaleString("pt-BR")}% • Você recebe {(90.5 - Number(galeria.comissao_organizador_percentual || 0)).toLocaleString("pt-BR")}% antes da tarifa do pagamento
-                                      </p>
+                                      <div className="mt-3 flex flex-wrap gap-1.5 text-[8px] font-black uppercase tracking-wider">
+                                        <span className="rounded-full bg-retratt/10 px-2 py-1 text-retratt">Retratt 9,5%</span>
+                                        <span className="rounded-full bg-amber-400/10 px-2 py-1 text-amber-300">Organizador {Number(galeria.comissao_organizador_percentual || 0).toLocaleString("pt-BR")}%</span>
+                                        <span className="rounded-full bg-emerald-400/10 px-2 py-1 text-emerald-300">Você {(90.5 - Number(galeria.comissao_organizador_percentual || 0)).toLocaleString("pt-BR")}%*</span>
+                                      </div>
+                                      <p className="mt-2 text-[8px] leading-relaxed text-zinc-600">*Antes da tarifa do meio de pagamento.</p>
                                   </div>
-                               </div>
+                            </div>
 
-                               <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 shrink-0 mt-3 sm:mt-0 w-full sm:w-auto">
-                                  <button onClick={() => abrirGerenciadorFotos(galeria.id)} className="cursor-pointer flex-1 sm:flex-none inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-retratt/30 bg-retratt/10 px-3 sm:px-4 text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-retratt hover:bg-retratt hover:text-black transition-colors">
-                                    <Images size={12} className="shrink-0"/> Minhas Fotos
+                               <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                                  <Link href={`/fotos/fotografo/painel?evento=${galeria.id}`} className="cursor-pointer inline-flex h-10 items-center justify-center gap-1.5 rounded-xl bg-retratt px-3 text-[9px] font-black uppercase tracking-wider text-black transition-colors hover:brightness-110">
+                                    <CloudUpload size={12} className="shrink-0"/> Adicionar mídias
+                                  </Link>
+                                  <button onClick={() => abrirGerenciadorFotos(galeria.id)} className="cursor-pointer inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-retratt/30 bg-retratt/10 px-3 text-[9px] font-black uppercase tracking-wider text-retratt transition-colors hover:bg-retratt hover:text-black">
+                                    <Images size={12} className="shrink-0"/> Minhas mídias
                                   </button>
-                                  <Link href={`/fotos/evento/${galeria.id}`} className="cursor-pointer flex-1 sm:flex-none inline-flex h-9 items-center justify-center gap-1.5 rounded-xl bg-white/10 px-3 sm:px-4 text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-white hover:bg-white hover:text-black transition-colors">
+                                  <Link href={`/fotos/evento/${galeria.id}`} className="cursor-pointer inline-flex h-10 items-center justify-center gap-1.5 rounded-xl bg-white/10 px-3 text-[9px] font-black uppercase tracking-wider text-white transition-colors hover:bg-white hover:text-black">
                                     Loja Oficial
                                   </Link>
                                </div>
-                            </div>
 
                             <PainelGerenciadorFotos galeriaId={galeria.id} />
                          </div>
@@ -617,37 +653,38 @@ export default function FotografoDashboardPage() {
                       {minhasGalerias.map((galeria) => (
                          <div key={galeria.id} className="rounded-2xl border border-white/5 bg-[#050505] p-4 sm:p-5 hover:border-white/10 transition-colors">
 
-                            <div className="flex flex-col sm:flex-row gap-4 sm:items-center justify-between mb-2">
-                               <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
-                                  <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-zinc-900 shrink-0 overflow-hidden border border-white/5 flex items-center justify-center">
+                            <div className="flex min-w-0 items-start gap-4">
+                                  <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/5 bg-zinc-900 sm:h-24 sm:w-24">
                                      {galeria.capa_url ? <img src={galeria.capa_url} className="w-full h-full object-cover" alt="Capa" /> : <Camera className="text-zinc-700" size={24}/>}
                                   </div>
                                   <div className="flex-1 min-w-0">
-                                     <h3 className="text-xs sm:text-sm font-black uppercase text-white truncate">{galeria.nome}</h3>
-                                     <div className="flex flex-wrap sm:flex-nowrap items-center gap-1 sm:gap-3 mt-1 sm:mt-1.5 text-[8px] sm:text-[9px] font-bold uppercase tracking-widest text-zinc-500">
+                                     <h3 className="line-clamp-2 text-sm font-black uppercase leading-snug text-white sm:text-base">{galeria.nome}</h3>
+                                     <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[9px] font-bold uppercase tracking-wider text-zinc-500">
                                         <span className="flex items-center gap-1 shrink-0"><Calendar size={10} className="shrink-0"/> {galeria.data_evento ? new Date(galeria.data_evento).toLocaleDateString('pt-BR') : "Sem data"}</span>
-                                        <span className="hidden sm:inline-block text-zinc-700">•</span>
-                                        <span className="flex items-center gap-1 truncate"><MapPin size={10} className="shrink-0"/> <span className="truncate">{galeria.cidade || "Local"} / {galeria.estado || "UF"}</span></span>
+                                        <span className="flex min-w-0 items-center gap-1"><MapPin size={10} className="shrink-0"/> <span className="truncate">{galeria.cidade || "Local"} / {galeria.estado || "UF"}</span></span>
                                      </div>
-                                      <p className="mt-1 sm:mt-1.5 text-[9px] sm:text-[10px] font-black text-retratt tracking-wider">
-                                         R$ {((galeria.preco_padrao_centavos || 0) / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                                      </p>
-                                      <p className="mt-1 text-[8px] font-bold uppercase tracking-wider text-zinc-500">Retratt 9,5% • Você recebe 90,5% antes da tarifa do pagamento</p>
+                                      <div className="mt-3 flex flex-wrap gap-1.5 text-[8px] font-black uppercase tracking-wider">
+                                        <span className="rounded-full bg-retratt/10 px-2 py-1 text-retratt">R$ {((galeria.preco_padrao_centavos || 0) / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 })} por foto</span>
+                                        <span className="rounded-full bg-emerald-400/10 px-2 py-1 text-emerald-300">Você recebe 90,5%*</span>
+                                      </div>
+                                      <p className="mt-2 text-[8px] leading-relaxed text-zinc-600">*Antes da tarifa do meio de pagamento.</p>
                                   </div>
-                               </div>
+                            </div>
 
-                               <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 shrink-0 mt-3 sm:mt-0 w-full sm:w-auto">
-                                  <button onClick={() => abrirGerenciadorFotos(galeria.id)} className="cursor-pointer flex-1 sm:flex-none inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-retratt/30 bg-retratt/10 px-3 sm:px-4 text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-retratt hover:bg-retratt hover:text-black transition-colors">
-                                    <Images size={12} className="shrink-0"/> Fotos
+                               <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                                  <Link href={`/fotos/fotografo/painel?evento=${galeria.id}`} className="cursor-pointer inline-flex h-10 items-center justify-center gap-1.5 rounded-xl bg-retratt px-2 text-[8px] font-black uppercase tracking-wider text-black transition-colors hover:brightness-110 sm:text-[9px]">
+                                    <CloudUpload size={12} className="shrink-0"/> Adicionar mídias
+                                  </Link>
+                                  <button onClick={() => abrirGerenciadorFotos(galeria.id)} className="cursor-pointer inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-retratt/30 bg-retratt/10 px-2 text-[8px] font-black uppercase tracking-wider text-retratt transition-colors hover:bg-retratt hover:text-black sm:text-[9px]">
+                                    <Images size={12} className="shrink-0"/> Mídias
                                   </button>
-                                  <button onClick={() => abrirEdicaoGaleria(galeria)} className="cursor-pointer flex-1 sm:flex-none inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-zinc-500/30 bg-zinc-500/10 px-3 sm:px-4 text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-zinc-400 hover:bg-zinc-500 hover:text-white transition-colors">
+                                  <button onClick={() => abrirEdicaoGaleria(galeria)} className="cursor-pointer inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-zinc-500/30 bg-zinc-500/10 px-2 text-[8px] font-black uppercase tracking-wider text-zinc-400 transition-colors hover:bg-zinc-500 hover:text-white sm:text-[9px]">
                                     <Edit size={12} className="shrink-0"/> Editar
                                   </button>
-                                  <Link href={`/fotos/evento/${galeria.id}`} className="cursor-pointer flex-1 sm:flex-none inline-flex h-9 items-center justify-center gap-1.5 rounded-xl bg-white/10 px-3 sm:px-4 text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-white hover:bg-white hover:text-black transition-colors">
+                                  <Link href={`/fotos/evento/${galeria.id}`} className="cursor-pointer inline-flex h-10 items-center justify-center gap-1.5 rounded-xl bg-white/10 px-2 text-[8px] font-black uppercase tracking-wider text-white transition-colors hover:bg-white hover:text-black sm:text-[9px]">
                                     Loja
                                   </Link>
                                </div>
-                            </div>
 
                             <PainelGerenciadorFotos galeriaId={galeria.id} />
 
@@ -771,9 +808,9 @@ export default function FotografoDashboardPage() {
                 )}
 
                 {/* 🔥 CRIAR GALERIA */}
-                <div className="rounded-3xl border border-retratt/20 bg-retratt/[0.02] overflow-hidden shadow-xl transition-all duration-300 mt-6">
+                <div id="criar-galeria" ref={criarGaleriaRef} className="scroll-mt-24 rounded-3xl border border-retratt/20 bg-retratt/[0.02] overflow-hidden shadow-xl transition-all duration-300 mt-6">
                   <div
-                    onClick={() => setMostrarCriarGaleria(!mostrarCriarGaleria)}
+                    onClick={() => mostrarCriarGaleria ? setMostrarCriarGaleria(false) : abrirCriacaoGaleria()}
                     className="flex items-center justify-between p-5 md:p-8 cursor-pointer hover:bg-retratt/[0.05] transition-colors gap-4"
                   >
                     <div className="min-w-0 flex-1">
@@ -838,29 +875,38 @@ export default function FotografoDashboardPage() {
             )}
           </div>
 
-          <div className="space-y-6 w-full min-w-0">
+          <div className="w-full min-w-0 space-y-6 xl:sticky xl:top-24 xl:self-start">
             {userId && (
-               <div className="rounded-3xl border border-white/5 bg-[#0a0a0e] p-5 sm:p-6 md:p-8 shadow-xl">
-                 <div className="flex items-center gap-3 mb-5 sm:mb-6 border-b border-white/5 pb-4"><CreditCard size={20} className="text-retratt shrink-0" /><h2 className="text-lg font-black uppercase tracking-tight text-white truncate">Recebimentos</h2></div>
-                 <div className="space-y-4">
-                   <div className={`rounded-2xl border p-4 sm:p-5 ${mercadoPagoConectado ? "bg-emerald-500/5 border-emerald-500/20" : "bg-[#050505] border-white/5"}`}>
-                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-3">
-                        <div className="min-w-0">
-                           <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400 truncate">Gateway de Pagamento</p>
-                           <img src="https://logospng.org/download/mercado-pago/logo-mercado-pago-icone-1024.png" alt="MP" className="h-4 sm:h-5 opacity-80 mt-1" />
-                        </div>
-                     </div>
-                     <h3 className="text-base font-black text-white mb-1">Mercado Pago</h3>
-                     <p className={`text-[10px] font-black uppercase tracking-widest ${mercadoPagoConectado ? "text-emerald-400" : "text-retratt"}`}>{mercadoPagoConectado ? "● Conta Ativa (Split Direto)" : "● Requer Conexão Urgente"}</p>
-                     <p className="text-[9px] font-medium text-zinc-500 mt-4 leading-relaxed">Conecte a sua carteira para receber automaticamente a sua % de cada foto vendida. A Retratt faz o Split (divisão) na hora.</p>
-                     {mercadoPagoConectado ? (
-                       <button onClick={desvincularMercadoPago} className="cursor-pointer mt-5 flex w-full h-11 items-center justify-center gap-2 rounded-xl border border-retratt/20 bg-retratt/10 text-[9px] font-black uppercase tracking-widest text-retratt hover:bg-retratt hover:text-white transition-colors">Desvincular Conta MP <LogOut size={14} className="shrink-0" /></button>
-                     ) : (
-                       <a href={mpConnectUrl} className="cursor-pointer mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-retratt px-4 text-[9px] font-black uppercase tracking-widest text-black hover:bg-retratt shadow-[0_0_15px_rgba(255,90,31,0.15)] text-center">Ligar Carteira Digital <ArrowRight size={14} className="shrink-0" /></a>
+               <div className={`rounded-3xl border bg-[#0a0a0e] shadow-xl ${mercadoPagoConectado ? "border-emerald-500/20 p-4 sm:p-5" : "border-white/5 p-5 sm:p-6"}`}>
+                 {mercadoPagoConectado ? (
+                   <>
+                     <button type="button" onClick={() => setMostrarDetalhesMp((atual) => !atual)} className="flex w-full cursor-pointer items-center gap-3 text-left">
+                       <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-400/10 text-emerald-300"><CheckCircle2 size={21}/></span>
+                       <span className="min-w-0 flex-1">
+                         <span className="block text-[9px] font-black uppercase tracking-widest text-zinc-500">Recebimentos</span>
+                         <span className="mt-0.5 block truncate text-sm font-black text-white">Mercado Pago conectado</span>
+                         <span className="mt-1 block text-[9px] font-bold uppercase tracking-wider text-emerald-400">Split direto ativo</span>
+                       </span>
+                       <span className="hidden text-[8px] font-black uppercase tracking-widest text-zinc-500 sm:block">Gerenciar</span>
+                       <ChevronDown size={17} className={`shrink-0 text-zinc-500 transition-transform ${mostrarDetalhesMp ? "rotate-180" : ""}`}/>
+                     </button>
+
+                     {mostrarDetalhesMp && (
+                       <div className="mt-4 border-t border-white/5 pt-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                         <p className="text-[10px] leading-relaxed text-zinc-500">Sua conta está pronta para receber automaticamente a sua parte de cada venda.</p>
+                         <div className="mt-3 flex items-center gap-2 text-[8px] font-black uppercase tracking-wider text-zinc-600"><ShieldCheck size={13}/> Pagamento e Pix protegidos</div>
+                         <button onClick={desvincularMercadoPago} className="mt-4 flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-retratt/20 bg-retratt/5 text-[8px] font-black uppercase tracking-widest text-retratt transition-colors hover:bg-retratt hover:text-white">Desvincular conta <LogOut size={13}/></button>
+                       </div>
                      )}
-                   </div>
-                   <div className="flex items-center justify-center gap-2 text-[9px] font-black uppercase tracking-widest text-zinc-600 mt-6 pt-4 border-t border-white/5"><ShieldCheck size={14} className="shrink-0" /> <span className="truncate">Pix Automático e Seguro</span></div>
-                 </div>
+                   </>
+                 ) : (
+                   <>
+                     <div className="flex items-center gap-3 border-b border-white/5 pb-4"><CreditCard size={19} className="shrink-0 text-retratt"/><div><p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Recebimentos</p><h2 className="text-base font-black text-white">Conecte sua conta</h2></div></div>
+                     <p className="mt-4 text-[10px] font-black uppercase tracking-wider text-retratt">Mercado Pago ainda não conectado</p>
+                     <p className="mt-2 text-[10px] leading-relaxed text-zinc-500">A conexão é necessária para receber sua porcentagem automaticamente a cada venda.</p>
+                     <a href={mpConnectUrl} className="mt-5 flex h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-retratt px-4 text-center text-[9px] font-black uppercase tracking-widest text-black shadow-[0_0_15px_rgba(255,90,31,0.15)]">Conectar Mercado Pago <ArrowRight size={14}/></a>
+                   </>
+                 )}
                </div>
             )}
           </div>

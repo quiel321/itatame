@@ -4,7 +4,9 @@
       "http://localhost:3000",
       "https://itatame.com.br",
       "https://www.itatame.com.br",
-      "https://fotos.itatame.com.br"
+      "https://fotos.itatame.com.br",
+      "https://retratt.com",
+      "https://www.retratt.com"
     ],
     "AllowedMethods": ["GET", "PUT", "HEAD"],
     "AllowedHeaders": ["Content-Type"],

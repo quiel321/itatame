@@ -41,7 +41,7 @@ export async function POST(request: Request) {
 
     const { data: foto, error: fotoError } = await supabase
       .from("foto_arquivos")
-      .select("id, fotografo_id, status, r2_original_key, r2_preview_key")
+      .select("id, fotografo_id, status, r2_original_key, r2_preview_key, r2_thumb_key")
       .eq("id", fotoId)
       .maybeSingle();
 
@@ -63,7 +63,7 @@ export async function POST(request: Request) {
         .eq("fotografo_id", fotografoId)
         .eq("status", "processando");
 
-      const chaves = [fotoValidada.r2_original_key, fotoValidada.r2_preview_key, fotoIaStorageKey(fotoValidada.id)].filter(Boolean) as string[];
+      const chaves = [fotoValidada.r2_original_key, fotoValidada.r2_preview_key, fotoValidada.r2_thumb_key, fotoIaStorageKey(fotoValidada.id)].filter(Boolean) as string[];
       await Promise.allSettled(chaves.map((key) => deleteR2Object(key)));
     }
 

@@ -6,16 +6,21 @@ import { useParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
 import { FOTO_IA_NUMERO_TAG_PREFIX } from "@/app/lib/fotos-ai";
 import { eventoPermiteBuscaPorNumero } from "@/app/lib/fotos-busca-numero";
-import { FotoAlbum, FotoArquivo, formatarPrecoFotos } from "@/app/lib/fotos";
+import { arquivoFotoEhVideo, FotoAlbum, FotoArquivo, formatarPrecoFotos } from "@/app/lib/fotos";
 import FotosShell from "../../_components/FotosShell";
 import BuscaFacial from "../../_components/BuscaFacial";
 import BuscaPorNumero from "../../_components/BuscaPorNumero";
-import { Camera, CalendarDays, CheckCircle2, ChevronLeft, Filter, Image as ImageIcon, MapPin, ScanFace, Search, ShieldCheck, ShoppingCart, X, Building2, Percent } from "lucide-react";
+import PreviewProtectionOverlay from "../../_components/PreviewProtectionOverlay";
+import { Camera, CalendarDays, CheckCircle2, ChevronLeft, Filter, Image as ImageIcon, MapPin, Play, ScanFace, Search, ShieldCheck, ShoppingCart, Video, X, Building2, Percent } from "lucide-react";
 
 const CARRINHO_FOTOS_KEY = "carrinho_fotos";
 
 function fotoPreviewSrc(foto: FotoArquivo) {
   return `/api/fotos/arquivo/${foto.id}?tipo=preview`;
+}
+
+function videoPreviewSrc(foto: FotoArquivo) {
+  return `/api/fotos/arquivo/${foto.id}?tipo=video-preview`;
 }
 
 export default function FotosEventoPage() {
@@ -131,7 +136,7 @@ export default function FotosEventoPage() {
       const [{ data: eventoData }, { data: albunsData }, { data: fotosData }] = await Promise.all([
         supabase.from("foto_eventos").select("id, nome, slug, descricao, local, cidade, estado, data_evento, capa_url, status, vendas_ate, desconto_combo_qtd, desconto_combo_percentual, organizador_user_id, created_by").eq("id", eventoId).maybeSingle(),
         supabase.from("foto_albuns").select("id, evento_id, fotografo_id, titulo, descricao, capa_url, status").eq("evento_id", eventoId).eq("status", "publicado").order("ordem", { ascending: true }),
-        supabase.from("foto_arquivos").select("id, evento_id, album_id, fotografo_id, titulo, r2_original_key, r2_preview_key, r2_thumb_key, preview_url, thumb_url, preco_centavos, status, tags, fotografo_dados:fotografos!fotografo_id(nome)").eq("evento_id", eventoId).eq("status", "publicada").order("created_at", { ascending: false }),
+        supabase.from("foto_arquivos").select("id, evento_id, album_id, fotografo_id, titulo, mime_type, r2_original_key, r2_preview_key, r2_thumb_key, preview_url, thumb_url, preco_centavos, status, tags, fotografo_dados:fotografos!fotografo_id(nome)").eq("evento_id", eventoId).eq("status", "publicada").order("created_at", { ascending: false }),
       ]);
 
       // 2. 🔥 INTELIGÊNCIA DO BANNER CORRIGIDA
@@ -391,6 +396,7 @@ export default function FotosEventoPage() {
             <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 xl2:grid-cols-7 gap-2 md:gap-3">
               {fotosFiltradas.map((foto) => {
                 const noCarrinho = carrinho.includes(String(foto.id));
+                const ehVideo = arquivoFotoEhVideo(foto);
 
                 return (
                   <article
@@ -414,21 +420,17 @@ export default function FotosEventoPage() {
                       <div className="flex h-full items-center justify-center px-4 text-center text-[9px] font-black uppercase tracking-[0.2em] text-zinc-700 bg-zinc-950">Retratt</div>
                     )}
 
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.15] group-hover:opacity-[0.25] transition-opacity select-none z-10">
-                      <span className="text-xl md:text-2xl font-black uppercase tracking-[0.3em] rotate-[-30deg]">
-                        <span className="text-retratt drop-shadow-md">R</span><span className="text-white drop-shadow-md">ETRATT</span>
-                      </span>
-                    </div>
+                    <PreviewProtectionOverlay compact />
 
-                    <div className="absolute left-1 md:left-2 top-0 bottom-0 flex items-center justify-center pointer-events-none select-none z-10 opacity-30">
-                      <span className="text-white text-[7px] md:text-[8px] font-black uppercase tracking-[0.25em] -rotate-90 whitespace-nowrap drop-shadow-md">
-                        Não tire print, valorize o fotógrafo
-                      </span>
-                    </div>
+                    {ehVideo && (
+                      <div className="absolute left-2 top-2 z-30 inline-flex items-center gap-1 rounded-full border border-retratt/40 bg-black/85 px-2 py-1 text-[7px] font-black uppercase tracking-widest text-white shadow-lg">
+                        <Play size={9} className="fill-retratt text-retratt" /> Vídeo
+                      </div>
+                    )}
 
                     <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/95 via-black/40 to-transparent pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20"></div>
 
-                    <div className="absolute top-2 left-2 pointer-events-none z-20 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                    <div className="absolute top-2 right-2 pointer-events-none z-20 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                       <span className="bg-black/80 backdrop-blur-sm text-white text-[7px] font-bold uppercase tracking-widest px-2 py-1 rounded-md border border-white/10 shadow-sm">
                         REF: {foto.id.toString().substring(0, 5)}
                       </span>
@@ -482,25 +484,43 @@ export default function FotosEventoPage() {
               </button>
 
               <div className="relative flex-1 h-[70vh] md:h-full w-full flex items-center justify-center overflow-hidden rounded-3xl bg-[#050505] border border-white/5 shadow-2xl">
-                <img
-                  data-foto-protegida-imagem
-                  src={fotoPreviewSrc(fotoSelecionada)}
-                  alt={fotoSelecionada.titulo || "Foto do evento"}
-                  className="w-auto h-auto max-w-full max-h-full object-contain select-none pointer-events-none"
-                  loading="lazy"
-                />
+                {arquivoFotoEhVideo(fotoSelecionada) && fotoSelecionada.r2_thumb_key ? (
+                  <video
+                    data-foto-protegida-imagem
+                    key={fotoSelecionada.id}
+                    src={videoPreviewSrc(fotoSelecionada)}
+                    poster={fotoPreviewSrc(fotoSelecionada)}
+                    className="h-auto max-h-full w-auto max-w-full object-contain"
+                    controls
+                    autoPlay
+                    muted
+                    playsInline
+                    preload="metadata"
+                    controlsList="nodownload noplaybackrate"
+                    disablePictureInPicture
+                  >
+                    Seu navegador não conseguiu reproduzir a amostra protegida.
+                  </video>
+                ) : (
+                  <img
+                    data-foto-protegida-imagem
+                    src={fotoPreviewSrc(fotoSelecionada)}
+                    alt={fotoSelecionada.titulo || "Foto do evento"}
+                    className="w-auto h-auto max-w-full max-h-full object-contain select-none pointer-events-none"
+                    loading="lazy"
+                  />
+                )}
 
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.15] select-none z-10">
-                  <span className="text-4xl md:text-6xl font-black uppercase tracking-[0.3em] rotate-[-25deg]">
-                    <span className="text-retratt drop-shadow-lg">R</span><span className="text-white drop-shadow-lg">ETRATT</span>
-                  </span>
-                </div>
+                <PreviewProtectionOverlay />
 
-                <div className="absolute left-2 md:left-6 top-0 bottom-0 flex items-center justify-center pointer-events-none select-none z-10 opacity-30">
-                  <span className="text-white text-[10px] md:text-sm font-black uppercase tracking-[0.3em] -rotate-90 whitespace-nowrap drop-shadow-lg">
-                    Não tire print, valorize o fotógrafo
-                  </span>
-                </div>
+                {arquivoFotoEhVideo(fotoSelecionada) && !fotoSelecionada.r2_thumb_key && (
+                  <div className="absolute inset-0 z-20 flex items-center justify-center">
+                    <div className="max-w-xs rounded-2xl border border-white/20 bg-black/75 px-5 py-4 text-center text-white shadow-2xl backdrop-blur-sm">
+                      <Play size={26} className="mx-auto fill-white" />
+                      <p className="mt-2 text-[9px] font-black uppercase tracking-widest">Amostra em processamento</p>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="w-full md:w-[340px] shrink-0 bg-[#0a0a0e] border border-white/5 rounded-3xl p-5 md:p-6 flex flex-col gap-5 shadow-2xl">
@@ -514,7 +534,7 @@ export default function FotosEventoPage() {
 
                 <div className="flex items-center gap-3.5">
                     <div className="w-12 h-12 rounded-2xl bg-zinc-900 flex items-center justify-center text-zinc-500 border border-white/5 shrink-0 shadow-inner">
-                        <ImageIcon size={20}/>
+                        {arquivoFotoEhVideo(fotoSelecionada) ? <Video size={20}/> : <ImageIcon size={20}/>}
                     </div>
                     <div className="flex-1 min-w-0">
                         <h3 className="text-white text-sm font-black uppercase tracking-tight truncate">{fotoSelecionada.titulo || "Foto do evento"}</h3>
@@ -552,7 +572,7 @@ export default function FotosEventoPage() {
 
                 <div className="mt-auto flex flex-col gap-4">
                   <div className="flex items-end justify-between bg-[#050505] p-4 rounded-2xl border border-white/5">
-                      <p className="text-[10px] text-zinc-500 font-black uppercase tracking-widest">Valor da Foto</p>
+                      <p className="text-[10px] text-zinc-500 font-black uppercase tracking-widest">Valor {arquivoFotoEhVideo(fotoSelecionada) ? "do vídeo" : "da foto"}</p>
                       <p className="text-3xl font-black text-retratt tracking-tight leading-none pr-1">{formatarPrecoFotos(fotoSelecionada.preco_centavos)}</p>
                   </div>
 

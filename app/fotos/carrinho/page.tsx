@@ -17,6 +17,7 @@ import {
   QrCode,
   ShieldCheck,
   Trash2,
+  Video,
   Wallet,
 } from "lucide-react";
 
@@ -55,6 +56,7 @@ type FotoCarrinho = {
   imagem: string;
   comboQtd: number;
   comboPercentual: number;
+  mimeType: string | null;
 };
 
 const CARRINHO_FOTOS_KEY = "carrinho_fotos";
@@ -123,6 +125,7 @@ export default function FotosCarrinhoPage() {
           .select(`
             id,
             titulo,
+            mime_type,
             preco_centavos,
             preview_url,
             thumb_url,
@@ -136,7 +139,7 @@ export default function FotosCarrinhoPage() {
         if (consulta.error) {
           consulta = await supabase
             .from("foto_arquivos")
-            .select("id, titulo, preco_centavos, preview_url, thumb_url, status")
+            .select("id, titulo, mime_type, preco_centavos, preview_url, thumb_url, status")
             .in("id", idsSalvos)
             .eq("status", "publicada");
         }
@@ -160,6 +163,7 @@ export default function FotosCarrinhoPage() {
               imagem: `/api/fotos/arquivo/${foto.id}?tipo=preview`,
               comboQtd: Number(evento?.desconto_combo_qtd || COMBO_QTD_PADRAO),
               comboPercentual: Number(evento?.desconto_combo_percentual ?? COMBO_PERCENTUAL_PADRAO),
+              mimeType: foto.mime_type || null,
             };
           });
 
@@ -334,7 +338,7 @@ export default function FotosCarrinhoPage() {
               <h1 className="text-2xl font-black uppercase tracking-tight text-white md:text-4xl">Carrinho</h1>
               {!carregandoCart && (
                 <p className="mt-2 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">
-                  Você selecionou {fotos.length} {fotos.length === 1 ? "foto" : "fotos"}
+                  Você selecionou {fotos.length} {fotos.length === 1 ? "item" : "itens"}
                 </p>
               )}
             </div>
@@ -343,7 +347,7 @@ export default function FotosCarrinhoPage() {
           {carregandoCart ? (
             <div className="flex flex-col items-center justify-center py-32">
               <Loader2 size={40} className="mb-4 animate-spin text-retratt" />
-              <p className="text-sm font-black uppercase tracking-widest text-zinc-400">Buscando as suas fotos...</p>
+              <p className="text-sm font-black uppercase tracking-widest text-zinc-400">Buscando seus itens...</p>
             </div>
           ) : fotos.length === 0 ? (
             <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-white/5 bg-[#0a0a0e]/50 py-24 backdrop-blur-sm">
@@ -363,12 +367,13 @@ export default function FotosCarrinhoPage() {
                   <div key={foto.id} className="group relative rounded-xl border border-white/5 bg-[#0a0a0e] p-2.5 transition-all duration-300 hover:border-retratt/30 hover:bg-retratt/5 hover:shadow-[0_10px_40px_rgba(255,90,31,0.05)]">
                     <div className="relative mb-3 aspect-square overflow-hidden rounded-lg bg-zinc-900">
                       <img src={foto.imagem} alt="Foto" className="h-full w-full object-cover opacity-90 transition-transform duration-700 group-hover:scale-110 group-hover:opacity-100" />
+                      {foto.mimeType?.startsWith("video/") && <span className="absolute left-2 top-2 z-10 inline-flex items-center gap-1 rounded-full bg-black/80 px-2 py-1 text-[8px] font-black uppercase tracking-wider text-white"><Video size={10}/> Vídeo</span>}
                       <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 transition-opacity group-hover:opacity-100">
                         <span className="rotate-[-25deg] text-[10px] font-black uppercase tracking-[0.3em] text-white/60 mix-blend-overlay">Retratt</span>
                       </div>
 
                       {etapa === "carrinho" && (
-                        <button onClick={() => removerFoto(foto.id)} className="absolute right-2 top-2 cursor-pointer rounded-lg bg-retratt/95 p-2.5 text-white opacity-100 shadow-lg backdrop-blur-md transition-all duration-300 hover:bg-retratt md:right-3 md:top-3 md:bg-black/60 md:opacity-0 md:group-hover:opacity-100 md:hover:bg-retratt" title="Remover foto" aria-label="Remover foto do carrinho">
+                        <button onClick={() => removerFoto(foto.id)} className="absolute right-2 top-2 cursor-pointer rounded-lg bg-retratt/95 p-2.5 text-white opacity-100 shadow-lg backdrop-blur-md transition-all duration-300 hover:bg-retratt md:right-3 md:top-3 md:bg-black/60 md:opacity-0 md:group-hover:opacity-100 md:hover:bg-retratt" title="Remover item" aria-label="Remover item do carrinho">
                           <Trash2 size={14} />
                         </button>
                       )}
@@ -403,7 +408,7 @@ export default function FotosCarrinhoPage() {
                             {temDesconto ? "Combo ativado" : "Pacote promocional"}
                           </p>
                           <p className="mt-0.5 text-[9px] text-zinc-400">
-                            {temDesconto ? `Você ganhou ${comboPercentual}% de desconto.` : `Adicione mais ${comboQtd - fotos.length} foto(s) para ganhar ${comboPercentual}% OFF.`}
+                            {temDesconto ? `Você ganhou ${comboPercentual}% de desconto.` : `Adicione mais ${comboQtd - fotos.length} item(ns) para ganhar ${comboPercentual}% OFF.`}
                           </p>
                         </div>
                       </div>

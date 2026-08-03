@@ -37,8 +37,13 @@ export type FotoArquivo = {
   thumb_url: string | null;
   preco_centavos: number;
   status: string | null;
+  mime_type?: string | null;
   tags?: string[] | null;
 };
+
+export function arquivoFotoEhVideo(arquivo?: Pick<FotoArquivo, "mime_type"> | null) {
+  return Boolean(arquivo?.mime_type?.toLowerCase().startsWith("video/"));
+}
 
 export const FOTO_STATUS_EVENTO = {
   rascunho: "rascunho",

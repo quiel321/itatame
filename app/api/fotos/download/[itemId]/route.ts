@@ -47,7 +47,8 @@ export async function GET(request: Request, context: Params) {
       user_agent: request.headers.get("user-agent"),
     });
 
-    const nome = String(foto.nome_original || `itatame-foto-${item.id}.jpg`).replace(/[\r\n"\\/]/g, "-");
+    const ehVideo = String(foto.mime_type || "").startsWith("video/");
+    const nome = String(foto.nome_original || `retratt-${ehVideo ? "video" : "foto"}-${item.id}.${ehVideo ? "mp4" : "jpg"}`).replace(/[\r\n"\\/]/g, "-");
     return new NextResponse(arquivo.body, {
       headers: {
         "Content-Type": foto.mime_type || arquivo.headers.get("content-type") || "application/octet-stream",
@@ -56,8 +57,7 @@ export async function GET(request: Request, context: Params) {
       },
     });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Erro ao baixar foto.";
+    const message = error instanceof Error ? error.message : "Erro ao baixar arquivo.";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
-

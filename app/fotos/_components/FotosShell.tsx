@@ -5,7 +5,7 @@ import { useEffect } from "react";
 import Link from "next/link";
 import FotosNavbar from "./FotosNavbar";
 
-export default function FotosShell({ children }: { children: ReactNode }) {
+export default function FotosShell({ children, area = "publico" }: { children: ReactNode; area?: "publico" | "fotografo" }) {
   const sitePrincipal = process.env.NEXT_PUBLIC_BASE_URL || "https://www.itatame.com.br";
   useEffect(() => {
     document.body.classList.add("fotos-route");
@@ -14,7 +14,7 @@ export default function FotosShell({ children }: { children: ReactNode }) {
 
   return (
     <div data-fotos-shell className="min-h-screen bg-black text-white flex flex-col font-sans">
-      <FotosNavbar />
+      <FotosNavbar area={area} />
 
       {/* O conteúdo da página (Home, Eventos, etc) entra aqui e expande para preencher o ecrã */}
       <div className="flex-1">

@@ -26,7 +26,7 @@ const metricas = [
 const funcionalidadesDashboard = [
   {
     titulo: "Galerias Freelancer",
-    texto: "Não dependa de ninguém. Crie eventos avulsos, defina a capa, o preço padrão por foto e configure descontos exclusivos de combo.",
+    texto: "Não dependa de ninguém. Crie eventos avulsos, defina a capa, o preço padrão das mídias e configure descontos exclusivos de combo.",
     icon: Store
   },
   {
@@ -59,7 +59,7 @@ const comparativo = [
   },
   {
     titulo: "Com Retratt",
-    itens: ["Pesquisa por IA (Reconhecimento Facial)", "Marca d'água na nuvem (Anti-print)", "Repasse automático pela conta conectada", "Galerias freelancers ou oficiais"],
+    itens: ["Pesquisa facial inteligente", "Venda de fotos e vídeos", "Prévia protegida contra reprodução", "Galerias freelancers ou oficiais"],
     destaque: true,
   },
 ];
@@ -107,12 +107,12 @@ export default function FotografoMarketingPage() {
               </h1>
 
               <p className="text-zinc-400 text-[11px] sm:text-xs md:text-sm font-medium leading-relaxed mb-6 md:mb-8 max-w-md pr-2 md:pr-0">
-                Junte-se à plataforma completa para fotógrafos de eventos. Crie galerias freelancers, conecte-se a eventos oficiais, venda por reconhecimento facial e receba via Pix na hora.
+                Junte-se à plataforma completa para fotógrafos de eventos. Crie álbuns, publique fotos e vídeos, conecte-se a eventos oficiais e acompanhe cada venda em um painel feito para você.
               </p>
 
               <div className="flex flex-col sm:flex-row gap-3 md:gap-4 w-full sm:w-auto mb-8 md:mb-10">
                 <Link href="/fotos/cadastro?perfil=fotografo" className="flex items-center justify-center gap-2 bg-retratt hover:bg-retratt text-black px-6 py-3.5 md:px-7 md:py-3.5 rounded-xl text-[9px] md:text-[11px] font-black uppercase tracking-widest transition-all shadow-[0_0_30px_rgba(255,90,31,0.3)] hover:scale-105">
-                  Criar Conta Grátis <ArrowRight size={14} className="md:w-4 md:h-4" />
+                  Vender minhas fotos <ArrowRight size={14} className="md:w-4 md:h-4" />
                 </Link>
                 <Link href="/fotos/login?perfil=fotografo&next=/fotos/fotografo/dashboard" className="flex items-center justify-center bg-white/5 hover:bg-white/10 text-white border border-white/10 px-6 py-3.5 md:px-7 md:py-3.5 rounded-xl text-[9px] md:text-[11px] font-black uppercase tracking-widest transition-colors backdrop-blur-md">
                   Acessar Dashboard
@@ -237,7 +237,7 @@ export default function FotografoMarketingPage() {
                 Ganhe dinheiro com<br className="hidden md:block"/> as fotos de <span className="text-zinc-500">qualquer evento.</span>
               </h2>
               <p className="text-zinc-400 text-[11px] md:text-sm font-medium leading-relaxed mb-6 md:mb-8 max-w-lg mx-auto md:mx-0 px-2 md:px-0">
-                Cadastre a sua organização, conecte o evento e credencie os fotógrafos da sua confiança. Você define uma % de royalty e ganha uma fatia automática sobre cada foto vendida.
+                Cadastre a sua organização, conecte o evento e credencie os fotógrafos da sua confiança. Você define uma % de royalty e ganha uma fatia automática sobre cada mídia vendida.
               </p>
               <Link href="/fotos/organizador" className="inline-flex w-full sm:w-auto items-center justify-center bg-white/5 hover:bg-white/10 border border-white/10 text-white px-6 py-3.5 md:px-8 md:py-4 rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-colors">
                 Área de Organizador

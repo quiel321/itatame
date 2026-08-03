@@ -32,14 +32,15 @@ export async function POST(request: Request) {
       .update({ status: "publicada" })
       .eq("id", fotoId)
       .eq("fotografo_id", fotografo.id)
-      .select("id, status, r2_original_key, tags")
+      .select("id, status, r2_original_key, mime_type, tags")
       .single();
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+    const ehVideo = String(data.mime_type || "").startsWith("video/");
     after(async () => {
       try {
-        const resultado = await indexarMiniaturaIaDoR2(data.id, { fallbackOriginalKey: data.r2_original_key });
+        const resultado = await indexarMiniaturaIaDoR2(data.id, ehVideo ? {} : { fallbackOriginalKey: data.r2_original_key });
         const { error: numerosError } = await supabase
           .from("foto_arquivos")
           .update({ tags: mesclarTagsNumerosIa(data.tags, resultado.detectedNumbers || []) })

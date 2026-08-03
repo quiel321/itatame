@@ -65,7 +65,7 @@ export async function GET(request: Request) {
 
     let query = supabase
       .from("foto_arquivos")
-      .select("id, evento_id, fotografo_id, titulo, status, thumb_url, preview_url, r2_thumb_key, r2_preview_key, created_at")
+      .select("id, evento_id, fotografo_id, titulo, mime_type, status, thumb_url, preview_url, r2_thumb_key, r2_preview_key, created_at")
       .eq("evento_id", eventoId)
       .order("created_at", { ascending: false });
 
@@ -110,6 +110,7 @@ export async function GET(request: Request) {
         evento_id: foto.evento_id,
         fotografo_id: foto.fotografo_id,
         titulo: foto.titulo,
+        mime_type: foto.mime_type,
         status: foto.status,
         situacao_pedido: situacaoPorFoto.get(foto.id) || null,
         quantidade_vendas: vendasPorFoto.get(foto.id) || 0,

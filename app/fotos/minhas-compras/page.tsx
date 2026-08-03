@@ -7,9 +7,10 @@ import { supabase } from "@/app/lib/supabase";
 import { formatarPrecoFotos } from "@/app/lib/fotos";
 import { podeAcessarPerfilFotos, rotaLoginFotos } from "@/app/lib/fotos-acesso";
 import FotosShell from "../_components/FotosShell";
-import { ArrowRight, Download, Image as ImageIcon, Pencil, ShoppingCart, UserRound, LogOut, CheckCircle2, AlertCircle, History, PackageOpen } from "lucide-react";
+import { ArrowRight, Download, Image as ImageIcon, Pencil, ShoppingCart, UserRound, LogOut, CheckCircle2, AlertCircle, History, PackageOpen, Video } from "lucide-react";
 
-type Pedido = { id: string; status: string | null; total_centavos: number | null; created_at: string; foto_pedido_itens?: Array<{ id: string; download_liberado: boolean; download_expires_at: string | null; foto_arquivos?: { id: string; titulo: string | null } | Array<{ id: string; titulo: string | null }> | null; }>; };
+type MidiaPedido = { id: string; titulo: string | null; mime_type: string | null };
+type Pedido = { id: string; status: string | null; total_centavos: number | null; created_at: string; foto_pedido_itens?: Array<{ id: string; download_liberado: boolean; download_expires_at: string | null; foto_arquivos?: MidiaPedido | MidiaPedido[] | null; }>; };
 type CompradorPerfil = { nome: string | null; email: string | null; telefone: string | null; perfil_completo?: boolean | null; };
 const CARRINHO_FOTOS_KEY = "carrinho_fotos";
 
@@ -66,7 +67,7 @@ export default function FotosMinhasComprasPage() {
       const abrirCadastro = new URLSearchParams(window.location.search).get("cadastro") === "1";
       setMostrarPerfil(abrirCadastro || !perfilAtual?.perfil_completo || !perfilAtual?.nome || !perfilAtual?.telefone);
 
-      const consultaPedidos = () => supabase.from("foto_pedidos").select("id, status, total_centavos, created_at, foto_pedido_itens(id, download_liberado, download_expires_at, foto_arquivos(id, titulo))").eq("comprador_user_id", auth.user.id).order("created_at", { ascending: false });
+      const consultaPedidos = () => supabase.from("foto_pedidos").select("id, status, total_centavos, created_at, foto_pedido_itens(id, download_liberado, download_expires_at, foto_arquivos(id, titulo, mime_type))").eq("comprador_user_id", auth.user.id).order("created_at", { ascending: false });
       let { data } = await consultaPedidos();
       const pendentes = ((data || []) as Pedido[]).filter((pedido) => pedido.status !== "pago").slice(0, 5);
       if (pendentes.length) {
@@ -128,7 +129,9 @@ export default function FotosMinhasComprasPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = "retratt-foto.jpg";
+    const contentType = response.headers.get("content-type") || blob.type;
+    const extensao = contentType.includes("mp4") ? "mp4" : contentType.includes("webm") ? "webm" : contentType.includes("quicktime") ? "mov" : "jpg";
+    link.download = `retratt-arquivo.${extensao}`;
     link.click();
     URL.revokeObjectURL(url);
   }
@@ -306,7 +309,7 @@ export default function FotosMinhasComprasPage() {
 
                       {pedidoAberto === pedido.id && (
                         <div className="border-t border-white/5 bg-[#0a0a0e] p-4">
-                          <p className="text-[8px] font-black uppercase tracking-widest text-zinc-500 mb-3">Fotos do Pacote ({pedido.foto_pedido_itens?.length || 0})</p>
+                          <p className="text-[8px] font-black uppercase tracking-widest text-zinc-500 mb-3">Itens do pedido ({pedido.foto_pedido_itens?.length || 0})</p>
                           <div className="grid gap-2 sm:grid-cols-2">
                             {(pedido.foto_pedido_itens || []).map((item) => {
                               const foto = Array.isArray(item.foto_arquivos) ? item.foto_arquivos[0] : item.foto_arquivos;
@@ -314,7 +317,7 @@ export default function FotosMinhasComprasPage() {
                                 <div key={item.id} className="flex items-center justify-between gap-2 rounded-lg border border-white/5 bg-[#050505] p-2">
                                   <div className="flex items-center gap-2 min-w-0">
                                      <div className="relative w-10 h-10 rounded-md bg-zinc-900 flex items-center justify-center shrink-0 overflow-hidden border border-white/10">
-                                       <ImageIcon size={12} className="text-zinc-600"/>
+                                       {foto?.mime_type?.startsWith("video/") ? <Video size={12} className="text-retratt"/> : <ImageIcon size={12} className="text-zinc-600"/>}
                                        {foto?.id && (
                                          <img
                                            src={`/api/fotos/arquivo/${foto.id}?tipo=thumb`}
@@ -325,7 +328,7 @@ export default function FotosMinhasComprasPage() {
                                          />
                                        )}
                                      </div>
-                                     <p className="truncate text-[10px] font-black uppercase text-white">{foto?.titulo || "Foto"}</p>
+                                     <p className="truncate text-[10px] font-black uppercase text-white">{foto?.titulo || (foto?.mime_type?.startsWith("video/") ? "Vídeo" : "Foto")}</p>
                                   </div>
                                   <button disabled={!item.download_liberado || baixandoItem === item.id} onClick={() => baixarFoto(item.id)} className={`cursor-pointer inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md px-3 text-[8px] font-black uppercase tracking-widest transition-all ${item.download_liberado ? "bg-retratt text-black hover:bg-retratt" : "bg-zinc-900 text-zinc-600 border border-white/5 disabled:cursor-not-allowed"}`}>
                                     <Download size={12} /> <span className="hidden sm:inline">{baixandoItem === item.id ? "Processando" : (item.download_liberado ? "Baixar" : "Aguardando")}</span>

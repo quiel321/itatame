@@ -76,7 +76,7 @@ export default function FinanceiroFotografoPage() {
   }, [carregar]);
 
   return (
-    <FotosShell>
+    <FotosShell area="fotografo">
       <main className="min-h-screen bg-[#050505] text-white">
         <section className="border-b border-white/5 bg-[radial-gradient(circle_at_85%_0%,rgba(16,185,129,0.17),transparent_34%),linear-gradient(180deg,#101014,#050505)]">
           <div className="mx-auto max-w-7xl px-4 py-8 md:px-8 md:py-12">

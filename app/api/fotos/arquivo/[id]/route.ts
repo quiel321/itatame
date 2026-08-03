@@ -15,7 +15,7 @@ export async function GET(request: Request, context: Params) {
     const supabase = createSupabaseServerClient();
     const { data: foto, error } = await supabase
       .from("foto_arquivos")
-      .select("id, status, r2_original_key, r2_preview_key, r2_thumb_key, preview_url, thumb_url")
+      .select("id, status, mime_type, r2_original_key, r2_preview_key, r2_thumb_key, preview_url, thumb_url")
       .eq("id", id)
       .maybeSingle();
 
@@ -23,13 +23,18 @@ export async function GET(request: Request, context: Params) {
       return NextResponse.json({ error: "Foto nao encontrada." }, { status: 404 });
     }
 
-    const key = tipo === "thumb"
-      ? foto.r2_thumb_key || foto.r2_preview_key
-      : foto.r2_preview_key || foto.r2_thumb_key;
+    const ehVideo = String(foto.mime_type || "").startsWith("video/");
+    const key = tipo === "video-preview"
+      ? foto.r2_thumb_key
+      : tipo === "thumb"
+        ? ehVideo ? foto.r2_preview_key || foto.r2_thumb_key : foto.r2_thumb_key || foto.r2_preview_key
+        : foto.r2_preview_key || foto.r2_thumb_key;
 
-    const urlPublica = tipo === "thumb"
-      ? foto.thumb_url || foto.preview_url
-      : foto.preview_url || foto.thumb_url;
+    const urlPublica = tipo === "video-preview"
+      ? foto.thumb_url
+      : tipo === "thumb"
+        ? ehVideo ? foto.preview_url || foto.thumb_url : foto.thumb_url || foto.preview_url
+        : foto.preview_url || foto.thumb_url;
 
     if (urlPublica && /^https?:\/\//.test(urlPublica)) {
       return NextResponse.redirect(urlPublica);
@@ -51,7 +56,7 @@ export async function GET(request: Request, context: Params) {
         "Cache-Control": "private, max-age=180",
       },
     });
-  } catch (error: any) {
-    return NextResponse.json({ error: error?.message || "Erro ao abrir preview." }, { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Erro ao abrir preview." }, { status: 500 });
   }
 }

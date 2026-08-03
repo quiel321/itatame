@@ -6,7 +6,7 @@ import { createSupabaseServerClient } from "../app/lib/supabase-server";
 
 loadEnvConfig(process.cwd());
 
-type FotoPendente = { id: string; r2_original_key: string; tags: string[] | null };
+type FotoPendente = { id: string; r2_original_key: string; r2_preview_key: string | null; mime_type: string | null; tags: string[] | null };
 
 function descreverErro(error: unknown) {
   if (error instanceof Error) {
@@ -31,7 +31,7 @@ async function carregarFotos() {
   for (let inicio = 0; ; inicio += pagina) {
     const { data, error } = await supabase
       .from("foto_arquivos")
-      .select("id, r2_original_key, tags")
+      .select("id, r2_original_key, r2_preview_key, mime_type, tags")
       .eq("status", "publicada")
       .not("r2_original_key", "is", null)
       .order("created_at", { ascending: true })

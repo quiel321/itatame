@@ -172,7 +172,7 @@ export async function indexarMiniaturaIaDoR2(
 }
 
 export async function prepararEIndexarFotoExistente(
-  foto: { id: string; r2_original_key: string },
+  foto: { id: string; r2_original_key: string; r2_preview_key?: string | null; mime_type?: string | null },
   options: { force?: boolean } = {},
 ) {
   const existente = await obterIndiceIa(foto.id);
@@ -181,10 +181,13 @@ export async function prepararEIndexarFotoExistente(
     return { ...resultado, thumbnailBytes: null };
   }
 
-  const original = await getR2ObjectBytes(foto.r2_original_key, 6 * 1024 * 1024);
+  const ehVideo = String(foto.mime_type || "").startsWith("video/");
+  const sourceKey = ehVideo ? foto.r2_preview_key : foto.r2_original_key;
+  if (!sourceKey) throw new Error("Vídeo sem capa disponível para indexação facial.");
+  const original = await getR2ObjectBytes(sourceKey, 6 * 1024 * 1024);
   const miniatura = await criarMiniaturaIa(original);
   await putR2Object(fotoIaStorageKey(foto.id), miniatura, "image/jpeg");
-  const resultado = await indexarMiniaturaIaDoR2(foto.id, { ...options, fallbackSource: original });
+  const resultado = await indexarMiniaturaIaDoR2(foto.id, ehVideo ? options : { ...options, fallbackSource: original });
   return { ...resultado, thumbnailBytes: miniatura.length };
 }
 

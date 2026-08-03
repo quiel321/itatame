@@ -47,7 +47,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const fotoIds = [...new Set((Array.isArray(body.fotoIds) ? body.fotoIds : []).map(String))];
     if (!fotoIds.length || fotoIds.length > 50) {
-      return NextResponse.json({ error: "Selecione entre 1 e 50 fotos." }, { status: 400 });
+      return NextResponse.json({ error: "Selecione entre 1 e 50 itens." }, { status: 400 });
     }
 
     const { data: fotos, error: fotosError } = await supabase
@@ -60,13 +60,13 @@ export async function POST(request: Request) {
       .in("id", fotoIds)
       .eq("status", "publicada");
     if (fotosError || !fotos || fotos.length !== fotoIds.length) {
-      return NextResponse.json({ error: "Uma ou mais fotos não estão disponíveis." }, { status: 409 });
+      return NextResponse.json({ error: "Um ou mais itens não estão disponíveis." }, { status: 409 });
     }
 
     const eventoId = String(fotos[0].evento_id);
     const fotografoId = String(fotos[0].fotografo_id);
     if (fotos.some((foto) => String(foto.evento_id) !== eventoId || String(foto.fotografo_id) !== fotografoId)) {
-      return NextResponse.json({ error: "Finalize separadamente as fotos de cada fotógrafo e evento." }, { status: 409 });
+      return NextResponse.json({ error: "Finalize separadamente os itens de cada fotógrafo e evento." }, { status: 409 });
     }
 
     const evento = primeiraRelacao(fotos[0].foto_eventos);

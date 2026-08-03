@@ -7,6 +7,14 @@ import imageCompression from "browser-image-compression";
 import { FOTO_IA_MAX_BYTES, FOTO_IA_MAX_DIMENSAO } from "@/app/lib/fotos-ai";
 import { supabase } from "@/app/lib/supabase";
 import { FotoAlbum, FotoEvento, formatarPrecoFotos } from "@/app/lib/fotos";
+import {
+  formatarDuracaoVideo,
+  VIDEO_IA_FRAME_COUNT,
+  VIDEO_MAX_BYTES,
+  VIDEO_MAX_DURATION_SECONDS,
+  VIDEO_PREVIEW_DURATION_SECONDS,
+  VIDEO_PREVIEW_MAX_BYTES,
+} from "@/app/lib/fotos-video";
 import FotosShell from "../../_components/FotosShell";
 import {
   AlertTriangle,
@@ -20,6 +28,7 @@ import {
   Plus,
   ShieldCheck,
   Trash2,
+  Video,
   Wallet,
 } from "lucide-react";
 
@@ -27,8 +36,32 @@ type UploadStatus = "idle" | "preparando" | "enviando" | "confirmando" | "ok" | 
 
 const MAX_UPLOAD_BYTES = 3 * 1024 * 1024; // 🔥 Limite alterado para 3MB
 const MAX_SOURCE_BYTES = 40 * 1024 * 1024;
-const MAX_UPLOAD_FILES = 500; // 🔥 Limite de 500 fotos por lote
-const TIPOS_PERMITIDOS = new Set(["image/jpeg", "image/png", "image/webp"]);
+const MAX_UPLOAD_FILES = 500;
+const TIPOS_FOTO = new Set(["image/jpeg", "image/png", "image/webp"]);
+const TIPOS_VIDEO = new Set(["video/mp4", "video/webm", "video/quicktime"]);
+
+function arquivoEhVideo(arquivo: File) {
+  return TIPOS_VIDEO.has(arquivo.type);
+}
+
+async function lerDuracaoVideo(file: File) {
+  const url = URL.createObjectURL(file);
+  const video = document.createElement("video");
+  video.preload = "metadata";
+  video.src = url;
+  try {
+    return await new Promise<number>((resolve, reject) => {
+      video.onloadedmetadata = () => Number.isFinite(video.duration) && video.duration > 0
+        ? resolve(video.duration)
+        : reject(new Error(`Não foi possível medir a duração de ${file.name}.`));
+      video.onerror = () => reject(new Error(`Não foi possível ler o vídeo ${file.name}.`));
+    });
+  } finally {
+    URL.revokeObjectURL(url);
+    video.removeAttribute("src");
+    video.load();
+  }
+}
 
 function formatarTamanho(bytes: number) {
   return `${(bytes / 1024 / 1024).toFixed(2).replace(".", ",")} MB`;
@@ -93,33 +126,7 @@ async function gerarDerivadosFoto(file: File) {
   if (!ctx) throw new Error("Não foi possível gerar preview.");
 
   ctx.drawImage(bitmap, 0, 0, width, height);
-  ctx.save();
-  ctx.globalAlpha = 0.22;
-  ctx.fillStyle = "#ffffff";
-  ctx.font = `900 ${Math.max(22, Math.round(width / 18))}px Arial`;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.translate(width / 2, height / 2);
-  ctx.rotate(-Math.PI / 7);
-  const passoX = Math.max(260, width / 2.2);
-  const passoY = Math.max(150, height / 4.5);
-  for (let y = -height; y <= height; y += passoY) {
-    for (let x = -width; x <= width; x += passoX) {
-      ctx.fillText("RETRATT", x, y);
-    }
-  }
-  ctx.restore();
-
-  ctx.save();
-  ctx.globalAlpha = 0.82;
-  ctx.fillStyle = "rgba(0,0,0,0.66)";
-  ctx.fillRect(0, height - 58, width, 58);
-  ctx.fillStyle = "#ffffff";
-  ctx.font = `900 ${Math.max(18, Math.round(width / 32))}px Arial`;
-  ctx.textAlign = "left";
-  ctx.textBaseline = "middle";
-  ctx.fillText("RETRATT - PRÉVIA PROTEGIDA", 22, height - 29);
-  ctx.restore();
+  desenharProtecaoRetratt(ctx, width, height);
 
   const previewBlob = await canvasParaJpeg(canvas, 0.82);
 
@@ -152,6 +159,277 @@ async function gerarDerivadosFoto(file: File) {
   return { previewBlob, miniaturaIa };
 }
 
+function posicionarVideo(video: HTMLVideoElement, tempo: number) {
+  return new Promise<void>((resolve, reject) => {
+    const destino = Math.min(Math.max(0, tempo), Math.max(0, video.duration - 0.05));
+    if (Math.abs(video.currentTime - destino) < 0.04) {
+      resolve();
+      return;
+    }
+
+    const timeout = window.setTimeout(() => reject(new Error("O vídeo demorou demais para preparar a prévia.")), 8000);
+    video.onseeked = () => {
+      window.clearTimeout(timeout);
+      video.onseeked = null;
+      resolve();
+    };
+    video.currentTime = destino;
+  });
+}
+
+function desenharVideoPreenchido(
+  ctx: CanvasRenderingContext2D,
+  video: HTMLVideoElement,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+) {
+  const escala = Math.max(width / video.videoWidth, height / video.videoHeight);
+  const largura = video.videoWidth * escala;
+  const altura = video.videoHeight * escala;
+  ctx.drawImage(video, x + (width - largura) / 2, y + (height - altura) / 2, largura, altura);
+}
+
+function escolherTipoPreviewVideo() {
+  if (typeof MediaRecorder === "undefined") return "";
+  return ["video/webm;codecs=vp8", "video/webm", "video/mp4"]
+    .find((tipo) => MediaRecorder.isTypeSupported(tipo)) || "";
+}
+
+async function gerarMiniaturaIaVideo(video: HTMLVideoElement) {
+  const colunas = 2;
+  const linhas = Math.ceil(VIDEO_IA_FRAME_COUNT / colunas);
+  const larguraQuadro = 480;
+  const alturaQuadro = 270;
+  const canvas = document.createElement("canvas");
+  canvas.width = larguraQuadro * colunas;
+  canvas.height = alturaQuadro * linhas;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Não foi possível preparar os quadros da busca facial.");
+
+  for (let index = 0; index < VIDEO_IA_FRAME_COUNT; index += 1) {
+    const proporcao = (index + 1) / (VIDEO_IA_FRAME_COUNT + 1);
+    await posicionarVideo(video, video.duration * proporcao);
+    const x = (index % colunas) * larguraQuadro;
+    const y = Math.floor(index / colunas) * alturaQuadro;
+    desenharVideoPreenchido(ctx, video, x, y, larguraQuadro, alturaQuadro);
+  }
+
+  let menor: Blob | null = null;
+  for (const qualidade of [0.82, 0.72, 0.62, 0.52, 0.42, 0.32]) {
+    const tentativa = await canvasParaJpeg(canvas, qualidade);
+    if (!menor || tentativa.size < menor.size) menor = tentativa;
+    if (tentativa.size <= FOTO_IA_MAX_BYTES) return tentativa;
+  }
+  if (!menor || menor.size > FOTO_IA_MAX_BYTES) {
+    throw new Error("Não foi possível preparar os quadros do vídeo abaixo de 300 KB.");
+  }
+  return menor;
+}
+
+async function gerarAmostraProtegidaVideo(video: HTMLVideoElement) {
+  const contentType = escolherTipoPreviewVideo();
+  if (!contentType || typeof MediaRecorder === "undefined") return null;
+
+  const maxWidth = 960;
+  const escala = Math.min(1, maxWidth / Math.max(1, video.videoWidth));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(video.videoWidth * escala));
+  canvas.height = Math.max(1, Math.round(video.videoHeight * escala));
+  const ctx = canvas.getContext("2d");
+  if (!ctx || typeof canvas.captureStream !== "function") return null;
+
+  const protecao = document.createElement("canvas");
+  protecao.width = canvas.width;
+  protecao.height = canvas.height;
+  const ctxProtecao = protecao.getContext("2d");
+  if (!ctxProtecao) return null;
+  desenharProtecaoRetratt(ctxProtecao, protecao.width, protecao.height);
+
+  const duracaoAmostra = Math.min(VIDEO_PREVIEW_DURATION_SECONDS, video.duration);
+  const inicio = video.duration > duracaoAmostra
+    ? Math.min(video.duration * 0.1, video.duration - duracaoAmostra)
+    : 0;
+  await posicionarVideo(video, inicio);
+
+  const stream = canvas.captureStream(24);
+  const videoComCaptura = video as HTMLVideoElement & {
+    captureStream?: () => MediaStream;
+    webkitCaptureStream?: () => MediaStream;
+  };
+  const streamDeAudio = videoComCaptura.captureStream?.() || videoComCaptura.webkitCaptureStream?.() || null;
+  streamDeAudio?.getAudioTracks().forEach((track) => stream.addTrack(track));
+  const recorder = new MediaRecorder(stream, { mimeType: contentType, videoBitsPerSecond: 1_600_000 });
+  const partes: Blob[] = [];
+  recorder.ondataavailable = (event) => {
+    if (event.data.size) partes.push(event.data);
+  };
+
+  let frame = 0;
+  const desenhar = () => {
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    ctx.drawImage(protecao, 0, 0);
+    frame = window.requestAnimationFrame(desenhar);
+  };
+
+  const finalizado = new Promise<void>((resolve, reject) => {
+    recorder.onstop = () => resolve();
+    recorder.onerror = () => reject(new Error("Não foi possível gerar a amostra protegida do vídeo."));
+  });
+
+  try {
+    recorder.start(500);
+    desenhar();
+    await video.play();
+    await new Promise<void>((resolve) => {
+      const timeout = window.setTimeout(resolve, duracaoAmostra * 1000);
+      video.onended = () => {
+        window.clearTimeout(timeout);
+        resolve();
+      };
+    });
+    video.pause();
+    recorder.stop();
+    await finalizado;
+  } finally {
+    video.pause();
+    if (frame) window.cancelAnimationFrame(frame);
+    stream.getTracks().forEach((track) => track.stop());
+    streamDeAudio?.getTracks().forEach((track) => track.stop());
+  }
+
+  const blob = new Blob(partes, { type: recorder.mimeType || contentType });
+  if (!blob.size || blob.size > VIDEO_PREVIEW_MAX_BYTES) {
+    throw new Error("A amostra protegida do vídeo ficou grande demais. Tente um vídeo menor.");
+  }
+  return blob;
+}
+
+async function gerarDerivadosVideo(file: File) {
+  const url = URL.createObjectURL(file);
+  const video = document.createElement("video");
+  video.preload = "metadata";
+  video.muted = true;
+  video.playsInline = true;
+  video.src = url;
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      video.onloadeddata = () => resolve();
+      video.onerror = () => reject(new Error(`Não foi possível ler o vídeo ${file.name}.`));
+    });
+    if (!Number.isFinite(video.duration) || video.duration <= 0) throw new Error(`Não foi possível medir a duração de ${file.name}.`);
+    if (video.duration > VIDEO_MAX_DURATION_SECONDS) throw new Error(`${file.name} ultrapassa o limite de 2 minutos.`);
+
+    const miniaturaIa = await gerarMiniaturaIaVideo(video);
+    await posicionarVideo(video, Math.min(1, video.duration * 0.1));
+
+    const maxWidth = 1200;
+    const escala = Math.min(1, maxWidth / Math.max(1, video.videoWidth));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(video.videoWidth * escala));
+    canvas.height = Math.max(1, Math.round(video.videoHeight * escala));
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Não foi possível criar a miniatura do vídeo.");
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    desenharProtecaoRetratt(ctx, canvas.width, canvas.height);
+    const previewBlob = await canvasParaJpeg(canvas, 0.82);
+    const previewVideoBlob = await gerarAmostraProtegidaVideo(video);
+    return {
+      duracaoSegundos: video.duration,
+      miniaturaIa,
+      previewBlob,
+      previewVideoBlob,
+      previewVideoContentType: previewVideoBlob?.type || "",
+    };
+  } finally {
+    URL.revokeObjectURL(url);
+    video.removeAttribute("src");
+    video.load();
+  }
+}
+
+function enviarDiretoAoR2(url: string, arquivo: Blob, onProgress: (percentual: number) => void) {
+  return new Promise<void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", url);
+    xhr.setRequestHeader("Content-Type", arquivo.type);
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) onProgress(Math.round((event.loaded / event.total) * 100));
+    };
+    xhr.onerror = () => reject(new Error("A conexão com o armazenamento foi interrompida durante o envio do vídeo."));
+    xhr.onload = () => xhr.status >= 200 && xhr.status < 300
+      ? resolve()
+      : reject(new Error(`O armazenamento recusou o vídeo (${xhr.status}).`));
+    xhr.send(arquivo);
+  });
+}
+
+function desenharProtecaoRetratt(ctx: CanvasRenderingContext2D, width: number, height: number) {
+  const passo = Math.max(58, Math.round(width / 13));
+  const segmento = Math.max(26, Math.round(passo * 0.62));
+  ctx.save();
+  ctx.lineWidth = Math.max(1.25, width / 750);
+  for (let y = -passo; y < height + passo; y += passo) {
+    for (let x = -passo; x < width + passo; x += passo) {
+      ctx.strokeStyle = "rgba(255,255,255,0.58)";
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + segmento, y + segmento);
+      ctx.stroke();
+      ctx.strokeStyle = "rgba(255,90,31,0.48)";
+      ctx.beginPath();
+      ctx.moveTo(x + segmento, y);
+      ctx.lineTo(x, y + segmento);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+
+  ctx.save();
+  ctx.globalAlpha = 0.7;
+  ctx.fillStyle = "rgba(0,0,0,0.58)";
+  ctx.font = `900 ${Math.max(14, Math.round(width / 48))}px Arial`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.translate(width / 2, height / 2);
+  ctx.rotate(-Math.PI / 9);
+  const passoX = Math.max(220, width / 2.4);
+  const passoY = Math.max(120, height / 5);
+  for (let y = -height; y <= height; y += passoY) {
+    for (let x = -width; x <= width; x += passoX) {
+      const texto = "RETRATT • REPRODUÇÃO NÃO AUTORIZADA";
+      const larguraTexto = ctx.measureText(texto).width + 24;
+      ctx.fillRect(x - larguraTexto / 2, y - 17, larguraTexto, 34);
+      ctx.fillStyle = "rgba(255,255,255,0.95)";
+      ctx.fillText(texto, x, y);
+      ctx.fillStyle = "rgba(0,0,0,0.58)";
+    }
+  }
+  ctx.restore();
+
+  const barraAltura = Math.min(82, Math.max(58, Math.round(height * 0.1)));
+  ctx.save();
+  ctx.fillStyle = "rgba(0,0,0,0.84)";
+  ctx.fillRect(0, height - barraAltura, width, barraAltura);
+  ctx.strokeStyle = "rgba(255,90,31,0.9)";
+  ctx.lineWidth = Math.max(2, width / 600);
+  ctx.beginPath();
+  ctx.moveTo(0, height - barraAltura);
+  ctx.lineTo(width, height - barraAltura);
+  ctx.stroke();
+  ctx.fillStyle = "#ffffff";
+  ctx.font = `900 ${Math.max(15, Math.round(width / 43))}px Arial`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("COMPARTILHAR SEM AUTORIZAÇÃO É ILEGAL", width / 2, height - barraAltura * 0.63);
+  ctx.fillStyle = "#ff5a1f";
+  ctx.font = `800 ${Math.max(11, Math.round(width / 62))}px Arial`;
+  ctx.fillText("COMPRE O ARQUIVO ORIGINAL • VALORIZE O FOTÓGRAFO", width / 2, height - barraAltura * 0.28);
+  ctx.restore();
+}
+
 export default function PainelFotografoPage() {
   const router = useRouter();
   const [email, setEmail] = useState<string | null>(null);
@@ -162,7 +440,8 @@ export default function PainelFotografoPage() {
   const [albumId, setAlbumId] = useState("");
   const [novoAlbum, setNovoAlbum] = useState("Geral");
   const [arquivos, setArquivos] = useState<File[]>([]);
-  const [preco, setPreco] = useState("15,00");
+  const [precoFoto, setPrecoFoto] = useState("15,00");
+  const [precoVideo, setPrecoVideo] = useState("25,00");
   const [status, setStatus] = useState<UploadStatus>("idle");
   const [mensagem, setMensagem] = useState("");
   const [carregando, setCarregando] = useState(true);
@@ -174,12 +453,13 @@ export default function PainelFotografoPage() {
   const [uploadAtual, setUploadAtual] = useState(0);
   const [uploadConcluidas, setUploadConcluidas] = useState(0);
   const [uploadTotal, setUploadTotal] = useState(0);
+  const [progressoArquivo, setProgressoArquivo] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  function precoCentavos() {
-    const normalizado = preco.replace(/\./g, "").replace(",", ".");
+  function converterPrecoCentavos(valorDigitado: string, padrao: number) {
+    const normalizado = valorDigitado.replace(/\./g, "").replace(",", ".");
     const valor = Number(normalizado);
-    return Number.isFinite(valor) ? Math.max(0, Math.round(valor * 100)) : 1500;
+    return Number.isFinite(valor) ? Math.max(0, Math.round(valor * 100)) : padrao;
   }
 
   useEffect(() => {
@@ -220,7 +500,9 @@ export default function PainelFotografoPage() {
 
       const lista = (data || []) as FotoEvento[];
       setEventos(lista);
-      if (lista[0]?.id) setEventoId(lista[0].id);
+      const eventoSolicitado = new URLSearchParams(window.location.search).get("evento");
+      const eventoInicial = lista.find((evento) => evento.id === eventoSolicitado) || lista[0];
+      if (eventoInicial?.id) setEventoId(eventoInicial.id);
       setCarregando(false);
     }
 
@@ -264,7 +546,8 @@ export default function PainelFotografoPage() {
 
   const eventoSelecionado = useMemo(() => eventos.find((evento) => evento.id === eventoId), [eventos, eventoId]);
   const albumSelecionado = useMemo(() => albuns.find((album) => album.id === albumId), [albuns, albumId]);
-  const valorAtual = formatarPrecoFotos(precoCentavos());
+  const valorFotoAtual = formatarPrecoFotos(converterPrecoCentavos(precoFoto, 1500));
+  const valorVideoAtual = formatarPrecoFotos(converterPrecoCentavos(precoVideo, 2500));
   const enviando = ["preparando", "enviando", "confirmando"].includes(status);
   const uploadBloqueado = !eventoId || carregandoAlbuns || enviando || otimizando || criandoAlbum;
   const totalBytes = arquivos.reduce((total, arquivo) => total + arquivo.size, 0);
@@ -274,18 +557,18 @@ export default function PainelFotografoPage() {
       return Math.min(100, Math.round((otimizacaoAtual / otimizacaoTotal) * 100));
     }
     if (enviando && uploadTotal > 0) {
-      const avancoDaEtapa = status === "preparando" ? 0.2 : status === "enviando" ? 0.72 : 0.92;
+      const avancoDaEtapa = status === "preparando" ? 0.2 : status === "enviando" ? 0.25 + (progressoArquivo / 100) * 0.55 : 0.92;
       return Math.min(99, Math.round(((uploadConcluidas + avancoDaEtapa) / uploadTotal) * 100));
     }
     return 0;
-  }, [enviando, otimizacaoAtual, otimizacaoTotal, otimizando, status, uploadConcluidas, uploadTotal]);
+  }, [enviando, otimizacaoAtual, otimizacaoTotal, otimizando, progressoArquivo, status, uploadConcluidas, uploadTotal]);
 
   const orientacaoPrincipal = useMemo(() => {
     if (!eventoId) return "Escolha primeiro onde as fotos serão publicadas.";
     if (carregandoAlbuns) return "Buscando os álbuns desta galeria...";
-    if (!albumId) return `O álbum “${novoAlbum.trim() || "Geral"}” será criado automaticamente ao enviar.`;
-    if (!arquivos.length) return `Álbum “${albumSelecionado?.titulo || "selecionado"}” pronto. Agora escolha suas fotos.`;
-    return `${arquivos.length} foto(s) pronta(s) para o álbum “${albumSelecionado?.titulo || novoAlbum.trim() || "Geral"}”.`;
+    if (!albumId) return `O álbum “${novoAlbum.trim() || "Geral"}” será criado automaticamente ao publicar.`;
+    if (!arquivos.length) return `Álbum “${albumSelecionado?.titulo || "selecionado"}” pronto. Agora escolha fotos ou vídeos.`;
+    return `${arquivos.length} mídia(s) pronta(s) para o álbum “${albumSelecionado?.titulo || novoAlbum.trim() || "Geral"}”.`;
   }, [albumId, albumSelecionado?.titulo, arquivos.length, carregandoAlbuns, eventoId, novoAlbum]);
 
   async function selecionarArquivos(lista: FileList | null) {
@@ -293,6 +576,7 @@ export default function PainelFotografoPage() {
     const recebidos = Array.from(lista);
     const lote = recebidos.slice(0, MAX_UPLOAD_FILES);
     const aceitos: File[] = [];
+    const motivosRecusa: string[] = [];
     let otimizadas = 0;
     let recusados = recebidos.length - lote.length;
 
@@ -303,22 +587,37 @@ export default function PainelFotografoPage() {
     setUploadAtual(0);
     setUploadConcluidas(0);
     setUploadTotal(0);
-    setMensagem(`Otimizando ${lote.length} foto(s) antes do envio... Isso pode levar alguns instantes dependendo da quantidade.`);
+    setMensagem(`Preparando ${lote.length} arquivo(s) antes do envio...`);
 
     for (let index = 0; index < lote.length; index += 1) {
       const arquivo = lote[index];
-      if (!TIPOS_PERMITIDOS.has(arquivo.type) || arquivo.size > MAX_SOURCE_BYTES) {
+      const ehVideo = arquivoEhVideo(arquivo);
+      const tipoValido = TIPOS_FOTO.has(arquivo.type) || ehVideo;
+      const excedeuLimite = ehVideo ? arquivo.size > VIDEO_MAX_BYTES : arquivo.size > MAX_SOURCE_BYTES;
+      if (!tipoValido || excedeuLimite) {
         recusados += 1;
+        motivosRecusa.push(!tipoValido
+          ? `${arquivo.name}: formato não aceito.`
+          : `${arquivo.name}: ultrapassa ${ehVideo ? "250 MB" : "40 MB antes da otimização"}.`);
         setOtimizacaoAtual(index + 1);
         continue;
       }
 
       try {
-        const resultado = await otimizarFotoParaUpload(arquivo);
-        aceitos.push(resultado.file);
-        if (resultado.otimizada) otimizadas += 1;
-      } catch {
+        if (ehVideo) {
+          const duracao = await lerDuracaoVideo(arquivo);
+          if (duracao > VIDEO_MAX_DURATION_SECONDS) {
+            throw new Error(`${arquivo.name} ultrapassa o limite de 2 minutos.`);
+          }
+          aceitos.push(arquivo);
+        } else {
+          const resultado = await otimizarFotoParaUpload(arquivo);
+          aceitos.push(resultado.file);
+          if (resultado.otimizada) otimizadas += 1;
+        }
+      } catch (error: unknown) {
         recusados += 1;
+        motivosRecusa.push(error instanceof Error ? error.message : `${arquivo.name}: não foi possível preparar o arquivo.`);
       }
       setOtimizacaoAtual(index + 1);
     }
@@ -332,11 +631,11 @@ export default function PainelFotografoPage() {
     if (fileInputRef.current) fileInputRef.current.value = "";
 
     if (recusados > 0) {
-      setMensagem(`${aceitos.length} foto(s) pronta(s). ${otimizadas} foram otimizadas automaticamente e ${recusados} ficaram fora por formato inválido, arquivo muito pesado ou lote acima de ${MAX_UPLOAD_FILES} fotos.`);
+      setMensagem(`${aceitos.length} mídia(s) pronta(s). ${otimizadas} foto(s) foram otimizadas e ${recusados} arquivo(s) ficaram fora. ${motivosRecusa[0] || "Revise formato, tamanho e duração."}`);
     } else if (otimizadas > 0) {
-      setMensagem(`${aceitos.length} foto(s) pronta(s). ${otimizadas} foram otimizadas automaticamente para até 3MB.`);
+      setMensagem(`${aceitos.length} mídia(s) pronta(s). ${otimizadas} foto(s) foram otimizadas automaticamente para até 3MB.`);
     } else {
-      setMensagem(`${aceitos.length} foto(s) pronta(s) para envio.`);
+      setMensagem(`${aceitos.length} mídia(s) pronta(s) para publicação.`);
     }
   }
 
@@ -388,7 +687,14 @@ export default function PainelFotografoPage() {
   }
 
   async function enviarUmaFoto(arquivo: File, token: string, destinoAlbumId: string) {
+    const ehVideo = arquivoEhVideo(arquivo);
+    setProgressoArquivo(0);
     setStatus("preparando");
+    const derivadosFoto = ehVideo ? null : await gerarDerivadosFoto(arquivo);
+    const derivadosVideo = ehVideo ? await gerarDerivadosVideo(arquivo) : null;
+    const previewBlob = derivadosVideo?.previewBlob || derivadosFoto!.previewBlob;
+    const miniaturaIa = derivadosVideo?.miniaturaIa || derivadosFoto!.miniaturaIa;
+
     const uploadResponse = await fetch("/api/fotos/upload-url", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -399,13 +705,18 @@ export default function PainelFotografoPage() {
         contentType: arquivo.type,
         size: arquivo.size,
         titulo: arquivo.name.replace(/\.[^.]+$/, ""),
-        precoCentavos: precoCentavos(),
+        precoCentavos: ehVideo
+          ? converterPrecoCentavos(precoVideo, 2500)
+          : converterPrecoCentavos(precoFoto, 1500),
+        duracaoSegundos: derivadosVideo?.duracaoSegundos || null,
+        videoPreviewContentType: derivadosVideo?.previewVideoContentType || null,
       }),
     });
 
     const uploadData = await uploadResponse.json();
     if (!uploadResponse.ok) throw new Error(uploadData.error || "Erro ao preparar os links de upload.");
 
+    try {
     async function enviarArquivo(blob: Blob, tipo: "preview" | "original" | "ia", contentType: string) {
       return fetch("/api/fotos/enviar-arquivo", {
         method: "POST",
@@ -419,12 +730,11 @@ export default function PainelFotografoPage() {
       });
     }
 
-    const { previewBlob, miniaturaIa } = await gerarDerivadosFoto(arquivo);
     setStatus("enviando");
     const iaResponse = await enviarArquivo(miniaturaIa, "ia", "image/jpeg");
     if (!iaResponse.ok) {
       const detalhe = await iaResponse.json().catch(() => null);
-      throw new Error(detalhe?.error || "Falha ao preparar a busca facial desta foto.");
+      throw new Error(detalhe?.error || `Falha ao preparar a busca facial deste ${ehVideo ? "vídeo" : "arquivo"}.`);
     }
 
     const previewResponse = await enviarArquivo(previewBlob, "preview", "image/jpeg");
@@ -433,10 +743,17 @@ export default function PainelFotografoPage() {
       throw new Error(detalhe?.error || "Falha ao enviar a previa para o R2.");
     }
 
-    const putResponse = await enviarArquivo(arquivo, "original", arquivo.type);
-    if (!putResponse.ok) {
-      const detalhe = await putResponse.json().catch(() => null);
-      throw new Error(detalhe?.error || "Falha ao enviar a foto original para o R2.");
+    if (ehVideo) {
+      if (derivadosVideo?.previewVideoBlob && uploadData.videoPreviewUploadUrl) {
+        await enviarDiretoAoR2(uploadData.videoPreviewUploadUrl, derivadosVideo.previewVideoBlob, () => undefined);
+      }
+      await enviarDiretoAoR2(uploadData.uploadUrl, arquivo, setProgressoArquivo);
+    } else {
+      const putResponse = await enviarArquivo(arquivo, "original", arquivo.type);
+      if (!putResponse.ok) {
+        const detalhe = await putResponse.json().catch(() => null);
+        throw new Error(detalhe?.error || "Falha ao enviar a foto original para o armazenamento.");
+      }
     }
 
     setStatus("confirmando");
@@ -447,6 +764,14 @@ export default function PainelFotografoPage() {
     });
     const confirmarData = await confirmarResponse.json();
     if (!confirmarResponse.ok) throw new Error(confirmarData.error || "Upload feito, mas não confirmado no banco.");
+    } catch (error) {
+      await fetch("/api/fotos/upload-url", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ fotoId: uploadData.fotoId }),
+      }).catch(() => undefined);
+      throw error;
+    }
   }
 
   async function enviarFotos(destinoAlbumId: string) {
@@ -479,12 +804,12 @@ export default function PainelFotografoPage() {
       setArquivos([]);
       if (fileInputRef.current) fileInputRef.current.value = "";
       setStatus("ok");
-      setMensagem(`${concluidas} foto(s) publicada(s) com sucesso. Elas já estão disponíveis na galeria.`);
+      setMensagem(`${concluidas} mídia(s) publicada(s) com sucesso. Elas já estão disponíveis na galeria.`);
     } catch (error: unknown) {
       let detalhe = error instanceof Error ? error.message : "Erro desconhecido ao enviar fotos.";
       if (concluidas > 0) {
         setArquivos((atuais) => atuais.slice(concluidas));
-        detalhe = `${concluidas} foto(s) foram publicadas. As restantes ficaram na fila para tentar novamente. ${detalhe}`;
+        detalhe = `${concluidas} mídia(s) foram publicadas. As restantes ficaram na fila para tentar novamente. ${detalhe}`;
       }
       setStatus("erro");
       setMensagem(detalhe);
@@ -513,7 +838,7 @@ export default function PainelFotografoPage() {
   }
 
   return (
-    <FotosShell>
+    <FotosShell area="fotografo">
       <main className="min-h-screen bg-[#050505] pb-12 text-white">
         <section className="border-b border-white/10 bg-[radial-gradient(circle_at_85%_0%,rgba(255,90,31,0.16),transparent_32%),linear-gradient(180deg,#0c0c0f,#050505)]">
           <div className="mx-auto max-w-7xl px-4 py-6 md:px-6 md:py-8">
@@ -522,9 +847,9 @@ export default function PainelFotografoPage() {
                 <p className="inline-flex items-center gap-2 rounded-full border border-retratt/30 bg-retratt/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.24em] text-retratt">
                   <Camera size={13} /> Área do fotógrafo
                 </p>
-                <h1 className="mt-4 text-3xl font-black uppercase leading-none md:text-5xl">Carregar fotos</h1>
+                <h1 className="mt-4 text-3xl font-black uppercase leading-none md:text-5xl">Criar álbum</h1>
                 <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-400">
-                  Publique várias fotos por evento e álbum. Fotos acima de 3MB são otimizadas automaticamente antes do envio.
+                  Escolha a galeria, organize um álbum e publique fotos ou vídeos em um fluxo simples. As fotos continuam otimizadas automaticamente até 3MB.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -551,8 +876,8 @@ export default function PainelFotografoPage() {
                 <p className="mt-1 text-2xl font-black text-white">{arquivos.length}</p>
               </div>
               <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-4">
-                <p className="flex items-center gap-2 text-[10px] font-black uppercase tracking-wider text-emerald-300"><Wallet size={14} /> Valor por foto</p>
-                <p className="mt-1 text-2xl font-black text-emerald-300">{valorAtual}</p>
+                <p className="flex items-center gap-2 text-[10px] font-black uppercase tracking-wider text-emerald-300"><Wallet size={14} /> Foto / vídeo</p>
+                <p className="mt-1 text-base font-black text-emerald-300">{valorFotoAtual} / {valorVideoAtual}</p>
               </div>
             </div>
           </div>
@@ -627,8 +952,9 @@ export default function PainelFotografoPage() {
               <p className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-white"><ShieldCheck size={16} className="text-emerald-400" /> Pode deixar com a gente</p>
               <div className="mt-3 space-y-2 text-xs text-zinc-400">
                 <p>✓ Fotos grandes continuam sendo otimizadas automaticamente até 3MB.</p>
-                <p>✓ Criamos a prévia protegida e a miniatura para busca facial.</p>
-                <p>✓ A foto original fica reservada para a entrega após a compra.</p>
+                <p>✓ Fotos e vídeos entram na busca facial; o vídeo recebe uma amostra protegida de 10 segundos.</p>
+                <p>✓ Vídeos: até {formatarDuracaoVideo(VIDEO_MAX_DURATION_SECONDS)} e 250 MB por arquivo.</p>
+                <p>✓ O arquivo original fica reservado para a entrega após a compra.</p>
               </div>
             </div>
           </aside>
@@ -637,8 +963,8 @@ export default function PainelFotografoPage() {
             <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-[9px] font-black uppercase tracking-[0.22em] text-retratt">Passo 2</p>
-                <h2 className="mt-1 text-lg font-black uppercase">Escolha e publique</h2>
-                <p className="mt-1 text-xs text-zinc-500">Você escolhe as imagens; a Retratt prepara e publica todo o lote.</p>
+                <h2 className="mt-1 text-lg font-black uppercase">Adicione suas mídias</h2>
+                <p className="mt-1 text-xs text-zinc-500">Você escolhe fotos e vídeos; a Retratt protege e publica o lote.</p>
               </div>
               {eventoSelecionado && <p className="rounded-full border border-retratt/20 bg-retratt/10 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-orange-200">{eventoSelecionado.nome}</p>}
             </div>
@@ -653,30 +979,43 @@ export default function PainelFotografoPage() {
 
             <div className="grid gap-4 lg:grid-cols-[1fr_250px]">
               <div className={`relative flex min-h-[250px] flex-col items-center justify-center rounded-2xl border-2 border-dashed bg-black p-5 text-center transition ${arquivos.length ? "border-emerald-500/30" : "border-white/10 hover:border-retratt/60 hover:bg-retratt/5"}`}>
-                <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={otimizando || enviando} onChange={(e) => void selecionarArquivos(e.target.files)} className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0 disabled:cursor-wait" />
+                <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime" multiple disabled={otimizando || enviando} onChange={(e) => void selecionarArquivos(e.target.files)} className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0 disabled:cursor-wait" />
                 <div className={`mb-3 flex h-16 w-16 items-center justify-center rounded-full ${arquivos.length ? "bg-emerald-500/10 text-emerald-400" : "bg-white/5 text-zinc-500"}`}>
                   {otimizando ? <Loader2 size={30} className="animate-spin text-retratt" /> : arquivos.length ? <CheckCircle2 size={30} /> : <CloudUpload size={30} />}
                 </div>
                 <p className="text-sm font-black uppercase tracking-wider text-white">
-                  {otimizando ? `Preparando ${otimizacaoAtual} de ${otimizacaoTotal}` : arquivos.length ? `${arquivos.length} foto(s) pronta(s)` : "Clique ou arraste suas fotos"}
+                  {otimizando ? `Preparando ${otimizacaoAtual} de ${otimizacaoTotal}` : arquivos.length ? `${arquivos.length} mídia(s) pronta(s)` : "Clique ou arraste fotos e vídeos"}
                 </p>
                 <p className="mt-2 max-w-sm text-xs leading-5 text-zinc-500">
-                  {arquivos.length ? "Clique novamente para trocar o lote ou revise a lista logo abaixo." : "Escolha até 500 imagens. Você verá o andamento de cada etapa antes da publicação."}
+                  {arquivos.length ? "Clique novamente para trocar o lote ou revise a lista logo abaixo." : "Escolha fotos e vídeos. Você verá o andamento de cada etapa antes da publicação."}
                 </p>
-                <p className="mt-3 text-[10px] font-black uppercase tracking-wider text-retratt">JPG, PNG ou WebP · até 3MB após otimização</p>
+                <p className="mt-3 text-[10px] font-black uppercase tracking-wider text-retratt">Fotos: JPG, PNG ou WebP · Vídeos: MP4, WebM ou MOV · Até {formatarDuracaoVideo(VIDEO_MAX_DURATION_SECONDS)} / 250 MB</p>
               </div>
 
               <div className="rounded-2xl border border-white/10 bg-black p-4">
-                <label className="text-[10px] font-black uppercase tracking-[0.22em] text-zinc-500">Preço de venda</label>
-                <div className="relative mt-2">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-zinc-500">R$</span>
-                  <input value={preco} onChange={(e) => setPreco(e.target.value)} className="h-12 w-full rounded-lg border border-white/10 bg-zinc-950 pl-9 pr-3 text-lg font-black outline-none focus:border-retratt" />
+                <label className="text-[10px] font-black uppercase tracking-[0.22em] text-zinc-500">Preços de venda</label>
+                <div className="mt-2 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+                  <label className="block">
+                    <span className="text-[9px] font-black uppercase tracking-wider text-zinc-500">Cada foto</span>
+                    <div className="relative mt-1">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-zinc-500">R$</span>
+                      <input value={precoFoto} onChange={(e) => setPrecoFoto(e.target.value)} inputMode="decimal" className="h-12 w-full rounded-lg border border-white/10 bg-zinc-950 pl-9 pr-3 text-lg font-black outline-none focus:border-retratt" />
+                    </div>
+                    <span className="mt-1 block text-[10px] font-bold text-emerald-300">{valorFotoAtual}</span>
+                  </label>
+                  <label className="block">
+                    <span className="text-[9px] font-black uppercase tracking-wider text-zinc-500">Cada vídeo</span>
+                    <div className="relative mt-1">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-zinc-500">R$</span>
+                      <input value={precoVideo} onChange={(e) => setPrecoVideo(e.target.value)} inputMode="decimal" className="h-12 w-full rounded-lg border border-white/10 bg-zinc-950 pl-9 pr-3 text-lg font-black outline-none focus:border-retratt" />
+                    </div>
+                    <span className="mt-1 block text-[10px] font-bold text-emerald-300">{valorVideoAtual}</span>
+                  </label>
                 </div>
-                <p className="mt-2 text-xs text-zinc-500">Valor atual: <span className="font-bold text-emerald-300">{valorAtual}</span></p>
-                <p className="mt-3 text-xs text-zinc-500">Lote atual: <span className="font-bold text-white">{arquivos.length}</span> foto(s) · {formatarTamanho(totalBytes)}</p>
+                <p className="mt-3 text-xs text-zinc-500">Lote atual: <span className="font-bold text-white">{arquivos.length}</span> mídia(s) · {formatarTamanho(totalBytes)}</p>
 
                 <button type="button" onClick={() => void iniciarEnvio()} disabled={uploadBloqueado} className="mt-4 inline-flex min-h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-retratt px-3 py-3 text-center text-xs font-black uppercase tracking-wider text-black shadow-[0_0_24px_rgba(255,90,31,0.18)] transition hover:bg-retratt disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500">
-                  {criandoAlbum ? <><Loader2 size={16} className="animate-spin" /> Criando álbum</> : otimizando ? <><Loader2 size={16} className="animate-spin" /> Preparando {otimizacaoAtual}/{otimizacaoTotal}</> : enviando ? <><Loader2 size={16} className="animate-spin" /> Publicando {uploadAtual}/{uploadTotal}</> : !arquivos.length ? <><ImagePlus size={16} /> Escolher fotos</> : !albumId ? <><FolderPlus size={16} /> Criar álbum e publicar</> : <><CloudUpload size={16} /> Publicar {arquivos.length} foto(s)</>}
+                  {criandoAlbum ? <><Loader2 size={16} className="animate-spin" /> Criando álbum</> : otimizando ? <><Loader2 size={16} className="animate-spin" /> Preparando {otimizacaoAtual}/{otimizacaoTotal}</> : enviando ? <><Loader2 size={16} className="animate-spin" /> Publicando {uploadAtual}/{uploadTotal}</> : !arquivos.length ? <><ImagePlus size={16} /> Escolher mídias</> : !albumId ? <><FolderPlus size={16} /> Criar álbum e publicar</> : <><CloudUpload size={16} /> Publicar {arquivos.length} mídia(s)</>}
                 </button>
 
                 {(otimizando || enviando || status === "ok") && (
@@ -702,20 +1041,20 @@ export default function PainelFotografoPage() {
             {arquivos.length > 0 && (
               <div className="mt-4 rounded-2xl border border-white/10 bg-black p-3">
                 <div className="mb-2 flex items-center justify-between">
-                  <p className="text-[10px] font-black uppercase tracking-[0.22em] text-zinc-500">Fotos selecionadas</p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.22em] text-zinc-500">Mídias selecionadas</p>
                   <button type="button" onClick={() => setArquivos([])} className="cursor-pointer text-[10px] font-black uppercase tracking-wider text-retratt hover:text-orange-300">Limpar</button>
                 </div>
                 <div className="max-h-52 space-y-2 overflow-y-auto pr-1">
                   {arquivos.map((arquivo, index) => (
                     <div key={`${arquivo.name}-${index}`} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-zinc-950 px-3 py-2">
                       <div className="min-w-0 flex items-center gap-3">
-                        <ImagePlus size={16} className="shrink-0 text-retratt" />
+                        {arquivoEhVideo(arquivo) ? <Video size={16} className="shrink-0 text-retratt" /> : <ImagePlus size={16} className="shrink-0 text-retratt" />}
                         <div className="min-w-0">
                           <p className="truncate text-xs font-bold text-white">{arquivo.name}</p>
                           <p className="text-[10px] text-zinc-500">{formatarTamanho(arquivo.size)}</p>
                         </div>
                       </div>
-                      <button type="button" onClick={() => removerArquivo(arquivo.name, index)} className="cursor-pointer rounded-lg border border-white/10 p-2 text-zinc-500 hover:border-retratt/40 hover:text-orange-300" aria-label="Remover foto">
+                      <button type="button" onClick={() => removerArquivo(arquivo.name, index)} className="cursor-pointer rounded-lg border border-white/10 p-2 text-zinc-500 hover:border-retratt/40 hover:text-orange-300" aria-label="Remover mídia">
                         <Trash2 size={14} />
                       </button>
                     </div>

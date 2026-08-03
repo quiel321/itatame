@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { ChangeEvent, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Camera, CheckCircle2, ImagePlus, Loader2, ScanFace, ShieldCheck, ShoppingCart, X } from "lucide-react";
+import { Camera, CheckCircle2, ImagePlus, Loader2, Play, ScanFace, ShieldCheck, ShoppingCart, X } from "lucide-react";
 
 type ResultadoFace = {
   id: string;
   eventoId: string;
   titulo: string | null;
   precoCentavos: number;
+  mimeType: string | null;
   similaridade: number;
   nivel: "forte" | "provavel" | "possivel";
   evento: { id: string; nome: string; data_evento: string | null; cidade: string | null; estado: string | null } | null;
@@ -242,7 +243,7 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
                   <div>
                     <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                       <div>
-                        <p className="flex items-center gap-2 text-sm font-black uppercase"><CheckCircle2 size={17} className="text-emerald-400" /> {resultados.length} foto(s) encontrada(s)</p>
+                        <p className="flex items-center gap-2 text-sm font-black uppercase"><CheckCircle2 size={17} className="text-emerald-400" /> {resultados.length} mídia(s) encontrada(s)</p>
                         <p className="mt-1 text-[10px] text-zinc-500">Ordenadas pela maior semelhança facial.</p>
                       </div>
                       <button type="button" onClick={alternarTodosResultados} className={`rounded-xl border px-3 py-2 text-[8px] font-black uppercase tracking-wider transition-colors ${todosResultadosSelecionados ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300" : "border-white/10 bg-white/5 text-zinc-300 hover:bg-white/10"}`}>
@@ -253,6 +254,7 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
                       {resultados.map((foto) => {
                         const fotoId = String(foto.id);
                         const noCarrinho = fotosNoCarrinho.includes(fotoId);
+                        const ehVideo = Boolean(foto.mimeType?.startsWith("video/"));
                         return (
                           <article key={foto.id} className={`relative overflow-hidden rounded-xl border bg-black transition-colors ${noCarrinho ? "border-emerald-400 shadow-[0_0_18px_rgba(52,211,153,0.15)]" : "border-white/10 hover:border-retratt/50"}`}>
                             <label className={`absolute right-2 top-2 z-20 flex h-9 w-9 cursor-pointer items-center justify-center rounded-xl border backdrop-blur-md ${noCarrinho ? "border-emerald-300 bg-emerald-400 text-black" : "border-white/20 bg-black/70 text-white"}`}>
@@ -267,11 +269,12 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
                             <Link href={`/fotos/evento/${foto.eventoId}?foto=${encodeURIComponent(foto.id)}&origem=ia`} className="group block">
                               <div className="relative aspect-[4/5] overflow-hidden bg-zinc-950">
                                 <img data-foto-protegida-imagem src={`/api/fotos/arquivo/${foto.id}?tipo=thumb`} alt={foto.titulo || "Foto encontrada"} className={`h-full w-full object-cover transition duration-300 group-hover:scale-105 ${noCarrinho ? "opacity-70" : ""}`} />
+                                {ehVideo && <span className="absolute bottom-2 left-2 z-10 inline-flex items-center gap-1 rounded-full bg-black/80 px-2 py-1 text-[7px] font-black uppercase tracking-wider text-white"><Play size={9} className="fill-retratt text-retratt" /> Vídeo</span>}
                                 <span className={`absolute left-2 top-2 rounded-full px-2 py-1 text-[8px] font-black uppercase tracking-wider ${foto.nivel === "forte" ? "bg-emerald-400 text-black" : foto.nivel === "provavel" ? "bg-retratt text-black" : "bg-retratt text-black"}`}>{foto.nivel} · {foto.similaridade.toFixed(0)}%</span>
                               </div>
                               <div className="p-2.5">
                                 <p className="line-clamp-2 text-[9px] font-black uppercase leading-4 text-white">{foto.evento?.nome || "Galeria Retratt"}</p>
-                                <p className="mt-1 text-[8px] font-black uppercase tracking-wider text-retratt">Abrir esta foto</p>
+                                <p className="mt-1 text-[8px] font-black uppercase tracking-wider text-retratt">Abrir {ehVideo ? "este vídeo" : "esta foto"}</p>
                               </div>
                             </Link>
                           </article>
