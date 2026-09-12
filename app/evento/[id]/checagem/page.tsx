@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/app/lib/supabase';
 import { useParams, useRouter } from 'next/navigation';
+import { grupoInscricao, type CategoriaCompeticao } from '@/app/lib/categorias-competicao';
 import { Search, Users, Layers, Shield, ArrowLeft, Trophy } from 'lucide-react';
 
 type InscricaoCompleta = {
@@ -47,10 +48,11 @@ export default function ChecagemGeralPage() {
 
       const { data: inscData } = await supabase
         .from('inscricoes')
-        .select('id, user_id, categoria, pagamento_ok')
+        .select('*')
         .eq('evento_id', eventoId)
         .eq('pagamento_ok', true);
 
+      const { data: categorias } = await supabase.from('categorias_evento').select('*').eq('evento_id', eventoId);
       if (inscData && inscData.length > 0) {
         const userIds = [...new Set(inscData.map(i => i.user_id))];
         const { data: atletasData } = await supabase
@@ -60,17 +62,18 @@ export default function ChecagemGeralPage() {
 
         const dadosCompletos: InscricaoCompleta[] = inscData.map(insc => {
           const atl = atletasData?.find(a => a.user_id === insc.user_id);
-          const categoria = insc.categoria || 'NÃO INFORMADA';
-          const faixa = atl?.faixa || 'FAIXA NÃO INFORMADA';
+          let categoria = insc.categoria || 'NÃO INFORMADA';
+          const faixa = insc.faixa || 'FAIXA NÃO INFORMADA';
+          try { categoria = grupoInscricao(insc, 'peso', (categorias || []) as CategoriaCompeticao[]).categoria; } catch { categoria += ' · Dados a conferir'; }
           return {
             id: insc.id,
             categoria,
-            atleta_nome: atl?.nome || 'Atleta Desconhecido',
-            equipe: atl?.equipe || 'SEM EQUIPE',
+            atleta_nome: insc.atleta || atl?.nome || 'Atleta Desconhecido',
+            equipe: insc.equipe || 'SEM EQUIPE',
             professor: atl?.professor || 'Sem Professor',
             faixa,
-            peso: atl?.peso || '',
-            sexo: atl?.sexo || '',
+            peso: insc.peso || '',
+            sexo: insc.sexo || '',
             chave_categoria: faixa + '__' + categoria,
             categoria_rotulo: faixa + ' / ' + categoria
           };

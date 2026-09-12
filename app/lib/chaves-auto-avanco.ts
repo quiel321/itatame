@@ -144,7 +144,7 @@ async function concluirWo(supabase: SupabaseLike, todas: ChaveLutaAuto[], luta: 
       status_luta: 'concluida',
       vencedor: vencedorFinal,
       vencedor_id: vencedorId || null,
-      metodo_vitoria: ladoVencedor === 'bye' ? 'avanco_direto' : 'wo',
+      metodo_vitoria: 'wo',
       finalizada_em: new Date().toISOString(),
     })
     .eq('id', luta.id);

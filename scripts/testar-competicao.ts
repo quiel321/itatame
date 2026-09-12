@@ -1,0 +1,43 @@
+import assert from 'node:assert/strict';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { prepararGrupos, montarChaves } from '../app/lib/gerar-chaves';
+import { grupoInscricao, categoriaCompativel, type CategoriaCompeticao, type InscricaoCompeticao } from '../app/lib/categorias-competicao';
+import { criarChavesImpressao, type LutaImpressao } from '../app/lib/chaves-impressao';
+import { limiteParcelas, validarParcelas } from '../app/lib/parcelamento';
+
+const evento='11111111-1111-4111-8111-111111111111';
+const atleta=(id:number, extras: Partial<InscricaoCompeticao> = {}):InscricaoCompeticao=>({ id,atleta_id:id,atleta:`Atleta de Teste ${id}`,equipe:`Academia ${id%3}`,categoria:'Leve',faixa:'Branca',sexo:'Masculino',idade:23,peso:70,modalidade:'Jiu-Jitsu',pagamento_ok:true,...extras });
+assert.notEqual(grupoInscricao(atleta(1),'peso').categoria,grupoInscricao(atleta(2,{sexo:'Feminino'}),'peso').categoria);
+assert.notEqual(grupoInscricao(atleta(1),'peso').categoria,grupoInscricao(atleta(2,{idade:32}),'peso').categoria);
+assert.notEqual(grupoInscricao(atleta(1,{idade:8}),'peso').categoria,grupoInscricao(atleta(2,{idade:9}),'peso').categoria);
+assert.throws(()=>grupoInscricao(atleta(1,{idade:null}),'peso'));
+assert.throws(()=>grupoInscricao(atleta(1,{sexo:''}),'peso'));
+const categoria:CategoriaCompeticao={id:'cat',evento_id:evento,nome:'Adulto Leve',modalidade:'Jiu-Jitsu',sexo:'Masculino',faixa:'Branca',idade_min:18,idade_max:29,peso_min:64,peso_max:76,tempo_minutos:5,tipo:'peso',ativa:true};
+assert.equal(categoriaCompativel(categoria,atleta(1,{peso:76})),true);
+assert.equal(categoriaCompativel(categoria,atleta(1,{peso:64})),false);
+assert.equal(categoriaCompativel(categoria,atleta(1,{peso:76.1})),false);
+assert.equal(categoriaCompativel(categoria,atleta(1,{sexo:'Feminino'})),false);
+assert.throws(()=>grupoInscricao(atleta(1,{categoria_id:'ausente'}),'peso',[categoria]));
+assert.throws(()=>prepararGrupos([atleta(1),atleta(1)],'peso',[]));
+assert.throws(()=>prepararGrupos(Array.from({length:65},(_,i)=>atleta(i+1)),'peso',[]));
+const exemplos:LutaImpressao[]=[];
+for(const tamanho of [1,2,3,4,5,8,16,17,32,64]) {
+  const entradas=Array.from({length:tamanho},(_,i)=>atleta(i+1,{categoria:`Divisão de teste com ${tamanho} atletas`}));
+  const lutas=montarChaves(evento,prepararGrupos(entradas,'peso',[]));
+  const ids=new Set(lutas.flatMap(l=>[l.atleta_1_id,l.atleta_2_id]).filter(Boolean));
+  assert.equal(ids.size,tamanho,`Nenhum atleta pode sumir (${tamanho})`);
+  assert.equal(lutas.filter(l=>!l.proxima_luta).length,1);
+  assert.equal(new Set(lutas.map(l=>l.id_visual)).size,lutas.length);
+  for(const l of lutas) if(l.proxima_luta) assert(lutas.some(p=>String(p.id_visual)===String(l.proxima_luta)));
+  assert.equal(lutas.length,tamanho===3?3:Math.max(2,2**Math.ceil(Math.log2(tamanho)))-1);
+  if([1,3,16,64].includes(tamanho))exemplos.push(...lutas.map((l,i)=>({...l,id:`teste-${tamanho}-${i}`} as LutaImpressao)));
+}
+assert.equal(limiteParcelas(false),1);assert.equal(limiteParcelas(true),12);
+assert.equal(validarParcelas('6',12),6);
+for(const valor of [0,13,1.5,'abc'])assert.throws(()=>validarParcelas(valor,12));
+assert.throws(()=>validarParcelas(2,1));
+mkdirSync('output/pdf',{recursive:true});
+const pdf=criarChavesImpressao({eventoNome:'Campeonato de demonstração - dados fictícios',lutas:exemplos});
+assert(pdf.getNumberOfPages()>=4);
+writeFileSync('output/pdf/chaves-demonstracao.pdf',Buffer.from(pdf.output('arraybuffer')));
+console.log('OK: divisões, elegibilidade, duplicatas, 1-64 atletas, árvore, parcelamento e PDF.');

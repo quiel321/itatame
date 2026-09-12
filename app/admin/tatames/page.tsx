@@ -1,5 +1,7 @@
 'use client';
 
+import { obterEventoOrganizador, guardarEventoOrganizador } from '@/app/lib/evento-organizador';
+
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertCircle, CheckCircle, Clock, Map, Play, RefreshCw, Search, Users, X } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
@@ -8,6 +10,7 @@ import { processarAvancosAutomaticosChaves } from '../../lib/chaves-auto-avanco'
 
 type Evento = { id: string | number; nome: string; data_evento?: string | null };
 type Luta = {
+  tempo_minutos?: number | null;
   id: string | number;
   categoria: string;
   faixa: string;
@@ -87,6 +90,7 @@ function ordenarLutasCronograma(a: Luta, b: Luta) {
 export default function GestaoTatames() {
   const [eventos, setEventos] = useState<Evento[]>([]);
   const [eventoSelecionado, setEventoSelecionado] = useState('');
+  useEffect(() => { if (eventoSelecionado && eventoSelecionado !== 'todos') guardarEventoOrganizador(eventoSelecionado); }, [eventoSelecionado]);
   const [loadingInit, setLoadingInit] = useState(true);
   const [categorias, setCategorias] = useState<CategoriaTatame[]>([]);
   const [lutasOperacao, setLutasOperacao] = useState<Luta[]>([]);
@@ -119,7 +123,7 @@ export default function GestaoTatames() {
 
       const meusEventos = (data || []) as Evento[];
       setEventos(meusEventos);
-      if (meusEventos.length > 0) setEventoSelecionado(String(meusEventos[0].id));
+      if (meusEventos.length > 0) setEventoSelecionado(obterEventoOrganizador(meusEventos));
       setLoadingInit(false);
     }
 
@@ -147,7 +151,7 @@ export default function GestaoTatames() {
 
     const { data: lutas, error } = await supabase
       .from('chaves')
-      .select('id, categoria, faixa, fase, id_visual, proxima_luta, ordem, ordem_tatame, tatame, status_luta, vencedor, atleta_1, atleta_2, horario_estimado, iniciada_em')
+      .select('id, categoria, faixa, fase, id_visual, proxima_luta, ordem, ordem_tatame, tatame, status_luta, vencedor, atleta_1, atleta_2, horario_estimado, iniciada_em, tempo_minutos')
       .eq('evento_id', eventoSelecionado);
 
     if (error) {
@@ -264,7 +268,7 @@ export default function GestaoTatames() {
 
       const updates = lutasReais.map((luta, index) => {
         const horarioEstimado = new Date(ponteiroTempo);
-        const tempoLuta = obterTempoRegulamentar(luta.categoria, luta.faixa);
+        const tempoLuta = (luta.tempo_minutos || obterTempoRegulamentar(luta.categoria, luta.faixa));
         ponteiroTempo.setMinutes(ponteiroTempo.getMinutes() + tempoLuta + cronoTransicao);
 
         return supabase

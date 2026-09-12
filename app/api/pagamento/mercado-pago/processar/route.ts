@@ -1,3 +1,4 @@
+import { limiteParcelas, validarParcelas } from '@/app/lib/parcelamento';
 import crypto from "crypto";
 import { NextResponse } from "next/server";
 import { calcularComissaoMarketplace } from "@/app/lib/planos-comerciais";
@@ -27,8 +28,8 @@ function numberValue(value: unknown) {
 
 function calcularValorInscricao(inscricao: any, evento: EventoPagamento) {
   const hoje = new Date();
-  const lote1Fim = evento.lote1_data_fim ? new Date(`${evento.lote1_data_fim}T23:59:59`) : null;
-  const lote2Fim = evento.lote2_data_fim ? new Date(`${evento.lote2_data_fim}T23:59:59`) : null;
+  const lote1Fim = evento.lote1_data_fim ? new Date(evento.lote1_data_fim.includes("T") ? evento.lote1_data_fim : `${evento.lote1_data_fim}T23:59:59`) : null;
+  const lote2Fim = evento.lote2_data_fim ? new Date(evento.lote2_data_fim.includes("T") ? evento.lote2_data_fim : `${evento.lote2_data_fim}T23:59:59`) : null;
 
   let valor = numberValue(evento.lote3_valor) || numberValue(evento.lote2_valor) || numberValue(evento.lote1_valor);
   if (lote1Fim && hoje <= lote1Fim) valor = numberValue(evento.lote1_valor);
@@ -56,7 +57,7 @@ function limparPayloadPagamento(formData: any, valorTotal: number, comissao: num
     },
   };
 
-  if (payload.installments) payload.installments = 1;
+  // Preserve a quantidade escolhida e exibida pelo Mercado Pago.
   if (payload.issuer_id) payload.issuer_id = String(payload.issuer_id);
   if (!payload.payer?.email) delete payload.payer;
 
@@ -110,7 +111,7 @@ export async function POST(request: Request) {
 
     const { data: organizador, error: orgError } = await supabase
       .from("organizadores")
-      .select("plano_comercial, mp_access_token")
+      .select("*")
       .eq("user_id", evento.organizador_id)
       .maybeSingle();
 
@@ -118,6 +119,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Organizador sem Mercado Pago conectado." }, { status: 409 });
     }
 
+    try { formData.installments = validarParcelas(formData.installments, limiteParcelas(organizador.mp_parcelamento_comprador_confirmado)); }
+    catch (error) { return NextResponse.json({ error: (error as Error).message }, { status: 400 }); }
     const valorTotal = calcularValorInscricao(inscricao, evento);
     const comissao = calcularComissaoMarketplace(valorTotal, organizador.plano_comercial);
     const descricao = `Inscricao - ${evento.nome || "Evento iTatame"}`;

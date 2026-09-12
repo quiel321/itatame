@@ -143,6 +143,14 @@ export default function Home() {
   return (
     <main className="flex flex-col min-h-screen bg-[#020202] text-white selection:bg-red-500/30 overflow-x-hidden font-sans">
 
+      {eventos.some(e => (resumosLutas[String(e.id)]?.emAndamento || 0) > 0) && (
+        <aside aria-label="Campeonatos ao vivo" className="z-20 border-y border-red-500/30 bg-red-950/70 px-4 py-3 mt-20">
+          <div className="max-w-7xl mx-auto flex flex-wrap gap-3 items-center">
+            <span className="flex items-center gap-2 text-xs font-black uppercase text-red-300"><span className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />Lutas ao vivo</span>
+            {eventos.filter(e => (resumosLutas[String(e.id)]?.emAndamento || 0) > 0).map(e => <Link key={e.id} href={`/evento/${e.id}/ao-vivo`} className="flex items-center gap-2 rounded-lg bg-white/10 px-3 py-2 text-sm hover:bg-white/20"><span>{e.nome}</span><span className="text-xs text-red-200">{resumosLutas[String(e.id)].emAndamento} em andamento</span><MonitorDot size={16} /><span className="sr-only">Abrir telão</span></Link>)}
+          </div>
+        </aside>
+      )}
      {/* 🚀 HERO SECTION */}
 <section className="relative h-[60vh] min-h-[400px] md:h-[75vh] md:min-h-[550px] w-full flex items-center justify-center">
   

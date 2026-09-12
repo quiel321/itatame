@@ -1,5 +1,7 @@
 "use client";
 
+import { obterEventoOrganizador, guardarEventoOrganizador } from '@/app/lib/evento-organizador';
+
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import Link from "next/link";
@@ -18,6 +20,7 @@ export default function VouchersAdminPage() {
 
   // ESTADOS DO FORMULÁRIO
   const [eventoId, setEventoId] = useState("");
+  useEffect(() => { if (eventoId && eventoId !== 'todos') guardarEventoOrganizador(eventoId); }, [eventoId]);
   const [codigo, setCodigo] = useState("");
   const [tipoDesconto, setTipoDesconto] = useState("porcentagem");
   const [valorDesconto, setValorDesconto] = useState<number | "">(100);
@@ -53,7 +56,7 @@ export default function VouchersAdminPage() {
 
       if (evtData && evtData.length > 0) {
         setEventos(evtData);
-        setEventoId(evtData[0].id.toString());
+        setEventoId(obterEventoOrganizador(evtData));
       }
     } catch (error: any) {
       setErro("Erro ao buscar eventos: " + error.message);

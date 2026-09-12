@@ -31,6 +31,7 @@ type CheckoutData = {
   valorTotal: number;
   comissao: number;
   plano: string;
+  maxParcelas?: number;
 };
 
 function carregarSdkMercadoPago() {
@@ -214,7 +215,7 @@ export default function PagamentoPage() {
               creditCard: "all",
               debitCard: "all",
               mercadoPago: "all",
-              maxInstallments: 1,
+              maxInstallments: checkoutData.maxParcelas || 1,
             },
             visual: {
               style: {
@@ -549,6 +550,7 @@ export default function PagamentoPage() {
                 </div>
               )}
 
+              <p className="text-xs text-zinc-400 mb-3">{(checkoutData.maxParcelas || 1) > 1 ? 'Parcelamento disponível conforme o cartão. Confira parcelas, acréscimos e total no Mercado Pago antes de confirmar.' : 'Pagamento no cartão em uma parcela.'}</p>
               <div id="paymentBrick_container" key={checkoutData.preferenceId} className={resultadoPagamento?.id && statusPendente(resultadoPagamento.status) ? "hidden" : ""}></div>
 
               {checkoutMensagem && (

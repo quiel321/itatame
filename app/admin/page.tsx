@@ -1,8 +1,10 @@
 "use client";
 
+import { obterEventoOrganizador, guardarEventoOrganizador } from '@/app/lib/evento-organizador';
+
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "../lib/supabase";
-import { PLANOS_COMERCIAIS, getPlanoComercial } from "../lib/planos-comerciais";
+import { getPlanoComercial } from "../lib/planos-comerciais";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import imageCompression from 'browser-image-compression';
@@ -31,7 +33,8 @@ export default function AdminPage() {
   const [novaFotoPreview, setNovaFotoPreview] = useState("");
 
   const [eventos, setEventos] = useState<any[]>([]);
-  const [eventoSelecionado, setEventoSelecionado] = useState<string>("todos");
+  const [eventoSelecionado, setEventoSelecionado] = useState<string>("");
+  useEffect(() => { if (eventoSelecionado && eventoSelecionado !== 'todos') guardarEventoOrganizador(eventoSelecionado); }, [eventoSelecionado]);
   const [inscricoes, setInscricoes] = useState<any[]>([]);
   const [busca, setBusca] = useState("");
   const [filtroPagamento, setFiltroPagamento] = useState("todos");
@@ -158,7 +161,8 @@ export default function AdminPage() {
 
       if (!error && meusEventos && meusEventos.length > 0) {
         setEventos(meusEventos);
-        setEventoSelecionado(meusEventos[0].id.toString());
+        setEventoSelecionado(obterEventoOrganizador(meusEventos));
+        setLoading(false);
       } else {
         setEventos([]);
         setLoading(false);
@@ -421,7 +425,10 @@ export default function AdminPage() {
 
   const planoAtual = getPlanoComercial(organizadorFinanceiro?.plano_comercial);
   const planoCompleto = planoAtual.id === "completo";
-  const mercadoPagoConectado = Boolean(organizadorFinanceiro?.mp_connected_at);
+
+  if (!loading && eventos.length > 0 && !eventoSelecionado) return (
+    <main className="min-h-screen bg-[#050505] text-white px-5 py-24"><section className="max-w-3xl mx-auto"><p className="text-red-400 text-xs uppercase tracking-widest mb-3">Portal do organizador</p><h1 className="text-3xl font-black mb-3">Qual campeonato vamos organizar?</h1><p className="text-zinc-400 mb-8">Escolha o evento para acessar participantes, chaves e operação.</p><div className="grid gap-3">{eventos.map(ev => <button key={ev.id} onClick={() => { guardarEventoOrganizador(String(ev.id)); setEventoSelecionado(String(ev.id)); }} className="text-left p-5 rounded-2xl border border-white/10 bg-zinc-900 hover:border-red-500 font-bold">{ev.nome} →</button>)}</div><Link href="/admin/novo-evento" className="inline-block mt-6 text-red-400">+ Criar campeonato</Link></section></main>
+  );
 
   return (
     <main className="min-h-screen bg-[#050505] text-white p-4 md:p-8 relative overflow-hidden font-sans selection:bg-red-500/30">
@@ -432,6 +439,13 @@ export default function AdminPage() {
 
       <div className="max-w-7xl mx-auto relative z-10">
         
+        <nav aria-label="Organização do campeonato" className="flex flex-wrap gap-2 mb-6 text-xs">
+          <button onClick={() => { guardarEventoOrganizador(''); setEventoSelecionado(''); }} className="rounded-lg border border-white/10 px-3 py-2">Trocar campeonato</button>
+          <Link href={`/admin/categorias?evento=${eventoSelecionado}`} className="rounded-lg bg-white/5 px-3 py-2">Categorias</Link>
+          <Link href={`/admin/equipes?evento=${eventoSelecionado}`} className="rounded-lg bg-white/5 px-3 py-2">Equipes e professores</Link>
+          <Link href={`/admin/resultados?evento=${eventoSelecionado}`} className="rounded-lg bg-white/5 px-3 py-2">Resultados manuais</Link>
+          <Link href="/admin/financeiro" className="rounded-lg bg-white/5 px-3 py-2">Financeiro</Link>
+        </nav>
         {/* HEADER VIP C/ FOTO */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 pb-6 border-b border-white/10">
           <div className="flex items-center gap-4 md:gap-5">
@@ -512,7 +526,7 @@ export default function AdminPage() {
                   <ShieldCheck className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-xs md:text-sm font-black text-white transition-colors leading-tight">Gestão de Equipe</h3>
+                  <h3 className="text-xs md:text-sm font-black text-white transition-colors leading-tight">Equipe de operação</h3>
                   <p className="text-zinc-500 text-[9px] md:text-[10px] font-medium mt-1 hidden md:block">PINs de Segurança.</p>
                 </div>
               </button>
@@ -527,62 +541,6 @@ export default function AdminPage() {
                 </div>
               </Link>
             </div>
-
-
-            <section className="bg-black/40 border border-white/5 rounded-2xl p-4 md:p-5 mb-8 shadow-xl">
-              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
-                <div className="min-w-0">
-                  <span className="text-emerald-400 text-[9px] font-black uppercase tracking-widest">Financeiro</span>
-                  <h2 className="text-lg md:text-xl font-black text-white mt-1">Plano e Mercado Pago</h2>
-                  <p className="text-zinc-500 text-xs mt-1 max-w-2xl">Consulte o plano contratado e conecte a conta Mercado Pago que receberá as inscrições. A mudança de plano é exclusiva do Super Admin.</p>
-                </div>
-
-                <div className="flex flex-col sm:flex-row gap-3 lg:items-center">
-                  <div className="rounded-xl border border-white/10 bg-[#050505] px-4 py-3 min-w-[170px]">
-                    <span className="block text-zinc-500 text-[9px] font-black uppercase tracking-widest">Plano atual</span>
-                    <strong className="block text-white text-sm mt-1">{planoAtual.nome} · {planoAtual.comissaoPercentual}%</strong>
-                  </div>
-                  <Link
-                    href={currentUserId ? `/api/mercado-pago/connect?organizador_id=${currentUserId}` : "#"}
-                    className={`cursor-pointer text-center rounded-xl px-5 py-3 text-[10px] font-black uppercase tracking-widest border transition-all ${mercadoPagoConectado ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20" : "bg-yellow-500 text-black border-yellow-400 hover:bg-yellow-400"}`}
-                  >
-                    {mercadoPagoConectado ? "Mercado Pago conectado" : "Conectar Mercado Pago"}
-                  </Link>
-                  <Link
-                    href="/admin/financeiro"
-                    className="cursor-pointer text-center rounded-xl px-5 py-3 text-[10px] font-black uppercase tracking-widest border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20 transition-all"
-                  >
-                    Auditoria financeira
-                  </Link>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-5">
-                {PLANOS_COMERCIAIS.map((plano) => {
-                  const ativo = planoAtual.id === plano.id;
-                  return (
-                    <button
-                      key={plano.id}
-                      type="button"
-                      disabled
-                      title="O plano é definido exclusivamente pelo Super Admin"
-                      className={`text-left rounded-xl border p-4 ${ativo ? "bg-red-600/10 border-red-500/40" : "bg-[#050505] border-white/10 opacity-50"}`}
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="text-white font-black text-sm uppercase tracking-widest">{plano.nome}</span>
-                        <span className={`text-[10px] font-black rounded px-2 py-1 ${ativo ? "bg-red-500 text-white" : "bg-white/5 text-zinc-400"}`}>{plano.comissaoPercentual}%</span>
-                      </div>
-                      <p className="text-zinc-500 text-xs mt-2 leading-relaxed">{plano.resumo}</p>
-                      <div className="flex flex-wrap gap-2 mt-3">
-                        {plano.recursos.map((recurso) => (
-                          <span key={recurso} className="text-[9px] text-zinc-400 bg-white/5 border border-white/5 rounded px-2 py-1 uppercase tracking-widest">{recurso}</span>
-                        ))}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </section>
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 border-b border-white/5 pb-4">
               <div className="flex items-center gap-3">
                 <Users className="w-5 h-5 text-red-500" />

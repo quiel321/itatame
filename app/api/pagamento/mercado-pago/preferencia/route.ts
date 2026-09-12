@@ -1,3 +1,4 @@
+import { limiteParcelas } from '@/app/lib/parcelamento';
 import { NextResponse } from "next/server";
 import { calcularComissaoMarketplace } from "@/app/lib/planos-comerciais";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
@@ -25,8 +26,8 @@ function numberValue(value: unknown) {
 
 function calcularValorInscricao(inscricao: any, evento: EventoPagamento) {
   const hoje = new Date();
-  const lote1Fim = evento.lote1_data_fim ? new Date(`${evento.lote1_data_fim}T23:59:59`) : null;
-  const lote2Fim = evento.lote2_data_fim ? new Date(`${evento.lote2_data_fim}T23:59:59`) : null;
+  const lote1Fim = evento.lote1_data_fim ? new Date(evento.lote1_data_fim.includes("T") ? evento.lote1_data_fim : `${evento.lote1_data_fim}T23:59:59`) : null;
+  const lote2Fim = evento.lote2_data_fim ? new Date(evento.lote2_data_fim.includes("T") ? evento.lote2_data_fim : `${evento.lote2_data_fim}T23:59:59`) : null;
 
   let valor = numberValue(evento.lote3_valor) || numberValue(evento.lote2_valor) || numberValue(evento.lote1_valor);
   if (lote1Fim && hoje <= lote1Fim) valor = numberValue(evento.lote1_valor);
@@ -88,7 +89,7 @@ export async function POST(request: Request) {
 
     const { data: organizador, error: orgError } = await supabase
       .from("organizadores")
-      .select("user_id, nome, plano_comercial, mp_access_token, mp_connected_at")
+      .select("*")
       .eq("user_id", evento.organizador_id)
       .maybeSingle();
 
@@ -115,7 +116,8 @@ export async function POST(request: Request) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        items: [
+        payment_methods: { installments: limiteParcelas(organizador.mp_parcelamento_comprador_confirmado) },
+      items: [
           {
             id: String(inscricao.id),
             title: `Inscricao - ${evento.nome || "Evento iTatame"}`,
@@ -169,6 +171,7 @@ export async function POST(request: Request) {
       valorTotal: comissao.valorTotal,
       comissao: comissao.comissao,
       plano: comissao.plano.id,
+      maxParcelas: limiteParcelas(organizador.mp_parcelamento_comprador_confirmado),
     });
   } catch (error) {
     console.error("Erro na preferencia Mercado Pago:", error);

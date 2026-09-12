@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { obterEventoOrganizador } from "@/app/lib/evento-organizador";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Banknote, CheckCircle2, Copy, Mail, RefreshCw, Search, ShieldAlert, WalletCards } from "lucide-react";
 import { supabase } from "@/app/lib/supabase";
-import { calcularComissaoMarketplace } from "@/app/lib/planos-comerciais";
+import { calcularComissaoMarketplace, getPlanoComercial } from "@/app/lib/planos-comerciais";
+import ParcelamentoOrganizador from "@/app/admin/_components/ParcelamentoOrganizador";
 
 type EventoResumo = {
   id: string | number;
@@ -36,6 +38,7 @@ type OrganizadorFinanceiro = {
   plano_comercial?: string | null;
   comissao_percentual?: string | number | null;
   mp_connected_at?: string | null;
+  mp_parcelamento_comprador_confirmado?: boolean | null;
 };
 
 type StatusPagamento = {
@@ -90,6 +93,7 @@ function nomeMetodoPagamento(status?: StatusPagamento | null) {
 export default function FinanceiroAdminPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
+  const [currentUserId, setCurrentUserId] = useState("");
   const [organizador, setOrganizador] = useState<OrganizadorFinanceiro | null>(null);
   const [eventos, setEventos] = useState<EventoResumo[]>([]);
   const [inscricoes, setInscricoes] = useState<InscricaoFinanceira[]>([]);
@@ -111,10 +115,11 @@ export default function FinanceiroAdminPage() {
       router.push("/login-organizador");
       return;
     }
+    setCurrentUserId(userId);
 
     const { data: orgData } = await supabase
       .from("organizadores")
-      .select("plano_comercial, comissao_percentual, mp_connected_at")
+      .select("plano_comercial, comissao_percentual, mp_connected_at, mp_parcelamento_comprador_confirmado")
       .eq("user_id", userId)
       .maybeSingle();
 
@@ -135,6 +140,7 @@ export default function FinanceiroAdminPage() {
 
     const eventosNormalizados = eventosData as EventoResumo[];
     setEventos(eventosNormalizados);
+    setEventoSelecionado(obterEventoOrganizador(eventosNormalizados) || "todos");
 
     if (eventosNormalizados.length === 0) {
       setInscricoes([]);
@@ -202,13 +208,14 @@ export default function FinanceiroAdminPage() {
     const pagas = inscricoesFiltradas.filter((item) => item.pagamento_ok).length;
     const pendentes = totalInscricoes - pagas;
     const semIdMp = inscricoesFiltradas.filter((item) => !item.mp_payment_id).length;
-    const bruto = inscricoesFiltradas.reduce((acc, item) => acc + numberValue(item.valor_total || item.valor_inscricao), 0);
-    const comissao = inscricoesFiltradas.reduce((acc, item) => {
+    const inscricoesPagas = inscricoesFiltradas.filter((item) => item.pagamento_ok === true);
+    const bruto = inscricoesPagas.reduce((acc, item) => acc + numberValue(item.valor_total || item.valor_inscricao), 0);
+    const comissao = inscricoesPagas.reduce((acc, item) => {
       const valor = numberValue(item.valor_total || item.valor_inscricao);
       return acc + calcularComissaoMarketplace(valor, plano).comissao;
     }, 0);
 
-    return { totalInscricoes, pagas, pendentes, semIdMp, bruto, comissao };
+    return { totalInscricoes, pagas, pendentes, semIdMp, bruto, comissao, valorOrganizador: Math.max(0, bruto - comissao) };
   }, [inscricoesFiltradas, organizador?.plano_comercial]);
 
   async function consultarStatus(inscricao: InscricaoFinanceira) {
@@ -274,6 +281,9 @@ export default function FinanceiroAdminPage() {
     setMensagem("Copiado para a area de transferencia.");
   }
 
+  const planoAtual = getPlanoComercial(organizador?.plano_comercial);
+  const mercadoPagoConectado = Boolean(organizador?.mp_connected_at);
+
   return (
     <main className="min-h-screen bg-[#050505] text-white p-4 md:p-8 font-sans">
       <div className="max-w-7xl mx-auto">
@@ -291,7 +301,55 @@ export default function FinanceiroAdminPage() {
           </button>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-6">
+        <section className="bg-black/40 border border-white/5 rounded-2xl p-4 md:p-5 mb-6 shadow-xl">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+            <div>
+              <span className="text-emerald-400 text-[9px] font-black uppercase tracking-widest">Configuração financeira</span>
+              <h2 className="text-lg md:text-xl font-black text-white mt-1">Plano e recebimento</h2>
+              <p className="text-zinc-500 text-xs mt-1 max-w-2xl">Gerencie aqui a conta que recebe as inscrições e as condições de parcelamento.</p>
+            </div>
+            <Link
+              href={currentUserId ? `/api/mercado-pago/connect?perfil=organizador&user_id=${currentUserId}&return_to=/admin/financeiro` : "#"}
+              className={`text-center rounded-xl px-5 py-3 text-[10px] font-black uppercase tracking-widest border transition-all ${mercadoPagoConectado ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20" : "bg-yellow-500 text-black border-yellow-400 hover:bg-yellow-400"}`}
+            >
+              {mercadoPagoConectado ? "Mercado Pago conectado" : "Conectar Mercado Pago"}
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-5">
+            <div className="rounded-xl border border-white/10 bg-[#050505] px-4 py-3">
+              <span className="block text-zinc-500 text-[9px] font-black uppercase tracking-widest">Plano atual</span>
+              <strong className="block text-white text-sm mt-1">{planoAtual.nome}</strong>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-[#050505] px-4 py-3">
+              <span className="block text-zinc-500 text-[9px] font-black uppercase tracking-widest">Comissão iTatame</span>
+              <strong className="block text-white text-sm mt-1">{planoAtual.comissaoPercentual}% por inscrição</strong>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-[#050505] px-4 py-3">
+              <span className="block text-zinc-500 text-[9px] font-black uppercase tracking-widest">Parcelamento</span>
+              <strong className={`block text-sm mt-1 ${organizador?.mp_parcelamento_comprador_confirmado ? "text-emerald-400" : "text-yellow-400"}`}>
+                {organizador?.mp_parcelamento_comprador_confirmado ? "Até 12x · juros do atleta" : "Somente 1x"}
+              </strong>
+            </div>
+          </div>
+
+          <ParcelamentoOrganizador
+            key={currentUserId + String(organizador?.mp_parcelamento_comprador_confirmado)}
+            confirmado={organizador?.mp_parcelamento_comprador_confirmado === true}
+            inicialConectado={mercadoPagoConectado}
+          />
+        </section>
+
+        <section className="mb-4 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-4">
+          <h2 className="text-sm font-black text-white">Como ler o financeiro</h2>
+          <div className="mt-3 grid gap-3 text-xs text-zinc-400 md:grid-cols-3">
+            <p><strong className="block text-zinc-200 mb-1">1. Arrecadado</strong>Soma somente inscrições com pagamento aprovado.</p>
+            <p><strong className="block text-zinc-200 mb-1">2. Comissão iTatame</strong>Percentual do plano aplicado sobre as inscrições pagas.</p>
+            <p><strong className="block text-zinc-200 mb-1">3. Valor do organizador</strong>Arrecadado menos a comissão iTatame. A tarifa de processamento do Mercado Pago aparece na conta Mercado Pago.</p>
+          </div>
+        </section>
+
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
           <div className="bg-black/40 border border-white/5 rounded-2xl p-4">
             <span className="text-zinc-500 text-[9px] font-black uppercase tracking-widest">Inscricoes</span>
             <strong className="block text-2xl font-black mt-2">{resumo.totalInscricoes}</strong>
@@ -308,9 +366,20 @@ export default function FinanceiroAdminPage() {
             <span className="text-yellow-400 text-[9px] font-black uppercase tracking-widest">Sem ID MP</span>
             <strong className="block text-2xl font-black mt-2 text-yellow-400">{resumo.semIdMp}</strong>
           </div>
-          <div className="bg-black/40 border border-white/5 rounded-2xl p-4 col-span-2 lg:col-span-1">
-            <span className="text-cyan-400 text-[9px] font-black uppercase tracking-widest">Comissao estimada</span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+          <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-4">
+            <span className="text-emerald-400 text-[9px] font-black uppercase tracking-widest">Arrecadado aprovado</span>
+            <strong className="block text-xl font-black mt-2 text-emerald-300">{formatarMoeda(resumo.bruto)}</strong>
+          </div>
+          <div className="bg-cyan-500/10 border border-cyan-500/20 rounded-2xl p-4">
+            <span className="text-cyan-400 text-[9px] font-black uppercase tracking-widest">Comissão iTatame</span>
             <strong className="block text-xl font-black mt-2 text-cyan-300">{formatarMoeda(resumo.comissao)}</strong>
+          </div>
+          <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-2xl p-4">
+            <span className="text-yellow-400 text-[9px] font-black uppercase tracking-widest">Organizador antes da tarifa MP</span>
+            <strong className="block text-xl font-black mt-2 text-yellow-200">{formatarMoeda(resumo.valorOrganizador)}</strong>
           </div>
         </div>
 

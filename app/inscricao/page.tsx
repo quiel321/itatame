@@ -1,15 +1,22 @@
 "use client";
 
 import { useEffect, useState, Suspense } from "react";
-import { supabase } from "../lib/supabase"; 
+import { supabase } from "../lib/supabase";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { categoriaCompativel, rotuloCategoria, type CategoriaCompeticao } from '@/app/lib/categorias-competicao';
 
 function FormularioInscricao() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const eventoId = searchParams.get("evento");
 
+  const [categoriasEvento, setCategoriasEvento] = useState<CategoriaCompeticao[]>([]);
+  const [categoriaId, setCategoriaId] = useState('');
+  const [equipesEvento, setEquipesEvento] = useState<{ id: string; nome: string; academia: string; professor: string }[]>([]);
+  const [equipeId, setEquipeId] = useState('');
+  const [tabelaCarregando, setTabelaCarregando] = useState(true);
+  const [tabelaErro, setTabelaErro] = useState('');
   const [eventoNome, setEventoNome] = useState("");
   const [valorLoteAtual, setValorLoteAtual] = useState<number>(0);
   const [nomeLoteAtual, setNomeLoteAtual] = useState<string>("");
@@ -33,7 +40,7 @@ function FormularioInscricao() {
   const [categoria, setCategoria] = useState("");
   const [idade, setIdade] = useState("");
   const [observacoes, setObservacoes] = useState("");
-  const [tipoInscricao, setTipoInscricao] = useState("peso"); 
+  const [tipoInscricao, setTipoInscricao] = useState("peso");
   const [termoAceito, setTermoAceito] = useState(false);
 
   // Estados do Cupom
@@ -58,9 +65,9 @@ function FormularioInscricao() {
   useEffect(() => {
     async function carregarAmbiente() {
       const { data: authData } = await supabase.auth.getUser();
-      if (!authData.user) { 
+      if (!authData.user) {
         router.push(`/login?redirect=/inscricao?evento=${eventoId}`);
-        return; 
+        return;
       }
 
       setUserId(authData.user.id);
@@ -70,11 +77,17 @@ function FormularioInscricao() {
         const { data: ev } = await supabase.from("eventos").select("*").eq("id", eventoId).single();
         if (ev) {
           setEventoNome(ev.nome);
+          const [cats, eqs] = await Promise.all([
+            supabase.from('categorias_evento').select('*').eq('evento_id', eventoId).eq('ativa', true),
+            supabase.from('equipes_evento').select('id,nome,academia,professor').eq('evento_id', eventoId).eq('ativa', true).order('nome'),
+          ]);
+          if (cats.error && !['PGRST205','42P01'].includes(cats.error.code)) setTabelaErro('Não foi possível carregar as categorias. Recarregue a página antes de se inscrever.');
+          setCategoriasEvento(cats.data || []); setEquipesEvento(eqs.data || []);setTabelaCarregando(false);
           const dataFimInscricoes = ev.data_fim_inscricoes || ev.lote3_data_fim || ev.lote2_data_fim || ev.lote1_data_fim;
           if (dataFimInscricoes && new Date() > new Date(dataFimInscricoes)) {
             setInscricoesEncerradas(true);
           }
-          
+
           const agora = new Date();
           let valor = 0;
           let nomeLote = "Inscrições Encerradas";
@@ -99,7 +112,7 @@ function FormularioInscricao() {
       }
 
       const { data: atleta, error } = await supabase.from("atletas").select("*").eq("user_id", authData.user.id).single();
-      
+
       if (!error && atleta) {
         setAtletaId(atleta.id);
         setNome(atleta.nome || "");
@@ -107,17 +120,22 @@ function FormularioInscricao() {
         setProfessor(atleta.professor || "");
         setFaixa(atleta.faixa || "");
         setPesoReal(atleta.peso || "");
-        setSexo(atleta.sexo || "Masculino"); 
+        setSexo(atleta.sexo || "Masculino");
         setCategoria(calcularCategoria(Number(atleta.peso)));
         setModalidade(atleta.modalidade || "");
         setFotoUrl(atleta.foto_url || "");
         setCpfAtleta(atleta.cpf || "");
 }
-      
+
       setLoading(false);
     }
     carregarAmbiente();
   }, [eventoId, router]);
+
+  const categoriasElegiveis = categoriasEvento.filter(c => c.tipo === 'peso' && categoriaCompativel(c, { idade, sexo, faixa, peso: pesoReal }));
+  useEffect(() => {
+    if (categoriaId && !categoriasElegiveis.some(c => c.id === categoriaId)) { setCategoriaId(''); setCategoria(''); }
+  }, [idade, sexo, faixa, pesoReal, categoriaId, categoriasEvento]);
 
   const valorBase = (tipoInscricao === "ambos") ? valorLoteAtual + 50.00 : valorLoteAtual;
   const valorTotal = Math.max(0, valorBase - desconto);
@@ -126,7 +144,7 @@ function FormularioInscricao() {
   async function aplicarCupom() {
     if (!cupom || !eventoId) return;
     setCupomMensagem("Verificando...");
-    
+
     const { data: cupomData, error } = await supabase
       .from("cupons")
       .select("*")
@@ -184,7 +202,10 @@ function FormularioInscricao() {
       return;
     }
 
-    if (!idade || !categoria) {
+    if (tabelaCarregando || tabelaErro || (categoriasEvento.length > 0 && !categoriasElegiveis.some(c => c.id === categoriaId))) {
+      setErro(tabelaErro || 'Escolha uma categoria compatível com sua idade, sexo, faixa e peso.');setProcessando(false);return;
+    }
+    if (!idade || !Number.isInteger(Number(idade)) || Number(idade) < 4 || Number(idade) > 100 || !categoria) {
       setErro("Por favor, preencha sua idade e categoria.");
       setProcessando(false);
       return;
@@ -250,6 +271,8 @@ function FormularioInscricao() {
       faixa,
       sexo,
       categoria,
+      ...(categoriaId ? { categoria_id: categoriaId, modalidade: categoriasEvento.find(c => c.id === categoriaId)?.modalidade } : { modalidade }),
+      ...(equipeId ? { equipe_id: equipeId } : {}),
       absoluto: tipoInscricao === "ambos",
       idade,
       observacoes,
@@ -308,8 +331,8 @@ function FormularioInscricao() {
         <div className="w-16 h-16 bg-green-500/10 border border-green-500/20 text-green-500 rounded-full flex items-center justify-center mx-auto mb-5 text-3xl">✓</div>
         <h2 className="text-2xl font-black text-white mb-3">Inscrição Confirmada!</h2>
         <p className="text-zinc-400 text-xs mb-8 font-medium">
-          {valorTotal === 0 
-            ? "Você está garantido na chave oficial (Cupom / Isenção Aplicada)." 
+          {valorTotal === 0
+            ? "Você está garantido na chave oficial (Cupom / Isenção Aplicada)."
             : "Dados enviados. Realize o pagamento para garantir seu nome nas chaves."}
         </p>
         {valorTotal > 0 ? (
@@ -380,13 +403,18 @@ function FormularioInscricao() {
             </div>
             <div>
                 <label className="text-[9px] text-zinc-500 font-bold uppercase block mb-1.5">Categoria de Peso Oficial</label>
+                {categoriasEvento.length > 0 ? <select aria-label="Categoria de peso" value={categoriaId} onChange={e => { const c = categoriasEvento.find(c => c.id === e.target.value);setCategoriaId(e.target.value);setCategoria(c ? rotuloCategoria(c) : ''); }} className="w-full bg-black border border-white/10 rounded-lg px-3 py-2.5 text-white text-xs"><option value="">Selecione sua categoria</option>{categoriasElegiveis.map(c => <option key={c.id} value={c.id}>{rotuloCategoria(c)}</option>)}</select> : (
                 <select value={categoria} onChange={(e) => setCategoria(e.target.value)} className="w-full bg-black border border-white/10 rounded-lg px-3 py-2.5 text-white text-xs appearance-none">
                   <option value="Pluma (Até 64.500 kg)">Pluma (Até 64.500 kg)</option>
                   <option value="Leve (Até 72.500 kg)">Leve (Até 72.500 kg)</option>
                   <option value="Meio Pesado (Até 80.000 kg)">Meio Pesado (Até 80.000 kg)</option>
                   <option value="Super Pesado (Até 85.500 kg)">Super Pesado (Até 85.500 kg)</option>
                   <option value="Pesadíssimo (Acima de 85.5 kg)">Pesadíssimo (Acima de 85.5 kg)</option>
-                </select>
+                </select>)}
+                {categoriasEvento.length > 0 && !categoriasElegiveis.length && <p className="text-amber-300 text-xs mt-2">Preencha sua idade. Se nenhuma categoria estiver disponível, confira faixa e peso no perfil ou fale com a organização.</p>}
+                {tabelaErro && <p role="alert" className="text-red-400 text-xs mt-2">{tabelaErro}</p>}
+                {equipesEvento.length > 0 && <label className="block mt-4 text-xs text-zinc-400">Equipe no campeonato<select value={equipeId} onChange={e => {const eq=equipesEvento.find(q=>q.id===e.target.value);setEquipeId(e.target.value);if(eq){setEquipe(eq.nome);setProfessor(eq.professor);}}} className="w-full bg-black border border-white/10 rounded-lg p-3 text-white mt-1"><option value="">{equipe} (cadastro atual)</option>{equipesEvento.map(eq=><option key={eq.id} value={eq.id}>{eq.nome}{eq.academia ? ` · ${eq.academia}` : ''}</option>)}</select></label>}
+
               </div>
           </section>
 
@@ -394,7 +422,7 @@ function FormularioInscricao() {
           <section className="bg-[#0a0a0e] border border-white/5 rounded-2xl p-5 md:p-6 shadow-xl">
             <h2 className="text-xs font-black text-white uppercase tracking-widest mb-2">Escolha seu Pacote</h2>
             <p className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest mb-5">Modalidade: <strong className="text-white">{nomeLoteAtual}</strong></p>
-            
+
             <div className="space-y-2.5">
               <label className={`block relative p-4 rounded-xl border cursor-pointer transition-all ${tipoInscricao === 'peso' ? 'border-red-500 bg-red-500/5' : 'border-white/5 bg-black'}`}>
                 <input type="radio" name="tipoInscricao" value="peso" checked={tipoInscricao === 'peso'} onChange={() => setTipoInscricao('peso')} className="absolute opacity-0 w-0 h-0" />
@@ -403,7 +431,8 @@ function FormularioInscricao() {
                   <span className="font-black text-sm">{isGratis ? "GRÁTIS" : `R$ ${valorLoteAtual.toFixed(2)}`}</span>
                 </div>
               </label>
-
+
+
 
               <label className={`block relative p-4 rounded-xl border cursor-pointer transition-all ${tipoInscricao === 'ambos' ? 'border-red-500 bg-red-500/5' : 'border-white/5 bg-black'}`}>
                 <input type="radio" name="tipoInscricao" value="ambos" checked={tipoInscricao === 'ambos'} onChange={() => setTipoInscricao('ambos')} className="absolute opacity-0 w-0 h-0" />
@@ -429,7 +458,7 @@ function FormularioInscricao() {
         <div className="lg:col-span-1">
           <div className="sticky top-20 bg-[#0a0a0e] border border-white/10 rounded-2xl p-5 shadow-2xl">
             <h3 className="text-xs font-black text-white uppercase tracking-widest mb-5 border-b border-white/5 pb-3">Resumo da Inscrição</h3>
-            
+
             <div className="space-y-3 mb-5 text-xs">
               <div className="flex justify-between"><span className="text-zinc-400">Inscrição Campeonato</span><span className="text-white font-bold">{isGratis ? "R$ 0,00" : `R$ ${valorLoteAtual.toFixed(2)}`}</span></div>
               {tipoInscricao === 'ambos' && <div className="flex justify-between"><span className="text-zinc-400">Add-on: Absoluto</span><span className="text-white font-bold">R$ 50,00</span></div>}
@@ -455,7 +484,7 @@ function FormularioInscricao() {
 
             {erro && <div className="mb-4 bg-red-500/10 border border-red-500/20 text-red-400 text-[10px] rounded-lg p-3 text-center font-bold">❌ {erro}</div>}
 
-            <button disabled={processando || perfilIncompleto || !categoria || !termoAceito || inscricoesEncerradas} className="cursor-pointer w-full bg-red-600 hover:bg-red-500 text-white font-black uppercase tracking-widest text-[11px] py-4 rounded-xl shadow-[0_0_15px_rgba(239,68,68,0.3)] transition-all disabled:opacity-50 flex items-center justify-center" onClick={finalizarInscricao}>
+            <button disabled={processando || perfilIncompleto || !categoria || !termoAceito || inscricoesEncerradas || tabelaCarregando || !!tabelaErro || (categoriasEvento.length > 0 && !categoriaId)} className="cursor-pointer w-full bg-red-600 hover:bg-red-500 text-white font-black uppercase tracking-widest text-[11px] py-4 rounded-xl shadow-[0_0_15px_rgba(239,68,68,0.3)] transition-all disabled:opacity-50 flex items-center justify-center" onClick={finalizarInscricao}>
               {processando ? "Salvando Inscrição..." : "Confirmar Inscrição Oficial"}
             </button>
           </div>
