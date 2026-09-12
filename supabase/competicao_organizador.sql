@@ -199,7 +199,7 @@ create policy solicitacoes_consulta on public.solicitacoes_equipe_evento for sel
 drop policy if exists solicitacoes_professor_insere on public.solicitacoes_equipe_evento;
 create policy solicitacoes_professor_insere on public.solicitacoes_equipe_evento for insert to authenticated with check (
   professor_user_id=auth.uid() and status='pendente'
-  and exists(select 1 from public.atletas a where a.user_id=auth.uid() and a.role='professor')
+  and exists(select 1 from public.atletas a where a.user_id=auth.uid()::text and a.role='professor')
 );
 drop policy if exists solicitacoes_professor_atualiza on public.solicitacoes_equipe_evento;
 create policy solicitacoes_professor_atualiza on public.solicitacoes_equipe_evento for update to authenticated

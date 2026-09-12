@@ -7,6 +7,7 @@ import { CompeticaoShell, campoCompeticao as campo, useEventoCompeticao } from '
 
 type ModoCadastro = 'modelo' | 'copiar' | 'manual';
 type EventoOpcao = { id: string | number; nome: string | null };
+type CategoriaNova = Omit<CategoriaCompeticao, 'id' | 'evento_id'>;
 
 const inicial = { nome: '', modalidade: 'Jiu-Jitsu', sexo: 'Masculino', faixa: 'Branca', idade_min: 18, idade_max: 29, peso_min: 0, peso_max: null as number | null, tempo_minutos: 5, tipo: 'peso' as const, ativa: true };
 const pesosModelo = [
@@ -52,7 +53,7 @@ function Editor({ eventoId }: { eventoId: string }) {
     return () => { ativo = false; };
   }, [eventoId]);
 
-  async function inserir(lista: Omit<CategoriaCompeticao, 'id'>[], sucesso: string) {
+  async function inserir(lista: CategoriaNova[], sucesso: string) {
     setSalvando(true); setMensagem('');
     try {
       lista.forEach(validarCategoria);
@@ -77,7 +78,7 @@ function Editor({ eventoId }: { eventoId: string }) {
     setSalvando(false);
     if (error) { setMensagem(error.message); return; }
     if (!data?.length) { setMensagem('O campeonato escolhido não possui categorias para copiar.'); return; }
-    await inserir(data as Omit<CategoriaCompeticao, 'id'>[], `${data.length} categorias copiadas. Revise a tabela antes de abrir as inscrições.`);
+    await inserir(data as CategoriaNova[], `${data.length} categorias copiadas. Revise a tabela antes de abrir as inscrições.`);
   }
 
   async function salvarManual(e: React.FormEvent) {
