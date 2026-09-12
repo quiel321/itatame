@@ -170,7 +170,7 @@ begin
   if exists(select 1 from public.chaves where evento_id=p_evento) then raise exception 'Unifique antes de gerar as chaves para preservar o sorteio e o ranking.'; end if;
   select * into destino from public.equipes_evento where id=p_destino and evento_id=p_evento and ativa;
   if not found then raise exception 'Equipe de destino inválida.'; end if;
-  update public.inscricoes set equipe_id=destino.id,equipe=destino.nome where evento_id=p_evento and equipe=any(p_nomes);
+  update public.inscricoes set equipe_id=destino.id,equipe=destino.nome where evento_id=p_evento and equipe_id is null and equipe=any(p_nomes);
   get diagnostics total=row_count;
   return total;
 end $$;

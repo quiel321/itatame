@@ -18,7 +18,7 @@ function Editor({ eventoId }: { eventoId: string }) {
   const [form,setForm] = useState({ nome:'',academia:'',professor:'',cidade:'' });
   const [mensagem,setMensagem] = useState('');
   const [salvando,setSalvando] = useState(false);
-  const [origens,setOrigens] = useState<{ equipe: string }[]>([]);
+  const [origens,setOrigens] = useState<{ equipe: string; equipe_id?: string | null }[]>([]);
   const [selecionadas,setSelecionadas] = useState<string[]>([]);
   const [destino,setDestino] = useState('');
   const [busca,setBusca] = useState('');
@@ -27,7 +27,7 @@ function Editor({ eventoId }: { eventoId: string }) {
     let ativo=true;
     async function carregar() {
       const [inscricoesResposta,equipesResposta,solicitacoesResposta] = await Promise.all([
-        supabase.from('inscricoes').select('equipe').eq('evento_id',eventoId),
+        supabase.from('inscricoes').select('equipe,equipe_id').eq('evento_id',eventoId),
         supabase.from('equipes_evento').select('id,nome,academia,professor,cidade').eq('evento_id',eventoId).order('nome'),
         supabase.from('solicitacoes_equipe_evento').select('id,equipe_nome,academia,professor,cidade,status').eq('evento_id',eventoId).order('criado_em'),
       ]);
@@ -75,11 +75,12 @@ function Editor({ eventoId }: { eventoId: string }) {
       if(error)throw new Error(error.message);
       setMensagem(`${data} inscrições vinculadas à equipe escolhida. Os perfis pessoais foram preservados.`);
       const nome=equipes.find(e=>e.id===destino)?.nome||'';
-      setOrigens(origens.map(o=>selecionadas.includes(o.equipe)?{equipe:nome}:o));setSelecionadas([]);
+      setOrigens(origens.map(o=>selecionadas.includes(o.equipe)?{equipe:nome,equipe_id:destino}:o));setSelecionadas([]);
     }catch(error){setMensagem((error as Error).message);}finally{setSalvando(false);}
   }
 
   const pendentes = solicitacoes.filter(item => item.status === 'pendente');
+  const nomesNaoVinculados = Array.from(new Set(origens.filter(item => !item.equipe_id && item.equipe).map(item => item.equipe))).sort();
   return <>
     <section className="mb-6 rounded-2xl border border-yellow-500/20 bg-yellow-500/5 p-5">
       <h2 className="font-bold">Como uma equipe entra no campeonato</h2>
@@ -98,7 +99,11 @@ function Editor({ eventoId }: { eventoId: string }) {
     <div className="grid lg:grid-cols-[340px_1fr] gap-6"><form onSubmit={salvar} className="p-5 rounded-2xl border border-white/10 bg-zinc-900/50 space-y-4 self-start"><h2 className="font-bold">Cadastrar equipe diretamente</h2><p className="text-xs text-zinc-400">Use quando você já recebeu os dados do responsável.</p>{(['nome','academia','professor','cidade'] as const).map(k=><label key={k} className="block text-xs capitalize">{k==='nome'?'Nome da equipe':k}<input maxLength={120} required={k==='nome'} className={campo+' mt-1'} value={form[k]} onChange={e=>setForm({...form,[k]:e.target.value})}/></label>)}<button disabled={salvando} className="w-full rounded-xl bg-red-600 p-3 font-bold disabled:opacity-40">{salvando?'Salvando...':'Cadastrar equipe'}</button></form>
     <section><input aria-label="Buscar equipe ou professor" className={campo} placeholder="Buscar equipe, academia ou professor" value={busca} onChange={e=>setBusca(e.target.value)}/><p className="my-4 text-xs text-zinc-400">{equipes.length} equipes aprovadas</p><div className="grid sm:grid-cols-2 gap-3">{equipes.filter(q=>[q.nome,q.academia,q.professor].join(' ').toLowerCase().includes(busca.toLowerCase())).map(q=><article key={q.id} className="p-5 border border-white/10 rounded-xl"><h2 className="font-bold">{q.nome}</h2><p className="text-zinc-400 text-sm mt-2">{q.academia || 'Academia não informada'}</p><p className="text-sm mt-2">Professor: {q.professor || 'Não informado'}</p><p className="text-xs text-zinc-500 mt-2">{q.cidade}</p></article>)}</div></section></div>
 
-    <section className="mt-6 p-5 rounded-2xl border border-white/10"><h2 className="font-bold">Corrigir nomes duplicados nas inscrições</h2><p className="text-sm text-zinc-400 mt-2 mb-4">Use somente quando a mesma equipe foi escrita de formas diferentes. A unificação vale para este campeonato e fica bloqueada depois de gerar as chaves.</p><div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">{Array.from(new Set(origens.map(o=>o.equipe).filter(Boolean))).sort().map(nome=><label key={nome} className="text-sm flex gap-2"><input type="checkbox" checked={selecionadas.includes(nome)} onChange={e=>setSelecionadas(e.target.checked?[...selecionadas,nome]:selecionadas.filter(n=>n!==nome))}/>{nome} ({origens.filter(o=>o.equipe===nome).length})</label>)}</div><label className="block text-xs mt-4">Equipe correta<select className={campo+' mt-1 max-w-lg'} value={destino} onChange={e=>setDestino(e.target.value)}><option value="">Selecione a equipe que permanecerá</option>{equipes.map(q=><option key={q.id} value={q.id}>{q.nome}</option>)}</select></label><p className="text-sm my-3">Prévia: {origens.filter(o=>selecionadas.includes(o.equipe)).length} inscrições serão vinculadas a {equipes.find(q=>q.id===destino)?.nome||'uma equipe a selecionar'}.</p><button disabled={salvando||!destino||!selecionadas.length} onClick={unificar} className="rounded-xl bg-red-600 p-3 text-sm disabled:opacity-40">Confirmar unificação</button></section>
+    <details className="mt-6 rounded-2xl border border-white/10 p-5">
+      <summary className="cursor-pointer font-bold">Vincular inscrições antigas a uma equipe oficial <span className="ml-2 text-xs text-zinc-500">{nomesNaoVinculados.length} nomes pendentes</span></summary>
+      <div className="mt-4 rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4 text-sm text-zinc-300"><strong className="block text-cyan-300">Quando usar?</strong>Somente em inscrições antigas que ainda não possuem vínculo. Exemplo: se “LEGADO” representa a equipe “Academia Central”, marque LEGADO, escolha Academia Central e confirme. Se LEGADO for o nome correto, cadastre primeiro uma equipe oficial com esse mesmo nome.</div>
+      {!nomesNaoVinculados.length ? <p className="mt-4 text-sm text-emerald-400">Todas as inscrições já estão vinculadas a equipes oficiais.</p> : <><div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{nomesNaoVinculados.map(nome=><label key={nome} className="flex gap-2 text-sm"><input type="checkbox" checked={selecionadas.includes(nome)} onChange={e=>setSelecionadas(e.target.checked?[...selecionadas,nome]:selecionadas.filter(n=>n!==nome))}/>{nome} ({origens.filter(o=>o.equipe===nome && !o.equipe_id).length} inscrições)</label>)}</div><label className="block text-xs mt-4">Equipe oficial que receberá as inscrições<select className={campo+' mt-1 max-w-lg'} value={destino} onChange={e=>setDestino(e.target.value)}><option value="">Selecione a equipe correta</option>{equipes.map(q=><option key={q.id} value={q.id}>{q.nome}</option>)}</select></label><p className="text-sm my-3">Prévia: {origens.filter(o=>selecionadas.includes(o.equipe) && !o.equipe_id).length} inscrições serão vinculadas a {equipes.find(q=>q.id===destino)?.nome||'uma equipe a selecionar'}.</p><button disabled={salvando||!destino||!selecionadas.length} onClick={unificar} className="rounded-xl bg-red-600 p-3 text-sm disabled:opacity-40">Confirmar vínculo</button></>}
+    </details>
     {mensagem&&<p role="status" className="mt-5 p-4 border border-white/10 rounded-xl text-sm">{mensagem}</p>}
   </>;
 }

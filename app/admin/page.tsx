@@ -38,6 +38,8 @@ export default function AdminPage() {
   const [inscricoes, setInscricoes] = useState<any[]>([]);
   const [busca, setBusca] = useState("");
   const [filtroPagamento, setFiltroPagamento] = useState("todos");
+  const [visualizacaoAtletas, setVisualizacaoAtletas] = useState<'lista' | 'detalhado'>('lista');
+  const [preparacao, setPreparacao] = useState({ categorias: 0, equipes: 0, solicitacoes: 0 });
   const [loading, setLoading] = useState(true);
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [editando, setEditando] = useState<any>(null);
@@ -155,7 +157,7 @@ export default function AdminPage() {
 
       const { data: meusEventos, error } = await supabase
         .from("eventos")
-        .select("id, nome")
+        .select("id, nome, data_evento, data_fim_inscricoes")
         .eq("organizador_id", authData.user.id)
         .order("id", { ascending: false });
 
@@ -170,6 +172,23 @@ export default function AdminPage() {
     }
     carregarDashboard();
   }, [router]);
+
+  useEffect(() => {
+    setVisualizacaoAtletas(window.localStorage.getItem('itatame:visualizacao-atletas') === 'detalhado' ? 'detalhado' : 'lista');
+  }, []);
+
+  useEffect(() => {
+    if (!eventoSelecionado || eventoSelecionado === 'todos') return;
+    let ativo = true;
+    void Promise.all([
+      supabase.from('categorias_evento').select('id', { count: 'exact', head: true }).eq('evento_id', eventoSelecionado).eq('ativa', true),
+      supabase.from('equipes_evento').select('id', { count: 'exact', head: true }).eq('evento_id', eventoSelecionado).eq('ativa', true),
+      supabase.from('solicitacoes_equipe_evento').select('id', { count: 'exact', head: true }).eq('evento_id', eventoSelecionado).eq('status', 'pendente'),
+    ]).then(([categorias, equipes, solicitacoes]) => {
+      if (ativo) setPreparacao({ categorias: categorias.count || 0, equipes: equipes.count || 0, solicitacoes: solicitacoes.count || 0 });
+    });
+    return () => { ativo = false; };
+  }, [eventoSelecionado]);
 
   useEffect(() => {
     async function carregarInscricoes() {
@@ -422,6 +441,25 @@ export default function AdminPage() {
   const totalInscritos = inscricoes.length;
   const totalPagos = inscricoes.filter(i => i.pagamento_ok).length;
   const totalPendentes = totalInscritos - totalPagos;
+  const eventoAtual = eventos.find(evento => String(evento.id) === eventoSelecionado);
+
+  function alterarVisualizacao(modo: 'lista' | 'detalhado') {
+    setVisualizacaoAtletas(modo);
+    window.localStorage.setItem('itatame:visualizacao-atletas', modo);
+  }
+
+  async function copiarLinkInscricao() {
+    if (!eventoAtual) return;
+    const link = `${window.location.origin}/inscricao?evento=${eventoAtual.id}`;
+    await navigator.clipboard.writeText(link);
+    alert('Link de inscrição copiado.');
+  }
+
+  function dataCurta(valor?: string | null) {
+    if (!valor) return 'Data a definir';
+    const [ano, mes, dia] = valor.slice(0, 10).split('-');
+    return ano && mes && dia ? `${dia}/${mes}/${ano}` : valor;
+  }
 
   const planoAtual = getPlanoComercial(organizadorFinanceiro?.plano_comercial);
   const planoCompleto = planoAtual.id === "completo";
@@ -441,6 +479,7 @@ export default function AdminPage() {
         
         <nav aria-label="Organização do campeonato" className="flex flex-wrap gap-2 mb-6 text-xs">
           <button onClick={() => { guardarEventoOrganizador(''); setEventoSelecionado(''); }} className="rounded-lg border border-white/10 px-3 py-2">Trocar campeonato</button>
+          <Link href="/admin/guia" className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-red-300">Guia rápido</Link>
           <Link href={`/admin/categorias?evento=${eventoSelecionado}`} className="rounded-lg bg-white/5 px-3 py-2">Categorias</Link>
           <Link href={`/admin/equipes?evento=${eventoSelecionado}`} className="rounded-lg bg-white/5 px-3 py-2">Equipes e professores</Link>
           <Link href={`/admin/resultados?evento=${eventoSelecionado}`} className="rounded-lg bg-white/5 px-3 py-2">Resultados manuais</Link>
@@ -480,6 +519,27 @@ export default function AdminPage() {
             </button>
           </div>
         </div>
+
+        {eventoAtual && (
+          <section className="mb-6 rounded-2xl border border-white/10 bg-gradient-to-r from-red-950/30 to-black/40 p-4 shadow-xl md:p-5">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="min-w-0">
+                <p className="text-[9px] font-black uppercase tracking-widest text-red-400">Campeonato em foco</p>
+                <h2 className="mt-1 truncate text-xl font-black text-white">{eventoAtual.nome}</h2>
+                <p className="mt-1 text-xs text-zinc-400">Evento: {dataCurta(eventoAtual.data_evento)} · Inscrições até: {dataCurta(eventoAtual.data_fim_inscricoes)}</p>
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <Link href={`/admin/categorias?evento=${eventoSelecionado}`} className="rounded-xl border border-white/10 bg-black/40 px-3 py-2 hover:border-red-500/40"><strong className="block text-lg">{preparacao.categorias}</strong><span className="text-[9px] uppercase text-zinc-500">Categorias</span></Link>
+                <Link href={`/admin/equipes?evento=${eventoSelecionado}`} className="rounded-xl border border-white/10 bg-black/40 px-3 py-2 hover:border-red-500/40"><strong className="block text-lg">{preparacao.equipes}</strong><span className="text-[9px] uppercase text-zinc-500">Equipes</span></Link>
+                <Link href={`/admin/equipes?evento=${eventoSelecionado}`} className={`rounded-xl border px-3 py-2 ${preparacao.solicitacoes ? 'border-yellow-500/40 bg-yellow-500/10 text-yellow-300' : 'border-white/10 bg-black/40'}`}><strong className="block text-lg">{preparacao.solicitacoes}</strong><span className="text-[9px] uppercase text-zinc-500">Pedidos</span></Link>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button onClick={copiarLinkInscricao} className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-[10px] font-black uppercase tracking-widest hover:bg-white/10"><Copy size={13} className="mr-2 inline" />Copiar inscrição</button>
+                <Link href={`/evento/${eventoSelecionado}`} className="rounded-xl bg-red-600 px-4 py-3 text-[10px] font-black uppercase tracking-widest hover:bg-red-500">Ver página pública</Link>
+              </div>
+            </div>
+          </section>
+        )}
 
         {/* DASHBOARD PRINCIPAL */}
         {!forceCompletion && (
@@ -546,7 +606,11 @@ export default function AdminPage() {
                 <Users className="w-5 h-5 text-red-500" />
                 <h2 className="text-xl font-black uppercase tracking-widest text-white">Gestão de Inscrições</h2>
               </div>
-              <div className="flex gap-2 w-full md:w-auto">
+              <div className="flex flex-wrap gap-2 w-full md:w-auto">
+                <div className="flex rounded-lg border border-white/10 bg-black/40 p-1" aria-label="Modo de exibição dos atletas">
+                  <button type="button" onClick={() => alterarVisualizacao('lista')} className={`rounded-md px-3 py-1.5 text-[9px] font-black uppercase tracking-widest ${visualizacaoAtletas === 'lista' ? 'bg-white text-black' : 'text-zinc-500 hover:text-white'}`}>Lista</button>
+                  <button type="button" onClick={() => alterarVisualizacao('detalhado')} className={`rounded-md px-3 py-1.5 text-[9px] font-black uppercase tracking-widest ${visualizacaoAtletas === 'detalhado' ? 'bg-white text-black' : 'text-zinc-500 hover:text-white'}`}>Detalhado</button>
+                </div>
                 <button onClick={exportarCSV} className="flex-1 md:flex-none justify-center cursor-pointer bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300 hover:text-white text-[9px] md:text-[10px] font-bold uppercase tracking-widest px-4 py-2.5 rounded-lg transition-colors flex items-center gap-1.5 active:scale-95 shadow-sm">
                   Gerar CSV
                 </button>
@@ -632,6 +696,24 @@ export default function AdminPage() {
             {/* ========================================================= */}
             {eventos.length > 0 && !loading && (
               inscricoesFiltradas.length > 0 ? (
+                visualizacaoAtletas === 'lista' ? (
+                  <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/30">
+                    <div className="hidden grid-cols-[1.4fr_1fr_1fr_0.75fr_220px] gap-3 border-b border-white/10 px-4 py-3 text-[9px] font-black uppercase tracking-widest text-zinc-600 lg:grid">
+                      <span>Atleta</span><span>Equipe</span><span>Categoria</span><span>Status</span><span>Ações</span>
+                    </div>
+                    <div className="divide-y divide-white/5">{inscricoesFiltradas.map(insc => <article key={insc.id} className="grid gap-3 px-4 py-3 hover:bg-white/[0.025] lg:grid-cols-[1.4fr_1fr_1fr_0.75fr_220px] lg:items-center">
+                      <div className="min-w-0"><h3 className="truncate text-sm font-black text-white">{insc.atleta || 'Não informado'}</h3><p className="mt-1 truncate text-[10px] text-zinc-600">{insc.eventos?.nome || 'Evento'} · {insc.faixa || 'Sem faixa'} · {insc.peso ? `${insc.peso} kg` : 'Sem peso'}</p></div>
+                      <p className="truncate text-xs text-zinc-400">{insc.equipe || 'Sem equipe'}</p>
+                      <p className="truncate text-xs text-yellow-400/80">{insc.categoria || 'Sem categoria'}</p>
+                      <div className="flex gap-1.5"><span className={`rounded-full border px-2 py-1 text-[8px] font-black uppercase ${insc.pagamento_ok ? 'border-green-500/20 bg-green-500/10 text-green-400' : 'border-red-500/20 bg-red-500/10 text-red-400'}`}>{insc.pagamento_ok ? 'Pago' : 'Pendente'}</span><span className={`rounded-full border px-2 py-1 text-[8px] font-black uppercase ${insc.pesagem_ok ? 'border-blue-500/20 bg-blue-500/10 text-blue-300' : 'border-white/5 bg-white/5 text-zinc-500'}`}>{insc.pesagem_ok ? 'Peso OK' : 'Sem peso'}</span></div>
+                      <div className="flex flex-wrap gap-1.5">
+                        <button onClick={() => toggleStatus(insc.id, 'pagamento_ok', insc.pagamento_ok)} disabled={loadingId === insc.id} className={`rounded-lg border px-2.5 py-2 text-[8px] font-black uppercase ${insc.pagamento_ok ? 'border-white/10 text-zinc-400' : 'border-green-500/30 bg-green-500/10 text-green-400'}`}>{insc.pagamento_ok ? 'Desfazer pagamento' : 'Aprovar pagamento'}</button>
+                        <button onClick={() => setEditando(insc)} className="rounded-lg border border-white/10 px-2.5 py-2 text-[8px] font-black uppercase text-zinc-300">Editar</button>
+                        <button onClick={() => excluirInscricao(insc.id, insc.atleta || 'Atleta')} disabled={loadingId === insc.id} className="rounded-lg px-2 py-2 text-[8px] font-black uppercase text-red-400">Excluir</button>
+                      </div>
+                    </article>)}</div>
+                  </div>
+                ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-5">
                   {inscricoesFiltradas.map((insc) => (
                     <div key={insc.id} className="bg-[#0a0a0e] border border-white/5 rounded-[20px] p-5 flex flex-col justify-between hover:border-white/10 transition-all shadow-xl h-full relative overflow-hidden group">
@@ -704,6 +786,7 @@ export default function AdminPage() {
                     </div>
                   ))}
                 </div>
+                )
               ) : (
                 <div className="text-center py-10 bg-black/40 border border-white/5 rounded-2xl shadow-xl">
                   <p className="text-zinc-500 text-sm font-medium">Nenhum atleta encontrado com os filtros atuais.</p>
