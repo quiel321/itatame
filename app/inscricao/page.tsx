@@ -36,6 +36,7 @@ function FormularioInscricao() {
   const [cpfAtleta, setCpfAtleta] = useState("");
   const [emailAtleta, setEmailAtleta] = useState("");
   const [inscricoesEncerradas, setInscricoesEncerradas] = useState(false);
+  const [motivoInscricaoIndisponivel, setMotivoInscricaoIndisponivel] = useState("");
   // Estados do Formulário
   const [categoria, setCategoria] = useState("");
   const [idade, setIdade] = useState("");
@@ -85,8 +86,21 @@ function FormularioInscricao() {
           if (cats.error && !['PGRST205','42P01'].includes(cats.error.code)) setTabelaErro('Não foi possível carregar as categorias. Recarregue a página antes de se inscrever.');
           setCategoriasEvento(cats.data || []); setEquipesEvento(eqs.data || []);setTabelaCarregando(false);
           const dataFimInscricoes = ev.data_fim_inscricoes || ev.lote3_data_fim || ev.lote2_data_fim || ev.lote1_data_fim;
-          if (dataFimInscricoes && new Date() > new Date(dataFimInscricoes)) {
+          const agoraInscricao = new Date();
+          const inicioInscricoes = ev.data_inicio_inscricoes ? new Date(ev.data_inicio_inscricoes) : null;
+          const statusAberto = String(ev.status || "").trim().toUpperCase() === "ABERTO";
+          if (!statusAberto) {
             setInscricoesEncerradas(true);
+            setMotivoInscricaoIndisponivel("Este evento ainda não está com as inscrições abertas.");
+          } else if (inicioInscricoes && agoraInscricao < inicioInscricoes) {
+            setInscricoesEncerradas(true);
+            setMotivoInscricaoIndisponivel(`As inscrições começam em ${inicioInscricoes.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}.`);
+          } else if (dataFimInscricoes && agoraInscricao > new Date(dataFimInscricoes)) {
+            setInscricoesEncerradas(true);
+            setMotivoInscricaoIndisponivel("O período de inscrições deste evento terminou.");
+          } else {
+            setInscricoesEncerradas(false);
+            setMotivoInscricaoIndisponivel("");
           }
 
           const agora = new Date();
@@ -189,7 +203,7 @@ function FormularioInscricao() {
     }
 
     if (inscricoesEncerradas) {
-      setErro("As inscrições deste evento já foram encerradas pelo organizador.");
+      setErro(motivoInscricaoIndisponivel || "As inscrições deste evento não estão disponíveis.");
       setProcessando(false);
       return;
     }
@@ -375,7 +389,7 @@ function FormularioInscricao() {
           {inscricoesEncerradas && (
             <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4">
               <p className="text-red-400 font-bold text-xs uppercase tracking-widest mb-1">Inscrições encerradas</p>
-              <p className="text-red-100/70 text-xs">O organizador encerrou o período de inscrições deste evento.</p>
+              <p className="text-red-100/70 text-xs">{motivoInscricaoIndisponivel || "As inscrições deste evento não estão disponíveis."}</p>
             </div>
           )}
 

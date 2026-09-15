@@ -237,9 +237,10 @@ export default function FinanceiroAdminPage() {
     setMensagem("Consultando pagamento no Mercado Pago...");
 
     try {
+      const { data: sessao } = await supabase.auth.getSession();
       const response = await fetch("/api/pagamento/mercado-pago/status", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessao.session?.access_token || ""}` },
         body: JSON.stringify({ inscricaoId: inscricao.id, paymentId: inscricao.mp_payment_id }),
       });
 

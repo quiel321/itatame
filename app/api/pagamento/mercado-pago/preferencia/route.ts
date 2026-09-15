@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { calcularComissaoMarketplace } from "@/app/lib/planos-comerciais";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
 import { obterAccessTokenOrganizador } from "@/app/lib/mercado-pago-integracao";
+import { autenticarRequest } from "@/app/lib/api-auth";
 
 type EventoPagamento = {
   id: string | number;
@@ -51,6 +52,8 @@ async function calcularValorCobrado(supabase: ReturnType<typeof createSupabaseSe
 
 export async function POST(request: Request) {
   try {
+    const usuario = await autenticarRequest(request);
+    if (!usuario) return NextResponse.json({ error: "Sessão inválida." }, { status: 401 });
     const { inscricaoId } = await request.json();
     if (!inscricaoId) {
       return NextResponse.json({ error: "Inscricao nao informada." }, { status: 400 });
@@ -89,6 +92,9 @@ export async function POST(request: Request) {
 
     if (inscricaoError || !inscricao) {
       return NextResponse.json({ error: "Inscricao nao encontrada." }, { status: 404 });
+    }
+    if (inscricao.user_id !== usuario.id) {
+      return NextResponse.json({ error: "Inscrição não autorizada para este usuário." }, { status: 403 });
     }
 
     if (inscricao.pagamento_ok) {

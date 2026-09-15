@@ -151,9 +151,10 @@ export default function PagamentoPage() {
     if (exibirMensagem) setCheckoutMensagem("Consultando pagamento no Mercado Pago...");
 
     try {
+      const { data: sessao } = await supabase.auth.getSession();
       const response = await fetch("/api/pagamento/mercado-pago/status", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessao.session?.access_token || ""}` },
         body: JSON.stringify({
           inscricaoId: checkoutData.inscricaoId,
           paymentId: resultadoPagamento?.id,
@@ -227,11 +228,11 @@ export default function PagamentoPage() {
             onReady: () => setBrickCarregando(false),
             onSubmit: ({ formData }: any) => {
               setCheckoutMensagem("Processando pagamento...");
-              return fetch("/api/pagamento/mercado-pago/processar", {
+              return supabase.auth.getSession().then(({ data: sessao }) => fetch("/api/pagamento/mercado-pago/processar", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessao.session?.access_token || ""}` },
                 body: JSON.stringify({ inscricaoId: checkoutData.inscricaoId, formData }),
-              })
+              }))
                 .then(async (response) => {
                   const data = await response.json();
                   if (!response.ok) throw new Error(data.error || "Pagamento recusado.");
@@ -297,9 +298,10 @@ export default function PagamentoPage() {
     setResultadoPagamento(null);
 
     try {
+      const { data: sessao } = await supabase.auth.getSession();
       const response = await fetch("/api/pagamento/mercado-pago/preferencia", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessao.session?.access_token || ""}` },
         body: JSON.stringify({ inscricaoId: inscricao.id }),
       });
 

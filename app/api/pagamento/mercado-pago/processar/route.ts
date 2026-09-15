@@ -5,6 +5,7 @@ import { calcularComissaoMarketplace } from "@/app/lib/planos-comerciais";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
 import { enviarEmailIngressoConfirmado } from "@/app/lib/email-ingresso";
 import { obterAccessTokenOrganizador } from "@/app/lib/mercado-pago-integracao";
+import { autenticarRequest } from "@/app/lib/api-auth";
 
 type EventoPagamento = {
   id: string | number;
@@ -78,6 +79,8 @@ function limparPayloadPagamento(formData: any, valorTotal: number, comissao: num
 
 export async function POST(request: Request) {
   try {
+    const usuario = await autenticarRequest(request);
+    if (!usuario) return NextResponse.json({ error: "Sessão inválida." }, { status: 401 });
     const { inscricaoId, formData } = await request.json();
     if (!inscricaoId || !formData) {
       return NextResponse.json({ error: "Dados de pagamento incompletos." }, { status: 400 });
@@ -111,6 +114,9 @@ export async function POST(request: Request) {
 
     if (inscricaoError || !inscricao) {
       return NextResponse.json({ error: "Inscricao nao encontrada." }, { status: 404 });
+    }
+    if (inscricao.user_id !== usuario.id) {
+      return NextResponse.json({ error: "Inscrição não autorizada para este usuário." }, { status: 403 });
     }
 
     if (inscricao.pagamento_ok) {
