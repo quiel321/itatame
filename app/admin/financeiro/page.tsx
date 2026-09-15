@@ -4,7 +4,7 @@ import Link from "next/link";
 import { obterEventoOrganizador } from "@/app/lib/evento-organizador";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Banknote, CheckCircle2, Copy, Mail, RefreshCw, Search, ShieldAlert, WalletCards } from "lucide-react";
+import { ArrowLeft, Banknote, CheckCircle2, Copy, Mail, RefreshCw, RotateCcw, Search, ShieldAlert, WalletCards, X } from "lucide-react";
 import { supabase } from "@/app/lib/supabase";
 import { calcularComissaoMarketplace, getPlanoComercial } from "@/app/lib/planos-comerciais";
 import ParcelamentoOrganizador from "@/app/admin/_components/ParcelamentoOrganizador";
@@ -36,6 +36,10 @@ type InscricaoFinanceira = {
   email_ingresso_destino?: string | null;
   email_ingresso_enviado_em?: string | null;
   email_ingresso_erro?: string | null;
+  estorno_status?: "processando" | "estornado" | "erro" | null;
+  estorno_valor?: string | number | null;
+  estorno_motivo?: string | null;
+  estornado_em?: string | null;
   eventos?: EventoResumo | EventoResumo[] | null;
 };
 
@@ -59,6 +63,7 @@ const filtrosStatus = [
   { id: "pagos", label: "Pagos" },
   { id: "pendentes", label: "Pendentes" },
   { id: "sem_mp", label: "Sem ID MP" },
+  { id: "estornados", label: "Estornados" },
 ] as const;
 
 function numberValue(value: unknown) {
@@ -108,6 +113,9 @@ export default function FinanceiroAdminPage() {
   const [acaoId, setAcaoId] = useState<string | number | null>(null);
   const [mensagem, setMensagem] = useState("");
   const [statusMp, setStatusMp] = useState<Record<string, StatusPagamento>>({});
+  const [estornoSelecionado, setEstornoSelecionado] = useState<InscricaoFinanceira | null>(null);
+  const [motivoEstorno, setMotivoEstorno] = useState("");
+  const [confirmacaoEstorno, setConfirmacaoEstorno] = useState("");
 
   const carregarDados = useCallback(async () => {
     setLoading(true);
@@ -176,6 +184,10 @@ export default function FinanceiroAdminPage() {
         email_ingresso_destino,
         email_ingresso_enviado_em,
         email_ingresso_erro,
+        estorno_status,
+        estorno_valor,
+        estorno_motivo,
+        estornado_em,
         eventos ( id, nome, data_evento )
       `)
       .in("evento_id", idsEventos)
@@ -205,7 +217,8 @@ export default function FinanceiroAdminPage() {
       const matchStatus = filtroStatus === "todos"
         || (filtroStatus === "pagos" && inscricao.pagamento_ok === true)
         || (filtroStatus === "pendentes" && inscricao.pagamento_ok !== true)
-        || (filtroStatus === "sem_mp" && !inscricao.mp_payment_id);
+        || (filtroStatus === "sem_mp" && !inscricao.mp_payment_id)
+        || (filtroStatus === "estornados" && inscricao.estorno_status === "estornado");
 
       return matchEvento && matchBusca && matchStatus;
     });
@@ -298,6 +311,38 @@ export default function FinanceiroAdminPage() {
     if (!texto) return;
     navigator.clipboard.writeText(texto);
     setMensagem("Copiado para a area de transferencia.");
+  }
+
+  async function confirmarEstorno() {
+    if (!estornoSelecionado) return;
+    setAcaoId(estornoSelecionado.id);
+    setMensagem("Solicitando estorno integral ao Mercado Pago...");
+    try {
+      const { data: sessao } = await supabase.auth.getSession();
+      const response = await fetch("/api/inscricoes/estorno", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessao.session?.access_token || ""}` },
+        body: JSON.stringify({ inscricaoId: estornoSelecionado.id, motivo: motivoEstorno, confirmacao: confirmacaoEstorno }),
+      });
+      const resultado = await response.json();
+      if (!response.ok) throw new Error(resultado.error || "Não foi possível realizar o estorno.");
+      setInscricoes((atual) => atual.map((item) => item.id === estornoSelecionado.id ? {
+        ...item,
+        pagamento_ok: false,
+        estorno_status: "estornado",
+        estorno_valor: resultado.valor,
+        estorno_motivo: motivoEstorno,
+        estornado_em: new Date().toISOString(),
+      } : item));
+      setMensagem(resultado.exigeRegenerarChaves
+        ? "Estorno confirmado. As chaves deste evento devem ser geradas novamente antes do campeonato."
+        : "Estorno confirmado pelo Mercado Pago e registrado na auditoria.");
+      setEstornoSelecionado(null); setMotivoEstorno(""); setConfirmacaoEstorno("");
+    } catch (error) {
+      setMensagem(error instanceof Error ? error.message : "Não foi possível realizar o estorno.");
+    } finally {
+      setAcaoId(null);
+    }
   }
 
   const planoAtual = getPlanoComercial(organizador?.plano_comercial);
@@ -472,9 +517,9 @@ export default function FinanceiroAdminPage() {
                     </div>
 
                     <div>
-                      <span className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[10px] font-black uppercase tracking-widest border ${pago ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-red-500/10 text-red-400 border-red-500/20"}`}>
+                      <span className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[10px] font-black uppercase tracking-widest border ${inscricao.estorno_status === "estornado" ? "bg-orange-500/10 text-orange-300 border-orange-500/20" : pago ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-red-500/10 text-red-400 border-red-500/20"}`}>
                         {pago ? <CheckCircle2 size={13} /> : <ShieldAlert size={13} />}
-                        {pago ? "Pago" : "Pendente"}
+                        {inscricao.estorno_status === "estornado" ? "Estornado" : pago ? "Pago" : "Pendente"}
                       </span>
                       {statusAtual && <p className="mt-2 text-[10px] text-zinc-500 font-bold uppercase tracking-widest">{nomeMetodoPagamento(statusAtual)} - {statusAtual.status}</p>}
                       {!inscricao.mp_payment_id && <p className="mt-2 text-[10px] text-yellow-400 font-bold uppercase tracking-widest">Sem ID Mercado Pago</p>}
@@ -483,12 +528,15 @@ export default function FinanceiroAdminPage() {
                       </p>}
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                       <button onClick={() => consultarStatus(inscricao)} disabled={!inscricao.mp_payment_id || acaoId === inscricao.id} className="cursor-pointer rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 px-3 py-2.5 text-[10px] font-black uppercase tracking-widest disabled:opacity-40 flex items-center justify-center gap-2">
                         <RefreshCw size={13} className={acaoId === inscricao.id ? "animate-spin" : ""} /> Consultar
                       </button>
                       <button onClick={() => reenviarPassaporte(inscricao)} disabled={!pago || acaoId === inscricao.id} className="cursor-pointer rounded-lg bg-emerald-600/10 hover:bg-emerald-600/20 border border-emerald-500/20 text-emerald-300 px-3 py-2.5 text-[10px] font-black uppercase tracking-widest disabled:opacity-40 flex items-center justify-center gap-2">
                         <Mail size={13} /> Reenviar
+                      </button>
+                      <button onClick={() => { setEstornoSelecionado(inscricao); setMotivoEstorno(""); setConfirmacaoEstorno(""); }} disabled={!pago || !inscricao.mp_payment_id || acaoId === inscricao.id || inscricao.estorno_status === "estornado"} className="cursor-pointer rounded-lg bg-red-600/10 hover:bg-red-600/20 border border-red-500/20 text-red-300 px-3 py-2.5 text-[10px] font-black uppercase tracking-widest disabled:opacity-40 flex items-center justify-center gap-2">
+                        <RotateCcw size={13} /> Estornar
                       </button>
                     </div>
                   </article>
@@ -504,6 +552,16 @@ export default function FinanceiroAdminPage() {
             Valores antigos podem aparecer como &quot;A calcular&quot; se a inscricao foi criada antes da gravacao de valor financeiro. Novas cobrancas gravam o valor para melhorar esta auditoria.
           </p>
         </div>
+        {estornoSelecionado && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4">
+          <div role="dialog" aria-modal="true" className="w-full max-w-lg rounded-3xl border border-red-500/30 bg-[#0a0a0e] p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4"><div><p className="text-[9px] font-black uppercase tracking-widest text-red-400">Operação financeira</p><h2 className="mt-1 text-xl font-black">Estorno integral da inscrição</h2></div><button onClick={() => setEstornoSelecionado(null)} className="rounded-lg border border-white/10 p-2 text-zinc-400"><X size={16}/></button></div>
+            <p className="mt-4 text-sm text-zinc-300"><strong>{estornoSelecionado.atleta}</strong> · {formatarMoeda(numberValue(estornoSelecionado.valor_total || estornoSelecionado.valor_inscricao))}</p>
+            <p className="mt-3 rounded-xl border border-yellow-500/20 bg-yellow-500/10 p-3 text-xs leading-relaxed text-yellow-100">O Mercado Pago devolverá o valor ao atleta e retirará proporcionalmente os valores do organizador e do iTatame. A conta recebedora precisa ter saldo disponível.</p>
+            <label className="mt-4 block text-xs font-bold text-zinc-400">Motivo<textarea value={motivoEstorno} onChange={(e) => setMotivoEstorno(e.target.value)} maxLength={300} className="mt-2 min-h-24 w-full rounded-xl border border-white/10 bg-black p-3 text-white outline-none" placeholder="Descreva o motivo do estorno"/></label>
+            <label className="mt-4 block text-xs font-bold text-zinc-400">Digite ESTORNAR para confirmar<input value={confirmacaoEstorno} onChange={(e) => setConfirmacaoEstorno(e.target.value.toUpperCase())} className="mt-2 w-full rounded-xl border border-red-500/30 bg-black p-3 font-black text-white outline-none"/></label>
+            <button onClick={confirmarEstorno} disabled={acaoId === estornoSelecionado.id || motivoEstorno.trim().length < 8 || confirmacaoEstorno !== "ESTORNAR"} className="mt-5 w-full rounded-xl bg-red-600 px-4 py-3 text-xs font-black uppercase tracking-widest disabled:opacity-40">{acaoId === estornoSelecionado.id ? "Processando..." : "Confirmar estorno integral"}</button>
+          </div>
+        </div>}
       </div>
     </main>
   );

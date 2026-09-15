@@ -224,6 +224,9 @@ export default function SuperAdminMasterPage() {
               <p className="text-zinc-500 text-[9px] md:text-[10px] font-medium mt-1 leading-relaxed">Comissões, royalties, galerias e repasses.</p>
             </div>
           </Link>
+          <Link href="/super-admin/inscricoes" className="col-span-2 md:col-span-1 group cursor-pointer relative bg-gradient-to-br from-[#0a0a0e] to-black border border-red-500/20 hover:border-red-500/60 rounded-2xl p-5 md:p-6 transition-all shadow-lg overflow-hidden flex flex-col justify-between min-h-[160px]">
+            <div className="absolute right-0 bottom-0 w-28 h-28 bg-red-500/10 blur-2xl pointer-events-none"></div><div className="w-10 h-10 bg-red-500/10 text-red-400 rounded-xl flex items-center justify-center mb-3 group-hover:bg-red-500 group-hover:text-white transition-all"><RefreshCw className="w-5 h-5"/></div><div><h3 className="text-sm md:text-base font-black text-white group-hover:text-red-300">Estornos de Inscrições</h3><p className="text-zinc-500 text-[9px] md:text-[10px] font-medium mt-1 leading-relaxed">Auditar e devolver pagamentos de campeonatos.</p></div>
+          </Link>
         </div>
 
         {/* BASE DE DADOS GLOBAL (TABELA DE AUDITORIA) */}
