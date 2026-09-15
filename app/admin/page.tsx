@@ -11,6 +11,7 @@ import imageCompression from 'browser-image-compression';
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { ShieldCheck, Map, Trash2, Key, Users, CheckCircle, Copy, RefreshCw, Play, Edit3, Trophy, Search, ChevronDown, Megaphone } from "lucide-react";
+import MercadoPagoConnectButton from "@/app/admin/_components/MercadoPagoConnectButton";
 
 export default function AdminPage() {
   const router = useRouter();
@@ -519,6 +520,22 @@ export default function AdminPage() {
             </button>
           </div>
         </div>
+
+        {isOrganizadorNativo && (
+          <section className={`mb-6 rounded-2xl border p-4 md:p-5 ${organizadorFinanceiro?.mp_connected_at ? "border-emerald-500/20 bg-emerald-500/5" : "border-yellow-500/40 bg-yellow-500/10"}`}>
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="max-w-3xl">
+                <p className={`text-[9px] font-black uppercase tracking-widest ${organizadorFinanceiro?.mp_connected_at ? "text-emerald-400" : "text-yellow-400"}`}>Recebimento das inscrições</p>
+                <h2 className="mt-1 text-lg font-black text-white">{organizadorFinanceiro?.mp_connected_at ? "Mercado Pago conectado" : "Ative o Mercado Pago antes de abrir as inscrições"}</h2>
+                <p className="mt-2 text-xs leading-5 text-zinc-300">Plano {planoAtual.nome}: a cada pagamento, {planoAtual.comissaoPercentual}% é destinado automaticamente ao iTatame e o restante ao organizador, antes da tarifa de processamento do Mercado Pago.</p>
+              </div>
+              <div className="shrink-0">
+                <MercadoPagoConnectButton conectado={Boolean(organizadorFinanceiro?.mp_connected_at)} returnTo="/admin" className={`w-full rounded-xl px-5 py-3 text-[10px] font-black uppercase tracking-widest ${organizadorFinanceiro?.mp_connected_at ? "border border-emerald-500/30 bg-emerald-500/10 text-emerald-300" : "bg-yellow-500 text-black hover:bg-yellow-400"}`} />
+                <Link href="/admin/financeiro" className="mt-2 block text-center text-[9px] font-bold uppercase tracking-widest text-zinc-500 hover:text-white">Ver auditoria financeira</Link>
+              </div>
+            </div>
+          </section>
+        )}
 
         {eventoAtual && (
           <section className="mb-6 rounded-2xl border border-white/10 bg-gradient-to-r from-red-950/30 to-black/40 p-4 shadow-xl md:p-5">

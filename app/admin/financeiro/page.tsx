@@ -8,6 +8,7 @@ import { ArrowLeft, Banknote, CheckCircle2, Copy, Mail, RefreshCw, Search, Shiel
 import { supabase } from "@/app/lib/supabase";
 import { calcularComissaoMarketplace, getPlanoComercial } from "@/app/lib/planos-comerciais";
 import ParcelamentoOrganizador from "@/app/admin/_components/ParcelamentoOrganizador";
+import MercadoPagoConnectButton from "@/app/admin/_components/MercadoPagoConnectButton";
 
 type EventoResumo = {
   id: string | number;
@@ -31,6 +32,10 @@ type InscricaoFinanceira = {
   valor_total?: string | number | null;
   mp_payment_id?: string | null;
   mp_preference_id?: string | null;
+  email_ingresso_status?: "pendente" | "enviando" | "enviado" | "erro" | null;
+  email_ingresso_destino?: string | null;
+  email_ingresso_enviado_em?: string | null;
+  email_ingresso_erro?: string | null;
   eventos?: EventoResumo | EventoResumo[] | null;
 };
 
@@ -167,6 +172,10 @@ export default function FinanceiroAdminPage() {
         valor_total,
         mp_payment_id,
         mp_preference_id,
+        email_ingresso_status,
+        email_ingresso_destino,
+        email_ingresso_enviado_em,
+        email_ingresso_erro,
         eventos ( id, nome, data_evento )
       `)
       .in("evento_id", idsEventos)
@@ -258,16 +267,25 @@ export default function FinanceiroAdminPage() {
     setMensagem("Reenviando passaporte por e-mail...");
 
     try {
+      const { data: sessao } = await supabase.auth.getSession();
       const response = await fetch("/api/enviar-ingresso-confirmado", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${sessao.session?.access_token || ""}`,
+        },
         body: JSON.stringify({ inscricaoId: inscricao.id }),
       });
 
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Falha ao reenviar passaporte.");
 
-      setMensagem("Passaporte reenviado. Se o atleta nao receber, confira o e-mail cadastrado.");
+      setInscricoes((atual) => atual.map((item) => item.id === inscricao.id ? {
+        ...item,
+        email_ingresso_status: "enviado",
+        email_ingresso_enviado_em: new Date().toISOString(),
+      } : item));
+      setMensagem("Passaporte reenviado e entrega registrada.");
     } catch (error) {
       setMensagem(error instanceof Error ? error.message : "Nao foi possivel reenviar o passaporte.");
     } finally {
@@ -308,12 +326,7 @@ export default function FinanceiroAdminPage() {
               <h2 className="text-lg md:text-xl font-black text-white mt-1">Plano e recebimento</h2>
               <p className="text-zinc-500 text-xs mt-1 max-w-2xl">Gerencie aqui a conta que recebe as inscrições e as condições de parcelamento.</p>
             </div>
-            <Link
-              href={currentUserId ? `/api/mercado-pago/connect?perfil=organizador&user_id=${currentUserId}&return_to=/admin/financeiro` : "#"}
-              className={`text-center rounded-xl px-5 py-3 text-[10px] font-black uppercase tracking-widest border transition-all ${mercadoPagoConectado ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20" : "bg-yellow-500 text-black border-yellow-400 hover:bg-yellow-400"}`}
-            >
-              {mercadoPagoConectado ? "Mercado Pago conectado" : "Conectar Mercado Pago"}
-            </Link>
+            <MercadoPagoConnectButton conectado={mercadoPagoConectado} returnTo="/admin/financeiro" className={`rounded-xl px-5 py-3 text-[10px] font-black uppercase tracking-widest border transition-all ${mercadoPagoConectado ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20" : "bg-yellow-500 text-black border-yellow-400 hover:bg-yellow-400"}`} />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-5">
@@ -464,6 +477,9 @@ export default function FinanceiroAdminPage() {
                       </span>
                       {statusAtual && <p className="mt-2 text-[10px] text-zinc-500 font-bold uppercase tracking-widest">{nomeMetodoPagamento(statusAtual)} - {statusAtual.status}</p>}
                       {!inscricao.mp_payment_id && <p className="mt-2 text-[10px] text-yellow-400 font-bold uppercase tracking-widest">Sem ID Mercado Pago</p>}
+                      {pago && <p className={`mt-2 text-[10px] font-bold uppercase tracking-widest ${inscricao.email_ingresso_status === "enviado" ? "text-emerald-400" : inscricao.email_ingresso_status === "erro" ? "text-red-400" : "text-yellow-400"}`} title={inscricao.email_ingresso_erro || undefined}>
+                        E-mail: {inscricao.email_ingresso_status === "enviado" ? "enviado" : inscricao.email_ingresso_status === "erro" ? "falhou" : "pendente"}
+                      </p>}
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">

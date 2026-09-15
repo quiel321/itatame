@@ -2,6 +2,7 @@ import { limiteParcelas } from '@/app/lib/parcelamento';
 import { NextResponse } from "next/server";
 import { calcularComissaoMarketplace } from "@/app/lib/planos-comerciais";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
+import { obterAccessTokenOrganizador } from "@/app/lib/mercado-pago-integracao";
 
 type EventoPagamento = {
   id: string | number;
@@ -37,6 +38,17 @@ function calcularValorInscricao(inscricao: any, evento: EventoPagamento) {
   return lutaPesoEAbsoluto ? valor + 50 : valor;
 }
 
+async function calcularValorCobrado(supabase: ReturnType<typeof createSupabaseServerClient>, inscricao: any, evento: EventoPagamento) {
+  const base = calcularValorInscricao(inscricao, evento);
+  if (!inscricao.cupom_id) return base;
+  const { data: cupom } = await supabase.from("cupons").select("desconto_porcentagem, desconto_valor").eq("id", inscricao.cupom_id).eq("evento_id", evento.id).maybeSingle();
+  if (!cupom) return base;
+  const desconto = Number(cupom.desconto_porcentagem || 0) > 0
+    ? base * Math.min(100, Number(cupom.desconto_porcentagem)) / 100
+    : Number(cupom.desconto_valor || 0);
+  return Number(Math.max(0, base - desconto).toFixed(2));
+}
+
 export async function POST(request: Request) {
   try {
     const { inscricaoId } = await request.json();
@@ -59,6 +71,7 @@ export async function POST(request: Request) {
         categoria,
         absoluto,
         pagamento_ok,
+        cupom_id,
         evento_id,
         eventos (
           id,
@@ -100,7 +113,10 @@ export async function POST(request: Request) {
       );
     }
 
-    const valorTotal = calcularValorInscricao(inscricao, evento);
+    const accessToken = await obterAccessTokenOrganizador(request, organizador, supabase);
+    if (!accessToken) return NextResponse.json({ error: "A conexão Mercado Pago do organizador expirou. Solicite uma nova conexão." }, { status: 409 });
+
+    const valorTotal = await calcularValorCobrado(supabase, inscricao, evento);
     if (valorTotal <= 0) {
       await supabase.from("inscricoes").update({ pagamento_ok: true }).eq("id", inscricao.id);
       return NextResponse.json({ pago: true });
@@ -112,7 +128,7 @@ export async function POST(request: Request) {
     const preferenceResponse = await fetch("https://api.mercadopago.com/checkout/preferences", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${organizador.mp_access_token}`,
+        Authorization: `Bearer ${accessToken}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({

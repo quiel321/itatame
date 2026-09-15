@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation"
 
 import { criarChavesImpressao, chaveGrupoPDF, type LutaImpressao } from '../../lib/chaves-impressao';
 import { criarKitContingenciaPDF } from "../../lib/kit-contingencia-pdf"
+import { rotuloLuta } from "../../lib/lutas-rotulos"
 
 type EventoOrganizador = {
   id: string | number;
@@ -173,13 +174,13 @@ export default function GerarChavesPage() {
     const lutas = await buscarChavesParaExportacao();
     if (!lutas) return;
 
-    const headers = ["Categoria", "Faixa", "Fase", "Luta Num", "Atleta 1 (Vermelho)", "Equipe 1", "Atleta 2 (Azul)", "Equipe 2", "Vencedor"];
+    const headers = ["Categoria", "Faixa", "Fase", "Identificação", "Atleta 1 (Vermelho)", "Equipe 1", "Atleta 2 (Azul)", "Equipe 2", "Vencedor"];
     
     const csvRows = lutas.map(l => [
       `"${l.categoria}"`,
       `"${l.faixa}"`,
       `"${l.fase}"`,
-      `"${l.id_visual}"`,
+      `"${rotuloLuta(l)}"`,
       `"${formatarNome(l.atleta_1)}"`,
       `"${formatarEquipe(l.atleta_1, l.equipe_1)}"`,
       `"${formatarNome(l.atleta_2)}"`,

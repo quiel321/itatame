@@ -116,66 +116,23 @@ export default function LoginOrganizadorPage() {
     }
 
     try {
-      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-        email,
-        password: senha,
-      });
+      const cadastro = new FormData();
+      cadastro.set("perfil", "organizador");
+      cadastro.set("email", email);
+      cadastro.set("password", senha);
+      cadastro.set("nome", nomeCompleto);
+      cadastro.set("telefone", telefone);
+      cadastro.set("academia", nomeAcademia);
+      if (foto) cadastro.set("foto", foto);
 
-      if (signUpError) throw signUpError;
-      
-      if (signUpData?.user) {
-        let fotoUrlFinal = "";
+      const response = await fetch("/api/cadastro", { method: "POST", body: cadastro });
+      const resultado = await response.json();
+      if (!response.ok) throw new Error(resultado.error || "Não foi possível criar o cadastro.");
 
-        if (foto) {
-          const fileExt = foto.name.split('.').pop();
-          const fileName = `${signUpData.user.id}-${Date.now()}.${fileExt}`;
-          const filePath = `organizadores/${fileName}`;
-
-          const { error: uploadError } = await supabase.storage
-            .from('avatars')
-            .upload(filePath, foto);
-
-          if (uploadError) throw uploadError;
-
-          const { data: publicUrlData } = supabase.storage
-            .from('avatars')
-            .getPublicUrl(filePath);
-
-          fotoUrlFinal = publicUrlData.publicUrl;
-        }
-
-        // INSERÇÃO LIMPA DIRETAMENTE NA TABELA 'ORGANIZADORES'
-        const { error: dbError } = await supabase.from("organizadores").insert([
-          {
-            user_id: signUpData.user.id,
-            nome: nomeCompleto,
-            email: email, 
-            telefone: telefone, 
-            academia: nomeAcademia || "Independente",
-            foto_url: fotoUrlFinal,
-            status: "pendente", // Nasce pendente de aprovação
-          }
-        ]);
-
-        if (dbError) throw dbError;
-
-        // 🔥 GATILHO DO E-MAIL DE BOAS-VINDAS (ORGANIZADOR) 🔥
-        try {
-          await fetch('/api/boas-vindas-org', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-              email: email,
-              nome: nomeCompleto
-            }),
-          });
-        } catch (err) {
-          console.error("Erro ao enviar e-mail de boas-vindas do organizador", err);
-        }
-        // 🔥 FIM DO GATILHO 🔥
-
-        setMostrarPendencia(true);
-      }
+      setSucesso(resultado.requiresEmailConfirmation
+        ? "Cadastro recebido. Confirme seu e-mail e aguarde a homologação do perfil."
+        : "Cadastro recebido. Aguarde a homologação do perfil.");
+      setMostrarPendencia(true);
     } catch (err: any) {
       setErro(err.message || "Erro ao realizar registo do organizador.");
     } finally {

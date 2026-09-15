@@ -1,3 +1,5 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+
 export type MercadoPagoIntegracao = "itatame" | "retratt";
 
 export type MercadoPagoConfig = {
@@ -78,4 +80,53 @@ export function obterConfigMercadoPago(
       clientSecret,
     baseUrl,
   };
+}
+
+type OrganizadorMercadoPago = {
+  user_id?: string | null;
+  mp_access_token?: string | null;
+  mp_refresh_token?: string | null;
+  mp_token_expires_at?: string | null;
+};
+
+export async function obterAccessTokenOrganizador(
+  request: Request,
+  organizador: OrganizadorMercadoPago,
+  supabase: SupabaseClient,
+) {
+  if (!organizador.mp_access_token) return null;
+  const expiraEm = organizador.mp_token_expires_at ? new Date(organizador.mp_token_expires_at).getTime() : 0;
+  if (!expiraEm || expiraEm > Date.now() + 5 * 60 * 1000 || !organizador.mp_refresh_token) {
+    return organizador.mp_access_token;
+  }
+
+  const config = obterConfigMercadoPago(request, "itatame");
+  const response = await fetch("https://api.mercadopago.com/oauth/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: config.clientId,
+      client_secret: config.clientSecret,
+      grant_type: "refresh_token",
+      refresh_token: organizador.mp_refresh_token,
+    }),
+  });
+  const data = await response.json();
+  if (!response.ok || !data.access_token) {
+    console.error("Não foi possível renovar o Mercado Pago do organizador:", data);
+    return expiraEm > Date.now() ? organizador.mp_access_token : null;
+  }
+
+  const tokenExpiresAt = data.expires_in
+    ? new Date(Date.now() + Number(data.expires_in) * 1000).toISOString()
+    : null;
+  if (organizador.user_id) {
+    await supabase.from("organizadores").update({
+      mp_access_token: data.access_token,
+      mp_refresh_token: data.refresh_token || organizador.mp_refresh_token,
+      mp_token_expires_at: tokenExpiresAt,
+      mp_scope: data.scope || null,
+    }).eq("user_id", organizador.user_id);
+  }
+  return String(data.access_token);
 }

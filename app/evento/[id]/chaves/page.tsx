@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { useParams } from "next/navigation"
 import { supabase } from "@/app/lib/supabase"
 import { processarAvancosAutomaticosChaves, propagarResultadoChave } from "@/app/lib/chaves-auto-avanco"
+import { rotuloLuta } from "@/app/lib/lutas-rotulos"
 
 // 1. Componente Atleta (COM FOTO E INTELIGÊNCIA DE LAYOUT)
 function Atleta({ nome, equipe, numero, luta_id, id_banco, foto, onAvancar, reverso = false, centralizado = false, ocultarLinha = false, larguraClass = "w-[96px] md:w-[180px]", campeao = false }: any) {
@@ -215,18 +216,6 @@ export default function ChavesPage() {
     }
   }
 
-  const getNomeDaFase = (luta: any, todasLutas: any[]) => {
-    if (String(luta.id_visual) === "999") return "FINAL - DISPUTA DO OURO";
-    if (String(luta.proxima_luta) === "999") return "SEMIFINAL";
-    const semis = todasLutas.filter(l => String(l.proxima_luta) === "999").map(l => String(l.id_visual));
-    if (semis.includes(String(luta.proxima_luta))) return "QUARTAS DE FINAL";
-    const quartas = todasLutas.filter(l => semis.includes(String(l.proxima_luta))).map(l => String(l.id_visual));
-    if (quartas.includes(String(luta.proxima_luta))) return "OITAVAS DE FINAL";
-    const oitavas = todasLutas.filter(l => quartas.includes(String(l.proxima_luta))).map(l => String(l.id_visual));
-    if (oitavas.includes(String(luta.proxima_luta))) return "16 AVOS DE FINAL";
-    return "FASE ELIMINATÓRIA";
-  }
-
   const lutasMobile = [...lutas]
     .filter(luta => {
       const a1 = limparNome(luta.atleta_1);
@@ -407,7 +396,7 @@ export default function ChavesPage() {
                     
                     <div className="bg-[#57d8ff]/10 border-b border-[#57d8ff]/20 py-1.5 px-3 flex justify-between items-center">
                       <span className="text-[9px] font-black text-[#57d8ff] uppercase tracking-widest">
-                        {getNomeDaFase(luta, lutas)} • #{luta.id_visual}
+                        {rotuloLuta(luta)}
                       </span>
                       {luta.vencedor && <span className="text-[8px] bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded font-bold uppercase border border-green-500/30">Finalizada</span>}
                     </div>

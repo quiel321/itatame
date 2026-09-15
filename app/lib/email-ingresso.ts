@@ -7,6 +7,7 @@ type EnviarEmailIngressoParams = {
   inscricaoId: string | number;
   emailFallback?: string | null;
   paymentId?: string | number | null;
+  forcarReenvio?: boolean;
 };
 
 function getBaseUrl() {
@@ -28,7 +29,7 @@ function escapeHtml(value: unknown) {
     .replace(/'/g, "&#039;");
 }
 
-export async function enviarEmailIngressoConfirmado({ inscricaoId, emailFallback, paymentId }: EnviarEmailIngressoParams) {
+export async function enviarEmailIngressoConfirmado({ inscricaoId, emailFallback, paymentId, forcarReenvio = false }: EnviarEmailIngressoParams) {
   if (!process.env.RESEND_API_KEY) {
     console.warn("RESEND_API_KEY nao configurada. E-mail de ingresso nao enviado.");
     return { skipped: true, reason: "RESEND_API_KEY ausente" };
@@ -44,6 +45,9 @@ export async function enviarEmailIngressoConfirmado({ inscricaoId, emailFallback
       categoria,
       absoluto,
       evento_id,
+      email,
+      email_ingresso_status,
+      email_ingresso_tentativas,
       eventos (
         nome,
         data_evento,
@@ -60,6 +64,27 @@ export async function enviarEmailIngressoConfirmado({ inscricaoId, emailFallback
     return { skipped: true, reason: "inscricao_nao_encontrada" };
   }
 
+  if (!forcarReenvio && inscricao.email_ingresso_status === "enviado") {
+    return { skipped: true, reason: "email_ja_enviado" };
+  }
+
+  const tentativas = Number(inscricao.email_ingresso_tentativas || 0) + 1;
+  const { data: reservado } = await supabase
+    .from("inscricoes")
+    .update({
+      email_ingresso_status: "enviando",
+      email_ingresso_tentativas: tentativas,
+      email_ingresso_erro: null,
+    })
+    .eq("id", inscricaoId)
+    .neq("email_ingresso_status", forcarReenvio ? "__nenhum__" : "enviando")
+    .select("id")
+    .maybeSingle();
+
+  if (!reservado && !forcarReenvio) {
+    return { skipped: true, reason: "email_em_processamento" };
+  }
+
   const evento = Array.isArray(inscricao.eventos) ? inscricao.eventos[0] : inscricao.eventos;
   const { data: atleta } = await supabase
     .from("atletas")
@@ -67,7 +92,7 @@ export async function enviarEmailIngressoConfirmado({ inscricaoId, emailFallback
     .eq("user_id", inscricao.user_id)
     .maybeSingle();
 
-  let emailDestino = emailFallback || atleta?.email || null;
+  let emailDestino = emailFallback || inscricao.email || atleta?.email || null;
 
   if (!emailDestino) {
     const { data: userData } = await supabase.auth.admin.getUserById(inscricao.user_id);
@@ -76,6 +101,10 @@ export async function enviarEmailIngressoConfirmado({ inscricaoId, emailFallback
 
   if (!emailDestino) {
     console.warn("E-mail do atleta nao encontrado para ingresso", { inscricaoId });
+    await supabase.from("inscricoes").update({
+      email_ingresso_status: "erro",
+      email_ingresso_erro: "E-mail do atleta não encontrado.",
+    }).eq("id", inscricaoId);
     return { skipped: true, reason: "email_nao_encontrado" };
   }
 
@@ -130,8 +159,21 @@ export async function enviarEmailIngressoConfirmado({ inscricaoId, emailFallback
 
   if (emailError) {
     console.error("Erro ao enviar e-mail de ingresso:", emailError);
+    await supabase.from("inscricoes").update({
+      email_ingresso_status: "erro",
+      email_ingresso_destino: emailDestino,
+      email_ingresso_erro: String(emailError.message || "Falha no Resend").slice(0, 500),
+    }).eq("id", inscricaoId);
     return { skipped: true, reason: "erro_resend", error: emailError };
   }
+
+  await supabase.from("inscricoes").update({
+    email_ingresso_status: "enviado",
+    email_ingresso_destino: emailDestino,
+    email_ingresso_enviado_em: new Date().toISOString(),
+    email_ingresso_erro: null,
+    email_ingresso_resend_id: data?.id || null,
+  }).eq("id", inscricaoId);
 
   return { success: true, data };
 }

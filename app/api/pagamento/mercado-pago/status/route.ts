@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
 import { enviarEmailIngressoConfirmado } from "@/app/lib/email-ingresso";
+import { obterAccessTokenOrganizador } from "@/app/lib/mercado-pago-integracao";
 
 function dadosDeExibicao(paymentData: any) {
   return {
@@ -50,7 +51,7 @@ export async function POST(request: Request) {
 
     const { data: organizador } = await supabase
       .from("organizadores")
-      .select("mp_access_token")
+      .select("user_id, mp_access_token, mp_refresh_token, mp_token_expires_at")
       .eq("user_id", evento.organizador_id)
       .maybeSingle();
 
@@ -58,8 +59,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Organizador sem Mercado Pago conectado." }, { status: 409 });
     }
 
+    const accessToken = await obterAccessTokenOrganizador(request, organizador, supabase);
+    if (!accessToken) return NextResponse.json({ error: "A conexão Mercado Pago do organizador expirou." }, { status: 409 });
+
     const paymentResponse = await fetch(`https://api.mercadopago.com/v1/payments/${idPagamento}`, {
-      headers: { Authorization: `Bearer ${organizador.mp_access_token}` },
+      headers: { Authorization: `Bearer ${accessToken}` },
     });
     const paymentData = await paymentResponse.json();
 
@@ -77,13 +81,11 @@ export async function POST(request: Request) {
         .update({ pagamento_ok: true, mp_payment_id: String(idPagamento) })
         .eq("id", inscricao.id);
 
-      if (!inscricao.pagamento_ok) {
-        await enviarEmailIngressoConfirmado({
-          inscricaoId: inscricao.id,
-          emailFallback: paymentData?.payer?.email,
-          paymentId: idPagamento,
-        });
-      }
+      await enviarEmailIngressoConfirmado({
+        inscricaoId: inscricao.id,
+        emailFallback: paymentData?.payer?.email,
+        paymentId: idPagamento,
+      });
     }
 
     return NextResponse.json(dadosDeExibicao(paymentData));

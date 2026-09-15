@@ -7,6 +7,7 @@ import { AlertCircle, CheckCircle, Clock, Map, Play, RefreshCw, Search, Users, X
 import { supabase } from '../../lib/supabase';
 import { obterTempoRegulamentar } from '../../lib/cronograma';
 import { processarAvancosAutomaticosChaves } from '../../lib/chaves-auto-avanco';
+import { rotuloLuta } from '../../lib/lutas-rotulos';
 
 type Evento = { id: string | number; nome: string; data_evento?: string | null };
 type Luta = {
@@ -380,7 +381,7 @@ export default function GestaoTatames() {
                     <h3 className="font-black uppercase text-white">{grupo.tatame}</h3>
                     <span className={`rounded-full px-2 py-1 text-[8px] font-black uppercase ${grupo.atual ? 'bg-red-500 text-white' : grupo.chamadas.length ? 'bg-yellow-400 text-black' : 'bg-emerald-500 text-black'}`}>{grupo.atual ? 'Em luta' : grupo.chamadas.length ? 'Chamada' : 'Livre'}</span>
                   </div>
-                  {grupo.atual && <div className="mt-3 rounded-xl border border-red-500/25 bg-red-500/10 p-3"><span className="text-[8px] font-black uppercase tracking-widest text-red-300">No tatame · luta {grupo.atual.id_visual || grupo.atual.id}</span><strong className="mt-1 block truncate text-xs uppercase text-white">{grupo.atual.atleta_1} × {grupo.atual.atleta_2}</strong></div>}
+                  {grupo.atual && <div className="mt-3 rounded-xl border border-red-500/25 bg-red-500/10 p-3"><span className="text-[8px] font-black uppercase tracking-widest text-red-300">No tatame · {rotuloLuta(grupo.atual)}</span><strong className="mt-1 block truncate text-xs uppercase text-white">{grupo.atual.atleta_1} × {grupo.atual.atleta_2}</strong></div>}
                   <div className="mt-3 grid grid-cols-2 gap-2">
                     <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 p-3"><span className="text-[8px] font-black uppercase text-cyan-300">Na baia</span><strong className="mt-1 block text-xl text-cyan-200">{grupo.baias.length}</strong></div>
                     <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/10 p-3"><span className="text-[8px] font-black uppercase text-yellow-300">Já chamadas</span><strong className="mt-1 block text-xl text-yellow-200">{grupo.chamadas.length}</strong></div>

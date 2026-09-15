@@ -47,6 +47,7 @@ function FormularioInscricao() {
   const [cupom, setCupom] = useState("");
   const [desconto, setDesconto] = useState(0);
   const [cupomMensagem, setCupomMensagem] = useState("");
+  const [cupomAplicado, setCupomAplicado] = useState("");
 
   const [inscricaoFeita, setInscricaoFeita] = useState(false);
   const [erro, setErro] = useState("");
@@ -139,7 +140,7 @@ function FormularioInscricao() {
 
   const valorBase = (tipoInscricao === "ambos") ? valorLoteAtual + 50.00 : valorLoteAtual;
   const valorTotal = Math.max(0, valorBase - desconto);
-  const isGratis = valorLoteAtual === 0;
+  const isGratis = valorBase === 0;
 
   async function aplicarCupom() {
     if (!cupom || !eventoId) return;
@@ -154,12 +155,14 @@ function FormularioInscricao() {
 
     if (error || !cupomData) {
       setDesconto(0);
+      setCupomAplicado("");
       setCupomMensagem("Cupom inválido para este evento.");
       return;
     }
 
     if (cupomData.usos_atualmente >= cupomData.limite_usos) {
       setDesconto(0);
+      setCupomAplicado("");
       setCupomMensagem("Limite de usos deste cupom esgotado.");
       return;
     }
@@ -172,6 +175,7 @@ function FormularioInscricao() {
       setDesconto(Number(cupomData.desconto_valor));
       setCupomMensagem(`Cupom aplicado: -R$ ${Number(cupomData.desconto_valor).toFixed(2).replace('.', ',')}`);
     }
+    setCupomAplicado(cupom.trim().toUpperCase());
   }
 
   async function finalizarInscricao() {
@@ -262,7 +266,7 @@ function FormularioInscricao() {
       }
     }
 
-    const isLiberado = valorTotal === 0;
+    let isLiberado = !cupomAplicado && valorTotal === 0;
     const inscricaoParaSalvar = {
       user_id: usuarioAtualId,
       atleta_id: atletaId,
@@ -279,16 +283,19 @@ function FormularioInscricao() {
       peso: pesoReal,
       evento_id: eventoId,
       pagamento_ok: isLiberado,
+      valor_inscricao: valorBase,
+      valor_total: cupomAplicado ? valorBase : valorTotal,
       cpf: cpfAtleta || null,
       email: emailAtleta || null
     };
 
-    let { error } = await supabase.from("inscricoes").insert([inscricaoParaSalvar]);
+    let { data: inscricaoCriada, error } = await supabase.from("inscricoes").insert([inscricaoParaSalvar]).select("id").single();
 
     if (error && (error.message.toLowerCase().includes("cpf") || error.message.toLowerCase().includes("email"))) {
       const { cpf, email, ...payloadSemCamposNovos } = inscricaoParaSalvar;
-      const retry = await supabase.from("inscricoes").insert([payloadSemCamposNovos]);
+      const retry = await supabase.from("inscricoes").insert([payloadSemCamposNovos]).select("id").single();
       error = retry.error;
+      inscricaoCriada = retry.data;
     }
 
     if (error) {
@@ -297,20 +304,29 @@ function FormularioInscricao() {
       return;
     }
 
-    if (desconto > 0 && cupom) {
-      const { data: cupomData } = await supabase
-        .from("cupons")
-        .select("id, usos_atualmente")
-        .eq("codigo", cupom.trim().toUpperCase())
-        .eq("evento_id", eventoId)
-        .maybeSingle();
+    const { data: sessao } = await supabase.auth.getSession();
+    const authorization = `Bearer ${sessao.session?.access_token || ""}`;
 
-      if (cupomData) {
-        await supabase
-          .from("cupons")
-          .update({ usos_atualmente: (cupomData.usos_atualmente || 0) + 1 })
-          .eq("id", cupomData.id);
+    if (cupomAplicado && inscricaoCriada?.id) {
+      const response = await fetch("/api/vouchers/aplicar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: authorization },
+        body: JSON.stringify({ inscricaoId: inscricaoCriada.id, codigo: cupomAplicado }),
+      });
+      const resultado = await response.json();
+      if (!response.ok) {
+        await supabase.from("inscricoes").delete().eq("id", inscricaoCriada.id).eq("user_id", usuarioAtualId);
+        setErro(resultado.error || "Não foi possível reservar esta cortesia.");
+        setProcessando(false);
+        return;
       }
+      isLiberado = resultado.gratuito === true;
+    } else if (isLiberado && inscricaoCriada?.id) {
+      await fetch("/api/enviar-ingresso-confirmado", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: authorization },
+        body: JSON.stringify({ inscricaoId: inscricaoCriada.id }),
+      });
     }
 
     setErro("");
@@ -470,7 +486,7 @@ function FormularioInscricao() {
               <div className="border-t border-white/10 pt-4 mb-5">
                 <label className="text-[9px] text-zinc-500 font-bold uppercase block mb-2">Cupom de Parceria / Cortesia</label>
                 <div className="flex gap-2">
-                  <input type="text" value={cupom} onChange={(e) => setCupom(e.target.value.toUpperCase())} placeholder="DIGITE O CÓDIGO" className="w-full bg-black border border-white/10 outline-none rounded-lg px-3 py-2 text-white text-xs uppercase" />
+                  <input type="text" value={cupom} onChange={(e) => { setCupom(e.target.value.toUpperCase()); setCupomAplicado(""); setDesconto(0); setCupomMensagem(""); }} placeholder="DIGITE O CÓDIGO" className="w-full bg-black border border-white/10 outline-none rounded-lg px-3 py-2 text-white text-xs uppercase" />
                   <button type="button" onClick={aplicarCupom} className="cursor-pointer bg-white/10 hover:bg-white/20 text-white text-[9px] font-bold uppercase px-4 rounded-lg transition-colors">Validar</button>
                 </div>
                 {cupomMensagem && <p className={`text-[10px] mt-2 font-bold ${desconto > 0 ? 'text-green-400' : 'text-red-400'}`}>{cupomMensagem}</p>}

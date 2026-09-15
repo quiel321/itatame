@@ -1,6 +1,7 @@
 import { jsPDF } from 'jspdf';
 import { obterTempoRegulamentar } from './cronograma';
 import type { LutaKitContingencia } from './kit-contingencia-pdf';
+import { rotuloLuta } from './lutas-rotulos';
 
 export type LutaImpressao = LutaKitContingencia & { numero_1?: string; numero_2?: string; atleta_1_id?: number|null; atleta_2_id?: number|null; tempo_minutos?: number|null };
 type No = { luta?: LutaImpressao; nome?: string; equipe?: string; filhos?: No[]; pagina?: number };
@@ -45,7 +46,7 @@ export function criarChavesImpressao({eventoNome,lutas}: {eventoNome:string;luta
       const ordenadas=[...grupo].sort((a,b)=>Number(a.id_visual)-Number(b.id_visual));
       ordenadas.forEach((l,i)=>{
         const x=12+i*93;doc.rect(x,59,87,73);
-        doc.setFont('helvetica','bold');texto(`${l.fase} | Luta ${l.id_visual}`,x+4,67,79,9);
+        doc.setFont('helvetica','bold');texto(rotuloLuta(l),x+4,67,79,9);
         doc.setFont('helvetica','normal');
         texto(real(l.atleta_1)?`${l.atleta_1} / ${l.equipe_1||''}`:i===1?'Perdedor da luta 1':'Vencedor da luta 1',x+4,81,79,9);
         texto(real(l.atleta_2)?`${l.atleta_2} / ${l.equipe_2||''}`:i===2?'Vencedor da luta 2':'A definir',x+4,101,79,9);
@@ -75,9 +76,9 @@ export function criarChavesImpressao({eventoNome,lutas}: {eventoNome:string;luta
     const profundidade=(n:No):number=>n.filhos?1+Math.max(...n.filhos.map(profundidade)):0;
     function imprimir(n:No):number {
       if(folhasNo(n)>16) {
-        n={...n,filhos:n.filhos!.map(f=>({nome:`Vencedor da luta ${f.luta?.id_visual}`,pagina:imprimir(f)}))};
+        n={...n,filhos:n.filhos!.map(f=>({nome:`Vencedor da ${rotuloLuta(f.luta || {})}`,pagina:imprimir(f)}))};
       }
-      const p=pagina(n.luta?.proxima_luta?`Seção até a luta ${n.luta.id_visual}`:'Chave / fase final');
+      const p=pagina(n.luta?.proxima_luta?`Seção até ${rotuloLuta(n.luta)}`:'Chave / fase final');
       const niveis=profundidade(n);const total=folhasNo(n);let indice=0;
       const largura=273/(niveis+1);
       function desenhar(no:No):{x:number;y:number} {
@@ -91,7 +92,7 @@ export function criarChavesImpressao({eventoNome,lutas}: {eventoNome:string;luta
         const filhos=no.filhos.map(desenhar);const y=(filhos[0].y+filhos[1].y)/2;
         for(const f of filhos){doc.line(f.x,f.y,x-1,f.y);doc.line(x-1,f.y,x-1,y);}
         doc.line(x-1,y,x+largura-4,y);
-        texto(`L${no.luta?.id_visual}: ${no.luta?.vencedor || '________________'}`,x+1,y-2,largura-5,7,2);
+        texto(`${rotuloLuta(no.luta || {})}: ${no.luta?.vencedor || '________________'}`,x+1,y-2,largura-5,7,2);
         return{x:x+largura-4,y};
       }
       desenhar(n);return p;

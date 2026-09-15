@@ -25,6 +25,9 @@ export default function VouchersAdminPage() {
   const [tipoDesconto, setTipoDesconto] = useState("porcentagem");
   const [valorDesconto, setValorDesconto] = useState<number | "">(100);
   const [limiteUsos, setLimiteUsos] = useState<number | "">(5);
+  const [finalidade, setFinalidade] = useState("projeto_social");
+  const [beneficiario, setBeneficiario] = useState("");
+  const [observacoes, setObservacoes] = useState("");
 
   useEffect(() => {
     carregarEventos();
@@ -107,6 +110,9 @@ export default function VouchersAdminPage() {
         usos_atualmente: 0,
         desconto_porcentagem: tipoDesconto === "porcentagem" ? valDesconto : 0,
         desconto_valor: tipoDesconto === "valor" ? valDesconto : 0,
+        finalidade,
+        beneficiario: beneficiario.trim() || null,
+        observacoes: observacoes.trim() || null,
       };
 
       const { data, error } = await supabase.from("cupons").insert([novoCupom]).select().single();
@@ -123,6 +129,8 @@ export default function VouchersAdminPage() {
       setValorDesconto(100);
       setTipoDesconto("porcentagem");
       setLimiteUsos(5);
+      setBeneficiario("");
+      setObservacoes("");
       
       if (data) {
         setCupons([data, ...cupons]);
@@ -134,6 +142,22 @@ export default function VouchersAdminPage() {
     } finally {
       setSalvando(false);
     }
+  }
+
+  function prepararCortesiaSocial() {
+    setFinalidade("projeto_social");
+    setTipoDesconto("porcentagem");
+    setValorDesconto(100);
+    setLimiteUsos(10);
+    setCodigo(`SOCIAL${Math.random().toString(36).slice(2, 6).toUpperCase()}`);
+  }
+
+  async function copiarOrientacao(cupomAtual: any) {
+    const link = `${window.location.origin}/inscricao?evento=${eventoId}`;
+    const quantidade = Math.max(0, Number(cupomAtual.limite_usos || 0) - Number(cupomAtual.usos_atualmente || 0));
+    const texto = `Inscrições de cortesia iTatame\n\n1. Acesse: ${link}\n2. Entre ou crie a conta do atleta.\n3. Preencha a inscrição e escolha a categoria.\n4. No resumo, informe o voucher ${cupomAtual.codigo} e clique em Validar.\n5. Confirme a inscrição.\n\nVagas disponíveis neste código: ${quantidade}. Cada atleta deve usar sua própria conta e e-mail para receber o QR Code.`;
+    await navigator.clipboard.writeText(texto);
+    setMensagem("Orientação e link copiados. Envie ao professor responsável.");
   }
 
   async function excluirCupom(id: string) {
@@ -181,6 +205,11 @@ export default function VouchersAdminPage() {
           {/* ========================================== */}
           <div className="bg-[#0a0a0e] border border-white/5 rounded-3xl p-6 shadow-xl h-fit">
             <h3 className="text-white font-black text-lg mb-6 border-b border-white/5 pb-4">Gerar Novo Cupom</h3>
+
+            <button type="button" onClick={prepararCortesiaSocial} className="mb-5 w-full rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-left text-xs font-black text-emerald-300 hover:bg-emerald-500/20">
+              Preparar inscrições gratuitas para projeto social
+              <span className="mt-1 block text-[10px] font-medium text-zinc-400">Preenche 100% de desconto e 10 vagas; você pode ajustar a quantidade.</span>
+            </button>
             
             {erro && <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl font-bold text-xs">{erro}</div>}
             {mensagem && <div className="mb-4 p-3 bg-green-500/10 border border-green-500/20 text-green-400 rounded-xl font-bold text-xs">{mensagem}</div>}
@@ -214,6 +243,25 @@ export default function VouchersAdminPage() {
                   <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5 pl-1">Desconto</label>
                   <input type="number" step="0.01" required value={valorDesconto} onChange={(e) => setValorDesconto(Number(e.target.value))} className={inputClass} />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5 pl-1">Finalidade</label>
+                <select value={finalidade} onChange={(e) => setFinalidade(e.target.value)} className={`${inputClass} appearance-none cursor-pointer`}>
+                  <option value="projeto_social" className="bg-[#0a0a0e]">Projeto social</option>
+                  <option value="cortesia" className="bg-[#0a0a0e]">Cortesia</option>
+                  <option value="promocional" className="bg-[#0a0a0e]">Promoção</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5 pl-1">Professor ou projeto beneficiado</label>
+                <input value={beneficiario} onChange={(e) => setBeneficiario(e.target.value)} placeholder="Ex.: Projeto Tatame para Todos" className={inputClass} />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5 pl-1">Observação interna</label>
+                <textarea value={observacoes} onChange={(e) => setObservacoes(e.target.value)} placeholder="Contato do professor ou combinação feita" className={`${inputClass} min-h-20 resize-y`} />
               </div>
 
               <div>
@@ -273,10 +321,12 @@ export default function VouchersAdminPage() {
                           <p className="text-zinc-400 text-xs mt-1 font-medium">
                             Desconto: <strong className="text-white">{c.desconto_porcentagem > 0 ? `${c.desconto_porcentagem}%` : `R$ ${c.desconto_valor.toFixed(2).replace('.', ',')}`}</strong>
                           </p>
+                          {c.beneficiario && <p className="mt-1 text-[10px] font-bold text-emerald-300">{c.beneficiario}</p>}
                         </div>
                       </div>
 
                       <div className="flex items-center gap-4 shrink-0">
+                        <button type="button" onClick={() => copiarOrientacao(c)} disabled={isEsgotado} className="cursor-pointer rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-[9px] font-black uppercase tracking-widest text-white hover:bg-white/10 disabled:opacity-40">Copiar instruções</button>
                         <div className="text-right">
                           <span className="text-2xl font-black text-white block leading-none">{c.usos_atualmente} <span className="text-sm text-zinc-600">/ {c.limite_usos}</span></span>
                           <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest">Usos</span>

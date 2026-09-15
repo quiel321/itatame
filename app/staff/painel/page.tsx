@@ -7,6 +7,7 @@ import { AlertCircle, ArrowRightLeft, CheckCircle, Clock, Filter, LogOut, Play, 
 import { supabase } from '../../lib/supabase';
 import { obterTempoRegulamentar } from '../../lib/cronograma';
 import { processarAvancosAutomaticosChaves } from '../../lib/chaves-auto-avanco';
+import { rotuloLuta } from '../../lib/lutas-rotulos';
 
 type StaffSession = {
   evento_id: string | number;
@@ -366,8 +367,8 @@ export default function PainelMesario() {
       const atletaPresente = isAtletaValido(lutaWait.atleta_1) ? lutaWait.atleta_1 : lutaWait.atleta_2;
       const feederOponente = lutasAlimentadoras.find(l => normalizar(l.vencedor) !== normalizar(atletaPresente));
       if (feederOponente) {
-        if (feederOponente.status_luta === 'concluida') return `Aguardando o sistema fechar a Luta ${feederOponente.id_visual}`;
-        return `Aguardando Vencedor da Luta ${feederOponente.id_visual}`;
+        if (feederOponente.status_luta === 'concluida') return `Aguardando o sistema fechar a ${rotuloLuta(feederOponente)}`;
+        return `Aguardando vencedor da ${rotuloLuta(feederOponente)}`;
       }
     }
     return "Avanço Direto / Aguardando Definição";
@@ -459,7 +460,7 @@ export default function PainelMesario() {
     if (idsAtuais.size > 0) {
       const { data: outrasLutas, error: erroConflito } = await supabase
         .from('chaves')
-        .select('id, id_visual, tatame, atleta_1_id, atleta_2_id, status_luta, iniciada_em, pontuacao_atleta_1, pontuacao_atleta_2')
+        .select('id, id_visual, fase, ordem, proxima_luta, tatame, atleta_1_id, atleta_2_id, status_luta, iniciada_em, pontuacao_atleta_1, pontuacao_atleta_2')
         .eq('evento_id', sessao.evento_id)
         .neq('id', luta.id)
         .neq('status_luta', 'concluida');
@@ -475,7 +476,7 @@ export default function PainelMesario() {
         return compartilha && reservada;
       });
       if (conflito) {
-        setAviso(`Atleta já reservado na luta ${conflito.id_visual || conflito.id}, no ${conflito.tatame || 'tatame definido'}. Finalize ou libere essa luta antes de iniciar outra.`);
+        setAviso(`Atleta já reservado na ${rotuloLuta(conflito)}, no ${conflito.tatame || 'tatame definido'}. Finalize ou libere essa luta antes de iniciar outra.`);
         return;
       }
     }
@@ -562,7 +563,7 @@ export default function PainelMesario() {
       <div key={`baia-${luta.id}`} className="bg-gradient-to-r from-[#0a0a0e] to-black border border-yellow-500/20 rounded-lg p-2.5 flex flex-col sm:flex-row items-center sm:items-stretch gap-3 relative overflow-hidden transition-all opacity-90 hover:opacity-100 hover:border-yellow-500/40">
         <div className="absolute top-0 left-0 w-1 h-full bg-yellow-500 shadow-[0_0_10px_rgba(234,179,8,0.5)]"></div>
         <div className="w-full sm:w-[25%] shrink-0 sm:border-r border-white/5 pr-2 pl-2 flex flex-col text-center sm:text-left justify-center">
-          <span className="text-[8px] text-yellow-500/70 font-black uppercase tracking-widest">{luta.fase} • Luta {luta.id_visual}</span>
+          <span className="text-[8px] text-yellow-500/70 font-black uppercase tracking-widest">{rotuloLuta(luta)}</span>
           <span className="text-[10px] font-black text-white leading-tight mt-0.5 truncate" title={luta.categoria}>{luta.categoria}</span>
           <span className="text-[9px] text-zinc-400 font-bold uppercase mt-0.5">{luta.faixa}</span>
         </div>
@@ -599,7 +600,7 @@ export default function PainelMesario() {
         <div className={`absolute top-0 left-0 w-1 h-full ${luta.status_luta === 'concluida' ? 'bg-green-600' : luta.status_luta === 'em_andamento' ? 'bg-red-600' : luta.iniciada_em ? 'bg-yellow-500' : 'bg-zinc-800'}`}></div>
 
         <div className="w-full sm:w-[25%] shrink-0 sm:border-r border-white/5 pb-1 sm:pb-0 sm:pr-2 pl-2 flex flex-col text-center sm:text-left">
-          <span className="text-[7px] md:text-[8px] text-zinc-500 font-black uppercase tracking-widest">{luta.fase} • Luta {luta.id_visual || luta.id}</span>
+          <span className="text-[7px] md:text-[8px] text-zinc-500 font-black uppercase tracking-widest">{rotuloLuta(luta)}</span>
           <span className="text-[9px] md:text-[10px] font-black text-white leading-tight mt-0.5 truncate" title={luta.categoria}>{luta.categoria}</span>
           <span className="text-[8px] md:text-[9px] text-zinc-400 font-bold uppercase mt-0.5">{luta.faixa}</span>
         </div>
@@ -855,7 +856,7 @@ export default function PainelMesario() {
             <div className="mb-5 flex items-start justify-between gap-3">
               <div>
                 <h2 className="text-lg font-black uppercase text-white">Transferir luta</h2>
-                <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-zinc-500">Luta {modalTransferencia.luta?.id_visual || modalTransferencia.luta?.id}</p>
+                <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-zinc-500">{modalTransferencia.luta ? rotuloLuta(modalTransferencia.luta) : "Confronto"}</p>
               </div>
               <button onClick={() => setModalTransferencia({ visivel: false, luta: null })} className="rounded-xl bg-white/5 p-2 text-zinc-400 hover:text-white"><X size={18} /></button>
             </div>

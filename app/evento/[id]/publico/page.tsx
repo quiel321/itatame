@@ -5,6 +5,7 @@ import { useParams } from "next/navigation"
 import { supabase } from "@/app/lib/supabase"
 import Link from "next/link"
 import { Clock } from "lucide-react"
+import { rotuloLuta } from "@/app/lib/lutas-rotulos"
 
 const formatarHorarioEstimado = (isoString: string | null) => {
   if (!isoString) return '';
@@ -244,19 +245,6 @@ export default function ChavesPublicoPage() {
     return { nome: campeao, equipe: "", foto: buscarFotoPorId(idCampeao) }
   }
 
-  const getNomeDaFase = (luta: any, todasLutas: any[]) => {
-    if (String(luta.id_visual) === "999" || !luta.proxima_luta) return "FINAL - DISPUTA DO OURO";
-    const semis = todasLutas.filter(l => String(l.proxima_luta) === "999" || !l.proxima_luta).map(l => String(l.id_visual));
-    if (semis.includes(String(luta.proxima_luta))) return "SEMIFINAL";
-    const quartas = todasLutas.filter(l => semis.includes(String(l.proxima_luta))).map(l => String(l.id_visual));
-    if (quartas.includes(String(luta.proxima_luta))) return "QUARTAS DE FINAL";
-    const oitavas = todasLutas.filter(l => quartas.includes(String(l.proxima_luta))).map(l => String(l.id_visual));
-    if (oitavas.includes(String(luta.proxima_luta))) return "OITAVAS DE FINAL";
-    const dezesseis = todasLutas.filter(l => oitavas.includes(String(l.proxima_luta))).map(l => String(l.id_visual));
-    if (dezesseis.includes(String(luta.proxima_luta))) return "16 AVOS DE FINAL";
-    return "FASE ELIMINATÓRIA";
-  }
-
   const campeaoData = getCampeao();
   const temCampeao = campeaoData.nome && campeaoData.nome !== "";
 
@@ -291,7 +279,7 @@ export default function ChavesPublicoPage() {
       const feederOponente = lutasAlimentadoras.find(l => limparNome(l.vencedor) !== limparNome(atletaPresente));
       if (feederOponente) {
         if (feederOponente.status_luta === 'concluida') return `Aguardando chamada ao tatame`;
-        return `Aguardando vencedor da Luta ${feederOponente.id_visual}`;
+        return `Aguardando vencedor da ${rotuloLuta(feederOponente)}`;
       }
     }
     return "Avanço Direto - Aguardando oponente";
@@ -505,7 +493,7 @@ export default function ChavesPublicoPage() {
                   return (
                     <div key={luta.id} className={`bg-[#0c1220] border ${luta.status_luta === 'em_andamento' ? 'border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.2)]' : 'border-[#57d8ff]/20'} rounded-xl flex flex-col relative overflow-hidden transition-all hover:border-[#57d8ff]/50`}>
                       <div className={`py-2 px-3 flex justify-between items-center border-b ${luta.status_luta === 'em_andamento' ? 'bg-red-500/10 border-red-500/20' : 'bg-[#57d8ff]/10 border-[#57d8ff]/20'}`}>
-                        <span className={`text-[9px] font-black uppercase tracking-widest ${luta.status_luta === 'em_andamento' ? 'text-red-400' : 'text-[#57d8ff]'}`}>{getNomeDaFase(luta, lutas)} • Luta {luta.id_visual}</span>
+                        <span className={`text-[9px] font-black uppercase tracking-widest ${luta.status_luta === 'em_andamento' ? 'text-red-400' : 'text-[#57d8ff]'}`}>{rotuloLuta(luta)}</span>
                         {luta.status_luta === 'em_andamento' && <span className="text-[8px] bg-red-500 text-white px-1.5 py-0.5 rounded font-black uppercase animate-pulse shadow-sm">Lutando</span>}
                       </div>
 

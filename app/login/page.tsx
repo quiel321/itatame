@@ -83,65 +83,23 @@ function FormularioLogin() {
         return;
       }
 
-      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-        email,
-        password: senha,
-        options: {
-          data: {
-            cpf: cpf,
-            role: tipoConta, 
-          },
-        },
-      });
+      const cadastro = new FormData();
+      cadastro.set("perfil", tipoConta);
+      cadastro.set("email", email);
+      cadastro.set("password", senha);
+      cadastro.set("cpf", cpf);
+      const response = await fetch("/api/cadastro", { method: "POST", body: cadastro });
+      const resultado = await response.json();
 
-      if (signUpError) {
-        if (signUpError.message.includes("User already registered")) {
-          setErro("Este e-mail já está cadastrado. Por favor, faça login.");
-        } else {
-          setErro(signUpError.message);
-        }
+      if (!response.ok) {
+        setErro(resultado.error || "Não foi possível criar a conta.");
       } else {
-        if (signUpData?.user) {
-          await supabase.from("atletas").insert([
-            {
-              user_id: signUpData.user.id,
-              email: email,
-              cpf: cpf,
-              role: tipoConta, 
-              nome: "", 
-              equipe: "Independente"
-            }
-          ]);
-          // 🔥 GATILHO DO E-MAIL DE BOAS-VINDAS ADICIONADO AQUI 🔥
-          try {
-            await fetch('/api/boas-vindas', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ 
-                email: email,
-                nome: "" // Fica vazio pois ele preenche no perfil depois
-              }),
-            });
-          } catch (err) {
-            console.error("Erro ao enviar e-mail de boas-vindas", err);
-          }
-          // 🔥 FIM DO GATILHO 🔥
-        }
-
-        setMensagem(tipoConta === "professor" 
-          ? "Conta criada! Acesse para gerenciar sua equipe." 
-          : "Conta criada com sucesso! Já pode acessar."
-        );
-        
-        setTimeout(() => {
-          if (redirecionarPara) {
-            router.push(redirecionarPara); 
-          } else {
-            setIsLogin(true); 
-            setSenha("");
-            setCpf("");
-          }
-        }, 2000);
+        setMensagem(resultado.requiresEmailConfirmation
+          ? "Cadastro realizado. Abra o e-mail enviado pelo iTatame e confirme seu endereço antes de entrar."
+          : "Cadastro realizado. Você já pode entrar.");
+        setIsLogin(true);
+        setSenha("");
+        setCpf("");
       }
     }
     setLoading(false);

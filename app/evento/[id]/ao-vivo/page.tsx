@@ -7,6 +7,7 @@ import { useParams } from "next/navigation";
 import { Clock, Medal, Monitor, Radio, Search, Trophy, X, ChevronRight } from "lucide-react";
 import { supabase } from "@/app/lib/supabase";
 import { obterTempoRegulamentar } from "@/app/lib/cronograma";
+import { rotuloLuta } from "@/app/lib/lutas-rotulos";
 
 // --- TIPOS ---
 type Evento = {
@@ -271,7 +272,7 @@ function LutaTvActiveCard({
         <div className="min-w-0 flex-1">
           <div className="mb-1 flex items-center gap-2">
             <span className="flex h-2.5 w-2.5 shrink-0 animate-pulse items-center justify-center rounded-full bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.8)]"></span>
-            <h2 className={`${compacto ? 'text-lg xl:text-xl' : 'text-xl xl:text-2xl'} line-clamp-2 font-black uppercase leading-tight tracking-tight text-white`}>{luta.tatame || "Tatame"} {luta.id_visual ? `- Luta #${luta.id_visual}` : ""}</h2>
+            <h2 className={`${compacto ? 'text-lg xl:text-xl' : 'text-xl xl:text-2xl'} line-clamp-2 font-black uppercase leading-tight tracking-tight text-white`}>{luta.tatame || "Tatame"} · {rotuloLuta(luta)}</h2>
           </div>
           <p className={`${compacto ? 'text-[9px]' : 'text-[10px] xl:text-xs'} line-clamp-2 font-bold uppercase leading-tight tracking-wider text-zinc-400`}>{subtituloLuta(luta)}</p>
         </div>
@@ -372,7 +373,7 @@ function LutaAoVivoCardMobile({ luta, agora, atletas }: { luta: LutaAoVivo; agor
           <div className="flex items-center gap-1.5 mb-0.5">
             <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping shrink-0"></span>
             <span className="text-[10px] md:text-xs font-black uppercase text-white truncate">
-              {luta.tatame || "Tatame"} {luta.id_visual ? `- Luta ${luta.id_visual}` : ""}
+              {luta.tatame || "Tatame"} · {rotuloLuta(luta)}
             </span>
           </div>
           <span className="text-[8px] md:text-[9px] font-medium uppercase text-zinc-400 truncate block leading-tight">{subtituloLuta(luta)}</span>

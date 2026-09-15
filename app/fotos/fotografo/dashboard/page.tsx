@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
 import FotosShell from "../../_components/FotosShell";
 import { ArrowRight, Camera, CheckCircle2, ChevronDown, CloudUpload, CreditCard, FolderOpen, ImagePlus, ShieldCheck, Wallet, LogOut, AlertCircle, Store, X, Edit, Calendar, MapPin, Image as ImageIcon, Trash2, Loader2, Check, Plus, Images, Trophy, ChartNoAxesCombined, Video } from "lucide-react";
+import MercadoPagoConnectButton from "@/app/admin/_components/MercadoPagoConnectButton";
 
 type FotografoPerfil = { id: string; nome: string | null; email: string | null; foto_url?: string | null; telefone?: string | null; documento?: string | null; cep?: string | null; endereco?: string | null; cidade?: string | null; estado?: string | null; bio?: string | null; perfil_completo?: boolean | null; status: string | null; mp_connected_at?: string | null; mp_user_id?: string | null; };
 type Totais = { fotos: number; albuns: number; eventos: number; vendas: number };
@@ -69,7 +70,6 @@ export default function FotografoDashboardPage() {
   const mercadoPagoConectado = useMemo(() => Boolean(perfil?.mp_connected_at), [perfil?.mp_connected_at]);
   const perfilPendente = useMemo(() => Boolean(userId && (!perfil?.perfil_completo || !perfil?.telefone || !perfil?.documento)), [userId, perfil]);
   const exibirFormularioPerfil = useMemo(() => Boolean(userId && (perfilPendente || mostrarFormularioPerfil)), [userId, perfilPendente, mostrarFormularioPerfil]);
-  const mpConnectUrl = useMemo(() => userId ? `/api/mercado-pago/connect?integracao=retratt&perfil=fotografo&user_id=${encodeURIComponent(userId)}&return_to=${encodeURIComponent("/fotos/fotografo/dashboard")}` : "/fotos/login?perfil=fotografo&next=/fotos/fotografo/dashboard", [userId]);
   const primeiroNome = useMemo(() => nomeExibicao.split(' ')[0], [nomeExibicao]);
 
   function abrirCriacaoGaleria() {
@@ -904,7 +904,7 @@ export default function FotografoDashboardPage() {
                      <div className="flex items-center gap-3 border-b border-white/5 pb-4"><CreditCard size={19} className="shrink-0 text-retratt"/><div><p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Recebimentos</p><h2 className="text-base font-black text-white">Conecte sua conta</h2></div></div>
                      <p className="mt-4 text-[10px] font-black uppercase tracking-wider text-retratt">Mercado Pago ainda não conectado</p>
                      <p className="mt-2 text-[10px] leading-relaxed text-zinc-500">A conexão é necessária para receber sua porcentagem automaticamente a cada venda.</p>
-                     <a href={mpConnectUrl} className="mt-5 flex h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-retratt px-4 text-center text-[9px] font-black uppercase tracking-widest text-black shadow-[0_0_15px_rgba(255,90,31,0.15)]">Conectar Mercado Pago <ArrowRight size={14}/></a>
+                     <MercadoPagoConnectButton conectado={false} perfil="fotografo" returnTo="/fotos/fotografo/dashboard" className="mt-5 flex h-11 w-full items-center justify-center rounded-xl bg-retratt px-4 text-center text-[9px] font-black uppercase tracking-widest text-black shadow-[0_0_15px_rgba(255,90,31,0.15)]" />
                    </>
                  )}
                </div>

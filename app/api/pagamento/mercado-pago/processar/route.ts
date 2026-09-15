@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { calcularComissaoMarketplace } from "@/app/lib/planos-comerciais";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
 import { enviarEmailIngressoConfirmado } from "@/app/lib/email-ingresso";
+import { obterAccessTokenOrganizador } from "@/app/lib/mercado-pago-integracao";
 
 type EventoPagamento = {
   id: string | number;
@@ -37,6 +38,17 @@ function calcularValorInscricao(inscricao: any, evento: EventoPagamento) {
 
   const lutaPesoEAbsoluto = inscricao.absoluto === true && inscricao.categoria !== "Absoluto";
   return lutaPesoEAbsoluto ? valor + 50 : valor;
+}
+
+async function calcularValorCobrado(supabase: ReturnType<typeof createSupabaseServerClient>, inscricao: any, evento: EventoPagamento) {
+  const base = calcularValorInscricao(inscricao, evento);
+  if (!inscricao.cupom_id) return base;
+  const { data: cupom } = await supabase.from("cupons").select("desconto_porcentagem, desconto_valor").eq("id", inscricao.cupom_id).eq("evento_id", evento.id).maybeSingle();
+  if (!cupom) return base;
+  const desconto = Number(cupom.desconto_porcentagem || 0) > 0
+    ? base * Math.min(100, Number(cupom.desconto_porcentagem)) / 100
+    : Number(cupom.desconto_valor || 0);
+  return Number(Math.max(0, base - desconto).toFixed(2));
 }
 
 function limparPayloadPagamento(formData: any, valorTotal: number, comissao: number, descricao: string, request: Request, inscricao: any, evento: any) {
@@ -81,6 +93,7 @@ export async function POST(request: Request) {
         categoria,
         absoluto,
         pagamento_ok,
+        cupom_id,
         evento_id,
         eventos (
           id,
@@ -119,9 +132,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Organizador sem Mercado Pago conectado." }, { status: 409 });
     }
 
+    const accessToken = await obterAccessTokenOrganizador(request, organizador, supabase);
+    if (!accessToken) return NextResponse.json({ error: "A conexão Mercado Pago do organizador expirou. Solicite uma nova conexão." }, { status: 409 });
+
     try { formData.installments = validarParcelas(formData.installments, limiteParcelas(organizador.mp_parcelamento_comprador_confirmado)); }
     catch (error) { return NextResponse.json({ error: (error as Error).message }, { status: 400 }); }
-    const valorTotal = calcularValorInscricao(inscricao, evento);
+    const valorTotal = await calcularValorCobrado(supabase, inscricao, evento);
     const comissao = calcularComissaoMarketplace(valorTotal, organizador.plano_comercial);
     const descricao = `Inscricao - ${evento.nome || "Evento iTatame"}`;
     const paymentPayload = limparPayloadPagamento(formData, comissao.valorTotal, comissao.comissao, descricao, request, inscricao, evento);
@@ -131,7 +147,7 @@ export async function POST(request: Request) {
       headers: {
         accept: "application/json",
         "content-type": "application/json",
-        Authorization: `Bearer ${organizador.mp_access_token}`,
+        Authorization: `Bearer ${accessToken}`,
         "X-Idempotency-Key": crypto.randomUUID(),
       },
       body: JSON.stringify(paymentPayload),

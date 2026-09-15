@@ -6,6 +6,7 @@ import { AlertCircle, CheckCircle2, Clock3, LogOut, Megaphone, RefreshCw, Shield
 import { supabase } from '../../lib/supabase';
 import { processarAvancosAutomaticosChaves, propagarResultadoChave } from '../../lib/chaves-auto-avanco';
 import { obterTempoRegulamentar } from '../../lib/cronograma';
+import { rotuloLuta } from '../../lib/lutas-rotulos';
 
 type StaffSession = {
   evento_id: string | number;
@@ -263,7 +264,7 @@ export default function PainelChamador() {
     const chavesAtuais = new Set(chavesDosAtletas(lutaAtual));
     const { data, error } = await supabase
       .from('chaves')
-      .select('id, id_visual, tatame, atleta_1, atleta_2, atleta_1_id, atleta_2_id, status_luta, iniciada_em, pontuacao_atleta_1, pontuacao_atleta_2')
+      .select('id, id_visual, fase, ordem, proxima_luta, tatame, atleta_1, atleta_2, atleta_1_id, atleta_2_id, status_luta, iniciada_em, pontuacao_atleta_1, pontuacao_atleta_2')
       .eq('evento_id', sessao.evento_id)
       .neq('id', lutaAtual.id)
       .neq('status_luta', 'concluida');
@@ -291,7 +292,7 @@ export default function PainelChamador() {
       try {
         const conflito = await buscarConflitoAtleta(luta);
         if (conflito) {
-          setToast({ mensagem: `${texto(nome)} já está reservado para a luta ${conflito.id_visual || conflito.id} no ${conflito.tatame || 'tatame definido'}.`, tipo: 'erro' });
+          setToast({ mensagem: `${texto(nome)} já está reservado para a ${rotuloLuta(conflito)} no ${conflito.tatame || 'tatame definido'}.`, tipo: 'erro' });
           return;
         }
       } catch (error: any) {
@@ -376,7 +377,7 @@ export default function PainelChamador() {
     try {
       const conflito = await buscarConflitoAtleta(luta);
       if (conflito) {
-        setToast({ mensagem: `Um atleta desta luta já está comprometido na luta ${conflito.id_visual || conflito.id}, no ${conflito.tatame || 'tatame definido'}.`, tipo: 'erro' });
+        setToast({ mensagem: `Um atleta desta luta já está comprometido na ${rotuloLuta(conflito)}, no ${conflito.tatame || 'tatame definido'}.`, tipo: 'erro' });
         setAcaoId(null);
         return;
       }
@@ -409,7 +410,7 @@ export default function PainelChamador() {
       notificarAtleta(luta.atleta_1_id, luta.atleta_1, luta.atleta_2, luta),
       notificarAtleta(luta.atleta_2_id, luta.atleta_2, luta.atleta_1, luta),
     ]);
-    setToast({ mensagem: `Luta ${luta.id_visual || luta.id} chamada. O mesário já pode iniciar.`, tipo: 'sucesso' });
+    setToast({ mensagem: `${rotuloLuta(luta)} chamada. O mesário já pode iniciar.`, tipo: 'sucesso' });
     setAcaoId(null);
     await carregar(true);
   };
@@ -425,7 +426,7 @@ export default function PainelChamador() {
     <article key={luta.id} className={`rounded-2xl border p-4 ${tipo === 'chamada' ? 'border-yellow-500/40 bg-yellow-500/10' : tipo === 'pronta' ? 'border-emerald-500/25 bg-emerald-500/5' : tipo === 'baia' ? 'border-cyan-500/30 bg-cyan-500/5' : 'border-white/10 bg-[#0b0b10]'}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">{luta.tatame || 'Sem tatame'} · Luta {luta.id_visual || luta.id} · {hora(luta.horario_estimado)}</p>
+          <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">{luta.tatame || 'Sem tatame'} · {rotuloLuta(luta)} · {hora(luta.horario_estimado)}</p>
           <h3 className="mt-1 truncate text-sm font-black uppercase text-white">{luta.categoria}</h3>
           <p className="mt-1 text-[9px] font-bold uppercase tracking-wider text-zinc-500">{luta.faixa || 'Faixa não informada'} · {luta.fase || 'Fase'}</p>
         </div>

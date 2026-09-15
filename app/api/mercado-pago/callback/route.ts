@@ -69,7 +69,8 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
   const error = url.searchParams.get("error");
-  const state = lerState(url.searchParams.get("state"), request);
+  const stateParam = url.searchParams.get("state");
+  const state = lerState(stateParam, request);
   const integracao = state?.integracao || detectarIntegracaoMercadoPago(request);
   const config = obterConfigMercadoPago(request, integracao);
   const baseUrl = config.baseUrl;
@@ -91,14 +92,14 @@ export async function GET(request: Request) {
 
   const tokenResponse = await fetch("https://api.mercadopago.com/oauth/token", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
       client_id: config.clientId,
       client_secret: config.clientSecret,
       code,
       grant_type: "authorization_code",
       redirect_uri: config.redirectUri,
-      test_token: process.env.MP_OAUTH_TEST_TOKEN === "true" ? "true" : "false",
+      state: stateParam || "",
     }),
   });
 

@@ -1,10 +1,11 @@
 import crypto from "crypto";
 import { NextResponse } from "next/server";
 import {
-  detectarIntegracaoMercadoPago,
   obterConfigMercadoPago,
   type MercadoPagoIntegracao,
 } from "@/app/lib/mercado-pago-integracao";
+import { autenticarRequest } from "@/app/lib/api-auth";
+import { createSupabaseServerClient } from "@/app/lib/supabase-server";
 
 type PerfilMercadoPago = "organizador" | "fotografo";
 
@@ -32,38 +33,44 @@ function assinarState(payload: OAuthState, secret: string) {
   return `${body}.${signature}`;
 }
 
-export async function GET(request: Request) {
-  const url = new URL(request.url);
-  const legadoAdmin = Boolean(url.searchParams.get("organizador_id")) && !url.searchParams.get("perfil");
-  const perfil = perfilValido(url.searchParams.get("perfil"));
-  const userId = url.searchParams.get("user_id") || url.searchParams.get("organizador_id");
-  const integracao = detectarIntegracaoMercadoPago(request, url.searchParams.get("integracao"));
-  const config = obterConfigMercadoPago(request, integracao);
-
-  if (!userId) {
-    return NextResponse.json({ error: "Usuário não informado." }, { status: 400 });
-  }
-
-  if (!config.clientId || !config.clientSecret || !config.stateSecret) {
-    const prefixo = integracao === "retratt" ? "RETRATT_MP" : "MP";
-    return NextResponse.json(
-      { error: `Configure ${prefixo}_CLIENT_ID, ${prefixo}_CLIENT_SECRET e o segredo de OAuth antes de conectar.` },
-      { status: 500 }
-    );
-  }
-
+function urlAutorizacao(config: ReturnType<typeof obterConfigMercadoPago>, payload: OAuthState) {
   const mercadoPagoUrl = new URL("https://auth.mercadopago.com.br/authorization");
   mercadoPagoUrl.searchParams.set("client_id", config.clientId);
   mercadoPagoUrl.searchParams.set("response_type", "code");
   mercadoPagoUrl.searchParams.set("platform_id", "mp");
   mercadoPagoUrl.searchParams.set("redirect_uri", config.redirectUri);
-  mercadoPagoUrl.searchParams.set("state", assinarState({
+  mercadoPagoUrl.searchParams.set("state", assinarState(payload, config.stateSecret));
+  return mercadoPagoUrl;
+}
+
+export async function POST(request: Request) {
+  const usuario = await autenticarRequest(request);
+  if (!usuario) return NextResponse.json({ error: "Sessão inválida." }, { status: 401 });
+
+  const body = await request.json().catch(() => ({}));
+  const perfil = perfilValido(body.perfil || null);
+
+  const supabase = createSupabaseServerClient();
+  const tabelaPerfil = perfil === "fotografo" ? "fotografos" : "organizadores";
+  const { data: registroPerfil } = await supabase.from(tabelaPerfil).select("id").eq("user_id", usuario.id).maybeSingle();
+  if (!registroPerfil) return NextResponse.json({ error: `${perfil === "fotografo" ? "Fotógrafo" : "Organizador"} não encontrado.` }, { status: 403 });
+
+  const integracao: MercadoPagoIntegracao = perfil === "fotografo" ? "retratt" : "itatame";
+  const config = obterConfigMercadoPago(request, integracao);
+  if (!config.clientId || !config.clientSecret || !config.stateSecret) {
+    return NextResponse.json({ error: "Integração Mercado Pago não configurada." }, { status: 500 });
+  }
+
+  const payload: OAuthState = {
     integracao,
     perfil,
-    userId,
-    returnTo: returnToSeguro(url.searchParams.get("return_to"), perfil, legadoAdmin),
+    userId: usuario.id,
+    returnTo: returnToSeguro(body.returnTo || null, perfil, false),
     ts: Date.now(),
-  }, config.stateSecret));
+  };
+  return NextResponse.json({ url: urlAutorizacao(config, payload).toString() });
+}
 
-  return NextResponse.redirect(mercadoPagoUrl);
+export async function GET() {
+  return NextResponse.json({ error: "Use o botão autenticado para conectar o Mercado Pago." }, { status: 405, headers: { Allow: "POST" } });
 }

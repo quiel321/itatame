@@ -1,5 +1,6 @@
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
+import { rotuloLuta } from "./lutas-rotulos";
 
 export type LutaKitContingencia = {
   id?: string | number | null;
@@ -413,6 +414,7 @@ function desenharResultadosPorCategoria(doc: jsPDF, lutas: LutaKitContingencia[]
   const grupos = new Map<string, LutaKitContingencia[]>();
   lutas.forEach((luta) => grupos.set(grupoDaLuta(luta), [...(grupos.get(grupoDaLuta(luta)) || []), luta]));
   for (const [grupo, lutasGrupo] of grupos) {
+    const lutasPorNumero = new Map(lutasGrupo.map((luta) => [String(luta.id_visual), luta]));
     const chaveDeTres = lutasGrupo.some((luta) => texto(luta.fase, "").toUpperCase().includes("CHAVE DE 3"));
     const y = novaPagina(doc, "Controle de resultados", grupo);
     if (chaveDeTres) {
@@ -435,7 +437,7 @@ function desenharResultadosPorCategoria(doc: jsPDF, lutas: LutaKitContingencia[]
           `${nomeReal(luta.atleta_1)}\n× ${nomeReal(luta.atleta_2)}`,
           concluida ? texto(luta.vencedor) : "________________",
           concluida ? `${metodoDaLuta(luta)} · ${placarDaLuta(luta)}` : "________________",
-          luta.proxima_luta ? `Luta ${luta.proxima_luta}` : "Pódio",
+          luta.proxima_luta ? rotuloLuta(lutasPorNumero.get(String(luta.proxima_luta)) || { id_visual: luta.proxima_luta }) : "Pódio",
           concluida ? "[x]" : "[ ]",
         ];
       }),
