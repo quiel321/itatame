@@ -75,3 +75,9 @@ html.fotos-protecao-instantanea [data-foto-protegida-imagem] {
 }
 
 /* A interface continua visível: somente as fotos à venda recebem o filtro. */
+button:not(:disabled),
+a[href],
+summary,
+[role="button"] {
+  cursor: pointer;
+}

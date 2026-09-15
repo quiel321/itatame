@@ -703,7 +703,7 @@ export default function PerfilPage() {
                  </div>
                  <div className="flex gap-3 px-4 relative z-10">
                     <div className="w-[100px] h-[100px] bg-white p-1.5 rounded-[2px] shrink-0 shadow-sm flex items-center justify-center">
-                       <QRCode value={`https://itatame.com/atleta/${userId}`} size={88} style={{ height: "auto", maxWidth: "100%", width: "100%" }} />
+                       <QRCode value={`${process.env.NEXT_PUBLIC_SITE_URL || "https://itatame.com.br"}/atleta/${userId}`} size={88} style={{ height: "auto", maxWidth: "100%", width: "100%" }} />
                     </div>
                     <div className="flex-1 space-y-1.5 flex flex-col justify-center">
                          <div className="flex bg-white h-6 items-center overflow-hidden rounded-[2px] shadow-sm">

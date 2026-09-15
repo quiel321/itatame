@@ -8,6 +8,7 @@ import {
   formatarDataHoraEvento,
   obterEtapaEvento,
   obterLinhaDoTempoEvento,
+  type ResumoLutasEvento,
   type TomEtapaEvento,
 } from "@/app/lib/evento-etapas";
 import Link from "next/link";
@@ -27,6 +28,7 @@ export default function EventoDetalhesPage() {
   const [evento, setEvento] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [inscricoes, setInscricoes] = useState<any[]>([]);
+  const [resumoLutas, setResumoLutas] = useState<ResumoLutasEvento>({ total: 0, concluidas: 0, emAndamento: 0, pendentes: 0 });
   const [abaAtiva, setAbaAtiva] = useState("sobre");
 
   // 🔥 STATE DO ACORDEÃO NOVO!
@@ -63,6 +65,25 @@ export default function EventoDetalhesPage() {
     carregarDados();
   }, [params.id]);
 
+  useEffect(() => {
+    if (!params.id) return;
+    let ativo = true;
+    const carregarAoVivo = async () => {
+      const { data } = await supabase.from('chaves').select('status_luta').eq('evento_id', params.id);
+      if (!ativo) return;
+      const lutas = data || [];
+      setResumoLutas({
+        total: lutas.length,
+        concluidas: lutas.filter(luta => luta.status_luta === 'concluida').length,
+        emAndamento: lutas.filter(luta => luta.status_luta === 'em_andamento').length,
+        pendentes: lutas.filter(luta => !['concluida', 'em_andamento'].includes(luta.status_luta || '')).length,
+      });
+    };
+    void carregarAoVivo();
+    const canal = supabase.channel(`evento-ao-vivo-${params.id}`).on('postgres_changes', { event: '*', schema: 'public', table: 'chaves', filter: `evento_id=eq.${params.id}` }, carregarAoVivo).subscribe();
+    return () => { ativo = false; void supabase.removeChannel(canal); };
+  }, [params.id]);
+
   if (loading) return <div className="min-h-screen bg-[#050505] flex items-center justify-center text-zinc-500 font-bold uppercase tracking-widest text-xs">Carregando evento...</div>;
   if (!evento) return <div className="min-h-screen bg-[#050505] flex items-center justify-center text-white font-bold text-sm">Evento não encontrado.</div>;
 
@@ -78,9 +99,10 @@ export default function EventoDetalhesPage() {
 
   // O mesmo motor temporal alimenta o card público, os avisos e esta página.
   const agora = new Date();
-  const etapaAtual = obterEtapaEvento(evento, agora);
+  const etapaAtual = obterEtapaEvento(evento, agora, resumoLutas);
   const linhaDoTempo = obterLinhaDoTempoEvento(evento, agora);
   const estiloAtual = estiloEtapa[etapaAtual.tom];
+  const lutasEmAndamento = resumoLutas.emAndamento;
   const fimPagamento = dataOperacional(evento.data_fim_pagamento, true);
   const pagamentoDisponivel =
     (etapaAtual.codigo === "INSCRICOES_ABERTAS" || etapaAtual.codigo === "AGUARDANDO_CHECAGEM") &&
@@ -140,13 +162,16 @@ export default function EventoDetalhesPage() {
               </div>
 
               <div className={`mb-4 rounded-xl border p-3 md:mb-5 md:p-4 ${estiloAtual.aviso}`}>
-                <div className="flex items-start gap-3">
-                  <span className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${estiloAtual.ponto} ${etapaAtual.codigo === "LUTAS_AO_VIVO" ? "animate-pulse" : ""}`} />
-                  <div>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="flex items-start gap-3">
+                    <span className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${estiloAtual.ponto} ${lutasEmAndamento > 0 ? "animate-pulse" : ""}`} />
+                    <div>
                     <p className="text-[9px] font-black uppercase tracking-[0.18em] text-zinc-500">Estado atual do evento</p>
                     <p className="mt-1 text-xs font-black uppercase tracking-wide text-white md:text-sm">{etapaAtual.titulo}</p>
                     <p className="mt-1 text-[10px] font-medium leading-relaxed text-zinc-400 md:text-xs">{etapaAtual.detalhe}. {etapaAtual.proximoPasso}.</p>
+                    </div>
                   </div>
+                  {lutasEmAndamento > 0 && <Link href={`/evento/${evento.id}/ao-vivo`} className="flex shrink-0 items-center justify-center gap-2 rounded-lg border border-red-400/40 bg-red-950/70 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-red-100 shadow-[0_0_18px_rgba(239,68,68,0.2)] hover:bg-red-900/80"><span className="h-2 w-2 animate-pulse rounded-full bg-red-400" />{lutasEmAndamento} {lutasEmAndamento === 1 ? 'Luta ao Vivo' : 'Lutas ao Vivo'}</Link>}
                 </div>
               </div>
             </div>
@@ -189,15 +214,6 @@ export default function EventoDetalhesPage() {
                 </Link>
               )}
               
-              {/* 🔥 NOVO BOTÃO: LUTAS AO VIVO */}
-              <Link href={`/evento/${evento.id}/ao-vivo`} className="bg-red-900/30 hover:bg-red-800/50 border border-red-500/50 text-red-200 font-black uppercase tracking-widest text-[10px] md:text-xs px-3 py-2.5 md:px-6 md:py-3.5 rounded-lg transition-all text-center flex-1 md:flex-none flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(239,68,68,0.2)]">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
-                </span>
-                Lutas ao Vivo
-              </Link>
-
               <Link href={`/evento/${evento.id}/publico`} className="bg-white/5 hover:bg-white/10 border border-white/10 text-white font-bold uppercase tracking-widest text-[10px] md:text-xs px-3 py-2.5 md:px-6 md:py-3.5 rounded-lg transition-all text-center flex-1 md:flex-none">
                 Chaves e Resultados
               </Link>
