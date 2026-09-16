@@ -9,7 +9,7 @@ type Solicitacao = { id: string; equipe_nome: string; academia: string; professo
 
 export default function EquipesPage() {
   const contexto = useEventoCompeticao();
-  return <CompeticaoShell titulo="Equipes e professores" descricao="O organizador pode cadastrar diretamente ou aprovar o pedido enviado por um professor. Equipe é o nome usado nas inscrições, chaves e ranking." contexto={contexto}><Editor key={contexto.eventoId} eventoId={contexto.eventoId} /></CompeticaoShell>;
+  return <CompeticaoShell titulo="Equipes e professores" descricao="O organizador e o professor podem cadastrar a equipe gratuitamente. Equipe é o nome usado nas inscrições, chaves e ranking." contexto={contexto}><Editor key={contexto.eventoId} eventoId={contexto.eventoId} /></CompeticaoShell>;
 }
 
 function Editor({ eventoId }: { eventoId: string }) {
@@ -86,13 +86,13 @@ function Editor({ eventoId }: { eventoId: string }) {
       <h2 className="font-bold">Como uma equipe entra no campeonato</h2>
       <div className="mt-3 grid gap-3 text-sm text-zinc-400 md:grid-cols-3">
         <p><strong className="block text-white mb-1">Opção 1 · Organizador</strong>Cadastre a equipe diretamente usando o formulário desta página.</p>
-        <p><strong className="block text-white mb-1">Opção 2 · Professor</strong>Na página pública do evento, o professor envia uma solicitação com a conta dele.</p>
-        <p><strong className="block text-white mb-1">Conferência</strong>Ao aprovar, a equipe aparece na inscrição, nas chaves e no ranking do evento.</p>
+        <p><strong className="block text-white mb-1">Opção 2 · Professor</strong>Na página pública do evento, o professor cadastra gratuitamente a equipe com a conta dele.</p>
+        <p><strong className="block text-white mb-1">Resultado</strong>A equipe aparece imediatamente na inscrição, nas chaves e no ranking do evento.</p>
       </div>
     </section>
 
     <section className="mb-6 rounded-2xl border border-white/10 p-5">
-      <div className="flex items-center justify-between gap-3"><div><h2 className="font-bold">Solicitações dos professores</h2><p className="mt-1 text-xs text-zinc-400">Confira nome, academia e responsável antes de aprovar.</p></div><span className="rounded-full bg-yellow-500 px-3 py-1 text-xs font-black text-black">{pendentes.length} pendentes</span></div>
+      <div className="flex items-center justify-between gap-3"><div><h2 className="font-bold">Solicitações antigas</h2><p className="mt-1 text-xs text-zinc-400">Pedidos anteriores à liberação do cadastro direto ainda podem ser analisados aqui.</p></div><span className="rounded-full bg-yellow-500 px-3 py-1 text-xs font-black text-black">{pendentes.length} pendentes</span></div>
       {!pendentes.length ? <p className="mt-4 text-sm text-zinc-500">Nenhuma solicitação aguardando análise.</p> : <div className="mt-4 grid gap-3 md:grid-cols-2">{pendentes.map(item => <article key={item.id} className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-4"><h3 className="font-bold">{item.equipe_nome}</h3><p className="mt-1 text-sm text-zinc-400">{item.academia || 'Academia não informada'} · {item.cidade || 'Cidade não informada'}</p><p className="mt-2 text-sm">Professor: {item.professor}</p><div className="mt-4 flex gap-2"><button disabled={salvando} onClick={() => analisar(item,true)} className="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-bold disabled:opacity-40">Aprovar</button><button disabled={salvando} onClick={() => analisar(item,false)} className="rounded-lg border border-red-500/30 px-4 py-2 text-xs font-bold text-red-300 disabled:opacity-40">Recusar</button></div></article>)}</div>}
     </section>
 

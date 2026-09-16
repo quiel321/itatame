@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabase";
 import { calcularResultadosChaves } from "../lib/ranking-eventos";
 import imageCompression from 'browser-image-compression';
 import QRCode from "react-qr-code";
+import { formatarTelefone } from '@/app/lib/formatar-telefone';
 
 export default function PerfilPage() {
   const [perfilId, setPerfilId] = useState<number | null>(null);
@@ -214,7 +215,7 @@ export default function PerfilPage() {
       setFotoUrl(perfilData.foto_url || "");
       setCpf(perfilData.cpf || authData.user.user_metadata?.cpf || "");
       setNascimento(perfilData.nascimento || "");
-      setTelefone(perfilData.telefone || "");
+      setTelefone(formatarTelefone(perfilData.telefone || ""));
       setEquipe(perfilData.equipe || "");
       setAcademia(perfilData.academia || "");
       setProfessor(perfilData.professor || "");
@@ -341,12 +342,27 @@ export default function PerfilPage() {
     setSalvando(true); setMensagem(""); setErro("");
     if (!nome || !cpf) { setErro("Nome e CPF são obrigatórios."); setSalvando(false); return; }
 
+    const cpfDigitos = cpf.replace(/\D/g, "");
+    const cpfFormatado = formatarCpf(cpfDigitos);
+    const telefoneDigitos = telefone.replace(/\D/g, "");
+    if (cpfDigitos.length !== 11 || (telefoneDigitos && (telefoneDigitos.length < 10 || telefoneDigitos.length > 11))) {
+      setErro('Informe um CPF e telefone válidos.'); setSalvando(false); return;
+    }
+    const [{ data: cpfExistente }, { data: telefoneExistente }] = await Promise.all([
+      supabase.from('atletas').select('user_id').in('cpf', [cpfDigitos, cpfFormatado]).neq('user_id', userId).limit(1),
+      telefoneDigitos ? supabase.from('atletas').select('user_id').in('telefone', [telefoneDigitos, formatarTelefone(telefoneDigitos)]).neq('user_id', userId).limit(1) : Promise.resolve({ data: [] }),
+    ]);
+    if (cpfExistente?.length || telefoneExistente?.length) {
+      setErro(cpfExistente?.length ? 'Este CPF já pertence a outra conta.' : 'Este telefone já pertence a outra conta.');
+      setSalvando(false); return;
+    }
+
     const perfilAtualizado: any = {
       user_id: userId,
       email,
       nome,
-      cpf,
-      telefone,
+      cpf: cpfFormatado,
+      telefone: telefoneDigitos,
       equipe,
       academia,
       professor,
@@ -896,7 +912,7 @@ export default function PerfilPage() {
                 <div><label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 pl-1 cursor-default">Nome Completo *</label><input type="text" value={nome} onChange={(e) => setNome(e.target.value)} className={`cursor-text w-full bg-black/50 border border-white/5 outline-none rounded-xl px-3 py-2 text-xs text-white transition-colors ${role === 'professor' ? 'focus:border-yellow-500/50' : 'focus:border-cyan-500/50'}`} /></div>
                 <div><label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 pl-1 cursor-default">E-mail</label><input type="email" value={email} disabled className="w-full bg-black/20 border border-transparent outline-none rounded-xl px-3 py-2 text-xs text-zinc-500 cursor-not-allowed" /></div>
                 <div><label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 pl-1 cursor-default">CPF *</label><input type="text" value={cpf} onChange={(e) => setCpf(formatarCpf(e.target.value))} className={`cursor-text w-full bg-black/50 border border-white/5 outline-none rounded-xl px-3 py-2 text-xs text-white transition-colors ${role === 'professor' ? 'focus:border-yellow-500/50' : 'focus:border-cyan-500/50'}`} /></div>
-                <div><label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 pl-1 cursor-default">Telefone / WhatsApp</label><input type="text" value={telefone} onChange={(e) => setTelefone(e.target.value)} className={`cursor-text w-full bg-black/50 border border-white/5 outline-none rounded-xl px-3 py-2 text-xs text-white transition-colors ${role === 'professor' ? 'focus:border-yellow-500/50' : 'focus:border-cyan-500/50'}`} /></div>
+                <div><label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 pl-1 cursor-default">Telefone / WhatsApp</label><input type="tel" value={telefone} onChange={(e) => setTelefone(formatarTelefone(e.target.value))} className={`cursor-text w-full bg-black/50 border border-white/5 outline-none rounded-xl px-3 py-2 text-xs text-white transition-colors ${role === 'professor' ? 'focus:border-yellow-500/50' : 'focus:border-cyan-500/50'}`} /></div>
                 <div><label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 pl-1 cursor-default">Cidade - Estado</label><input type="text" value={cidade} onChange={(e) => setCidade(e.target.value)} className={`cursor-text w-full bg-black/50 border border-white/5 outline-none rounded-xl px-3 py-2 text-xs text-white transition-colors ${role === 'professor' ? 'focus:border-yellow-500/50' : 'focus:border-cyan-500/50'}`} /></div>
 
                 {role === "professor" ? (

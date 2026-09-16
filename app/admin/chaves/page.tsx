@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation"
 import { criarChavesImpressao, chaveGrupoPDF, type LutaImpressao } from '../../lib/chaves-impressao';
 import { criarKitContingenciaPDF } from "../../lib/kit-contingencia-pdf"
 import { rotuloLuta } from "../../lib/lutas-rotulos"
+import { semFaixaDuplicada } from "../../lib/categorias-competicao"
 
 type EventoOrganizador = {
   id: string | number;
@@ -310,7 +311,7 @@ export default function GerarChavesPage() {
           <section className="mb-5 space-y-3">
             <h3 className="font-bold text-sm">Chaves para impressão</h3>
             <button onClick={carregarImpressao} disabled={!eventoId || exportando} className="text-sm text-cyan-300">Carregar / atualizar chaves</button>
-            <select aria-label="Categoria para impressão" value={grupoImpressao} onChange={e => setGrupoImpressao(e.target.value)} className="w-full rounded-xl bg-black border border-white/10 p-3 text-xs"><option value="">Selecione uma categoria</option>{Array.from(new Map(chavesImpressao.map(l => [chaveGrupoPDF(l), `${l.categoria} · ${l.faixa}`])).entries()).map(([k,v]) => <option key={k} value={k}>{v}</option>)}</select>
+            <select aria-label="Categoria para impressão" value={grupoImpressao} onChange={e => setGrupoImpressao(e.target.value)} className="w-full rounded-xl bg-black border border-white/10 p-3 text-xs"><option value="">Selecione uma categoria</option>{Array.from(new Map(chavesImpressao.map(l => [chaveGrupoPDF(l), `${semFaixaDuplicada(l.categoria || '', l.faixa || '')} · ${l.faixa || 'Faixa não informada'}`])).entries()).map(([k,v]) => <option key={k} value={k}>{v}</option>)}</select>
             <div className="flex gap-2"><button disabled={!grupoImpressao} onClick={() => imprimirChaves(false)} className="rounded-lg border border-white/10 p-3 text-xs disabled:opacity-40">PDF individual</button><button disabled={!chavesImpressao.length} onClick={() => imprimirChaves(true)} className="rounded-lg bg-red-600 p-3 text-xs disabled:opacity-40">PDF de todas as chaves</button></div>
             <Link href={`/admin/resultados?evento=${eventoId}`} className="inline-block text-xs text-zinc-300 underline">Lançar resultados da súmula</Link>
           </section>

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
 import { autenticarRequest } from "@/app/lib/api-auth";
 import { obterAccessTokenOrganizador } from "@/app/lib/mercado-pago-integracao";
+import { enviarEmailEstorno } from "@/app/lib/email-estorno";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -71,7 +72,7 @@ export async function POST(request: Request) {
 
   const { data: inscricao, error: inscricaoError } = await supabase
     .from("inscricoes")
-    .select("id,evento_id,atleta,pagamento_ok,valor_inscricao,valor_total,mp_payment_id,cortesia,estorno_status,eventos(id,nome,organizador_id)")
+    .select("id,evento_id,user_id,email,atleta,pagamento_ok,valor_inscricao,valor_total,mp_payment_id,cortesia,estorno_status,eventos(id,nome,organizador_id)")
     .eq("id", inscricaoId)
     .maybeSingle();
   if (inscricaoError) return NextResponse.json({ error: inscricaoError.message }, { status: 500 });
@@ -156,7 +157,10 @@ export async function POST(request: Request) {
       estornado_por: usuario.id,
     }).eq("id", inscricao.id);
     if (error) throw new Error(error.message);
-    return NextResponse.json({ success: true, status: "estornado", valor: valorPagamento, refundId, jaEstornado, exigeRegenerarChaves });
+    const aviso = await enviarEmailEstorno(inscricao, evento.nome || "Campeonato", valorPagamento)
+      .catch((erro: unknown) => ({ enviado: false, motivo: erro instanceof Error ? erro.message : "Falha no envio" }));
+    if (!aviso.enviado) console.error("Estorno confirmado, mas e-mail não enviado:", aviso.motivo, inscricao.id);
+    return NextResponse.json({ success: true, status: "estornado", valor: valorPagamento, refundId, jaEstornado, exigeRegenerarChaves, emailEnviado: aviso.enviado });
   };
 
   if (pagamento.status === "refunded") return concluir(null, "refunded", true);

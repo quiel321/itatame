@@ -48,6 +48,7 @@ export async function enviarEmailIngressoConfirmado({ inscricaoId, emailFallback
       email,
       email_ingresso_status,
       email_ingresso_tentativas,
+      email_ingresso_enviado_em,
       eventos (
         nome,
         data_evento,
@@ -69,15 +70,20 @@ export async function enviarEmailIngressoConfirmado({ inscricaoId, emailFallback
   }
 
   const tentativas = Number(inscricao.email_ingresso_tentativas || 0) + 1;
+  const limiteTentativaAnterior = new Date(Date.now() - 10 * 60 * 1000).toISOString();
   const { data: reservado } = await supabase
     .from("inscricoes")
     .update({
       email_ingresso_status: "enviando",
       email_ingresso_tentativas: tentativas,
       email_ingresso_erro: null,
+      // Enquanto envia, este campo guarda o início da tentativa para recuperar envios interrompidos.
+      email_ingresso_enviado_em: new Date().toISOString(),
     })
     .eq("id", inscricaoId)
-    .neq("email_ingresso_status", forcarReenvio ? "__nenhum__" : "enviando")
+    .or(forcarReenvio
+      ? "email_ingresso_status.neq.__nenhum__"
+      : `email_ingresso_status.neq.enviando,email_ingresso_enviado_em.lt.${limiteTentativaAnterior},email_ingresso_enviado_em.is.null`)
     .select("id")
     .maybeSingle();
 
@@ -92,11 +98,12 @@ export async function enviarEmailIngressoConfirmado({ inscricaoId, emailFallback
     .eq("user_id", inscricao.user_id)
     .maybeSingle();
 
-  let emailDestino = emailFallback || inscricao.email || atleta?.email || null;
+  // O pagador pode ser outra pessoa; o ingresso pertence à conta do atleta.
+  let emailDestino = atleta?.email || inscricao.email || null;
 
   if (!emailDestino) {
     const { data: userData } = await supabase.auth.admin.getUserById(inscricao.user_id);
-    emailDestino = userData?.user?.email || null;
+    emailDestino = userData?.user?.email || emailFallback || null;
   }
 
   if (!emailDestino) {
@@ -104,6 +111,7 @@ export async function enviarEmailIngressoConfirmado({ inscricaoId, emailFallback
     await supabase.from("inscricoes").update({
       email_ingresso_status: "erro",
       email_ingresso_erro: "E-mail do atleta não encontrado.",
+      email_ingresso_enviado_em: null,
     }).eq("id", inscricaoId);
     return { skipped: true, reason: "email_nao_encontrado" };
   }
@@ -163,6 +171,7 @@ export async function enviarEmailIngressoConfirmado({ inscricaoId, emailFallback
       email_ingresso_status: "erro",
       email_ingresso_destino: emailDestino,
       email_ingresso_erro: String(emailError.message || "Falha no Resend").slice(0, 500),
+      email_ingresso_enviado_em: null,
     }).eq("id", inscricaoId);
     return { skipped: true, reason: "erro_resend", error: emailError };
   }

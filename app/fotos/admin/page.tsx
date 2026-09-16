@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
 import FotosShell from "../_components/FotosShell";
 import { ArrowRight, BarChart3, Camera, CheckCircle2, FolderPlus, ImagePlus, Pencil, Store, Trophy, Wallet, LogOut, Check, AlertCircle, ShieldCheck, UploadCloud, Loader2, X, Trash2, Plus } from "lucide-react";
+import { formatarDocumento } from '@/app/lib/formatar-documento';
+import { formatarTelefone } from '@/app/lib/formatar-telefone';
 
 type Totais = { eventos: number; albuns: number; fotos: number; pedidos: number };
 type EventoBase = { id: string; nome: string; local?: string | null; cidade?: string | null; estado?: string | null; data_evento?: string | null; banner_url?: string | null };
@@ -940,11 +942,11 @@ export default function FotosAdminPage() {
 
                      <div>
                         <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">WhatsApp</label>
-                        <input value={orgForm.telefone} onChange={(e) => setOrgForm({ ...orgForm, telefone: e.target.value })} className="h-11 w-full rounded-xl border border-white/10 bg-[#050505] px-3 text-xs font-bold text-white outline-none focus:border-retratt" placeholder="(00) 00000-0000" />
+                        <input value={formatarTelefone(orgForm.telefone)} onChange={(e) => setOrgForm({ ...orgForm, telefone: formatarTelefone(e.target.value) })} className="h-11 w-full rounded-xl border border-white/10 bg-[#050505] px-3 text-xs font-bold text-white outline-none focus:border-retratt" placeholder="(00) 00000-0000" />
                      </div>
                      <div>
                         <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">CPF ou CNPJ</label>
-                        <input value={orgForm.documento} onChange={(e) => setOrgForm({ ...orgForm, documento: e.target.value })} className="h-11 w-full rounded-xl border border-white/10 bg-[#050505] px-3 text-xs font-bold text-white outline-none focus:border-retratt" placeholder="000.000.000-00" />
+                        <input value={formatarDocumento(orgForm.documento)} onChange={(e) => setOrgForm({ ...orgForm, documento: formatarDocumento(e.target.value) })} className="h-11 w-full rounded-xl border border-white/10 bg-[#050505] px-3 text-xs font-bold text-white outline-none focus:border-retratt" placeholder="000.000.000-00" />
                      </div>
 
                      <div>

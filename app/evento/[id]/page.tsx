@@ -26,6 +26,7 @@ const estiloEtapa: Record<TomEtapaEvento, { badge: string; aviso: string; ponto:
 export default function EventoDetalhesPage() {
   const params = useParams();
   const [evento, setEvento] = useState<any>(null);
+  const [organizador, setOrganizador] = useState<{ nome: string; foto_url: string | null } | null>(null);
   const [loading, setLoading] = useState(true);
   const [inscricoes, setInscricoes] = useState<any[]>([]);
   const [resumoLutas, setResumoLutas] = useState<ResumoLutasEvento>({ total: 0, concluidas: 0, emAndamento: 0, pendentes: 0 });
@@ -50,6 +51,10 @@ export default function EventoDetalhesPage() {
         .single();
       
       setEvento(eventoData);
+      if (eventoData?.organizador_id) {
+        const resposta = await fetch(`/api/organizadores/${encodeURIComponent(eventoData.organizador_id)}/publico`);
+        if (resposta.ok) setOrganizador(await resposta.json());
+      }
 
       const { data: inscritosData, error } = await supabase
         .from("inscricoes")
@@ -149,6 +154,10 @@ export default function EventoDetalhesPage() {
               <h1 className="text-xl md:text-4xl font-black text-white leading-tight mb-2 md:mb-4 tracking-tight">
                 {evento.nome}
               </h1>
+              {organizador && <Link href={`/organizador/${evento.organizador_id}`} className="mb-4 inline-flex items-center gap-2 text-xs text-zinc-300 hover:text-white">
+                {organizador.foto_url && <img src={organizador.foto_url} alt="" className="h-7 w-7 rounded-full object-cover" />}
+                Organizado por <strong className="text-white">{organizador.nome}</strong> ↗
+              </Link>}
               
               <div className="space-y-1.5 md:space-y-2 mb-4 md:mb-8">
                 <div className="flex items-center gap-2 text-zinc-300 text-xs md:text-sm font-medium">

@@ -17,6 +17,12 @@ export function normalizarCompeticao(valor: unknown) {
   return String(valor ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().replace(/\s+/g, ' ').toUpperCase();
 }
 
+export function semFaixaDuplicada(categoria: string, faixa: string) {
+  return categoria.split('·').map(parte => parte.trim())
+    .filter(parte => normalizarCompeticao(parte) !== normalizarCompeticao(faixa))
+    .join(' · ');
+}
+
 export function divisaoEtaria(idade: number) {
   if (!Number.isInteger(idade) || idade < 4 || idade > 100) throw new Error('Idade competitiva inválida (4 a 100 anos).');
   if (idade < 16) return `${idade} anos`;
@@ -27,7 +33,7 @@ export function divisaoEtaria(idade: number) {
 
 export function rotuloCategoria(c: CategoriaCompeticao) {
   const peso = c.tipo === 'absoluto' ? 'Absoluto' : c.peso_max == null ? `Acima de ${c.peso_min} kg` : `${c.peso_min} a ${c.peso_max} kg`;
-  return `${c.modalidade} · ${c.nome} · ${c.idade_min}-${c.idade_max} anos · ${c.sexo} · ${c.faixa} · ${peso}`;
+  return `${c.modalidade} · ${semFaixaDuplicada(c.nome, c.faixa)} · ${c.idade_min}-${c.idade_max} anos · ${c.sexo} · ${peso}`;
 }
 
 export function categoriaCompativel(c: CategoriaCompeticao, i: InscricaoCompeticao) {

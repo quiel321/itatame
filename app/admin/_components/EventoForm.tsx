@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import imageCompression from "browser-image-compression";
 import {
@@ -64,6 +64,8 @@ export default function EventoForm({ modo, eventoId }: EventoFormProps) {
   const [sucesso, setSucesso] = useState(false);
   const [erro, setErro] = useState("");
   const [comprimindo, setComprimindo] = useState(false);
+  const [trava, setTrava] = useState<"nenhuma" | "inscricoes" | "chaves" | "lutas">("nenhuma");
+  const originalRef = useRef<Record<string, string | number | null>>({});
 
   const [nome, setNome] = useState("");
   const [modalidade, setModalidade] = useState("Jiu-Jitsu");
@@ -122,6 +124,22 @@ export default function EventoForm({ modo, eventoId }: EventoFormProps) {
           .single();
 
         if (error || !evento) throw new Error("Evento não encontrado.");
+        originalRef.current = {
+          data_evento: evento.data_evento || "",
+          status: evento.status || "ABERTO",
+          lote1_valor: Number(evento.lote1_valor) || 0,
+          lote2_valor: Number(evento.lote2_valor) || 0,
+          lote3_valor: Number(evento.lote3_valor) || 0,
+          lote1_data_fim: paraInputDateTime(evento.lote1_data_fim),
+          lote2_data_fim: paraInputDateTime(evento.lote2_data_fim),
+          lote3_data_fim: paraInputDateTime(evento.lote3_data_fim),
+        };
+        const [{ count: inscricoes }, { data: lutas }] = await Promise.all([
+          supabase.from("inscricoes").select("id", { count: "exact", head: true }).eq("evento_id", eventoId),
+          supabase.from("chaves").select("id,status_luta,iniciada_em,vencedor").eq("evento_id", eventoId),
+        ]);
+        setTrava((lutas || []).some(luta => luta.iniciada_em || luta.vencedor || ['em_andamento', 'concluida'].includes(luta.status_luta))
+          ? "lutas" : lutas?.length ? "chaves" : inscricoes ? "inscricoes" : "nenhuma");
 
         setNome(evento.nome || "");
         setModalidade(evento.descricao || "Jiu-Jitsu");
@@ -221,6 +239,22 @@ export default function EventoForm({ modo, eventoId }: EventoFormProps) {
     try {
       const { data: authData } = await supabase.auth.getUser();
       if (!authData.user) throw new Error("Usuário não autenticado.");
+
+      if (editando && eventoId) {
+        const [{ count: inscricoes }, { data: lutas }] = await Promise.all([
+          supabase.from("inscricoes").select("id", { count: "exact", head: true }).eq("evento_id", eventoId),
+          supabase.from("chaves").select("id,status_luta,iniciada_em,vencedor").eq("evento_id", eventoId),
+        ]);
+        const alterouPrecos = [
+          ['lote1_valor', lote1Valor], ['lote2_valor', lote2Valor], ['lote3_valor', lote3Valor],
+          ['lote1_data_fim', lote1DataFim], ['lote2_data_fim', lote2DataFim], ['lote3_data_fim', lote3DataFim],
+        ].some(([campo, valor]) => originalRef.current[String(campo)] !== valor);
+        if ((inscricoes || lutas?.length) && alterouPrecos) throw new Error("Já há inscrições ou chaves. Os preços e prazos dos lotes não podem mais ser alterados; restaure os valores anteriores para salvar as outras informações.");
+        if (lutas?.length && originalRef.current.data_evento !== dataEvento) throw new Error("As chaves já foram geradas. A data do evento está bloqueada para preservar o cronograma.");
+        if ((lutas || []).some(luta => luta.iniciada_em || luta.vencedor || ['em_andamento', 'concluida'].includes(luta.status_luta)) && originalRef.current.status !== status) {
+          throw new Error("As lutas já começaram. A situação manual do evento não pode ser alterada.");
+        }
+      }
 
       let finalBannerUrl = bannerAtualUrl;
       let finalRegulamentoUrl = regulamentoAtualUrl;
@@ -341,6 +375,10 @@ export default function EventoForm({ modo, eventoId }: EventoFormProps) {
             {salvando ? "Salvando..." : "Salvar evento"}
           </button>
         </header>
+        {editando && trava !== "nenhuma" && <p className="rounded-xl border border-amber-500/25 bg-amber-500/10 p-4 text-xs text-amber-100">
+          {trava === "inscricoes" ? "Já existem inscrições: preços e datas dos lotes estão protegidos." : trava === "chaves" ? "As chaves foram geradas: preços, lotes e data do evento estão protegidos." : "Lutas iniciadas: preços, lotes, data e situação manual estão protegidos."}
+          {' '}Outros dados, como local, descrição, regulamento e banner, ainda podem ser corrigidos.
+        </p>}
 
         {(erro || sucesso || comprimindo) && (
           <div className={"rounded-lg border px-4 py-3 text-sm font-bold " + (erro ? "border-red-500/40 bg-red-500/10 text-red-200" : "border-emerald-500/40 bg-emerald-500/10 text-emerald-200")}>
@@ -354,7 +392,8 @@ export default function EventoForm({ modo, eventoId }: EventoFormProps) {
               <SectionTitle icon={<Info size={16} />} title="Informações gerais" subtitle="Dados que o atleta vê antes de se inscrever." />
               <div className="mt-4 grid gap-3 md:grid-cols-4">
                 <Field label="Nome oficial" className="md:col-span-3"><input required value={nome} onChange={(e) => setNome(e.target.value)} className={inputClass} placeholder="Ex: Spartan Open Jiu-Jitsu CJ" /></Field>
-                <Field label="Status"><select value={status} onChange={(e) => setStatus(e.target.value)} className={inputClass}><option value="EM BREVE">Em breve</option><option value="ABERTO">Inscrições abertas</option><option value="OFICIAL">Oficial</option><option value="ENCERRADO">Encerrado</option></select></Field>
+                <Field label="Situação manual"><select value={status} onChange={(e) => setStatus(e.target.value)} className={inputClass}><option value="EM BREVE">Em breve</option><option value="ABERTO">Inscrições abertas</option><option value="OFICIAL">Inscrições encerradas</option><option value="ENCERRADO">Encerrado</option></select></Field>
+                <p className="md:col-span-4 text-xs text-zinc-400">As datas configuradas controlam automaticamente as inscrições, a checagem e a publicação das chaves. Use “Inscrições encerradas” para fechar manualmente um evento sem data final definida.</p>
                 <Field label="Modalidade"><input value={modalidade} onChange={(e) => setModalidade(e.target.value)} className={inputClass} /></Field>
                 <Field label="Data do evento"><input required type="date" value={dataEvento} onChange={(e) => setDataEvento(e.target.value)} className={inputClass + " [color-scheme:dark]"} /></Field>
                 <Field label="Cidade"><input required value={cidade} onChange={(e) => setCidade(e.target.value)} className={inputClass} /></Field>

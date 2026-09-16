@@ -8,6 +8,7 @@ import { Clock, Medal, Monitor, Radio, Search, Trophy, X, ChevronRight } from "l
 import { supabase } from "@/app/lib/supabase";
 import { obterTempoRegulamentar } from "@/app/lib/cronograma";
 import { rotuloLuta } from "@/app/lib/lutas-rotulos";
+import { semFaixaDuplicada } from "@/app/lib/categorias-competicao";
 
 // --- TIPOS ---
 type Evento = {
@@ -135,7 +136,7 @@ function nomeMetodoLuta(luta: LutaAoVivo) {
 }
 
 function subtituloLuta(luta: LutaAoVivo) {
-  return [luta.fase, luta.categoria, luta.faixa].filter(Boolean).join(" • ");
+  return [luta.fase, semFaixaDuplicada(luta.categoria || '', luta.faixa || ''), luta.faixa].filter(Boolean).join(" • ");
 }
 
 function getAtletaPerfil(map: Record<number, AtletaPerfil>, id?: number | null) {
@@ -493,6 +494,7 @@ export default function AoVivoPage() {
   const [evento, setEvento] = useState<Evento | null>(null);
   const [lutas, setLutas] = useState<LutaAoVivo[]>([]);
   const [atletas, setAtletas] = useState<Record<number, AtletaPerfil>>({});
+  const [checkin, setCheckin] = useState<{ aprovados: number; aguardando: number; recentes: string[] }>({ aprovados: 0, aguardando: 0, recentes: [] });
   const [loading, setLoading] = useState(true);
   const [agora, setAgora] = useState(() => Date.now());
   const [busca, setBusca] = useState("");
@@ -584,6 +586,32 @@ export default function AoVivoPage() {
   }, [eventoId, buscarLutas]);
 
   useEffect(() => {
+    if (!eventoId) return;
+    const carregarCheckin = async () => {
+      const { data } = await supabase.from('inscricoes')
+        .select('atleta,status_checkin,checkin_realizado_em,pagamento_ok')
+        .eq('evento_id', eventoId).eq('pagamento_ok', true);
+      if (!data) return;
+      const unicos = new Map<string, (typeof data)[number]>();
+      data.forEach(item => { if (item.atleta) unicos.set(item.atleta, item); });
+      const participantes = Array.from(unicos.values());
+      setCheckin({
+        aprovados: participantes.filter(item => item.status_checkin === 'aprovado').length,
+        aguardando: participantes.filter(item => !item.status_checkin || item.status_checkin === 'pendente').length,
+        recentes: participantes.filter(item => item.status_checkin === 'aprovado' && item.checkin_realizado_em)
+          .sort((a, b) => String(b.checkin_realizado_em).localeCompare(String(a.checkin_realizado_em)))
+          .slice(0, 4).map(item => item.atleta),
+      });
+    };
+    void carregarCheckin();
+    const intervalo = window.setInterval(() => void carregarCheckin(), 15000);
+    const canal = supabase.channel(`checkin-telao-${eventoId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'inscricoes', filter: `evento_id=eq.${eventoId}` }, () => void carregarCheckin())
+      .subscribe();
+    return () => { window.clearInterval(intervalo); void supabase.removeChannel(canal); };
+  }, [eventoId]);
+
+  useEffect(() => {
     const interval = window.setInterval(() => setAgora(Date.now()), 1000);
     return () => window.clearInterval(interval);
   }, []);
@@ -619,6 +647,7 @@ export default function AoVivoPage() {
   }, [busca, lutas, tatameFiltro]);
 
   const lutasAtivas = useMemo(() => lutasFiltradas.filter((luta) => luta.status_luta === "em_andamento"), [lutasFiltradas]);
+  const chamadas = useMemo(() => lutasFiltradas.filter(luta => luta.status_luta !== 'concluida' && luta.status_luta !== 'em_andamento' && Boolean(luta.iniciada_em)), [lutasFiltradas]);
   const atletasNaBaia = useMemo(() => lutasFiltradas.flatMap((luta) => {
     if (luta.status_luta === "concluida" || luta.status_luta === "em_andamento") return [];
     const p1 = parsePontos(luta.pontuacao_atleta_1);
@@ -698,6 +727,17 @@ export default function AoVivoPage() {
             <span className="text-xs font-bold uppercase tracking-widest text-zinc-600 mt-2">Horário Local</span>
           </div>
         </header>
+
+        <div className="mb-3 flex flex-wrap items-center gap-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-2 text-xs font-bold uppercase text-emerald-200">
+          <span>Check-in confirmado: {checkin.aprovados}</span>
+          <span className="text-amber-200">Aguardando: {checkin.aguardando}</span>
+          {checkin.recentes.length > 0 && <span className="min-w-0 truncate text-zinc-300">Últimos confirmados: {checkin.recentes.join(' · ')}</span>}
+        </div>
+
+        {chamadas.length > 0 && <div className="mb-3 flex items-center gap-3 overflow-hidden rounded-xl border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-yellow-100">
+          <span className="shrink-0 rounded-lg bg-yellow-400 px-2 py-1 text-xs font-black uppercase text-black">Chamada</span>
+          <span className="min-w-0 truncate text-sm font-black uppercase">{chamadas.slice(0, 3).map(luta => `${limparNome(luta.atleta_1)} e ${limparNome(luta.atleta_2)} · ${luta.tatame || 'Tatame a definir'}`).join('  •  ')}</span>
+        </div>}
 
         {atletasNaBaia.length > 0 && (
           <div className="mb-3 flex items-center gap-3 overflow-hidden rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-4 py-2 text-cyan-200">

@@ -72,8 +72,31 @@ function Editor({ eventoId }: { eventoId: string }) {
 
   async function importarModelo() {
     const modelo = modelosPesoIBJJF.find(item => item.id === modeloId) || modelosPesoIBJJF[0];
-    const lista = modelo.pesos.map(peso => ({ ...form, ...peso, sexo: modelo.sexo, nome: `${peso.nome} · ${form.faixa}`, tipo: 'peso' as const, ativa: true }));
+    const lista = modelo.pesos.map(peso => ({
+      ...form,
+      ...peso,
+      sexo: modelo.sexo || form.sexo,
+      idade_min: modelo.idade_min ?? form.idade_min,
+      idade_max: modelo.idade_max ?? form.idade_max,
+      tempo_minutos: modelo.tempo_minutos ?? form.tempo_minutos,
+      nome: peso.nome,
+      tipo: 'peso' as const,
+      ativa: true,
+    }));
     await inserir(lista, `${modelo.pesos.length} categorias de referência IBJJF importadas. Revise faixa, idade, tempo e regulamento antes de abrir as inscrições.`);
+  }
+
+  function selecionarModelo(id: string) {
+    const modelo = modelosPesoIBJJF.find(item => item.id === id) || modelosPesoIBJJF[0];
+    setModeloId(id);
+    setForm(atual => ({
+      ...atual,
+      sexo: modelo.sexo || atual.sexo,
+      idade_min: modelo.idade_min ?? atual.idade_min,
+      idade_max: modelo.idade_max ?? atual.idade_max,
+      tempo_minutos: modelo.tempo_minutos ?? atual.tempo_minutos,
+      faixa: modelo.faixasPermitidas?.includes(atual.faixa) ? atual.faixa : (modelo.faixasPermitidas?.[0] || atual.faixa),
+    }));
   }
 
   async function copiarCampeonato() {
@@ -152,10 +175,13 @@ function Editor({ eventoId }: { eventoId: string }) {
     <div className="grid grid-cols-2 gap-3">{(['idade_min','idade_max','tempo_minutos'] as const).map(k => <label key={k} className="text-xs">{{ idade_min:'Idade mínima', idade_max:'Idade máxima', tempo_minutos:'Tempo de luta' }[k]}<input required type="number" min={k.startsWith('idade') ? 4 : 1} max={k.startsWith('idade') ? 100 : 30} step="1" className={campo + ' mt-1'} value={form[k]} onChange={e => setForm({ ...form, [k]: Number(e.target.value) })} /></label>)}</div>
   </>;
 
+  const modeloSelecionado = modelosPesoIBJJF.find(item => item.id === modeloId) || modelosPesoIBJJF[0];
   const seletorModelo = <>
-    <label className="block text-xs">Tabela de referência<select className={campo + ' mt-1'} value={modeloId} onChange={e => setModeloId(e.target.value as typeof modeloId)}>{modelosPesoIBJJF.map(modelo => <option key={modelo.id} value={modelo.id}>{modelo.titulo}</option>)}</select></label>
-    <p className="rounded-lg border border-white/10 bg-black/30 p-3 text-xs leading-relaxed text-zinc-400">{modelosPesoIBJJF.find(item => item.id === modeloId)?.descricao}</p>
-    {(['modalidade','faixa'] as const).map(k => <label key={k} className="block text-xs capitalize">{k}<input required maxLength={80} className={campo + ' mt-1'} value={form[k]} onChange={e => setForm({ ...form, [k]: e.target.value })} /></label>)}
+    <label className="block text-xs">Tabela de referência<select className={campo + ' mt-1'} value={modeloId} onChange={e => selecionarModelo(e.target.value)}><optgroup label="Adulto">{modelosPesoIBJJF.filter(modelo => modelo.id.startsWith('adulto_')).map(modelo => <option key={modelo.id} value={modelo.id}>{modelo.titulo}</option>)}</optgroup><optgroup label="Kids / Infantil">{modelosPesoIBJJF.filter(modelo => modelo.id.startsWith('kids_')).map(modelo => <option key={modelo.id} value={modelo.id}>{modelo.titulo}</option>)}</optgroup></select></label>
+    <p className="rounded-lg border border-white/10 bg-black/30 p-3 text-xs leading-relaxed text-zinc-400">{modeloSelecionado.descricao}</p>
+    <label className="block text-xs">Modalidade<input required maxLength={80} className={campo + ' mt-1'} value={form.modalidade} onChange={e => setForm({ ...form, modalidade: e.target.value })} /></label>
+    <label className="block text-xs">Faixa<select className={campo + ' mt-1'} value={form.faixa} onChange={e => setForm({ ...form, faixa: e.target.value })}>{(modeloSelecionado.faixasPermitidas || [form.faixa]).map(faixa => <option key={faixa}>{faixa}</option>)}</select></label>
+    <label className="block text-xs">Sexo competitivo<select disabled={Boolean(modeloSelecionado.sexo)} className={campo + ' mt-1 disabled:opacity-60'} value={modeloSelecionado.sexo || form.sexo} onChange={e => setForm({ ...form, sexo: e.target.value })}><option>Masculino</option><option>Feminino</option></select></label>
     <div className="grid grid-cols-2 gap-3">{(['idade_min','idade_max','tempo_minutos'] as const).map(k => <label key={k} className="text-xs">{{ idade_min:'Idade mínima', idade_max:'Idade máxima', tempo_minutos:'Tempo de luta' }[k]}<input required type="number" min={k.startsWith('idade') ? 4 : 1} max={k.startsWith('idade') ? 100 : 30} step="1" className={campo + ' mt-1'} value={form[k]} onChange={e => setForm({ ...form, [k]: Number(e.target.value) })} /></label>)}</div>
   </>;
 
@@ -179,7 +205,7 @@ function Editor({ eventoId }: { eventoId: string }) {
 
     <div className="grid lg:grid-cols-[380px_1fr] gap-6">
       <section className="rounded-2xl border border-white/10 bg-zinc-900/50 p-5 self-start">
-        {modo === 'modelo' && <div className="space-y-4"><h2 className="font-bold">Categorias de referência IBJJF</h2><p className="text-xs leading-relaxed text-zinc-400">Importa os limites Adult Gi usados pela IBJJF. A pesagem inclui o kimono. O organizador deve conferir faixa, idade, tempo e o regulamento específico do evento.</p>{seletorModelo}<a href={fonteCategoriasIBJJF} target="_blank" rel="noopener noreferrer" className="block text-xs font-bold text-cyan-400 underline underline-offset-4">Consultar regras oficiais da IBJJF</a><button type="button" disabled={salvando} onClick={importarModelo} className="w-full rounded-xl bg-red-600 p-3 font-bold disabled:opacity-40">Importar tabela selecionada</button></div>}
+        {modo === 'modelo' && <div className="space-y-4"><h2 className="font-bold">Categorias de referência IBJJF</h2><p className="text-xs leading-relaxed text-zinc-400">Escolha Adulto ou Kids/Infantil. Nos modelos infantis, selecione a idade, a faixa e o sexo; o sistema preenche os nove pesos oficiais em quilogramas e o tempo de luta. A pesagem inclui o kimono.</p>{seletorModelo}<a href={modeloSelecionado.fonte || fonteCategoriasIBJJF} target="_blank" rel="noopener noreferrer" className="block text-xs font-bold text-cyan-400 underline underline-offset-4">Consultar fonte oficial da IBJJF</a><button type="button" disabled={salvando} onClick={importarModelo} className="w-full rounded-xl bg-red-600 p-3 font-bold disabled:opacity-40">Importar tabela selecionada</button></div>}
         {modo === 'copiar' && <div className="space-y-4"><h2 className="font-bold">Copiar de outro campeonato</h2><p className="text-xs text-zinc-400">Copia todas as categorias de outro evento seu. As categorias do evento original permanecem intactas.</p><label className="block text-xs">Campeonato de origem<select className={campo + ' mt-1'} value={eventoOrigem} onChange={e => setEventoOrigem(e.target.value)}><option value="">Selecione</option>{eventos.map(evento => <option key={evento.id} value={String(evento.id)}>{evento.nome || `Evento ${evento.id}`}</option>)}</select></label><button type="button" disabled={salvando || !eventoOrigem} onClick={copiarCampeonato} className="w-full rounded-xl bg-red-600 p-3 font-bold disabled:opacity-40">Copiar tabela</button></div>}
         {modo === 'manual' && <form onSubmit={salvarManual} className="space-y-4"><h2 className="font-bold">{editandoId ? 'Editar categoria' : 'Nova categoria'}</h2><p className="text-xs text-zinc-400">{editandoId ? 'Revise os dados e salve. Categorias já utilizadas ficam protegidas.' : 'Use para uma divisão especial ou para completar uma tabela.'}</p><label className="block text-xs">Nome da categoria<input required maxLength={80} className={campo + ' mt-1'} value={form.nome} onChange={e => setForm({ ...form, nome: e.target.value })} /></label>{seletorBase}<div className="grid grid-cols-2 gap-3"><label className="text-xs">Peso acima de (kg)<input required type="number" min="0" max="500" step="0.1" className={campo + ' mt-1'} value={form.peso_min} onChange={e => setForm({ ...form, peso_min: Number(e.target.value) })} /></label><label className="text-xs">Peso máximo (kg)<input type="number" min="0.1" max="500" step="0.1" placeholder="Sem limite" className={campo + ' mt-1'} value={form.peso_max ?? ''} onChange={e => setForm({ ...form, peso_max: e.target.value === '' ? null : Number(e.target.value) })} /></label></div><button disabled={salvando || carregando} className="w-full rounded-xl bg-red-600 p-3 font-bold disabled:opacity-40">{editandoId ? 'Salvar alterações' : 'Cadastrar categoria'}</button>{editandoId && <button type="button" onClick={cancelarEdicao} className="w-full rounded-xl border border-white/10 p-3 text-sm text-zinc-300">Cancelar edição</button>}</form>}
       </section>

@@ -171,10 +171,34 @@ export default function CheckinOperador() {
   // =========================================================================
   const processarCheckin = async (status: 'aprovado' | 'desclassificado_peso' | 'desclassificado_kimono') => {
     setLoading(true);
+    const peso = Number(String(pesoAferido).replace(',', '.'));
+    if (!Number.isFinite(peso) || peso <= 0 || peso > 500) {
+      setErro('Informe o peso aferido em kg, entre 0 e 500.');
+      setLoading(false);
+      return;
+    }
+
+    if (status === 'aprovado' && atleta.categoria_id) {
+      const { data: categoria, error: categoriaError } = await supabase
+        .from('categorias_evento')
+        .select('nome,peso_min,peso_max,tipo')
+        .eq('id', atleta.categoria_id)
+        .maybeSingle();
+      if (categoriaError || !categoria) {
+        setErro('Não foi possível validar o limite da categoria. Confira a categoria antes de aprovar.');
+        setLoading(false);
+        return;
+      }
+      if (categoria.tipo === 'peso' && (peso <= Number(categoria.peso_min) || (categoria.peso_max != null && peso > Number(categoria.peso_max)))) {
+        setErro(`Peso fora da categoria ${categoria.nome}. Confira a balança e marque a decisão correta.`);
+        setLoading(false);
+        return;
+      }
+    }
     
     const atualizacao = {
       status_checkin: status,
-      peso_aferido: pesoAferido ? parseFloat(pesoAferido) : null,
+      peso_aferido: peso,
       kimono_aprovado: status === 'desclassificado_kimono' ? false : kimonoAprovado,
       checkin_realizado_em: new Date().toISOString(),
       pesagem_ok: status === 'aprovado'
@@ -189,6 +213,16 @@ export default function CheckinOperador() {
 
     if (error) {
       alert('Erro de conexão ao salvar no sistema: ' + error.message);
+      setLoading(false);
+      return;
+    }
+
+    const { error: pesoPerfilError } = await supabase
+      .from('atletas')
+      .update({ peso: String(peso) })
+      .eq('user_id', atleta.user_id);
+    if (pesoPerfilError) {
+      setErro('Check-in salvo, mas o peso do perfil não foi atualizado. Avise o organizador para corrigir o cadastro: ' + pesoPerfilError.message);
       setLoading(false);
       return;
     }
@@ -319,6 +353,7 @@ export default function CheckinOperador() {
 
         {atleta && !loading && (
           <div className="animate-in slide-in-from-right-8 duration-300 flex flex-col gap-4">
+            {erro && <p role="alert" className="rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-200">{erro}</p>}
             <div className="bg-[#0a0a0e] border border-white/10 rounded-3xl overflow-hidden shadow-2xl flex flex-col items-center p-8 relative">
               <div className="w-24 h-24 rounded-full border-4 border-[#161622] bg-zinc-900 flex items-center justify-center text-3xl font-black text-zinc-600 shadow-[0_0_30px_rgba(0,0,0,0.8)] z-10 mb-4 overflow-hidden">
                 {atleta.foto_url ? (

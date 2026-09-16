@@ -13,6 +13,10 @@ export default function Navbar() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+  }, [pathname]);
+
+  useEffect(() => {
     async function checkAuth() {
       const { data: { session } } = await supabase.auth.getSession();
 

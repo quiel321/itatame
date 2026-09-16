@@ -202,12 +202,14 @@ export default function PagamentoPage() {
 
         const mp = new window.MercadoPago(checkoutData.publicKey, { locale: "pt-BR" });
         const bricksBuilder = mp.bricks();
+        const { data: conta } = await supabase.auth.getUser();
 
         window.paymentBrickController = await bricksBuilder.create("payment", "paymentBrick_container", {
           initialization: {
             amount: checkoutData.valorTotal,
             preferenceId: checkoutData.preferenceId,
             marketplace: true,
+            ...(conta.user?.email ? { payer: { email: conta.user.email } } : {}),
           },
           customization: {
             paymentMethods: {

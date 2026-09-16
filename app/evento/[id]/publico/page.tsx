@@ -6,6 +6,7 @@ import { supabase } from "@/app/lib/supabase"
 import Link from "next/link"
 import { Clock } from "lucide-react"
 import { rotuloLuta } from "@/app/lib/lutas-rotulos"
+import { semFaixaDuplicada } from "@/app/lib/categorias-competicao"
 
 const formatarHorarioEstimado = (isoString: string | null) => {
   if (!isoString) return '';
@@ -326,7 +327,7 @@ export default function ChavesPublicoPage() {
               {categoriasFiltradas.length === 0 && <option value="">Nenhuma chave nesta modalidade...</option>}
               {categoriasFiltradas.map((cat) => {
                 const [nomeCategoria, faixa] = cat.split("__");
-                const catFormatada = nomeCategoria.replace("-", "").trim(); 
+                const catFormatada = semFaixaDuplicada(nomeCategoria.replace("-", "").trim(), faixa);
                 return <option key={cat} value={cat}>{catFormatada} • Faixa {faixa}</option>
               })}
             </select>

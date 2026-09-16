@@ -12,6 +12,8 @@ import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { ShieldCheck, Map, Trash2, Key, Users, CheckCircle, Copy, RefreshCw, Play, Edit3, Trophy, Search, ChevronDown, Megaphone } from "lucide-react";
 import MercadoPagoConnectButton from "@/app/admin/_components/MercadoPagoConnectButton";
+import { formatarDocumento } from '@/app/lib/formatar-documento';
+import { formatarTelefone } from '@/app/lib/formatar-telefone';
 
 export default function AdminPage() {
   const router = useRouter();
@@ -1010,11 +1012,11 @@ export default function AdminPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-black/40 p-4 rounded-xl border border-white/5">
                   <div>
                     <label className="text-zinc-500 text-[9px] md:text-[10px] font-black uppercase tracking-widest block mb-1 ml-1">CPF ou CNPJ (Repasses) *</label>
-                    <input required value={perfilData.documento} onChange={(e) => setPerfilData({...perfilData, documento: e.target.value})} className="w-full bg-black border border-white/10 rounded-lg px-3 py-2.5 outline-none focus:border-red-500 text-white text-xs md:text-sm" placeholder="000.000.000-00" />
+                    <input required value={formatarDocumento(perfilData.documento)} onChange={(e) => setPerfilData({...perfilData, documento: formatarDocumento(e.target.value)})} className="w-full bg-black border border-white/10 rounded-lg px-3 py-2.5 outline-none focus:border-red-500 text-white text-xs md:text-sm" placeholder="000.000.000-00" />
                   </div>
                   <div>
                     <label className="text-zinc-500 text-[9px] md:text-[10px] font-black uppercase tracking-widest block mb-1 ml-1">WhatsApp de Suporte *</label>
-                    <input required value={perfilData.telefone} onChange={(e) => setPerfilData({...perfilData, telefone: e.target.value})} className="w-full bg-black border border-white/10 rounded-lg px-3 py-2.5 outline-none focus:border-red-500 text-white text-xs md:text-sm" placeholder="(00) 00000-0000" />
+                    <input required value={formatarTelefone(perfilData.telefone)} onChange={(e) => setPerfilData({...perfilData, telefone: formatarTelefone(e.target.value)})} className="w-full bg-black border border-white/10 rounded-lg px-3 py-2.5 outline-none focus:border-red-500 text-white text-xs md:text-sm" placeholder="(00) 00000-0000" />
                   </div>
                 </div>
               </div>
