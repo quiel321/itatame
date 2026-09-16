@@ -21,25 +21,34 @@ function Editor({ eventoId }: { eventoId: string }) {
   const [eventos, setEventos] = useState<EventoOpcao[]>([]);
   const [eventoOrigem, setEventoOrigem] = useState('');
   const [modo, setModo] = useState<ModoCadastro>('modelo');
-  const [form, setForm] = useState(inicial);
+  const [form, setForm] = useState<CategoriaNova>(inicial);
   const [mensagem, setMensagem] = useState('');
   const [salvando, setSalvando] = useState(false);
   const [carregando, setCarregando] = useState(true);
   const [busca, setBusca] = useState('');
   const [modeloId, setModeloId] = useState(modelosPesoIBJJF[0].id);
+  const [categoriasEmUso, setCategoriasEmUso] = useState<Set<string>>(new Set());
+  const [editandoId, setEditandoId] = useState<string | null>(null);
+  const [categoriaExcluir, setCategoriaExcluir] = useState<CategoriaCompeticao | null>(null);
 
   useEffect(() => {
     let ativo = true;
     if (!eventoId) return;
     async function carregar() {
       const { data: authData } = await supabase.auth.getUser();
-      const [categoriasResposta, eventosResposta] = await Promise.all([
+      const [categoriasResposta, eventosResposta, inscricoesResposta, chavesResposta] = await Promise.all([
         supabase.from('categorias_evento').select('*').eq('evento_id', eventoId).order('idade_min'),
         authData.user ? supabase.from('eventos').select('id,nome').eq('organizador_id', authData.user.id).neq('id', eventoId).order('id', { ascending: false }) : Promise.resolve({ data: [] }),
+        supabase.from('inscricoes').select('categoria_id').eq('evento_id', eventoId).not('categoria_id', 'is', null),
+        supabase.from('chaves').select('categoria_id').eq('evento_id', eventoId).not('categoria_id', 'is', null),
       ]);
       if (!ativo) return;
       setCategorias(categoriasResposta.data || []);
       setEventos((eventosResposta.data || []) as EventoOpcao[]);
+      setCategoriasEmUso(new Set([
+        ...(inscricoesResposta.data || []).map(item => String(item.categoria_id)),
+        ...(chavesResposta.data || []).map(item => String(item.categoria_id)),
+      ]));
       if (categoriasResposta.error) setMensagem('Não foi possível carregar as categorias deste campeonato.');
       setCarregando(false);
     }
@@ -56,7 +65,8 @@ function Editor({ eventoId }: { eventoId: string }) {
       if (error) throw new Error(error.code === '23505' ? 'Uma ou mais categorias já existem neste campeonato.' : error.message);
       setCategorias(atual => [...atual, ...(data || [])]);
       setMensagem(sucesso);
-    } catch (error) { setMensagem((error as Error).message); }
+      return true;
+    } catch (error) { setMensagem((error as Error).message); return false; }
     finally { setSalvando(false); }
   }
 
@@ -78,8 +88,62 @@ function Editor({ eventoId }: { eventoId: string }) {
 
   async function salvarManual(e: React.FormEvent) {
     e.preventDefault();
-    await inserir([{ ...form, nome: form.nome.trim(), faixa: form.faixa.trim(), modalidade: form.modalidade.trim() }], 'Categoria cadastrada e disponível para os atletas elegíveis.');
-    setForm(atual => ({ ...atual, nome: '' }));
+    const categoria = { ...form, nome: form.nome.trim(), faixa: form.faixa.trim(), modalidade: form.modalidade.trim() };
+    if (editandoId) {
+      setSalvando(true); setMensagem('');
+      try {
+        validarCategoria(categoria);
+        const { data, error } = await supabase.from('categorias_evento').update(categoria).eq('id', editandoId).eq('evento_id', eventoId).select().single();
+        if (error) throw new Error(error.code === '23505' ? 'Já existe uma categoria com esses dados.' : error.message);
+        setCategorias(atual => atual.map(item => item.id === editandoId ? data : item));
+        setMensagem('Categoria atualizada. As opções de inscrição já usam os novos dados.');
+        cancelarEdicao();
+      } catch (error) { setMensagem((error as Error).message); }
+      finally { setSalvando(false); }
+      return;
+    }
+    const salvou = await inserir([categoria], 'Categoria cadastrada e disponível para os atletas elegíveis.');
+    if (salvou) setForm(atual => ({ ...atual, nome: '' }));
+  }
+
+  function editarCategoria(categoria: CategoriaCompeticao) {
+    setModo('manual');
+    setEditandoId(categoria.id);
+    setForm({
+      nome: categoria.nome, modalidade: categoria.modalidade, sexo: categoria.sexo,
+      faixa: categoria.faixa, idade_min: categoria.idade_min, idade_max: categoria.idade_max,
+      peso_min: categoria.peso_min, peso_max: categoria.peso_max,
+      tempo_minutos: categoria.tempo_minutos, tipo: categoria.tipo, ativa: categoria.ativa,
+    });
+    setMensagem('Editando a categoria selecionada.');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function cancelarEdicao() {
+    setEditandoId(null);
+    setForm(inicial);
+  }
+
+  async function alternarCategoria(categoria: CategoriaCompeticao) {
+    setSalvando(true); setMensagem('');
+    const { data, error } = await supabase.from('categorias_evento').update({ ativa: !categoria.ativa }).eq('id', categoria.id).eq('evento_id', eventoId).select().single();
+    setSalvando(false);
+    if (error) { setMensagem(error.message); return; }
+    setCategorias(atual => atual.map(item => item.id === categoria.id ? data : item));
+    setMensagem(data.ativa ? 'Categoria reativada e disponível para novas inscrições.' : 'Categoria pausada e ocultada das novas inscrições.');
+  }
+
+  async function excluirCategoria() {
+    if (!categoriaExcluir) return;
+    setSalvando(true); setMensagem('');
+    const { data, error } = await supabase.from('categorias_evento').delete().eq('id', categoriaExcluir.id).eq('evento_id', eventoId).select('id').maybeSingle();
+    setSalvando(false);
+    if (error) { setMensagem(error.code === '23503' ? 'Categoria em uso. Ela foi preservada para proteger inscrições e chaves.' : error.message); setCategoriaExcluir(null); return; }
+    if (!data) { setMensagem('A categoria não foi excluída. Atualize a página e confirme seu acesso ao campeonato.'); setCategoriaExcluir(null); return; }
+    setCategorias(atual => atual.filter(item => item.id !== categoriaExcluir.id));
+    if (editandoId === categoriaExcluir.id) cancelarEdicao();
+    setMensagem('Categoria excluída.');
+    setCategoriaExcluir(null);
   }
 
   const seletorBase = <>
@@ -117,11 +181,12 @@ function Editor({ eventoId }: { eventoId: string }) {
       <section className="rounded-2xl border border-white/10 bg-zinc-900/50 p-5 self-start">
         {modo === 'modelo' && <div className="space-y-4"><h2 className="font-bold">Categorias de referência IBJJF</h2><p className="text-xs leading-relaxed text-zinc-400">Importa os limites Adult Gi usados pela IBJJF. A pesagem inclui o kimono. O organizador deve conferir faixa, idade, tempo e o regulamento específico do evento.</p>{seletorModelo}<a href={fonteCategoriasIBJJF} target="_blank" rel="noopener noreferrer" className="block text-xs font-bold text-cyan-400 underline underline-offset-4">Consultar regras oficiais da IBJJF</a><button type="button" disabled={salvando} onClick={importarModelo} className="w-full rounded-xl bg-red-600 p-3 font-bold disabled:opacity-40">Importar tabela selecionada</button></div>}
         {modo === 'copiar' && <div className="space-y-4"><h2 className="font-bold">Copiar de outro campeonato</h2><p className="text-xs text-zinc-400">Copia todas as categorias de outro evento seu. As categorias do evento original permanecem intactas.</p><label className="block text-xs">Campeonato de origem<select className={campo + ' mt-1'} value={eventoOrigem} onChange={e => setEventoOrigem(e.target.value)}><option value="">Selecione</option>{eventos.map(evento => <option key={evento.id} value={String(evento.id)}>{evento.nome || `Evento ${evento.id}`}</option>)}</select></label><button type="button" disabled={salvando || !eventoOrigem} onClick={copiarCampeonato} className="w-full rounded-xl bg-red-600 p-3 font-bold disabled:opacity-40">Copiar tabela</button></div>}
-        {modo === 'manual' && <form onSubmit={salvarManual} className="space-y-4"><h2 className="font-bold">Nova categoria</h2><p className="text-xs text-zinc-400">Use para uma divisão especial ou para completar uma tabela.</p><label className="block text-xs">Nome da categoria<input required maxLength={80} className={campo + ' mt-1'} value={form.nome} onChange={e => setForm({ ...form, nome: e.target.value })} /></label>{seletorBase}<div className="grid grid-cols-2 gap-3"><label className="text-xs">Peso acima de (kg)<input required type="number" min="0" max="500" step="0.1" className={campo + ' mt-1'} value={form.peso_min} onChange={e => setForm({ ...form, peso_min: Number(e.target.value) })} /></label><label className="text-xs">Peso máximo (kg)<input type="number" min="0.1" max="500" step="0.1" placeholder="Sem limite" className={campo + ' mt-1'} value={form.peso_max ?? ''} onChange={e => setForm({ ...form, peso_max: e.target.value === '' ? null : Number(e.target.value) })} /></label></div><button disabled={salvando || carregando} className="w-full rounded-xl bg-red-600 p-3 font-bold disabled:opacity-40">Cadastrar categoria</button></form>}
+        {modo === 'manual' && <form onSubmit={salvarManual} className="space-y-4"><h2 className="font-bold">{editandoId ? 'Editar categoria' : 'Nova categoria'}</h2><p className="text-xs text-zinc-400">{editandoId ? 'Revise os dados e salve. Categorias já utilizadas ficam protegidas.' : 'Use para uma divisão especial ou para completar uma tabela.'}</p><label className="block text-xs">Nome da categoria<input required maxLength={80} className={campo + ' mt-1'} value={form.nome} onChange={e => setForm({ ...form, nome: e.target.value })} /></label>{seletorBase}<div className="grid grid-cols-2 gap-3"><label className="text-xs">Peso acima de (kg)<input required type="number" min="0" max="500" step="0.1" className={campo + ' mt-1'} value={form.peso_min} onChange={e => setForm({ ...form, peso_min: Number(e.target.value) })} /></label><label className="text-xs">Peso máximo (kg)<input type="number" min="0.1" max="500" step="0.1" placeholder="Sem limite" className={campo + ' mt-1'} value={form.peso_max ?? ''} onChange={e => setForm({ ...form, peso_max: e.target.value === '' ? null : Number(e.target.value) })} /></label></div><button disabled={salvando || carregando} className="w-full rounded-xl bg-red-600 p-3 font-bold disabled:opacity-40">{editandoId ? 'Salvar alterações' : 'Cadastrar categoria'}</button>{editandoId && <button type="button" onClick={cancelarEdicao} className="w-full rounded-xl border border-white/10 p-3 text-sm text-zinc-300">Cancelar edição</button>}</form>}
       </section>
 
-      <section><label className="sr-only" htmlFor="busca-categoria">Buscar categoria</label><input id="busca-categoria" className={campo} placeholder="Buscar nome, faixa ou divisão" value={busca} onChange={e => setBusca(e.target.value)} /><p className="my-4 text-xs text-zinc-400">{categorias.length} categorias cadastradas</p><div className="space-y-3">{categorias.filter(c => rotuloCategoria(c).toLowerCase().includes(busca.toLowerCase())).map(c => <article key={c.id} className="rounded-xl border border-white/10 p-4"><h2 className="font-bold">{c.nome}</h2><p className="text-sm text-zinc-400 mt-1">{rotuloCategoria(c)}</p><p className="text-xs text-red-300 mt-2">{c.tempo_minutos} minutos</p></article>)}</div>{!categorias.length && !carregando && <p className="text-zinc-400 text-sm">Nenhuma categoria cadastrada. Escolha uma das três opções ao lado para começar.</p>}</section>
+      <section><label className="sr-only" htmlFor="busca-categoria">Buscar categoria</label><input id="busca-categoria" className={campo} placeholder="Buscar nome, faixa ou divisão" value={busca} onChange={e => setBusca(e.target.value)} /><p className="my-4 text-xs text-zinc-400">{categorias.length} categorias cadastradas</p><div className="space-y-3">{categorias.filter(c => rotuloCategoria(c).toLowerCase().includes(busca.toLowerCase())).map(c => { const emUso = categoriasEmUso.has(c.id); return <article key={c.id} className={`rounded-xl border p-4 ${c.ativa ? 'border-white/10' : 'border-yellow-500/20 bg-yellow-500/5 opacity-75'}`}><div className="flex flex-wrap items-start justify-between gap-2"><h2 className="font-bold">{c.nome}</h2><span className={`rounded-full px-2 py-1 text-[9px] font-black uppercase ${emUso ? 'bg-cyan-500/10 text-cyan-300' : c.ativa ? 'bg-green-500/10 text-green-300' : 'bg-yellow-500/10 text-yellow-300'}`}>{emUso ? 'Em uso · protegida' : c.ativa ? 'Ativa' : 'Pausada'}</span></div><p className="text-sm text-zinc-400 mt-1">{rotuloCategoria(c)}</p><p className="text-xs text-red-300 mt-2">{c.tempo_minutos} minutos</p>{emUso ? <p className="mt-3 rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-2 text-[10px] text-cyan-100">Possui inscrição ou chave vinculada. Os dados foram bloqueados para preservar o campeonato.</p> : <div className="mt-4 flex flex-wrap gap-2"><button type="button" onClick={() => editarCategoria(c)} className="rounded-lg border border-white/10 px-3 py-2 text-xs font-bold">Editar</button><button type="button" disabled={salvando} onClick={() => alternarCategoria(c)} className="rounded-lg border border-yellow-500/20 px-3 py-2 text-xs font-bold text-yellow-300 disabled:opacity-40">{c.ativa ? 'Pausar' : 'Reativar'}</button><button type="button" onClick={() => setCategoriaExcluir(c)} className="rounded-lg border border-red-500/20 px-3 py-2 text-xs font-bold text-red-300">Excluir</button></div>}</article>; })}</div>{!categorias.length && !carregando && <p className="text-zinc-400 text-sm">Nenhuma categoria cadastrada. Escolha uma das três opções ao lado para começar.</p>}</section>
     </div>
     {mensagem && <p role="status" className="mt-5 rounded-xl border border-white/10 p-4 text-sm">{mensagem}</p>}
+    {categoriaExcluir && <div className="fixed inset-0 z-[100] grid place-items-center bg-black/80 p-4"><div role="dialog" aria-modal="true" aria-labelledby="titulo-excluir-categoria" className="w-full max-w-md rounded-2xl border border-red-500/30 bg-zinc-950 p-6 shadow-2xl"><h2 id="titulo-excluir-categoria" className="text-lg font-black">Excluir categoria?</h2><p className="mt-2 text-sm text-zinc-400">A categoria <strong className="text-white">{categoriaExcluir.nome}</strong> será removida deste campeonato. Essa ação é permitida somente enquanto ela não possuir inscrições ou chaves.</p><div className="mt-5 flex gap-3"><button type="button" onClick={() => setCategoriaExcluir(null)} className="flex-1 rounded-xl border border-white/10 p-3 text-sm font-bold">Cancelar</button><button type="button" disabled={salvando} onClick={excluirCategoria} className="flex-1 rounded-xl bg-red-600 p-3 text-sm font-bold disabled:opacity-40">Confirmar exclusão</button></div></div></div>}
   </>;
 }
