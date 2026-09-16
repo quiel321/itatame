@@ -1,6 +1,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { grupoInscricao, type InscricaoCompeticao, type CategoriaCompeticao } from './categorias-competicao';
-type Participante = InscricaoCompeticao & { equipe_atleta: string };
+import { grupoInscricao, normalizarCompeticao, type InscricaoCompeticao, type CategoriaCompeticao } from './categorias-competicao';
+type Participante = InscricaoCompeticao & { equipe_atleta: string; equipe_chave: string };
+
+function chaveEquipe(inscricao: InscricaoCompeticao) {
+  if (inscricao.equipe_id) return `ID:${inscricao.equipe_id}`;
+  const nome = normalizarCompeticao(inscricao.equipe);
+  // Sem uma equipe informada, atletas diferentes não podem ser presumidos como companheiros.
+  return nome && nome !== 'SEM EQUIPE' ? `NOME:${nome}` : `ATLETA:${inscricao.atleta_id ?? inscricao.id}`;
+}
 export function prepararGrupos(inscricoes: InscricaoCompeticao[], tipo: 'peso' | 'absoluto', categorias: CategoriaCompeticao[]) {
   const grupos: Record<string, Participante[]> = {};
   const metadados: Record<string, ReturnType<typeof grupoInscricao>> = {};
@@ -13,7 +20,11 @@ export function prepararGrupos(inscricoes: InscricaoCompeticao[], tipo: 'peso' |
     try { grupo = grupoInscricao(inscricao, tipo, categorias); }
     catch (error) { throw new Error(`Inscrição ${inscricao.id} (${inscricao.atleta}): ${(error as Error).message}`); }
     const chave = `${grupo.categoria}__${grupo.faixa}`;
-    (grupos[chave] ||= []).push({ ...inscricao, equipe_atleta: inscricao.equipe?.trim() || 'SEM EQUIPE' });
+    (grupos[chave] ||= []).push({
+      ...inscricao,
+      equipe_atleta: inscricao.equipe?.trim() || 'SEM EQUIPE',
+      equipe_chave: chaveEquipe(inscricao),
+    });
     metadados[chave] = grupo;
   }
   for (const [chave, atletas] of Object.entries(grupos)) {
@@ -40,39 +51,61 @@ export function prepararGrupos(inscricoes: InscricaoCompeticao[], tipo: 'peso' |
     return novoMapa;
   }
 
-  function distribuirEquipesEmLadosOpostos(atletas: any[], tamanho: number, posicoes: number[]) {
-    const grupos = new Map<string, any[]>();
+  function distribuirEquipesEmLadosOpostos(atletas: Participante[], tamanho: number, posicoes: number[]) {
+    const grupos = new Map<string, Participante[]>();
     atletas.forEach((atleta) => {
-      const equipe = String(atleta.equipe_atleta || "SEM EQUIPE").trim().toUpperCase();
+      const equipe = atleta.equipe_chave;
       const lista = grupos.get(equipe) || [];
       lista.push(atleta);
       grupos.set(equipe, lista);
     });
 
-    const esquerda: any[] = [];
-    const direita: any[] = [];
+    const esquerda: Participante[] = [];
+    const direita: Participante[] = [];
     const capacidade = tamanho / 2;
     const gruposOrdenados = Array.from(grupos.values())
       .map((grupo) => embaralhar([...grupo]))
       .sort((a, b) => b.length - a.length);
 
+    // Escolhe globalmente quantos atletas de cada equipe irão para cada metade.
+    // Para dois atletas da mesma equipe, a única distribuição possível é 1 + 1,
+    // garantindo que eles só possam se encontrar na final.
+    let possibilidades = new Map<number, number[]>([[0, []]]);
     gruposOrdenados.forEach((grupo) => {
-      grupo.forEach((atleta, indice) => {
-        let destino = indice % 2 === 0 ? esquerda : direita;
-        let alternativo = destino === esquerda ? direita : esquerda;
-        if (destino.length >= capacidade || (alternativo.length < destino.length && alternativo.length < capacidade)) {
-          [destino, alternativo] = [alternativo, destino];
-        }
-        destino.push(atleta);
+      const minimo = Math.floor(grupo.length / 2);
+      const maximo = Math.ceil(grupo.length / 2);
+      const opcoes = minimo === maximo ? [minimo] : [minimo, maximo];
+      const proximas = new Map<number, number[]>();
+      possibilidades.forEach((escolhas, totalEsquerda) => {
+        opcoes.forEach((quantidadeEsquerda) => {
+          const novoTotal = totalEsquerda + quantidadeEsquerda;
+          if (novoTotal <= capacidade && !proximas.has(novoTotal)) {
+            proximas.set(novoTotal, [...escolhas, quantidadeEsquerda]);
+          }
+        });
       });
+      possibilidades = proximas;
+    });
+
+    const minimoEsquerda = Math.max(0, atletas.length - capacidade);
+    const solucao = Array.from(possibilidades.entries())
+      .filter(([total]) => total >= minimoEsquerda)
+      .sort(([a], [b]) => Math.abs(atletas.length - 2 * a) - Math.abs(atletas.length - 2 * b))[0];
+    if (!solucao) throw new Error('Não foi possível distribuir as equipes com segurança na chave.');
+
+    gruposOrdenados.forEach((grupo, indice) => {
+      const quantidadeEsquerda = solucao[1][indice];
+      esquerda.push(...grupo.slice(0, quantidadeEsquerda));
+      direita.push(...grupo.slice(quantidadeEsquerda));
     });
 
     embaralhar(esquerda);
     embaralhar(direita);
-    while (esquerda.length < capacidade) esquerda.push({ atleta: "BYE", nome: "BYE", equipe_atleta: "" });
-    while (direita.length < capacidade) direita.push({ atleta: "BYE", nome: "BYE", equipe_atleta: "" });
+    const bye = () => ({ atleta: 'BYE', nome: 'BYE', equipe_atleta: '', equipe_chave: `BYE:${Math.random()}` } as Participante);
+    while (esquerda.length < capacidade) esquerda.push(bye());
+    while (direita.length < capacidade) direita.push(bye());
 
-    const porSeed = Array.from({ length: tamanho }, () => ({ atleta: "BYE", nome: "BYE", equipe_atleta: "" }));
+    const porSeed = Array.from({ length: tamanho }, () => bye());
     posicoes.slice(0, capacidade).forEach((seed, indice) => { porSeed[seed - 1] = esquerda[indice]; });
     posicoes.slice(capacidade).forEach((seed, indice) => { porSeed[seed - 1] = direita[indice]; });
     return porSeed;
