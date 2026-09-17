@@ -6,6 +6,7 @@ import { calcularResultadosChaves } from "../lib/ranking-eventos";
 import imageCompression from 'browser-image-compression';
 import QRCode from "react-qr-code";
 import { formatarTelefone } from '@/app/lib/formatar-telefone';
+import { cpfValido, formatarCpf, variantesCpf } from '@/app/lib/validar-cpf';
 import { CategoriaCompeticao, categoriaCompativelSemPeso, categoriaMaisLeve, rotuloCategoria } from '@/app/lib/categorias-competicao';
 
 export default function PerfilPage() {
@@ -32,6 +33,7 @@ export default function PerfilPage() {
   const [equipe, setEquipe] = useState("");
   const [academia, setAcademia] = useState("");
   const [professor, setProfessor] = useState("");
+  const [professorId, setProfessorId] = useState("");
   const [peso, setPeso] = useState("");
   const [cidade, setCidade] = useState("");
   const [faixa, setFaixa] = useState("");
@@ -52,11 +54,6 @@ export default function PerfilPage() {
   
   // 🔥 NOVO: Estado para controlar o Popup de Notificações
   const [mostrarPopupNotificacao, setMostrarPopupNotificacao] = useState(false);
-
-  const formatarCpf = (value: string) => {
-    if (!value) return "";
-    return value.replace(/\D/g, "").replace(/(\d{3})(\d)/, "$1.$2").replace(/(\d{3})(\d)/, "$1.$2").replace(/(\d{3})(\d{1,2})$/, "$1-$2").substring(0, 14);
-  };
 
   const calcularIdade = (dataNasc: string) => {
     if (!dataNasc) return "?";
@@ -187,7 +184,7 @@ export default function PerfilPage() {
       return;
     }
 
-    const { data: profsData } = await supabase.from("atletas").select("nome, equipe, academia, modalidade").eq("role", "professor").neq("nome", "");
+    const { data: profsData } = await supabase.from("atletas").select("user_id, nome, equipe, academia, modalidade").eq("role", "professor").neq("nome", "").order("nome");
     if (profsData) setProfessoresDisponiveis(profsData);
 
     const { data: depsData } = await supabase.from("atletas").select("*").eq("responsavel_id", authData.user.id);
@@ -220,6 +217,7 @@ export default function PerfilPage() {
       setEquipe(perfilData.equipe || "");
       setAcademia(perfilData.academia || "");
       setProfessor(perfilData.professor || "");
+      setProfessorId(perfilData.professor_id || "");
       setPeso(perfilData.peso || "");
       setCidade(perfilData.cidade || "");
       setFaixa(perfilData.faixa || "");
@@ -252,15 +250,18 @@ export default function PerfilPage() {
       });
 
       if (userRole === "professor" || userRole === "super-admin") {
-        let query = supabase.from("atletas").select("id, user_id, nome, faixa, peso, nascimento, foto_url, ouro, prata, bronze, professor, equipe").neq("user_id", authData.user.id);
+        const equipeProfessor = (perfilData.equipe || "").trim();
+        let query = supabase.from("atletas").select("id, user_id, nome, faixa, peso, nascimento, foto_url, ouro, prata, bronze, professor, professor_id, equipe, academia").neq("user_id", authData.user.id);
 
-        if (userRole === "professor" && perfilData.nome) {
-          query = query.eq("professor", perfilData.nome);
-        } else if (userRole === "super-admin" && perfilData.equipe) {
-          query = query.eq("equipe", perfilData.equipe);
+        // O vinculo e o professor_id do aluno: cada mestre ve apenas quem escolheu a conta dele.
+        if (userRole === "professor") {
+          query = query.eq("professor_id", authData.user.id);
+        } else {
+          query = query.eq("equipe", equipeProfessor);
         }
 
-        const { data: alunosData } = await query;
+        const podeListar = userRole === "professor" || Boolean(equipeProfessor);
+        const { data: alunosData } = podeListar ? await query : { data: [] as any[] };
 
         if (alunosData && alunosData.length > 0) {
           const alunosIds = alunosData.map(a => a.user_id).filter(id => id);
@@ -282,8 +283,10 @@ export default function PerfilPage() {
       }
 
       if (userRole === "atleta" && perfilData.professor) {
-        const profExisteNaLista = profsData?.some(p => p.nome === perfilData.professor);
-        if (!profExisteNaLista) setProfessorPersonalizado(true);
+        // Cadastros antigos guardavam so o nome: reconecta ao id quando o nome bate com um professor da lista.
+        const profDaLista = profsData?.find(p => p.nome === perfilData.professor);
+        if (profDaLista && !perfilData.professor_id) setProfessorId(profDaLista.user_id);
+        if (!profDaLista) setProfessorPersonalizado(true);
       }
 
       if (userRole !== "super-admin" && (!perfilData.nome || (!perfilData.cpf && !authData.user.user_metadata?.cpf))) {
@@ -305,36 +308,36 @@ export default function PerfilPage() {
     setLoading(false);
   }
 
+  // O select guarda o user_id do professor: renomear a academia nao desfaz mais o vinculo.
   const handleProfessorChange = (e: React.ChangeEvent<HTMLSelectElement>, isDependente = false) => {
     const selecionado = e.target.value;
+    const profEncontrado = professoresDisponiveis.find(p => p.user_id === selecionado);
 
     if (isDependente) {
-      if (selecionado === "OUTRO") {
-        setFormDependente({ ...formDependente, professor: "", equipe: "", academia: "", professorPersonalizado: true });
+      if (selecionado === "OUTRO" || !profEncontrado) {
+        setFormDependente({ ...formDependente, professor: "", professor_id: "", equipe: "", academia: "", professorPersonalizado: selecionado === "OUTRO" });
       } else {
-        const profEncontrado = professoresDisponiveis.find(p => p.nome === selecionado);
         setFormDependente({
           ...formDependente,
-          professor: selecionado,
-          equipe: profEncontrado?.equipe || "",
-          academia: profEncontrado?.academia || "",
-          modalidade: profEncontrado?.modalidade || formDependente.modalidade,
+          professor: profEncontrado.nome || "",
+          professor_id: profEncontrado.user_id,
+          equipe: profEncontrado.equipe || "",
+          academia: profEncontrado.academia || "",
+          modalidade: profEncontrado.modalidade || formDependente.modalidade,
           professorPersonalizado: false
         });
       }
     } else {
-      if (selecionado === "OUTRO") {
-        setProfessorPersonalizado(true);
-        setProfessor(""); setEquipe(""); setAcademia("");
+      if (selecionado === "OUTRO" || !profEncontrado) {
+        setProfessorPersonalizado(selecionado === "OUTRO");
+        setProfessor(""); setProfessorId(""); setEquipe(""); setAcademia("");
       } else {
         setProfessorPersonalizado(false);
-        setProfessor(selecionado);
-        const profEncontrado = professoresDisponiveis.find(p => p.nome === selecionado);
-        if (profEncontrado) {
-          setEquipe(profEncontrado.equipe || "");
-          setAcademia(profEncontrado.academia || "");
-          if (profEncontrado.modalidade) setModalidade(profEncontrado.modalidade);
-        }
+        setProfessor(profEncontrado.nome || "");
+        setProfessorId(profEncontrado.user_id);
+        setEquipe(profEncontrado.equipe || "");
+        setAcademia(profEncontrado.academia || "");
+        if (profEncontrado.modalidade) setModalidade(profEncontrado.modalidade);
       }
     }
   };
@@ -343,14 +346,19 @@ export default function PerfilPage() {
     setSalvando(true); setMensagem(""); setErro("");
     if (!nome || !cpf) { setErro("Nome e CPF são obrigatórios."); setSalvando(false); return; }
 
-    const cpfDigitos = cpf.replace(/\D/g, "");
-    const cpfFormatado = formatarCpf(cpfDigitos);
+    const cpfFormatado = formatarCpf(cpf);
     const telefoneDigitos = telefone.replace(/\D/g, "");
-    if (cpfDigitos.length !== 11 || (telefoneDigitos && (telefoneDigitos.length < 10 || telefoneDigitos.length > 11))) {
-      setErro('Informe um CPF e telefone válidos.'); setSalvando(false); return;
+    if (!cpfValido(cpf)) {
+      setErro('Este CPF não existe. Confira os números digitados.'); setSalvando(false); return;
+    }
+    if (telefoneDigitos && (telefoneDigitos.length < 10 || telefoneDigitos.length > 11)) {
+      setErro('Informe um telefone válido com DDD.'); setSalvando(false); return;
+    }
+    if (nascimento && new Date(nascimento) > new Date()) {
+      setErro('A data de nascimento não pode estar no futuro.'); setSalvando(false); return;
     }
     const [{ data: cpfExistente }, { data: telefoneExistente }] = await Promise.all([
-      supabase.from('atletas').select('user_id').in('cpf', [cpfDigitos, cpfFormatado]).neq('user_id', userId).limit(1),
+      supabase.from('atletas').select('user_id').in('cpf', variantesCpf(cpf)).neq('user_id', userId).limit(1),
       telefoneDigitos ? supabase.from('atletas').select('user_id').in('telefone', [telefoneDigitos, formatarTelefone(telefoneDigitos)]).neq('user_id', userId).limit(1) : Promise.resolve({ data: [] }),
     ]);
     if (cpfExistente?.length || telefoneExistente?.length) {
@@ -367,6 +375,7 @@ export default function PerfilPage() {
       equipe,
       academia,
       professor,
+      professor_id: professorId || null,
       cidade,
       faixa,
       modalidade,
@@ -398,6 +407,14 @@ export default function PerfilPage() {
       setErro("Nome, Sexo e Data de Nascimento do dependente são obrigatórios.");
       setSalvando(false); return;
     }
+    if (formDependente.cpf && !cpfValido(formDependente.cpf)) {
+      setErro("O CPF do dependente não existe. Confira os números ou deixe o campo em branco.");
+      setSalvando(false); return;
+    }
+    if (new Date(formDependente.nascimento) > new Date()) {
+      setErro("A data de nascimento não pode estar no futuro.");
+      setSalvando(false); return;
+    }
 
     const isNew = !formDependente.user_id;
     const dependenteId = isNew ? crypto.randomUUID() : formDependente.user_id;
@@ -407,12 +424,13 @@ export default function PerfilPage() {
       responsavel_id: userId,
       role: "atleta",
       nome: formDependente.nome,
-      cpf: formDependente.cpf || null,
+      cpf: formDependente.cpf ? formatarCpf(formDependente.cpf) : null,
       nascimento: formDependente.nascimento,
       sexo: formDependente.sexo,
       equipe: formDependente.equipe,
       academia: formDependente.academia,
       professor: formDependente.professor,
+      professor_id: formDependente.professor_id || null,
       faixa: formDependente.faixa,
       peso: formDependente.peso ? formDependente.peso : null,
       modalidade: formDependente.modalidade,
@@ -587,6 +605,7 @@ export default function PerfilPage() {
   };
 
   const totalAlunos = minhaEquipe.length;
+  const vinculoEquipePendente = !nome.trim() || (!equipe.trim() && !academia.trim());
   const categoriaDestinoEdicao: CategoriaCompeticao | undefined = editandoInscricao?.categoriasDisponiveis?.find((c: CategoriaCompeticao) => c.id === editandoInscricao.categoriaNova);
   const categoriaOriginalEdicao: CategoriaCompeticao | null = editandoInscricao?.categoriasDisponiveis?.find((c: CategoriaCompeticao) => c.id === editandoInscricao.categoria_id) || null;
   const mudancaParaPesoMenor = Boolean(categoriaDestinoEdicao && categoriaMaisLeve(categoriaOriginalEdicao, categoriaDestinoEdicao));
@@ -697,54 +716,80 @@ export default function PerfilPage() {
           {/* 🎫 NOVA ABA: CARTEIRA DO ATLETA */}
           {abaAtiva === "carteirinha" && (
             <div className="animate-in fade-in slide-in-from-right-4 duration-500 w-full flex flex-col items-center pt-4 md:pt-10">
-               <div className="w-[340px] bg-[#0c1220] border border-zinc-800 rounded-xl overflow-hidden relative shadow-[0_0_40px_rgba(6,182,212,0.15)] pb-4">
-                 <div className="absolute top-0 right-0 w-40 h-40 bg-cyan-500/10 blur-3xl rounded-full pointer-events-none"></div>
-                 <div className="absolute bottom-0 left-0 w-24 h-24 bg-blue-500/10 blur-2xl rounded-full pointer-events-none"></div>
-                 <div className="flex gap-3 p-4 pb-2 relative z-10">
-                    <div className="w-[125px] h-[160px] bg-zinc-900 border-2 border-zinc-800 rounded overflow-hidden shrink-0 shadow-lg">
-                       {fotoUrl ? <img src={fotoUrl} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-4xl font-black text-zinc-700 bg-zinc-900">{nome?.charAt(0) || "?"}</div>}
+               <div className={`w-full max-w-[360px] rounded-2xl overflow-hidden relative border ${role === 'professor' ? 'border-yellow-500/30 bg-[#15100a] shadow-[0_0_40px_rgba(234,179,8,0.12)]' : 'border-cyan-500/25 bg-[#0a1018] shadow-[0_0_40px_rgba(6,182,212,0.12)]'}`}>
+
+                 {/* FAIXA SUPERIOR */}
+                 <div className={`flex items-center justify-between px-4 py-2.5 border-b ${role === 'professor' ? 'border-yellow-500/20 bg-yellow-500/[0.06]' : 'border-cyan-500/20 bg-cyan-500/[0.06]'}`}>
+                    <span className="text-white font-black italic tracking-tighter text-xl"><span className="text-red-600">i</span>TATAME</span>
+                    <span className={`text-[8px] font-black uppercase tracking-[0.18em] px-2 py-1 rounded border ${role === 'professor' ? 'text-yellow-400 border-yellow-500/30 bg-yellow-500/10' : 'text-cyan-400 border-cyan-500/30 bg-cyan-500/10'}`}>
+                      {role === 'professor' ? 'Carteira do Mestre' : 'Digital Card'}
+                    </span>
+                 </div>
+
+                 {/* FOTO + IDENTIFICACAO */}
+                 <div className="flex gap-3.5 p-4">
+                    <div className={`w-[108px] h-[138px] rounded-lg overflow-hidden shrink-0 border ${role === 'professor' ? 'border-yellow-500/25' : 'border-cyan-500/25'} bg-black`}>
+                       {fotoUrl ? <img src={fotoUrl} alt={nome || "Foto do atleta"} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-4xl font-black text-zinc-700">{nome?.charAt(0) || "?"}</div>}
                     </div>
-                    <div className="flex-1 flex flex-col items-end pt-2">
-                       <span className="text-white font-black italic tracking-tighter text-2xl mb-1"><span className="text-red-600">i</span>TATAME</span>
-                       <span className="text-[9px] font-black uppercase tracking-widest text-cyan-400 bg-cyan-400/10 px-2 py-0.5 rounded border border-cyan-400/20 text-right">Digital Card</span>
+
+                    <div className="flex-1 min-w-0 flex flex-col">
+                       <span className="text-[8px] font-black uppercase tracking-[0.18em] text-zinc-500">Nome</span>
+                       <span className="text-white text-[13px] font-black uppercase leading-tight break-words mb-2.5">{nome || "Não informado"}</span>
+
+                       <span className="text-[8px] font-black uppercase tracking-[0.18em] text-zinc-500">Nascimento</span>
+                       <span className="text-white text-[11px] font-bold mb-2.5">
+                         {nascimento ? `${formatarData(nascimento)} · ${calcularIdade(nascimento)} anos` : "--/--/----"}
+                       </span>
+
+                       <span className="text-[8px] font-black uppercase tracking-[0.18em] text-zinc-500">Faixa</span>
+                       <span className={`mt-0.5 w-max px-2 py-1 rounded text-[9px] font-black uppercase tracking-widest ${getCorFaixa(faixa)}`}>
+                         {faixa || (role === 'professor' ? "Não informada" : "Branca")}
+                       </span>
                     </div>
                  </div>
-                 <div className="space-y-1.5 px-4 mb-4 relative z-10">
-                    <div className="flex bg-white h-7 items-center overflow-hidden rounded-[2px] shadow-sm">
-                       <div className="bg-cyan-900 text-white font-black italic text-[9px] px-2 h-full flex items-center w-[90px]" style={{ clipPath: 'polygon(0 0, 100% 0, 85% 100%, 0 100%)' }}>NOME</div>
-                       <div className="text-black text-[10px] font-bold px-1 truncate flex-1 uppercase">{nome || "NÃO INFORMADO"}</div>
+
+                 {/* EQUIPE E MODALIDADE */}
+                 <div className="mx-4 mb-4 grid grid-cols-2 gap-px rounded-lg overflow-hidden border border-white/5 bg-white/5">
+                    <div className="bg-black/60 p-2.5 min-w-0">
+                       <span className="text-[8px] font-black uppercase tracking-[0.18em] text-zinc-500 block">Equipe / Academia</span>
+                       <span className={`text-[10px] font-black uppercase truncate block mt-0.5 ${role === 'professor' ? 'text-yellow-400' : 'text-cyan-400'}`}>{academia ? `${equipe} · ${academia}` : equipe || "Sem equipe"}</span>
                     </div>
-                    <div className="flex bg-white h-7 items-center overflow-hidden rounded-[2px] shadow-sm">
-                       <div className="bg-cyan-900 text-white font-black italic text-[9px] px-2 h-full flex items-center w-[90px]" style={{ clipPath: 'polygon(0 0, 100% 0, 85% 100%, 0 100%)' }}>ACADEMIA</div>
-                       <div className="text-black text-[10px] font-bold px-1 truncate flex-1 uppercase">{academia ? `${equipe} - ${academia}` : equipe || "SEM EQUIPE"}</div>
-                    </div>
-                    <div className="flex bg-white h-7 items-center overflow-hidden rounded-[2px] shadow-sm">
-                       <div className="bg-cyan-900 text-white font-black italic text-[9px] px-2 h-full flex items-center w-[90px]" style={{ clipPath: 'polygon(0 0, 100% 0, 85% 100%, 0 100%)' }}>FAIXA</div>
-                       <div className="text-black text-[10px] font-bold px-1 truncate flex-1 uppercase">{faixa || "BRANCA"}</div>
+                    <div className="bg-black/60 p-2.5 min-w-0">
+                       <span className="text-[8px] font-black uppercase tracking-[0.18em] text-zinc-500 block">Modalidade</span>
+                       <span className="text-[10px] font-black uppercase text-white truncate block mt-0.5">{modalidade || "Jiu-Jitsu"}</span>
                     </div>
                  </div>
-                 <div className="flex gap-3 px-4 relative z-10">
-                    <div className="w-[100px] h-[100px] bg-white p-1.5 rounded-[2px] shrink-0 shadow-sm flex items-center justify-center">
-                       <QRCode value={`${process.env.NEXT_PUBLIC_SITE_URL || "https://itatame.com.br"}/atleta/${userId}`} size={88} style={{ height: "auto", maxWidth: "100%", width: "100%" }} />
+
+                 {/* QR + REGISTRO */}
+                 <div className="flex items-center gap-3.5 px-4 pb-4">
+                    <div className="w-[92px] h-[92px] bg-white p-1.5 rounded-lg shrink-0 flex items-center justify-center">
+                       <QRCode value={`${process.env.NEXT_PUBLIC_SITE_URL || "https://itatame.com.br"}/atleta/${userId}`} size={80} style={{ height: "auto", maxWidth: "100%", width: "100%" }} />
                     </div>
-                    <div className="flex-1 space-y-1.5 flex flex-col justify-center">
-                         <div className="flex bg-white h-6 items-center overflow-hidden rounded-[2px] shadow-sm">
-                            <div className="bg-cyan-900 text-white font-black italic text-[8px] pl-2 pr-2 h-full flex items-center w-[90px]" style={{ clipPath: 'polygon(0 0, 100% 0, 85% 100%, 0 100%)' }}>NASCIMENTO</div>
-                            <div className="text-black text-[8px] sm:text-[9px] font-bold px-1 truncate flex-1">{nascimento ? formatarData(nascimento) : "--/--/----"}</div>
-                         </div>
-                         <div className="flex bg-white h-6 items-center overflow-hidden rounded-[2px] shadow-sm">
-                            <div className="bg-cyan-900 text-white font-black italic text-[8px] pl-2 pr-2 h-full flex items-center w-[90px]" style={{ clipPath: 'polygon(0 0, 100% 0, 85% 100%, 0 100%)' }}>NÚMERO</div>
-                            <div className="text-black text-[8px] sm:text-[9px] font-bold px-1 truncate flex-1">{userId.substring(0,8).toUpperCase()}</div>
-                         </div>
-                         <div className="flex bg-white h-6 items-center overflow-hidden rounded-[2px] shadow-sm">
-                            <div className="bg-cyan-900 text-white font-black italic text-[8px] pl-2 pr-2 h-full flex items-center w-[90px]" style={{ clipPath: 'polygon(0 0, 100% 0, 85% 100%, 0 100%)' }}>VALIDADE</div>
-                            <div className="text-black text-[8px] sm:text-[9px] font-bold px-1 truncate flex-1">31/12/{new Date().getFullYear()}</div>
-                         </div>
+                    <div className="flex-1 min-w-0 space-y-2">
+                       <div>
+                          <span className="text-[8px] font-black uppercase tracking-[0.18em] text-zinc-500 block">Registro</span>
+                          <span className="text-white text-[11px] font-black tracking-widest">{userId.substring(0, 8).toUpperCase()}</span>
+                       </div>
+                       <div>
+                          <span className="text-[8px] font-black uppercase tracking-[0.18em] text-zinc-500 block">Validade</span>
+                          <span className="text-white text-[11px] font-black tracking-widest">31/12/{new Date().getFullYear()}</span>
+                       </div>
                     </div>
+                 </div>
+
+                 <div className={`px-4 py-2 border-t text-center ${role === 'professor' ? 'border-yellow-500/15 bg-yellow-500/[0.04]' : 'border-cyan-500/15 bg-cyan-500/[0.04]'}`}>
+                    <span className="text-[8px] font-black uppercase tracking-[0.2em] text-zinc-500">itatame.com.br · Registro Digital Oficial</span>
                  </div>
                </div>
-               <p className="text-zinc-500 text-[10px] uppercase font-bold tracking-widest mt-6 text-center max-w-[300px]">
-                 Este é o seu registro digital oficial. Escaneie o QR Code para acessar o seu perfil público e mural de medalhas.
+
+               {!nascimento && (
+                 <button onClick={() => setAbaAtiva("editar")} className="cursor-pointer mt-5 text-[10px] font-black uppercase tracking-widest text-yellow-500 hover:text-yellow-400 transition-colors">
+                   Informe sua data de nascimento para completar a carteira
+                 </button>
+               )}
+
+               <p className="text-zinc-500 text-[10px] uppercase font-bold tracking-widest mt-5 text-center max-w-[320px]">
+                 Escaneie o QR Code para abrir o perfil público e o mural de medalhas.
                </p>
             </div>
           )}
@@ -840,6 +885,10 @@ export default function PerfilPage() {
 
                     <div className="bg-black/50 border border-white/5 rounded-xl p-3 flex flex-wrap gap-4 sm:gap-6 cursor-default">
                       <div>
+                        <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest block mb-0.5">Nascimento</span>
+                        <span className="text-sm md:text-base text-white font-black uppercase tracking-tight">{nascimento ? `${formatarData(nascimento)} · ${calcularIdade(nascimento)} ANOS` : "--"}</span>
+                      </div>
+                      <div>
                         <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest block mb-0.5">Cidade Sede</span>
                         <span className="text-sm md:text-base text-white font-black uppercase tracking-tight">{cidade || "--"}</span>
                       </div>
@@ -923,6 +972,7 @@ export default function PerfilPage() {
 
                 {role === "professor" ? (
                   <>
+                    <div><label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 pl-1 cursor-default">Data de Nascimento</label><input type="date" value={nascimento} onChange={(e) => setNascimento(e.target.value)} max={new Date().toISOString().slice(0, 10)} className="cursor-pointer w-full bg-black/50 border border-white/5 focus:border-yellow-500/50 outline-none rounded-xl px-3 py-2 text-xs text-white transition-colors [&::-webkit-calendar-picker-indicator]:invert" /></div>
                     <div><label className="block text-[10px] font-bold text-yellow-500 uppercase tracking-wider mb-1 pl-1 cursor-default">Bandeira / Equipe Global Oficial</label><input type="text" value={equipe} onChange={(e) => setEquipe(e.target.value)} placeholder="Ex: Gracie Barra, Nova União" className="cursor-text w-full bg-black/50 border border-white/5 outline-none rounded-xl px-3 py-2 text-xs text-white transition-colors focus:border-yellow-500" /></div>
                     <div><label className="block text-[10px] font-bold text-yellow-500 uppercase tracking-wider mb-1 pl-1 cursor-default">Nome da sua Academia / CT local</label><input type="text" value={academia} onChange={(e) => setAcademia(e.target.value)} placeholder="Ex: CT Silva, Matriz Centro" className="cursor-text w-full bg-black/50 border border-white/5 outline-none rounded-xl px-3 py-2 text-xs text-white transition-colors focus:border-yellow-500" /></div>
                     <div>
@@ -969,10 +1019,10 @@ export default function PerfilPage() {
                     </div>
                     <div className="md:col-span-2">
                       <label className="block text-[10px] font-bold text-cyan-500 uppercase tracking-wider mb-1 pl-1 cursor-default">Selecione seu Professor Responsável</label>
-                      <select value={professorPersonalizado ? "OUTRO" : professor} onChange={(e) => handleProfessorChange(e, false)} className="cursor-pointer w-full bg-cyan-900/10 border border-cyan-500/30 focus:border-cyan-500 outline-none rounded-xl px-3 py-3 text-xs text-white transition-colors appearance-none">
+                      <select value={professorPersonalizado ? "OUTRO" : professorId} onChange={(e) => handleProfessorChange(e, false)} className="cursor-pointer w-full bg-cyan-900/10 border border-cyan-500/30 focus:border-cyan-500 outline-none rounded-xl px-3 py-3 text-xs text-white transition-colors appearance-none">
                         <option value="" className="bg-[#0a0a0e] text-white">Selecione na lista...</option>
                         {professoresDisponiveis.map(p => (
-                          <option key={p.nome} value={p.nome} className="bg-[#0a0a0e] text-white">{p.nome}</option>
+                          <option key={p.user_id} value={p.user_id} className="bg-[#0a0a0e] text-white">{p.nome}{p.academia ? ` · ${p.academia}` : ""}</option>
                         ))}
                         <option value="OUTRO" className="bg-[#0a0a0e] text-white">Outro / Meu professor não está na lista</option>
                       </select>
@@ -1056,7 +1106,7 @@ export default function PerfilPage() {
                       <p className="text-zinc-400 text-xs mt-1">Gerencie os perfis de filhos e menores sob sua responsabilidade.</p>
                     </div>
                     <button
-                      onClick={() => setFormDependente({ nome: "", cpf: "", nascimento: "", sexo: "", professor: "", equipe: "", academia: "", faixa: "", peso: "", modalidade: "", professorPersonalizado: false })}
+                      onClick={() => setFormDependente({ nome: "", cpf: "", nascimento: "", sexo: "", professor: "", professor_id: "", equipe: "", academia: "", faixa: "", peso: "", modalidade: "", professorPersonalizado: false })}
                       className="cursor-pointer bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest shadow-[0_0_15px_rgba(6,182,212,0.2)] shrink-0"
                     >
                       + Adicionar Dependente
@@ -1085,7 +1135,7 @@ export default function PerfilPage() {
                             </div>
                           </div>
                           <button
-                            onClick={() => setFormDependente({ ...dep, professorPersonalizado: !professoresDisponiveis.some(p => p.nome === dep.professor) })}
+                            onClick={() => setFormDependente({ ...dep, professorPersonalizado: Boolean(dep.professor) && !professoresDisponiveis.some(p => p.user_id === dep.professor_id) })}
                             className="cursor-pointer bg-white/5 hover:bg-white/10 text-white p-2.5 rounded-lg transition-colors border border-transparent hover:border-white/10 shrink-0"
                           >
                             <svg className="w-4 h-4 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
@@ -1118,9 +1168,9 @@ export default function PerfilPage() {
 
                     <div className="md:col-span-2 mt-2">
                       <label className="block text-[10px] font-bold text-cyan-500 uppercase tracking-wider mb-1 pl-1 cursor-default">Professor da Criança</label>
-                      <select value={formDependente.professorPersonalizado ? "OUTRO" : (formDependente.professor || "")} onChange={(e) => handleProfessorChange(e, true)} className="cursor-pointer w-full bg-cyan-900/10 border border-cyan-500/30 focus:border-cyan-500 outline-none rounded-xl px-3 py-3 text-xs text-white transition-colors appearance-none">
+                      <select value={formDependente.professorPersonalizado ? "OUTRO" : (formDependente.professor_id || "")} onChange={(e) => handleProfessorChange(e, true)} className="cursor-pointer w-full bg-cyan-900/10 border border-cyan-500/30 focus:border-cyan-500 outline-none rounded-xl px-3 py-3 text-xs text-white transition-colors appearance-none">
                         <option value="" className="bg-[#0a0a0e] text-white">Selecione na lista...</option>
-                        {professoresDisponiveis.map(p => <option key={p.nome} value={p.nome} className="bg-[#0a0a0e] text-white">{p.nome}</option>)}
+                        {professoresDisponiveis.map(p => <option key={p.user_id} value={p.user_id} className="bg-[#0a0a0e] text-white">{p.nome}{p.academia ? ` · ${p.academia}` : ""}</option>)}
                         <option value="OUTRO" className="bg-[#0a0a0e] text-white">Outro / O professor não está na lista</option>
                       </select>
                       {formDependente.professorPersonalizado && (
@@ -1286,14 +1336,17 @@ export default function PerfilPage() {
                 </div>
               </div>
 
-              {!equipe ? (
-                <div className="bg-yellow-500/10 border border-yellow-500/20 p-6 rounded-2xl text-center">
-                  <span className="text-3xl mb-3 block pointer-events-none">⚠️</span>
-                  <h4 className="text-yellow-500 font-black text-sm uppercase tracking-widest mb-2">Equipe não configurada</h4>
-                  <p className="text-zinc-400 text-xs max-w-md mx-auto mb-4">Para seus alunos aparecerem aqui, vá na aba "Dados da Academia" e preencha a Bandeira e o nome do seu CT.</p>
-                  <button onClick={() => setAbaAtiva("editar")} className="cursor-pointer bg-yellow-600 text-black px-4 py-2 rounded-lg font-black text-[10px] uppercase tracking-widest hover:bg-yellow-500 transition-colors">Configurar Agora</button>
+              {vinculoEquipePendente && (
+                <div className="bg-yellow-500/10 border border-yellow-500/20 p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
+                  <div className="flex-1">
+                    <h4 className="text-yellow-500 font-black text-[11px] uppercase tracking-widest mb-1">Complete o cadastro da sua academia</h4>
+                    <p className="text-zinc-400 text-xs">Preencha nome completo, Bandeira e nome do CT em "Dados da Academia" para que seus alunos encontrem você na lista de professores.</p>
+                  </div>
+                  <button onClick={() => setAbaAtiva("editar")} className="cursor-pointer shrink-0 bg-yellow-600 text-black px-4 py-2 rounded-lg font-black text-[10px] uppercase tracking-widest hover:bg-yellow-500 transition-colors">Configurar Agora</button>
                 </div>
-              ) : minhaEquipe.length === 0 ? (
+              )}
+
+              {minhaEquipe.length === 0 ? (
                 <div className="bg-black/30 border border-dashed border-white/10 p-10 rounded-2xl text-center">
                   <p className="text-zinc-500 text-sm font-medium">Ainda não há alunos cadastrados no sistema sob a sua supervisão.</p>
                   <p className="text-zinc-600 text-[10px] mt-2 uppercase tracking-widest">Peça para seus alunos escolherem o seu nome na lista durante o cadastro.</p>

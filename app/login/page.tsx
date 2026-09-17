@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { Eye, EyeOff } from 'lucide-react';
 import { formatarTelefone } from '@/app/lib/formatar-telefone';
+import { cpfValido, formatarCpf } from '@/app/lib/validar-cpf';
 
 function FormularioLogin() {
   const router = useRouter();
@@ -50,16 +51,6 @@ function FormularioLogin() {
     } catch { setErro('Não foi possível reenviar agora. Tente novamente.'); }
     setLoading(false);
   }
-
-  // MÁSCARA DE CPF
-  const formatarCpf = (value: string) => {
-    return value
-      .replace(/\D/g, "")
-      .replace(/(\d{3})(\d)/, "$1.$2")
-      .replace(/(\d{3})(\d)/, "$1.$2")
-      .replace(/(\d{3})(\d{1,2})$/, "$1-$2")
-      .substring(0, 14);
-  };
 
   async function handleAuth(e: React.FormEvent) {
     e.preventDefault();
@@ -108,8 +99,8 @@ function FormularioLogin() {
       // ==========================================
       // LÓGICA DE CADASTRO (ATLETA / PROFESSOR)
       // ==========================================
-      if (cpf.length < 14) {
-        setErro("Por favor, informe um CPF válido.");
+      if (!cpfValido(cpf)) {
+        setErro("Este CPF não existe. Confira os números digitados.");
         setLoading(false);
         return;
       }

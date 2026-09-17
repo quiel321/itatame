@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from "@/app/lib/supabase-server";
 import { Resend } from "resend";
 import { enviarLinkAutenticacao } from "@/app/lib/email-autenticacao";
 import { consumirLimiteAuth, ipDaRequisicao } from '@/app/lib/limite-auth';
+import { cpfValido, variantesCpf } from '@/app/lib/validar-cpf';
 
 function texto(value: FormDataEntryValue | null) {
   return typeof value === "string" ? value.trim() : "";
@@ -29,8 +30,11 @@ export async function POST(request: Request) {
     if (perfil === "organizador" && (!nome || telefone.length < 10 || telefone.length > 11)) {
       return NextResponse.json({ error: "Informe nome e telefone do organizador." }, { status: 400 });
     }
-    if (perfil !== "organizador" && (cpf.length !== 11 || telefone.length < 10 || telefone.length > 11)) {
-      return NextResponse.json({ error: "Informe CPF e telefone válidos." }, { status: 400 });
+    if (perfil !== "organizador" && (telefone.length < 10 || telefone.length > 11)) {
+      return NextResponse.json({ error: "Informe um telefone válido com DDD." }, { status: 400 });
+    }
+    if (perfil !== "organizador" && !cpfValido(cpf)) {
+      return NextResponse.json({ error: "Este CPF não existe. Confira os números digitados." }, { status: 400 });
     }
 
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -40,8 +44,7 @@ export async function POST(request: Request) {
 
     const supabase = createSupabaseServerClient();
     if (perfil !== "organizador") {
-      const cpfFormatado = cpf.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, "$1.$2.$3-$4");
-      const { data: existentes, error: buscaError } = await supabase.from("atletas").select("cpf").in("cpf", [cpf, cpfFormatado]).limit(1);
+      const { data: existentes, error: buscaError } = await supabase.from("atletas").select("cpf").in("cpf", variantesCpf(cpf)).limit(1);
       if (buscaError) return NextResponse.json({ error: "Não foi possível validar o CPF agora." }, { status: 500 });
       if ((existentes || []).some(item => String(item.cpf || "").replace(/\D/g, "") === cpf)) {
         return NextResponse.json({ error: "Este CPF já possui cadastro. Entre na conta existente ou recupere a senha." }, { status: 409 });
