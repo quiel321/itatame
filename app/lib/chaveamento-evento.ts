@@ -3,7 +3,7 @@ import type { CategoriaCompeticao, InscricaoCompeticao } from '@/app/lib/categor
 
 type ClienteSupabase = {
   from: (tabela: string) => any;
-  rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: { code?: string; message: string } | null }>;
+  rpc: (fn: string, args: Record<string, unknown>) => any;
 };
 
 export type EventoChaveamento = {
