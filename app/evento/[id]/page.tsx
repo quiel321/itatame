@@ -53,6 +53,7 @@ export default function EventoDetalhesPage() {
         .single();
       
       setEvento(eventoData);
+      void fetch(`/api/eventos/${params.id}/gerar-chaves-auto`);
       if (eventoData?.organizador_id) {
         const resposta = await fetch(`/api/organizadores/${encodeURIComponent(eventoData.organizador_id)}/publico`);
         if (resposta.ok) setOrganizador(await resposta.json());

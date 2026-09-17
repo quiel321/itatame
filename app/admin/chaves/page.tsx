@@ -92,6 +92,11 @@ export default function GerarChavesPage() {
     carregarMeusEventos()
   }, [router])
 
+  useEffect(() => {
+    if (!eventoId) return;
+    void fetch(`/api/eventos/${eventoId}/gerar-chaves-auto`);
+  }, [eventoId])
+
   async function gerarChaves() {
     setLoading(true); setMensagem({ tipo: '', texto: '' });
     try {
