@@ -15,6 +15,7 @@ import { semFaixaDuplicada } from "../../lib/categorias-competicao"
 type EventoOrganizador = {
   id: string | number;
   nome: string;
+  cidade?: string | null;
   data_fim_inscricoes?: string | null;
   lote1_data_fim?: string | null;
   lote2_data_fim?: string | null;
@@ -76,7 +77,7 @@ export default function GerarChavesPage() {
 
       const { data, error } = await supabase
         .from("eventos")
-        .select("id, nome, data_fim_inscricoes, lote1_data_fim, lote2_data_fim, lote3_data_fim, data_fim_checagem, data_divulgacao_chaves")
+        .select("id, nome, cidade, data_fim_inscricoes, lote1_data_fim, lote2_data_fim, lote3_data_fim, data_fim_checagem, data_divulgacao_chaves")
         .eq("organizador_id", authData.user.id)
         .order("id", { ascending: false })
 
@@ -157,7 +158,7 @@ export default function GerarChavesPage() {
   function imprimirChaves(todas: boolean) {
     try {
       const lutas = todas ? chavesImpressao : chavesImpressao.filter(l => chaveGrupoPDF(l) === grupoImpressao);
-      criarChavesImpressao({ eventoNome: eventoSelecionado?.nome || 'Campeonato', lutas }).save(todas ? 'chaves-completas.pdf' : 'chave-individual.pdf');
+      criarChavesImpressao({ eventoNome: eventoSelecionado?.nome || 'Campeonato', eventoCidade: eventoSelecionado?.cidade, lutas }).save(todas ? 'chaves-completas.pdf' : 'chave-individual.pdf');
     } catch (error) { setMensagem({ tipo: 'erro', texto: (error as Error).message }); }
   }
 

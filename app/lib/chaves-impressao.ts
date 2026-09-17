@@ -10,6 +10,14 @@ const limpo = (v: unknown) => String(v ?? '').replace(/\s+/g, ' ').trim();
 const real = (v: unknown) => v && !['BYE', 'TBD'].includes(limpo(v).toUpperCase());
 export const chaveGrupoPDF = (l: LutaImpressao) => JSON.stringify([l.categoria || '', l.faixa || '']);
 
+export function tituloEventoImpressao(nome: string, cidade?: string | null) {
+  const evento = limpo(nome) || 'Campeonato';
+  const local = limpo(cidade);
+  if (!local) return evento;
+  if (evento.toUpperCase().includes(local.toUpperCase())) return evento;
+  return `${evento} - ${local.toUpperCase()}`;
+}
+
 function codigoNumerico(texto: string) {
   let h = 2166136261;
   for (let i = 0; i < texto.length; i++) {
@@ -37,8 +45,9 @@ function desenharLogo(doc: jsPDF, x: number, y: number) {
 }
 
 /** Imprime a árvore real, inclusive BYEs. Grandes chaves são repartidas com referências entre páginas. */
-export function criarChavesImpressao({ eventoNome, lutas }: { eventoNome: string; lutas: LutaImpressao[] }) {
+export function criarChavesImpressao({ eventoNome, eventoCidade, lutas }: { eventoNome: string; eventoCidade?: string | null; lutas: LutaImpressao[] }) {
   if (!lutas.length) throw new Error('Nenhuma chave para imprimir.');
+  const tituloEvento = tituloEventoImpressao(eventoNome, eventoCidade);
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const grupos = new Map<string, LutaImpressao[]>();
   for (const l of lutas) {
@@ -65,7 +74,7 @@ export function criarChavesImpressao({ eventoNome, lutas }: { eventoNome: string
 
   function pagina(base: LutaImpressao, titulo: string, atletas: number) {
     if (folhas++) doc.addPage();
-    const codigo = codigoNumerico(`${eventoNome}|${base.categoria}|${base.faixa}`);
+    const codigo = codigoNumerico(`${tituloEvento}|${base.categoria}|${base.faixa}`);
     const area = limpo(base.tatame) || '_______';
     const horario = base.horario_estimado
       ? new Date(base.horario_estimado).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
@@ -80,7 +89,7 @@ export function criarChavesImpressao({ eventoNome, lutas }: { eventoNome: string
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(11);
     doc.setTextColor(24, 24, 27);
-    texto(eventoNome.toUpperCase(), 62, 12.2, 168, 11, 2);
+    texto(tituloEvento.toUpperCase(), 62, 12.2, 168, 11, 2);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
     doc.setTextColor(82, 82, 91);
