@@ -8,6 +8,7 @@ import { supabase } from '../../lib/supabase';
 import { obterTempoRegulamentar } from '../../lib/cronograma';
 import { processarAvancosAutomaticosChaves } from '../../lib/chaves-auto-avanco';
 import { rotuloLuta } from '../../lib/lutas-rotulos';
+import { garantirVinculoStaff } from '../../lib/staff-sessao';
 
 type StaffSession = {
   evento_id: string | number;
@@ -140,6 +141,9 @@ export default function PainelMesario() {
 
   const buscarTatames = useCallback(async () => {
     if (!sessao) return;
+
+    // staff_eventos só é legível para o posto vinculado ao evento.
+    await garantirVinculoStaff();
 
     const { data } = await supabase
       .from('staff_eventos')

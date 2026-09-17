@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 import { processarAvancosAutomaticosChaves, propagarResultadoChave } from "../../../lib/chaves-auto-avanco";
+import { garantirVinculoStaff } from "../../../lib/staff-sessao";
 
 export default function PlacarMesarioDB() {
   const params = useParams();
@@ -199,6 +200,13 @@ export default function PlacarMesarioDB() {
     const nomePerdedor = vencedorLado === "azul" ? lutaAtual.atleta_2 : lutaAtual.atleta_1;
     const equipePerdedor = vencedorLado === "azul" ? lutaAtual.equipe_2 : lutaAtual.equipe_1;
     const idPerdedor = vencedorLado === "azul" ? lutaAtual.atleta_2_id : lutaAtual.atleta_1_id;
+
+    // Renova o vínculo antes de gravar: as medalhas só entram para atletas inscritos neste evento.
+    const vinculo = await garantirVinculoStaff();
+    if (!vinculo.ok) {
+      alert(vinculo.erro || 'Posto sem autorização para registrar o resultado.');
+      return false;
+    }
 
     try {
       const finalizadaEm = new Date().toISOString();
@@ -475,6 +483,12 @@ export default function PlacarMesarioDB() {
 
   const salvarCorrecaoResultado = async (lado: 'azul' | 'vermelho') => {
     if (!lutaAtual || !window.confirm('Confirmar a correção deste resultado oficial?')) return;
+
+    const vinculo = await garantirVinculoStaff();
+    if (!vinculo.ok) {
+      alert(vinculo.erro || 'Posto sem autorização para corrigir o resultado.');
+      return;
+    }
 
     const novoNome = lado === 'azul' ? lutaAtual.atleta_1 : lutaAtual.atleta_2;
     const novaEquipe = lado === 'azul' ? lutaAtual.equipe_1 : lutaAtual.equipe_2;

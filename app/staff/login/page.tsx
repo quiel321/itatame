@@ -28,51 +28,55 @@ export default function StaffLogin() {
     setLoading(true);
     setErro('');
 
-    // 1. Checa se o PIN existe e é válido
-    const { data: staffData, error } = await supabase
-      .from('staff_eventos')
-      .select('*, eventos(nome, organizador_id)')
-      .eq('pin_acesso', pin.trim().toUpperCase())
-      .single();
+    // =========================================================
+    // 1. A MÁGICA DA SEGURANÇA: Criar uma Sessão Autenticada
+    // A sessão vem antes do PIN porque quem confere o código agora é o banco, e ele precisa
+    // de um auth.uid() para registrar o vínculo do posto. Sessão existente é reaproveitada
+    // para não criar um usuário anônimo por tentativa.
+    // =========================================================
+    const { data: sessaoAtual } = await supabase.auth.getSession();
+    let usuarioSessao = sessaoAtual.session?.user ?? null;
+
+    if (!usuarioSessao) {
+      const { data: authData, error: authError } = await supabase.auth.signInAnonymously();
+      if (authError) {
+        setErro('Falha na autenticação segura. Contate o suporte.');
+        setLoading(false);
+        return;
+      }
+      usuarioSessao = authData.user;
+    }
+
+    // 2. O banco valida o PIN e amarra este posto à sessão (função vincular_sessao_staff)
+    const { data: vinculo, error } = await supabase.rpc('vincular_sessao_staff', { p_pin: pin.trim().toUpperCase() });
+    const staffData = vinculo as {
+      staff_id: string; evento_id: string; funcao: string; identificacao: string;
+      evento_nome: string | null; plano_comercial: string | null;
+    } | null;
 
     if (error || !staffData) {
-      setErro('Código inválido ou não encontrado.');
+      await supabase.auth.signOut();
+      setErro(error?.message || 'Código inválido ou não encontrado.');
       setLoading(false);
       return;
     }
 
-    if (staffData.funcao !== 'checkin') {
-      const eventoRel = Array.isArray(staffData.eventos) ? staffData.eventos[0] : staffData.eventos;
-      const organizadorId = eventoRel?.organizador_id;
-      const { data: organizador } = organizadorId
-        ? await supabase.from('organizadores').select('plano_comercial').eq('user_id', organizadorId).limit(1).maybeSingle()
-        : { data: null };
-      if (organizador?.plano_comercial !== 'completo') {
-        setErro('Este posto operacional exige o plano Completo. Solicite a regularização ao organizador.');
-        setLoading(false);
-        return;
-      }
-    }
-
-    // =========================================================
-    // 2. A MÁGICA DA SEGURANÇA: Criar uma Sessão Autenticada
-    // =========================================================
-    const { data: authData, error: authError } = await supabase.auth.signInAnonymously();
-    
-    if (authError) {
-       setErro('Falha na autenticação segura. Contate o suporte.');
-       setLoading(false);
-       return;
+    if (staffData.funcao !== 'checkin' && staffData.plano_comercial !== 'completo') {
+      await supabase.auth.signOut();
+      setErro('Este posto operacional exige o plano Completo. Solicite a regularização ao organizador.');
+      setLoading(false);
+      return;
     }
 
     // 3. Salvar os dados locais para a interface saber quem é o cara
     const sessaoStaff = {
-      id: staffData.id,
+      id: staffData.staff_id,
       evento_id: staffData.evento_id,
       funcao: staffData.funcao,
       identificacao: staffData.identificacao,
-      evento_nome: staffData.eventos?.nome,
-      user_id: authData.user?.id // Guarda a chave gerada pelo banco
+      evento_nome: staffData.evento_nome,
+      user_id: usuarioSessao?.id, // Guarda a chave gerada pelo banco
+      pin: pin.trim().toUpperCase() // Renova o vínculo do posto sem exigir novo login
     };
     
     localStorage.setItem('itatame_staff_session', JSON.stringify(sessaoStaff));

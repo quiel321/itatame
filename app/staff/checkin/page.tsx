@@ -6,6 +6,7 @@ import { Scanner } from '@yudiel/react-qr-scanner';
 import { CheckCircle, XCircle, Scale, ArrowLeft, QrCode } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { obterTempoRegulamentar } from '../../lib/cronograma';
+import { garantirVinculoStaff } from '../../lib/staff-sessao';
 
 export default function CheckinOperador() {
   const router = useRouter();
@@ -174,6 +175,14 @@ export default function CheckinOperador() {
     const peso = Number(String(pesoAferido).replace(',', '.'));
     if (!Number.isFinite(peso) || peso <= 0 || peso > 500) {
       setErro('Informe o peso aferido em kg, entre 0 e 500.');
+      setLoading(false);
+      return;
+    }
+
+    // Renova o vínculo antes de gravar: o banco só aceita a pesagem de quem está no posto do evento.
+    const vinculo = await garantirVinculoStaff();
+    if (!vinculo.ok) {
+      setErro(vinculo.erro || 'Posto sem autorização para gravar a pesagem.');
       setLoading(false);
       return;
     }
