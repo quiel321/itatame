@@ -614,7 +614,7 @@ export default function PerfilPage() {
     if (editandoInscricao.user_id === userId && resultado.inscricao.peso != null) {
       setPeso(String(resultado.inscricao.peso));
     }
-    setEditandoInscricao((atual) => atual && atual.id === editandoInscricao.id
+    setEditandoInscricao((atual: any) => atual && atual.id === editandoInscricao.id
       ? { ...atual, ...resultado.inscricao, categoriaNova: resultado.inscricao.categoria_id, pesoAtual: String(resultado.inscricao.peso ?? atual.pesoAtual) }
       : atual);
     setMensagem("Inscrição atualizada. Confira a checagem do evento novamente.");
