@@ -4,7 +4,7 @@ import { obterEventoOrganizador, guardarEventoOrganizador } from '@/app/lib/even
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { AlertCircle, CheckCircle, Clock, Map, Play, RefreshCw, Search, X } from 'lucide-react';
+import { AlertCircle, CheckCircle, Clock, Play, RefreshCw, Search, X } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { obterTempoRegulamentar } from '../../lib/cronograma';
 import { processarAvancosAutomaticosChaves } from '../../lib/chaves-auto-avanco';
@@ -45,6 +45,27 @@ function limpar(value?: string | null) {
 
 function normalizar(value?: string | null) {
   return limpar(value).toUpperCase();
+}
+
+function chaveTatame(value?: string | null) {
+  return normalizar(value);
+}
+
+function nomeOficialTatame(nome: string, oficiais: string[]) {
+  const chave = chaveTatame(nome);
+  if (!chave || chave === 'NÃO DEFINIDO') return 'Não definido';
+  return oficiais.find((item) => chaveTatame(item) === chave) || limpar(nome);
+}
+
+function unicosTatame(nomes: string[], oficiais: string[] = []) {
+  const mapa = new Map<string, string>();
+  nomes.forEach((nome) => {
+    const oficial = nomeOficialTatame(nome, oficiais);
+    const chave = chaveTatame(oficial);
+    if (!chave || chave === 'NÃO DEFINIDO') return;
+    if (!mapa.has(chave)) mapa.set(chave, oficial);
+  });
+  return Array.from(mapa.values()).sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true }));
 }
 
 function isFantasma(nome?: string | null) {
@@ -206,7 +227,7 @@ export default function GestaoTatames() {
   const alterarTatame = (categoriaObj: CategoriaTatame, novoTatame: string) => {
     setCategorias((prev) => prev.map((cat) => cat.idUnico === categoriaObj.idUnico ? { ...cat, tatameAtual: novoTatame } : cat));
     setTemAlteracoesPendentes(true);
-    setMensagem('Alteração preparada. Use “Salvar alterações” ao terminar a distribuição.');
+    setMensagem('Categoria movida. Toque em Salvar distribuição para o mesário e o chamador enxergarem.');
   };
 
   const salvarAlteracoes = async () => {
@@ -215,7 +236,7 @@ export default function GestaoTatames() {
     setMensagem('Salvando distribuição dos tatames...');
     const resultados = await Promise.all(categorias.map((categoria) => supabase
       .from('chaves')
-      .update({ tatame: categoria.tatameAtual === 'Não definido' ? null : categoria.tatameAtual })
+      .update({ tatame: categoria.tatameAtual === 'Não definido' ? null : nomeOficialTatame(categoria.tatameAtual, tatamesDisponiveis) })
       .eq('evento_id', eventoSelecionado)
       .eq('categoria', categoria.nome)
       .eq('faixa', categoria.faixa)));
@@ -292,17 +313,20 @@ export default function GestaoTatames() {
     }
   };
 
+  const categoriasVisiveis = useMemo(() => categorias.map((cat) => ({
+    ...cat,
+    tatameAtual: cat.tatameAtual === 'Não definido' ? 'Não definido' : nomeOficialTatame(cat.tatameAtual, tatamesDisponiveis),
+  })), [categorias, tatamesDisponiveis]);
+
   const categoriasFiltradas = useMemo(() => {
     const termo = busca.trim().toLowerCase();
-    return categorias.filter((cat) => !termo || cat.nome.toLowerCase().includes(termo) || cat.faixa.toLowerCase().includes(termo) || cat.tatameAtual.toLowerCase().includes(termo));
-  }, [busca, categorias]);
+    return categoriasVisiveis.filter((cat) => !termo || cat.nome.toLowerCase().includes(termo) || cat.faixa.toLowerCase().includes(termo) || cat.tatameAtual.toLowerCase().includes(termo));
+  }, [busca, categoriasVisiveis]);
 
-  const nomesTatame = useMemo(() => {
-    return Array.from(new Set([
-      ...tatamesDisponiveis,
-      ...categorias.map((cat) => cat.tatameAtual).filter((tatame) => tatame && tatame !== 'Não definido'),
-    ]));
-  }, [categorias, tatamesDisponiveis]);
+  const nomesTatame = useMemo(() => unicosTatame([
+    ...tatamesDisponiveis,
+    ...categoriasVisiveis.map((cat) => cat.tatameAtual),
+  ], tatamesDisponiveis), [categoriasVisiveis, tatamesDisponiveis]);
 
   const resumo = useMemo(() => {
     const total = categorias.reduce((acc, cat) => acc + cat.totalLutas, 0);
@@ -312,34 +336,38 @@ export default function GestaoTatames() {
   }, [categorias]);
 
   const operacaoPorTatame = useMemo(() => {
-    const grupos = new globalThis.Map<string, Luta[]>();
+    const grupos = new globalThis.Map<string, { nome: string; itens: Luta[] }>();
     lutasOperacao.forEach((luta) => {
-      const tatame = limpar(luta.tatame);
-      if (!tatame || (isFantasma(luta.atleta_1) && isFantasma(luta.atleta_2))) return;
-      grupos.set(tatame, [...(grupos.get(tatame) || []), luta]);
+      const chave = chaveTatame(luta.tatame);
+      if (!chave || (isFantasma(luta.atleta_1) && isFantasma(luta.atleta_2))) return;
+      const nome = nomeOficialTatame(limpar(luta.tatame), tatamesDisponiveis);
+      const atual = grupos.get(chave) || { nome, itens: [] };
+      atual.itens.push(luta);
+      grupos.set(chave, atual);
     });
 
-    return Array.from(grupos.entries()).map(([tatame, itens]) => {
+    return Array.from(grupos.values()).map(({ nome, itens }) => {
       const ordenadas = [...itens].sort(ordenarLutasCronograma);
       const pendentes = ordenadas.filter((luta) => !statusConcluido(luta));
       const baias = pendentes.filter((luta) => isFantasma(luta.atleta_1) !== isFantasma(luta.atleta_2));
       const atual = pendentes.find((luta) => luta.status_luta === 'em_andamento') || null;
       const chamadas = pendentes.filter((luta) => luta.status_luta !== 'em_andamento' && Boolean(luta.iniciada_em));
       const proximas = pendentes.filter((luta) => isLutaReal(luta) && luta.status_luta !== 'em_andamento').slice(0, 3);
-      return { tatame, atual, chamadas, baias, proximas };
-    }).sort((a, b) => a.tatame.localeCompare(b.tatame));
-  }, [lutasOperacao]);
+      return { tatame: nome, atual, chamadas, baias, proximas };
+    }).sort((a, b) => a.tatame.localeCompare(b.tatame, 'pt-BR', { numeric: true }));
+  }, [lutasOperacao, tatamesDisponiveis]);
 
-  const tatamesUsados = Array.from(new Set(categorias.map((cat) => cat.tatameAtual).filter((tatame) => tatame && tatame !== 'Não definido')));
-  const tatamesJaAgendados = Array.from(new Set(categorias.filter((cat) => Boolean(cat.proximaHora)).map((cat) => cat.tatameAtual)));
-  const tatamesPendentesCrono = tatamesUsados.filter((tatame) => !tatamesJaAgendados.includes(tatame) && !tatamesCronometrados.includes(tatame));
+  const tatamesUsados = unicosTatame(categoriasVisiveis.map((cat) => cat.tatameAtual), tatamesDisponiveis);
+  const tatamesJaAgendados = unicosTatame(categoriasVisiveis.filter((cat) => Boolean(cat.proximaHora)).map((cat) => cat.tatameAtual), tatamesDisponiveis);
+  const chavesComHorario = new Set([...tatamesJaAgendados, ...tatamesCronometrados].map(chaveTatame));
+  const tatamesPendentesCrono = tatamesUsados.filter((tatame) => !chavesComHorario.has(chaveTatame(tatame)));
 
   const categoriasSemTatame = categoriasFiltradas.filter((cat) => cat.tatameAtual === 'Não definido');
   const colunasTatame = nomesTatame.map((tatame) => ({
     tatame,
-    categorias: categoriasFiltradas.filter((cat) => cat.tatameAtual === tatame),
-    operacao: operacaoPorTatame.find((grupo) => grupo.tatame === tatame) || null,
-    temHorario: tatamesJaAgendados.includes(tatame) || tatamesCronometrados.includes(tatame),
+    categorias: categoriasFiltradas.filter((cat) => chaveTatame(cat.tatameAtual) === chaveTatame(tatame)),
+    operacao: operacaoPorTatame.find((grupo) => chaveTatame(grupo.tatame) === chaveTatame(tatame)) || null,
+    temHorario: chavesComHorario.has(chaveTatame(tatame)),
   }));
   const passoAtual = resumo.semTatame > 0 || temAlteracoesPendentes ? 1 : tatamesPendentesCrono.length > 0 || tatamesUsados.length === 0 ? 2 : 3;
 
@@ -352,13 +380,16 @@ export default function GestaoTatames() {
     setShowCronoModal(true);
   };
 
-  const seletorTatame = (cat: CategoriaTatame) => {
+  const seletorTatame = (cat: CategoriaTatame, destaque = false) => {
     const concluida = cat.totalLutas > 0 && cat.lutasConcluidas === cat.totalLutas;
     return (
-      <select value={cat.tatameAtual} onChange={(event) => alterarTatame(cat, event.target.value)} disabled={concluida || Boolean(salvando)} className="min-h-11 w-full rounded-xl border border-white/10 bg-black px-3 text-xs font-bold text-white outline-none disabled:opacity-50">
-        <option value="Não definido">Ainda sem tatame</option>
-        {nomesTatame.map((tatame) => <option key={tatame} value={tatame}>{tatame}</option>)}
-      </select>
+      <label className="block">
+        <span className={`mb-1 block text-[10px] font-bold uppercase tracking-widest ${destaque ? 'text-yellow-300' : 'text-zinc-500'}`}>{destaque ? 'Escolha o tatame' : 'Mover para'}</span>
+        <select value={cat.tatameAtual} onChange={(event) => alterarTatame(cat, event.target.value)} disabled={concluida || Boolean(salvando)} className={`min-h-11 w-full rounded-xl px-3 text-sm font-bold text-white outline-none disabled:opacity-50 ${destaque ? 'border-2 border-yellow-400 bg-black' : 'border border-white/10 bg-black/60'}`}>
+          <option value="Não definido">Ainda sem tatame</option>
+          {nomesTatame.map((tatame) => <option key={chaveTatame(tatame)} value={tatame}>{tatame}</option>)}
+        </select>
+      </label>
     );
   };
 
@@ -422,60 +453,68 @@ export default function GestaoTatames() {
         ) : (
           <div className="space-y-4">
             {categoriasSemTatame.length > 0 && (
-              <section className="rounded-2xl border border-yellow-500/30 bg-yellow-500/5 p-4">
-                <h2 className="font-black text-yellow-200">Ainda sem tatame ({categoriasSemTatame.length})</h2>
-                <p className="mt-1 text-sm text-zinc-400">Escolha o tatame à direita. Depois use Salvar distribuição.</p>
-                <div className="mt-3 space-y-2">
+              <section className="rounded-2xl border-2 border-dashed border-yellow-400 bg-yellow-500/10 p-5">
+                <p className="text-[11px] font-black uppercase tracking-widest text-yellow-300">Precisa da sua decisão</p>
+                <h2 className="mt-1 text-lg font-black text-yellow-50">Estas categorias ainda não têm tatame</h2>
+                <p className="mt-1 text-sm text-yellow-100/80">Escolha onde cada uma vai lutar. Elas só entram na fila do mesário depois que você salvar.</p>
+                <div className="mt-4 space-y-3">
                   {categoriasSemTatame.map((cat) => (
-                    <div key={cat.idUnico} className="grid gap-2 rounded-xl border border-white/10 bg-black/40 p-3 sm:grid-cols-[1fr_180px] sm:items-center">
+                    <div key={cat.idUnico} className="grid gap-3 rounded-2xl border border-yellow-400/40 bg-[#1a1408] p-4 sm:grid-cols-[1fr_220px] sm:items-center">
                       <div>
-                        <p className="font-bold uppercase text-white">{cat.nome}</p>
-                        <p className="text-xs text-zinc-500">Faixa {cat.faixa} · {cat.lutasConcluidas}/{cat.totalLutas} lutas</p>
+                        <span className="rounded-full bg-yellow-400 px-2 py-0.5 text-[10px] font-black uppercase text-black">Sem tatame</span>
+                        <p className="mt-2 font-black uppercase text-white">{cat.nome}</p>
+                        <p className="text-sm text-yellow-100/70">Faixa {cat.faixa} · {cat.totalLutas} luta(s)</p>
                       </div>
-                      {seletorTatame(cat)}
+                      {seletorTatame(cat, true)}
                     </div>
                   ))}
                 </div>
               </section>
             )}
 
+            <h2 className="pt-2 text-sm font-bold uppercase tracking-widest text-zinc-500">Fila de cada tatame</h2>
             {colunasTatame.map((coluna) => (
-              <section key={coluna.tatame} className="rounded-2xl border border-white/10 bg-[#0b0b10] p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3 border-b border-white/10 pb-3">
+              <section key={chaveTatame(coluna.tatame)} className={`rounded-2xl p-4 ${coluna.categorias.length === 0 ? 'border border-dashed border-white/15 bg-transparent' : 'border border-white/10 bg-[#0b0b10]'}`}>
+                <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <h2 className="flex items-center gap-2 font-black uppercase text-white"><Map size={16} className="text-red-400" /> {coluna.tatame}</h2>
-                    <p className="mt-1 text-sm text-zinc-500">{coluna.categorias.length} categoria(s) · {coluna.temHorario ? 'horário definido' : 'ainda sem horário'}</p>
+                    <h3 className="font-black uppercase text-white">{coluna.tatame}</h3>
+                    <p className="mt-1 text-sm text-zinc-500">
+                      {coluna.categorias.length === 0
+                        ? 'Vazio — nenhuma categoria aqui ainda.'
+                        : `${coluna.categorias.length} categoria(s) neste tatame · ${coluna.temHorario ? 'horário definido' : 'falta definir o horário'}`}
+                    </p>
                   </div>
-                  {coluna.operacao && (
+                  {coluna.categorias.length > 0 && coluna.operacao && (
                     <span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase ${coluna.operacao.atual ? 'bg-red-500 text-white' : coluna.operacao.chamadas.length ? 'bg-yellow-400 text-black' : 'bg-emerald-500/80 text-black'}`}>
                       {coluna.operacao.atual ? 'Lutando agora' : coluna.operacao.chamadas.length ? 'Atleta chamado' : 'Livre'}
                     </span>
                   )}
                 </div>
 
-                {coluna.operacao?.atual && (
-                  <p className="mt-3 rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-100">Agora: {coluna.operacao.atual.atleta_1} × {coluna.operacao.atual.atleta_2}</p>
-                )}
-                {coluna.operacao && coluna.operacao.proximas.length > 0 && (
-                  <p className="mt-2 text-sm text-zinc-400">Próxima: {coluna.operacao.proximas[0].atleta_1} × {coluna.operacao.proximas[0].atleta_2}</p>
-                )}
-                {coluna.operacao && coluna.operacao.baias.length > 0 && (
-                  <p className="mt-1 text-sm text-cyan-300">Esperando adversário: {coluna.operacao.baias.slice(0, 2).map((luta) => isFantasma(luta.atleta_1) ? luta.atleta_2 : luta.atleta_1).join(', ')}</p>
-                )}
-
-                <div className="mt-3 space-y-2">
-                  {coluna.categorias.length === 0 ? (
-                    <p className="text-sm text-zinc-600">Nenhuma categoria neste tatame.</p>
-                  ) : coluna.categorias.map((cat) => (
-                    <div key={cat.idUnico} className="grid gap-2 rounded-xl border border-white/5 bg-black/30 p-3 sm:grid-cols-[1fr_180px] sm:items-center">
-                      <div>
-                        <p className="font-bold uppercase text-white">{cat.nome}</p>
-                        <p className="text-xs text-zinc-500">Faixa {cat.faixa} · {cat.lutasConcluidas}/{cat.totalLutas} lutas · {formatarHorario(cat.proximaHora)}</p>
-                      </div>
-                      {seletorTatame(cat)}
+                {coluna.categorias.length > 0 && (
+                  <>
+                    {coluna.operacao?.atual && (
+                      <p className="mt-3 rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-100">Agora: {coluna.operacao.atual.atleta_1} × {coluna.operacao.atual.atleta_2}</p>
+                    )}
+                    {coluna.operacao && coluna.operacao.proximas.length > 0 && (
+                      <p className="mt-2 text-sm text-zinc-400">Próxima luta: {coluna.operacao.proximas[0].atleta_1} × {coluna.operacao.proximas[0].atleta_2}</p>
+                    )}
+                    {coluna.operacao && coluna.operacao.baias.length > 0 && (
+                      <p className="mt-1 text-sm text-cyan-300">Esperando adversário: {coluna.operacao.baias.slice(0, 2).map((luta) => isFantasma(luta.atleta_1) ? luta.atleta_2 : luta.atleta_1).join(', ')}</p>
+                    )}
+                    <div className="mt-3 space-y-2">
+                      {coluna.categorias.map((cat) => (
+                        <div key={cat.idUnico} className="grid gap-3 rounded-xl border border-white/10 bg-black/40 p-3 sm:grid-cols-[1fr_200px] sm:items-center">
+                          <div>
+                            <p className="font-bold uppercase text-white">{cat.nome}</p>
+                            <p className="text-xs text-zinc-500">Faixa {cat.faixa} · {cat.lutasConcluidas}/{cat.totalLutas} lutas · {formatarHorario(cat.proximaHora)}</p>
+                          </div>
+                          {seletorTatame(cat)}
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  </>
+                )}
               </section>
             ))}
           </div>
@@ -514,7 +553,7 @@ export default function GestaoTatames() {
                 <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-widest text-zinc-500">Qual tatame?</label>
                 <select value={cronoTatame} onChange={(event) => setCronoTatame(event.target.value)} className="w-full rounded-xl border border-white/10 bg-black px-4 py-3 text-sm font-bold text-white outline-none">
                   <option value="" disabled>Selecione</option>
-                  {(tatamesUsados.length > 0 ? tatamesUsados : tatamesDisponiveis).map((tatame) => <option key={tatame} value={tatame}>{tatame}{tatamesJaAgendados.includes(tatame) || tatamesCronometrados.includes(tatame) ? ' · já tem horário' : ''}</option>)}
+                  {(tatamesUsados.length > 0 ? tatamesUsados : nomesTatame).map((tatame) => <option key={chaveTatame(tatame)} value={tatame}>{tatame}{chavesComHorario.has(chaveTatame(tatame)) ? ' · já tem horário' : ''}</option>)}
                 </select>
               </div>
 
