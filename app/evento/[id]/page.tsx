@@ -142,13 +142,18 @@ export default function EventoDetalhesPage() {
 
           <div className="flex-1 flex flex-col justify-between py-1 md:py-2">
             <div>
-              <div className="flex flex-wrap items-center gap-2 md:gap-3 mb-2 md:mb-3">
-                <span className="text-zinc-500 text-[9px] md:text-[10px] font-black uppercase tracking-widest border border-white/10 px-2 md:px-3 py-1 rounded-full bg-white/5">
-                  {evento.descricao || "Evento Esportivo"}
-                </span>
-                <span className="text-red-500 font-bold text-[10px] md:text-xs flex items-center gap-1">
-                  🔥 {totalInscritos} / {evento.limite_vagas || 500} vagas
-                </span>
+              <div className="flex flex-wrap items-center justify-between gap-2 md:gap-3 mb-2 md:mb-3">
+                <div className="flex flex-wrap items-center gap-2 md:gap-3">
+                  <span className="text-zinc-500 text-[9px] md:text-[10px] font-black uppercase tracking-widest border border-white/10 px-2 md:px-3 py-1 rounded-full bg-white/5">
+                    {evento.descricao || "Evento Esportivo"}
+                  </span>
+                  <span className="text-red-500 font-bold text-[10px] md:text-xs flex items-center gap-1">
+                    🔥 {totalInscritos} / {evento.limite_vagas || 500} vagas
+                  </span>
+                </div>
+                <Link href={`/evento/${evento.id}/equipe`} className="text-[9px] md:text-[10px] font-bold uppercase tracking-widest text-zinc-500 hover:text-yellow-400 transition-colors">
+                  Área do professor
+                </Link>
               </div>
               
               <h1 className="text-xl md:text-4xl font-black text-white leading-tight mb-2 md:mb-4 tracking-tight">
@@ -202,10 +207,6 @@ export default function EventoDetalhesPage() {
                 )
               )}
 
-              <Link href={`/evento/${evento.id}/equipe`} className="bg-yellow-500/10 hover:bg-yellow-500/20 border border-yellow-500/30 text-yellow-300 font-black uppercase tracking-widest text-[10px] md:text-xs px-3 py-2.5 md:px-6 md:py-3.5 rounded-lg transition-all text-center flex-1 md:flex-none">
-                Professor / Equipe
-              </Link>
-              
               {etapaAtual.checagemAberta ? (
                 <Link href={`/evento/${evento.id}/checagem`} className="bg-green-600 hover:bg-green-500 text-white font-black uppercase tracking-widest text-[10px] md:text-xs px-3 py-2.5 md:px-6 md:py-3.5 rounded-lg shadow-[0_0_15px_rgba(22,163,74,0.3)] transition-all text-center flex-1 md:flex-none flex items-center justify-center gap-1.5">
                   <svg className="w-3.5 h-3.5 md:w-4 md:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>

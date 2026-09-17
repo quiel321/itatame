@@ -440,7 +440,7 @@ function FormularioInscricao() {
                 </select>)}
                 {categoriasEvento.length > 0 && !categoriasElegiveis.length && <p className="text-amber-300 text-xs mt-2">Preencha sua idade. Se nenhuma categoria estiver disponível, confira faixa e peso no perfil ou fale com a organização.</p>}
                 {tabelaErro && <p role="alert" className="text-red-400 text-xs mt-2">{tabelaErro}</p>}
-                {equipesEvento.length > 0 && <label className="block mt-4 text-xs text-zinc-400">Equipe no campeonato<select value={equipeId} onChange={e => {const eq=equipesEvento.find(q=>q.id===e.target.value);setEquipeId(e.target.value);if(eq){setEquipe(eq.nome);setProfessor(eq.professor);}}} className="w-full bg-black border border-white/10 rounded-lg p-3 text-white mt-1"><option value="">{equipe} (cadastro atual)</option>{equipesEvento.map(eq=><option key={eq.id} value={eq.id}>{eq.nome}{eq.academia ? ` · ${eq.academia}` : ''}</option>)}</select></label>}
+                {equipesEvento.length > 0 && <label className="block mt-4 text-xs text-zinc-400">Equipe no campeonato<select value={equipeId} onChange={e => {const eq=equipesEvento.find(q=>q.id===e.target.value);setEquipeId(e.target.value);if(eq){setEquipe(eq.nome);setProfessor(eq.professor);}}} className="w-full bg-black border border-white/10 rounded-lg p-3 text-white mt-1"><option value="">{equipe} (cadastro atual)</option>{equipesEvento.map(eq=><option key={eq.id} value={eq.id}>{eq.nome}</option>)}</select></label>}
 
               </div>
           </section>
