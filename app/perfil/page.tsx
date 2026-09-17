@@ -6,7 +6,7 @@ import { calcularResultadosChaves } from "../lib/ranking-eventos";
 import imageCompression from 'browser-image-compression';
 import QRCode from "react-qr-code";
 import { formatarTelefone } from '@/app/lib/formatar-telefone';
-import { cpfValido, formatarCpf, variantesCpf } from '@/app/lib/validar-cpf';
+import { cpfValido, formatarCpf } from '@/app/lib/validar-cpf';
 import { CategoriaCompeticao, categoriaCompativelSemPeso, categoriaMaisLeve, rotuloCategoria } from '@/app/lib/categorias-competicao';
 
 export default function PerfilPage() {
@@ -184,7 +184,7 @@ export default function PerfilPage() {
       return;
     }
 
-    const { data: profsData } = await supabase.from("atletas").select("user_id, nome, equipe, academia, modalidade").eq("role", "professor").neq("nome", "").order("nome");
+    const { data: profsData } = await supabase.from("atletas_publico").select("user_id, nome, equipe, academia, modalidade").eq("role", "professor").neq("nome", "").order("nome");
     if (profsData) setProfessoresDisponiveis(profsData);
 
     const { data: depsData } = await supabase.from("atletas").select("*").eq("responsavel_id", authData.user.id);
@@ -251,7 +251,7 @@ export default function PerfilPage() {
 
       if (userRole === "professor" || userRole === "super-admin") {
         const equipeProfessor = (perfilData.equipe || "").trim();
-        let query = supabase.from("atletas").select("id, user_id, nome, faixa, peso, nascimento, foto_url, ouro, prata, bronze, professor, professor_id, equipe, academia").neq("user_id", authData.user.id);
+        let query = supabase.from("atletas_publico").select("id, user_id, nome, faixa, peso, nascimento, foto_url, ouro, prata, bronze, professor, professor_id, equipe, academia").neq("user_id", authData.user.id);
 
         // O vinculo e o professor_id do aluno: cada mestre ve apenas quem escolheu a conta dele.
         if (userRole === "professor") {
@@ -357,12 +357,16 @@ export default function PerfilPage() {
     if (nascimento && new Date(nascimento) > new Date()) {
       setErro('A data de nascimento não pode estar no futuro.'); setSalvando(false); return;
     }
-    const [{ data: cpfExistente }, { data: telefoneExistente }] = await Promise.all([
-      supabase.from('atletas').select('user_id').in('cpf', variantesCpf(cpf)).neq('user_id', userId).limit(1),
-      telefoneDigitos ? supabase.from('atletas').select('user_id').in('telefone', [telefoneDigitos, formatarTelefone(telefoneDigitos)]).neq('user_id', userId).limit(1) : Promise.resolve({ data: [] }),
-    ]);
-    if (cpfExistente?.length || telefoneExistente?.length) {
-      setErro(cpfExistente?.length ? 'Este CPF já pertence a outra conta.' : 'Este telefone já pertence a outra conta.');
+    const { data: documento, error: documentoError } = await supabase.rpc('documento_em_uso', {
+      p_cpf: cpf,
+      p_telefone: telefoneDigitos,
+      p_exceto_user_id: userId,
+    });
+    if (documentoError) {
+      setErro('Não foi possível conferir CPF e telefone agora. Tente de novo.'); setSalvando(false); return;
+    }
+    if (documento?.cpf || documento?.telefone) {
+      setErro(documento?.cpf ? 'Este CPF já pertence a outra conta.' : 'Este telefone já pertence a outra conta.');
       setSalvando(false); return;
     }
 
@@ -418,6 +422,20 @@ export default function PerfilPage() {
 
     const isNew = !formDependente.user_id;
     const dependenteId = isNew ? crypto.randomUUID() : formDependente.user_id;
+
+    if (formDependente.cpf) {
+      const { data: documento, error: documentoError } = await supabase.rpc('documento_em_uso', {
+        p_cpf: formDependente.cpf,
+        p_telefone: '',
+        p_exceto_user_id: dependenteId,
+      });
+      if (documentoError) {
+        setErro('Não foi possível conferir o CPF do dependente agora. Tente de novo.'); setSalvando(false); return;
+      }
+      if (documento?.cpf) {
+        setErro('Este CPF já pertence a outra conta.'); setSalvando(false); return;
+      }
+    }
 
     const dadosDependente = {
       user_id: dependenteId,

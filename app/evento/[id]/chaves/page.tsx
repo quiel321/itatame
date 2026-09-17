@@ -86,7 +86,7 @@ export default function ChavesPage() {
   }
 
   async function carregarFotos() {
-    const { data } = await supabase.from('atletas').select('nome, foto_url');
+    const { data } = await supabase.from('atletas_publico').select('nome, foto_url');
     if (data) setAtletasDB(data);
   }
 

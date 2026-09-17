@@ -245,24 +245,21 @@ function FormularioInscricao() {
     }
 
     if (cpfAtleta) {
-      const { data: atletasMesmoCpf } = await supabase
-        .from("atletas")
-        .select("id")
-        .eq("cpf", cpfAtleta);
+      const { data: cpfJaInscrito, error: erroCpf } = await supabase.rpc('cpf_inscrito_no_evento', {
+        p_evento_id: eventoId,
+        p_cpf: cpfAtleta,
+      });
 
-      const idsMesmoCpf = (atletasMesmoCpf || []).map((atleta) => atleta.id).filter(Boolean);
-      if (idsMesmoCpf.length > 0) {
-        const { data: inscricaoMesmoCpf } = await supabase
-          .from("inscricoes")
-          .select("id")
-          .eq("evento_id", eventoId)
-          .in("atleta_id", idsMesmoCpf);
+      if (erroCpf) {
+        setErro("Não foi possível conferir este CPF agora. Tente de novo.");
+        setProcessando(false);
+        return;
+      }
 
-        if (inscricaoMesmoCpf && inscricaoMesmoCpf.length > 0) {
-          setErro("Já existe inscrição neste evento para este CPF.");
-          setProcessando(false);
-          return;
-        }
+      if (cpfJaInscrito) {
+        setErro("Já existe inscrição neste evento para este CPF.");
+        setProcessando(false);
+        return;
       }
     }
 

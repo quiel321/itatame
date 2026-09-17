@@ -120,7 +120,7 @@ export default function PlacarMesarioDB() {
       const idsAtletas = [luta.atleta_1_id, luta.atleta_2_id].filter(Boolean);
       if (idsAtletas.length > 0) {
         const { data: perfis } = await supabase
-          .from("atletas")
+          .from("atletas_publico")
           .select("id, nome, foto_url, equipe, academia, faixa")
           .in("id", idsAtletas);
 
@@ -253,7 +253,7 @@ export default function PlacarMesarioDB() {
 
       const updateEstatistica = async (idAtletaNum: number, coluna: string, incremento: number) => {
         if (!idAtletaNum) return;
-        const { data } = await supabase.from("atletas").select(`id, ${coluna}`).eq("id", idAtletaNum).single();
+        const { data } = await supabase.from("atletas_publico").select(`id, ${coluna}`).eq("id", idAtletaNum).single();
         if (data) {
           const valorAtual = (data as any)[coluna] || 0;
           await supabase.from("atletas").update({ [coluna]: Math.max(0, valorAtual + incremento) }).eq("id", idAtletaNum);
@@ -508,7 +508,7 @@ export default function PlacarMesarioDB() {
 
     const ajustar = async (id: number | null | undefined, coluna: string, delta: number) => {
       if (!id || delta === 0) return;
-      const { data } = await supabase.from('atletas').select(`id, ${coluna}`).eq('id', id).maybeSingle();
+      const { data } = await supabase.from('atletas_publico').select(`id, ${coluna}`).eq('id', id).maybeSingle();
       if (!data) return;
       await supabase.from('atletas').update({ [coluna]: Math.max(0, Number((data as any)[coluna] || 0) + delta) }).eq('id', id);
     };

@@ -519,7 +519,7 @@ export default function AoVivoPage() {
   const carregarAtletas = useCallback(async (lutasBase: LutaAoVivo[]) => {
     const ids = Array.from(new Set(lutasBase.flatMap((luta) => [luta.atleta_1_id, luta.atleta_2_id, luta.vencedor_id]).filter((id): id is number => Boolean(id))));
     if (ids.length === 0) return;
-    const { data } = await supabase.from("atletas").select("id, user_id, nome, foto_url, equipe, academia, faixa").in("id", ids);
+    const { data } = await supabase.from("atletas_publico").select("id, user_id, nome, foto_url, equipe, academia, faixa").in("id", ids);
     const mapa = Object.fromEntries(((data || []) as AtletaPerfil[]).map((atleta) => [atleta.id, atleta]));
     setAtletas(mapa);
   }, []);

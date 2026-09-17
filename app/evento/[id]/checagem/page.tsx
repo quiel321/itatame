@@ -56,7 +56,7 @@ export default function ChecagemGeralPage() {
       if (inscData && inscData.length > 0) {
         const userIds = [...new Set(inscData.map(i => i.user_id))];
         const { data: atletasData } = await supabase
-          .from('atletas')
+          .from('atletas_publico')
           .select('user_id, nome, equipe, professor, faixa, peso, sexo')
           .in('user_id', userIds);
 

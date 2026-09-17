@@ -22,8 +22,8 @@ export default function PerfilPublicoAtleta() {
 
       // 1. Busca os dados do Atleta
       const { data: atlData } = await supabase
-        .from("atletas")
-        .select("*")
+        .from("atletas_publico")
+        .select("id, user_id, nome, foto_url, faixa, equipe, academia, professor, cidade, nascimento, peso, ouro, prata, bronze, vitorias, derrotas, vitorias_wo")
         .eq("user_id", userId)
         .single();
 

@@ -39,7 +39,7 @@ export default function RankingPage() {
       }
     }
 
-    const { data: atls } = await supabase.from("atletas").select("*");
+    const { data: atls } = await supabase.from("atletas_publico").select("id, user_id, nome, foto_url, faixa, academia, equipe, ouro, prata, bronze, vitorias, lutas, vitorias_wo");
     if (atls) setTodosAtletas(atls);
     
     setLoading(false);

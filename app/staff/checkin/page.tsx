@@ -153,7 +153,7 @@ export default function CheckinOperador() {
     let fotoUrl = null;
     if (inscricaoData.user_id) {
       const { data: atletaData } = await supabase
-        .from('atletas')
+        .from('atletas_publico')
         .select('foto_url')
         .eq('user_id', inscricaoData.user_id)
         .single();
