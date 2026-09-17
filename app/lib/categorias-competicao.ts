@@ -33,7 +33,8 @@ export function divisaoEtaria(idade: number) {
 
 export function rotuloCategoria(c: CategoriaCompeticao) {
   const peso = c.tipo === 'absoluto' ? 'Absoluto' : c.peso_max == null ? `Acima de ${c.peso_min} kg` : `${c.peso_min} a ${c.peso_max} kg`;
-  return `${c.modalidade} · ${semFaixaDuplicada(c.nome, c.faixa)} · ${c.idade_min}-${c.idade_max} anos · ${c.sexo} · ${peso}`;
+  return [c.modalidade, semFaixaDuplicada(c.nome, c.faixa), c.faixa, `${c.idade_min}-${c.idade_max} anos`, c.sexo, peso]
+    .filter(Boolean).join(' · ');
 }
 
 export function categoriaCompativelSemPeso(c: CategoriaCompeticao, i: InscricaoCompeticao) {
