@@ -440,11 +440,12 @@ export default function PerfilPage() {
       }
     }
 
-    const dadosDependente = {
+    const dadosDependente: Record<string, unknown> = {
       user_id: dependenteId,
       responsavel_id: userId,
       role: "atleta",
       nome: formDependente.nome,
+      email: null,
       cpf: formDependente.cpf ? formatarCpf(formDependente.cpf) : null,
       nascimento: formDependente.nascimento,
       sexo: formDependente.sexo,
@@ -459,7 +460,14 @@ export default function PerfilPage() {
       foto_url: formDependente.foto_url || null,
     };
 
-    const { error } = await supabase.from("atletas").upsert(dadosDependente, { onConflict: "user_id" });
+    let { error } = await supabase.from("atletas").upsert(dadosDependente, { onConflict: "user_id" });
+    if (error && /email/i.test(error.message)) {
+      const retry = await supabase.from("atletas").upsert({
+        ...dadosDependente,
+        email: `dep.${dependenteId}@itatame.invalid`,
+      }, { onConflict: "user_id" });
+      error = retry.error;
+    }
 
     if (error) {
       setErro("Erro ao salvar dependente: " + error.message);
