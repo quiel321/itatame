@@ -74,6 +74,9 @@ export default function PagamentoPage() {
   const [checkoutMensagem, setCheckoutMensagem] = useState("");
   const [resultadoPagamento, setResultadoPagamento] = useState<ResultadoPagamento | null>(null);
   const [verificandoPagamento, setVerificandoPagamento] = useState(false);
+  const [cupomPorInscricao, setCupomPorInscricao] = useState<Record<string, string>>({});
+  const [cupomMsg, setCupomMsg] = useState<Record<string, string>>({});
+  const [aplicandoCupomId, setAplicandoCupomId] = useState<string | number | null>(null);
 
   const carregarInscricoes = useCallback(async () => {
     const { data: authData } = await supabase.auth.getUser();
@@ -325,6 +328,40 @@ export default function PagamentoPage() {
     }
   }
 
+  async function aplicarCupomPendente(inscricao: any) {
+    const codigo = (cupomPorInscricao[String(inscricao.id)] || "").trim().toUpperCase();
+    if (!codigo) {
+      setCupomMsg((atual) => ({ ...atual, [String(inscricao.id)]: "Digite o código da cortesia." }));
+      return;
+    }
+
+    setAplicandoCupomId(inscricao.id);
+    setCupomMsg((atual) => ({ ...atual, [String(inscricao.id)]: "Aplicando cortesia..." }));
+
+    try {
+      const { data: sessao } = await supabase.auth.getSession();
+      const response = await fetch("/api/vouchers/aplicar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessao.session?.access_token || ""}` },
+        body: JSON.stringify({ inscricaoId: inscricao.id, codigo }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Não foi possível aplicar esta cortesia.");
+
+      await carregarInscricoes();
+      if (data.gratuito) {
+        setAbaAtiva("pagas");
+        setCupomMsg((atual) => ({ ...atual, [String(inscricao.id)]: `Cortesia ${data.codigo} aplicada. Inscrição liberada.` }));
+      } else {
+        setCupomMsg((atual) => ({ ...atual, [String(inscricao.id)]: `Cortesia ${data.codigo} aplicada. Novo total: ${formatarMoeda(data.valorTotal)}.` }));
+      }
+    } catch (error: any) {
+      setCupomMsg((atual) => ({ ...atual, [String(inscricao.id)]: error.message || "Não foi possível aplicar esta cortesia." }));
+    } finally {
+      setAplicandoCupomId(null);
+    }
+  }
+
   const formatarData = (dataStr: string) => {
     if (!dataStr) return "Data a definir";
     const [ano, mes, dia] = dataStr.split("-");
@@ -450,7 +487,11 @@ export default function PagamentoPage() {
 
                       <div className="bg-black/50 p-3 rounded-xl border border-white/5 mb-4 md:mb-0">
                         <span className="block text-[9px] text-zinc-500 font-bold uppercase tracking-widest mb-1">Categoria Inscrita</span>
-                        <span className="text-white text-xs font-bold">{insc.categoria}</span>
+                        <span className="text-white text-xs font-bold">{insc.categoria}{insc.absoluto ? " + Absoluto" : ""}</span>
+                        <span className="block text-zinc-400 text-[10px] font-bold uppercase tracking-widest mt-2">
+                          Total: <strong className="text-white">{formatarMoeda(Number(insc.valor_total || insc.valor_inscricao || 0))}</strong>
+                          {insc.cupom_codigo ? ` · cortesia ${insc.cupom_codigo}` : ""}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -458,6 +499,31 @@ export default function PagamentoPage() {
                   <div className="p-5 bg-black/20 border-t md:border-t-0 md:border-l border-white/5 flex flex-col justify-center gap-3 shrink-0 md:w-56">
                     {abaAtiva === "pendentes" ? (
                       <>
+                        {!insc.cupom_id && (
+                          <div>
+                            <label className="block text-[9px] text-zinc-500 font-bold uppercase tracking-widest mb-1.5">Cupom de cortesia</label>
+                            <div className="flex gap-1.5">
+                              <input
+                                type="text"
+                                value={cupomPorInscricao[String(insc.id)] || ""}
+                                onChange={(e) => setCupomPorInscricao((atual) => ({ ...atual, [String(insc.id)]: e.target.value.toUpperCase() }))}
+                                placeholder="CÓDIGO"
+                                className="w-full bg-black border border-white/10 rounded-lg px-2 py-2 text-white text-[10px] uppercase outline-none"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => aplicarCupomPendente(insc)}
+                                disabled={aplicandoCupomId === insc.id}
+                                className="cursor-pointer shrink-0 bg-white/10 hover:bg-white/20 text-white text-[9px] font-black uppercase px-2.5 rounded-lg disabled:opacity-60"
+                              >
+                                {aplicandoCupomId === insc.id ? "..." : "Aplicar"}
+                              </button>
+                            </div>
+                            {cupomMsg[String(insc.id)] && (
+                              <p className={`mt-1.5 text-[10px] font-bold ${cupomMsg[String(insc.id)].includes("aplicada") ? "text-green-400" : "text-yellow-400"}`}>{cupomMsg[String(insc.id)]}</p>
+                            )}
+                          </div>
+                        )}
                         <button
                           onClick={() => iniciarPagamentoMercadoPago(insc)}
                           disabled={processandoPagamento && inscricaoSelecionada?.id === insc.id}

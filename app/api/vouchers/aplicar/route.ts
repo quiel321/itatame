@@ -22,7 +22,14 @@ export async function POST(request: Request) {
     .select("id, user_id, evento_id, valor_inscricao, valor_total, cupom_id, cupom_codigo, pagamento_ok")
     .eq("id", inscricaoId)
     .maybeSingle();
-  if (!inscricao || inscricao.user_id !== usuario.id) return NextResponse.json({ error: "Inscrição não autorizada." }, { status: 403 });
+  if (!inscricao) return NextResponse.json({ error: "Inscrição não autorizada." }, { status: 403 });
+
+  if (inscricao.user_id !== usuario.id) {
+    const { data: atleta } = await supabase.from("atletas").select("responsavel_id").eq("user_id", inscricao.user_id).maybeSingle();
+    if (atleta?.responsavel_id !== usuario.id) return NextResponse.json({ error: "Inscrição não autorizada." }, { status: 403 });
+  }
+
+  if (inscricao.pagamento_ok) return NextResponse.json({ error: "Esta inscrição já está paga." }, { status: 409 });
 
   if (inscricao.cupom_id) {
     if (inscricao.cupom_codigo === codigoLimpo) {

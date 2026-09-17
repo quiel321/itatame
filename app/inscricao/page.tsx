@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabase";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { categoriaCompativel, rotuloCategoria, type CategoriaCompeticao } from '@/app/lib/categorias-competicao';
+import { valorAddonAbsoluto, valorLoteVigente } from '@/app/lib/valor-inscricao';
 
 function FormularioInscricao() {
   const searchParams = useSearchParams();
@@ -19,6 +20,7 @@ function FormularioInscricao() {
   const [tabelaErro, setTabelaErro] = useState('');
   const [eventoNome, setEventoNome] = useState("");
   const [valorLoteAtual, setValorLoteAtual] = useState<number>(0);
+  const [valorAbsoluto, setValorAbsoluto] = useState<number>(0);
   const [nomeLoteAtual, setNomeLoteAtual] = useState<string>("");
   const [loading, setLoading] = useState(true);
 
@@ -104,24 +106,13 @@ function FormularioInscricao() {
           }
 
           const agora = new Date();
-          let valor = 0;
-          let nomeLote = "Inscrições Encerradas";
+          let nomeLote = "Lote Final";
+          if (ev.lote1_data_fim && agora <= new Date(ev.lote1_data_fim)) nomeLote = "1º Lote";
+          else if (ev.lote2_data_fim && agora <= new Date(ev.lote2_data_fim)) nomeLote = "2º Lote";
+          else if (ev.lote3_data_fim && agora <= new Date(ev.lote3_data_fim)) nomeLote = "3º Lote";
 
-          if (ev.lote1_data_fim && agora <= new Date(ev.lote1_data_fim)) {
-            valor = Number(ev.lote1_valor);
-            nomeLote = "1º Lote";
-          } else if (ev.lote2_data_fim && agora <= new Date(ev.lote2_data_fim)) {
-            valor = Number(ev.lote2_valor);
-            nomeLote = "2º Lote";
-          } else if (ev.lote3_data_fim && agora <= new Date(ev.lote3_data_fim)) {
-            valor = Number(ev.lote3_valor);
-            nomeLote = "3º Lote";
-          } else {
-            valor = Number(ev.lote3_valor) || Number(ev.lote2_valor) || Number(ev.lote1_valor) || 0;
-            nomeLote = "Lote Final";
-          }
-
-          setValorLoteAtual(valor);
+          setValorLoteAtual(valorLoteVigente(ev, agora));
+          setValorAbsoluto(valorAddonAbsoluto(ev));
           setNomeLoteAtual(nomeLote);
         }
       }
@@ -152,7 +143,7 @@ function FormularioInscricao() {
     if (categoriaId && !categoriasElegiveis.some(c => c.id === categoriaId)) { setCategoriaId(''); setCategoria(''); }
   }, [idade, sexo, faixa, pesoReal, categoriaId, categoriasEvento]);
 
-  const valorBase = (tipoInscricao === "ambos") ? valorLoteAtual + 50.00 : valorLoteAtual;
+  const valorBase = (tipoInscricao === "ambos") ? valorLoteAtual + valorAbsoluto : valorLoteAtual;
   const valorTotal = Math.max(0, valorBase - desconto);
   const isGratis = valorBase === 0;
 
@@ -338,6 +329,12 @@ function FormularioInscricao() {
         headers: { "Content-Type": "application/json", Authorization: authorization },
         body: JSON.stringify({ inscricaoId: inscricaoCriada.id }),
       });
+    } else if (inscricaoCriada?.id) {
+      await fetch("/api/enviar-pagamento-pendente", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: authorization },
+        body: JSON.stringify({ inscricaoId: inscricaoCriada.id, meio: "inscricao" }),
+      });
     }
 
     setErro("");
@@ -465,7 +462,7 @@ function FormularioInscricao() {
                 <input type="radio" name="tipoInscricao" value="ambos" checked={tipoInscricao === 'ambos'} onChange={() => setTipoInscricao('ambos')} className="absolute opacity-0 w-0 h-0" />
                 <div className="flex justify-between items-center">
                   <h3 className="font-bold text-xs">Categoria de Peso + Absoluto <span className="bg-amber-500/20 text-amber-500 text-[8px] font-black uppercase px-2 py-0.5 rounded ml-2">Dupla Oportunidade</span></h3>
-                  <span className="font-black text-sm">{isGratis ? "GRÁTIS" : `R$ ${(valorLoteAtual + 50).toFixed(2)}`}</span>
+                  <span className="font-black text-sm">{isGratis ? "GRÁTIS" : `R$ ${(valorLoteAtual + valorAbsoluto).toFixed(2)}`}</span>
                 </div>
               </label>
             </div>
@@ -488,7 +485,7 @@ function FormularioInscricao() {
 
             <div className="space-y-3 mb-5 text-xs">
               <div className="flex justify-between"><span className="text-zinc-400">Inscrição Campeonato</span><span className="text-white font-bold">{isGratis ? "R$ 0,00" : `R$ ${valorLoteAtual.toFixed(2)}`}</span></div>
-              {tipoInscricao === 'ambos' && <div className="flex justify-between"><span className="text-zinc-400">Add-on: Absoluto</span><span className="text-white font-bold">R$ 50,00</span></div>}
+              {tipoInscricao === 'ambos' && valorAbsoluto > 0 && <div className="flex justify-between"><span className="text-zinc-400">Add-on: Absoluto</span><span className="text-white font-bold">R$ {valorAbsoluto.toFixed(2)}</span></div>}
               {desconto > 0 && <div className="flex justify-between text-green-400"><span className="font-bold">Desconto Validado</span><span className="font-bold">- R$ {desconto.toFixed(2)}</span></div>}
             </div>
 

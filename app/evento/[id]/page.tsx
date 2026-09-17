@@ -12,6 +12,7 @@ import {
   type TomEtapaEvento,
 } from "@/app/lib/evento-etapas";
 import Link from "next/link";
+import { valorAddonAbsoluto } from "@/app/lib/valor-inscricao";
 
 const estiloEtapa: Record<TomEtapaEvento, { badge: string; aviso: string; ponto: string }> = {
   cyan: { badge: "border-cyan-400/30 bg-cyan-500/15 text-cyan-300", aviso: "border-cyan-500/25 bg-cyan-500/[0.07]", ponto: "bg-cyan-400" },
@@ -121,6 +122,7 @@ export default function EventoDetalhesPage() {
   else if (fimLote2 && agora <= fimLote2) loteAtivo = 2;
   else if (fimLote3 && agora <= fimLote3) loteAtivo = 3;
   else loteAtivo = 4; // Todos os lotes encerrados
+  const addonAbsoluto = valorAddonAbsoluto(evento);
 
   return (
     <main className="min-h-screen bg-[#050505] flex flex-col pb-20">
@@ -303,6 +305,16 @@ export default function EventoDetalhesPage() {
                       </div>
                     )}
                   </div>
+
+                  {addonAbsoluto > 0 && (
+                    <div className="p-4 rounded-xl border border-amber-500/20 bg-amber-500/5 mb-6 flex justify-between items-center text-white">
+                      <div>
+                        <h4 className="font-black uppercase tracking-widest text-xs md:text-sm">Add-on Absoluto</h4>
+                        <p className="text-[10px] md:text-xs mt-1 text-zinc-400">Somado ao lote vigente na opção Categoria de Peso + Absoluto.</p>
+                      </div>
+                      <p className="font-black text-lg">+ R$ {addonAbsoluto.toFixed(2).replace('.', ',')}</p>
+                    </div>
+                  )}
 
                   {evento.valores_lotes && (
                     <div className="bg-white/5 p-4 rounded-xl border border-white/10 mt-4">

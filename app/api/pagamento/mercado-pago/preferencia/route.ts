@@ -4,6 +4,7 @@ import { calcularComissaoMarketplace } from "@/app/lib/planos-comerciais";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
 import { obterAccessTokenOrganizador } from "@/app/lib/mercado-pago-integracao";
 import { autenticarRequest } from "@/app/lib/api-auth";
+import { calcularValorInscricao } from "@/app/lib/valor-inscricao";
 
 type EventoPagamento = {
   id: string | number;
@@ -14,29 +15,13 @@ type EventoPagamento = {
   lote2_valor?: number | string | null;
   lote2_data_fim?: string | null;
   lote3_valor?: number | string | null;
+  valor_absoluto?: number | string | null;
+  regras_pontuacao_equipes?: { valor_absoluto?: number | string | null } | null;
 };
 
 function getBaseUrl(request: Request) {
   const origin = new URL(request.url).origin;
   return process.env.NEXT_PUBLIC_BASE_URL || origin;
-}
-
-function numberValue(value: unknown) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function calcularValorInscricao(inscricao: any, evento: EventoPagamento) {
-  const hoje = new Date();
-  const lote1Fim = evento.lote1_data_fim ? new Date(evento.lote1_data_fim.includes("T") ? evento.lote1_data_fim : `${evento.lote1_data_fim}T23:59:59`) : null;
-  const lote2Fim = evento.lote2_data_fim ? new Date(evento.lote2_data_fim.includes("T") ? evento.lote2_data_fim : `${evento.lote2_data_fim}T23:59:59`) : null;
-
-  let valor = numberValue(evento.lote3_valor) || numberValue(evento.lote2_valor) || numberValue(evento.lote1_valor);
-  if (lote1Fim && hoje <= lote1Fim) valor = numberValue(evento.lote1_valor);
-  else if (lote2Fim && hoje <= lote2Fim) valor = numberValue(evento.lote2_valor);
-
-  const lutaPesoEAbsoluto = inscricao.absoluto === true && inscricao.categoria !== "Absoluto";
-  return lutaPesoEAbsoluto ? valor + 50 : valor;
 }
 
 async function calcularValorCobrado(supabase: ReturnType<typeof createSupabaseServerClient>, inscricao: any, evento: EventoPagamento) {
@@ -84,7 +69,8 @@ export async function POST(request: Request) {
           lote1_data_fim,
           lote2_valor,
           lote2_data_fim,
-          lote3_valor
+          lote3_valor,
+          regras_pontuacao_equipes
         )
       `)
       .eq("id", inscricaoId)

@@ -34,6 +34,7 @@ type RegrasPontuacao = {
   vitoria?: number;
   absoluto_pontua?: boolean;
   wo_pontua?: boolean;
+  valor_absoluto?: number;
 };
 
 const inputClass = "w-full rounded-lg border border-white/10 bg-black px-3 py-3 text-sm text-white outline-none transition focus:border-red-500 placeholder:text-zinc-700";
@@ -98,6 +99,7 @@ export default function EventoForm({ modo, eventoId }: EventoFormProps) {
   const [lote2DataFim, setLote2DataFim] = useState("");
   const [lote3Valor, setLote3Valor] = useState(0);
   const [lote3DataFim, setLote3DataFim] = useState("");
+  const [valorAbsoluto, setValorAbsoluto] = useState(0);
 
   const [bannerAtualUrl, setBannerAtualUrl] = useState("");
   const [regulamentoAtualUrl, setRegulamentoAtualUrl] = useState("");
@@ -126,6 +128,7 @@ export default function EventoForm({ modo, eventoId }: EventoFormProps) {
           lote1_valor: Number(evento.lote1_valor) || 0,
           lote2_valor: Number(evento.lote2_valor) || 0,
           lote3_valor: Number(evento.lote3_valor) || 0,
+          valor_absoluto: Number(evento.valor_absoluto ?? (evento.regras_pontuacao_equipes as RegrasPontuacao | null)?.valor_absoluto) || 0,
           lote1_data_fim: paraInputDateTimeEvento(evento.lote1_data_fim, evento.estado),
           lote2_data_fim: paraInputDateTimeEvento(evento.lote2_data_fim, evento.estado),
           lote3_data_fim: paraInputDateTimeEvento(evento.lote3_data_fim, evento.estado),
@@ -166,6 +169,7 @@ export default function EventoForm({ modo, eventoId }: EventoFormProps) {
         setDataDivulgacaoCronograma(paraInputDateTimeEvento(evento.data_divulgacao_cronograma, evento.estado));
 
         const regras = (evento.regras_pontuacao_equipes || {}) as RegrasPontuacao;
+        setValorAbsoluto(Number(evento.valor_absoluto ?? regras.valor_absoluto) || 0);
         setPontosEquipeOuro(Number(regras.ouro) || 9);
         setPontosEquipePrata(Number(regras.prata) || 3);
         setPontosEquipeBronze(Number(regras.bronze) || 1);
@@ -282,6 +286,7 @@ export default function EventoForm({ modo, eventoId }: EventoFormProps) {
         vitoria: pontosEquipeVitoria,
         absoluto_pontua: absolutoPontuaEquipe,
         wo_pontua: woPontuaEquipe,
+        valor_absoluto: valorAbsoluto,
       };
 
       const payload = {
@@ -411,6 +416,13 @@ export default function EventoForm({ modo, eventoId }: EventoFormProps) {
                 <LoteCard numero="1" valor={lote1Valor} setValor={setLote1Valor} dataFim={lote1DataFim} setDataFim={setLote1DataFim} destaque="Promocional" />
                 <LoteCard numero="2" valor={lote2Valor} setValor={setLote2Valor} dataFim={lote2DataFim} setDataFim={setLote2DataFim} destaque="Intermediário" />
                 <LoteCard numero="3" valor={lote3Valor} setValor={setLote3Valor} dataFim={lote3DataFim} setDataFim={setLote3DataFim} destaque="Final" />
+              </div>
+              <div className="mt-4 rounded-xl border border-white/10 bg-black p-3">
+                <Field label="Valor extra do Absoluto">
+                  <input type="number" min={0} step="0.01" value={valorAbsoluto} onChange={(e) => setValorAbsoluto(Number(e.target.value))} className={inputClass} />
+                </Field>
+                <p className="mt-3 text-xs leading-relaxed text-zinc-500">Somado ao lote vigente só quando o atleta escolhe Categoria de Peso + Absoluto. Os lotes acima cobram a categoria de peso. Use 0 se o absoluto não tiver custo à parte.</p>
+                <p className="mt-2 text-xs font-bold text-zinc-500">Prévia: <span className="text-white">{dinheiro(valorAbsoluto)}</span></p>
               </div>
             </div>
 
