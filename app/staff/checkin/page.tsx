@@ -18,7 +18,7 @@ export default function CheckinOperador() {
   const canalOperacaoRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   const [pesoAferido, setPesoAferido] = useState('');
-  const [kimonoAprovado, setKimonoAprovado] = useState(true);
+  const [kimonoAprovado, setKimonoAprovado] = useState(false);
 
   // =========================================================================
   // SEGURANÇA DE PORTA: Garante que o operador está logado via PIN
@@ -165,7 +165,8 @@ export default function CheckinOperador() {
     }
 
     setAtleta({ ...inscricaoData, foto_url: fotoUrl, evento_nome: eventoData.nome, inscricoes_liberadas: inscricoesData.length });
-    setPesoAferido(inscricaoData.peso || ''); 
+    setPesoAferido(inscricaoData.peso || '');
+    setKimonoAprovado(false);
     setLoading(false);
   };
   // =========================================================================
@@ -173,6 +174,7 @@ export default function CheckinOperador() {
   // =========================================================================
   const processarCheckin = async (status: 'aprovado' | 'desclassificado_peso' | 'desclassificado_kimono') => {
     setLoading(true);
+    const statusFinal = status === 'aprovado' && !kimonoAprovado ? 'desclassificado_kimono' : status;
     const peso = Number(String(pesoAferido).replace(',', '.'));
     if (!Number.isFinite(peso) || peso <= 0 || peso > 500) {
       setErro('Informe o peso aferido em kg, entre 0 e 500.');
@@ -188,7 +190,7 @@ export default function CheckinOperador() {
       return;
     }
 
-    if (status === 'aprovado' && atleta.categoria_id) {
+    if (statusFinal === 'aprovado' && atleta.categoria_id) {
       const { data: categoria, error: categoriaError } = await supabase
         .from('categorias_evento')
         .select('nome,peso_min,peso_max,tipo')
@@ -207,12 +209,12 @@ export default function CheckinOperador() {
     }
     
     const atualizacao = {
-      status_checkin: status,
+      status_checkin: statusFinal,
       peso_aferido: peso,
-      kimono_aprovado: status === 'desclassificado_kimono' ? false : kimonoAprovado,
+      kimono_aprovado: statusFinal !== 'desclassificado_kimono' && kimonoAprovado,
       checkin_realizado_em: new Date().toISOString(),
-      pesagem_ok: status === 'aprovado',
-      ...(status === 'aprovado' ? { peso: String(peso) } : {}),
+      pesagem_ok: statusFinal === 'aprovado',
+      ...(statusFinal === 'aprovado' ? { peso: String(peso) } : {}),
     };
 
     // Atualização segura: Atualiza usando o cruzamento absoluto (Evento + User_ID)
@@ -241,10 +243,10 @@ export default function CheckinOperador() {
     void canalOperacaoRef.current?.send({
       type: 'broadcast',
       event: 'checkin_atualizado',
-      payload: { evento_id: atleta.evento_id, atleta_id: atleta.atleta_id, status },
+      payload: { evento_id: atleta.evento_id, atleta_id: atleta.atleta_id, status: statusFinal },
     });
 
-    if(status === 'aprovado') {
+    if(statusFinal === 'aprovado') {
         const { data: lutasEvento } = await supabase
           .from('chaves')
           .select('id, categoria, faixa, tatame, atleta_1, atleta_2, atleta_1_id, atleta_2_id, status_luta, ordem_tatame, ordem, horario_estimado')
@@ -285,7 +287,7 @@ export default function CheckinOperador() {
     setScannedId(null);
     setAtleta(null);
     setPesoAferido('');
-    setKimonoAprovado(true);
+    setKimonoAprovado(false);
     setErro('');
     setLoading(false);
   };
@@ -425,10 +427,12 @@ export default function CheckinOperador() {
 
               <hr className="border-white/5" />
 
-              <label className="flex items-center justify-between p-4 rounded-2xl border border-white/5 bg-white/[0.02] active:bg-white/[0.05] transition-colors cursor-pointer group">
+              <label className={`flex items-center justify-between p-4 rounded-2xl border transition-colors cursor-pointer group ${kimonoAprovado ? 'border-green-500/30 bg-green-500/5' : 'border-red-500/40 bg-red-950/20'}`}>
                 <span className="font-bold text-zinc-200 text-sm uppercase tracking-wider flex flex-col group-hover:text-white transition-colors">
                   Kimono / Faixa
-                  <span className="text-[10px] text-green-500/80 font-bold mt-1 tracking-widest normal-case">DENTRO DOS PADRÕES</span>
+                  <span className={`text-[10px] font-bold mt-1 tracking-widest normal-case ${kimonoAprovado ? 'text-green-500/80' : 'text-red-400'}`}>
+                    {kimonoAprovado ? 'Dentro dos padrões' : 'Desmarcado desclassifica o atleta'}
+                  </span>
                 </span>
                 <input 
                   type="checkbox" 
@@ -441,7 +445,7 @@ export default function CheckinOperador() {
 
             <div className="flex flex-col gap-3 mt-2 mb-8">
               <button 
-                onClick={() => processarCheckin('aprovado')}
+                onClick={() => processarCheckin(kimonoAprovado ? 'aprovado' : 'desclassificado_kimono')}
                 className="w-full bg-green-600 hover:bg-green-500 text-white font-black py-6 rounded-3xl flex items-center justify-center gap-3 text-base uppercase tracking-widest shadow-[0_0_25px_rgba(22,163,74,0.3)] active:scale-[0.98] transition-all border border-green-500/50"
               >
                 <CheckCircle size={22} /> Aprovar Atleta
