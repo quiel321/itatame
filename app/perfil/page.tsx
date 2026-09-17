@@ -6,6 +6,7 @@ import { calcularResultadosChaves } from "../lib/ranking-eventos";
 import imageCompression from 'browser-image-compression';
 import QRCode from "react-qr-code";
 import { formatarTelefone } from '@/app/lib/formatar-telefone';
+import { CategoriaCompeticao, categoriaCompativelSemPeso, categoriaMaisLeve, rotuloCategoria } from '@/app/lib/categorias-competicao';
 
 export default function PerfilPage() {
   const [perfilId, setPerfilId] = useState<number | null>(null);
@@ -197,7 +198,7 @@ export default function PerfilPage() {
 
     const { data: inscricoesData } = await supabase
       .from("inscricoes")
-      .select(`id, evento_id, user_id, categoria, absoluto, pagamento_ok, pesagem_ok, eventos (nome, data_evento, data_inicio_checagem, data_fim_checagem, data_divulgacao_chaves)`)
+      .select(`id, evento_id, user_id, categoria, categoria_id, idade, sexo, faixa, modalidade, peso, absoluto, pagamento_ok, pesagem_ok, eventos (nome, data_evento, data_inicio_checagem, data_fim_checagem, data_divulgacao_chaves)`)
       .in("user_id", idsFamilia);
 
     if (inscricoesData) setMinhasInscricoes(inscricoesData);
@@ -266,7 +267,7 @@ export default function PerfilPage() {
           let inscricoesAlunos: any[] = [];
 
           if (alunosIds.length > 0) {
-            const { data: inscData } = await supabase.from("inscricoes").select(`id, evento_id, user_id, categoria, absoluto, pagamento_ok, pesagem_ok, eventos (nome, data_evento, data_inicio_checagem, data_fim_checagem, data_divulgacao_chaves)`).in("user_id", alunosIds);
+            const { data: inscData } = await supabase.from("inscricoes").select(`id, evento_id, user_id, categoria, categoria_id, idade, sexo, faixa, modalidade, peso, absoluto, pagamento_ok, pesagem_ok, eventos (nome, data_evento, data_inicio_checagem, data_fim_checagem, data_divulgacao_chaves)`).in("user_id", alunosIds);
             if (inscData) inscricoesAlunos = inscData;
           }
 
@@ -496,31 +497,24 @@ export default function PerfilPage() {
     return (insc.pagamento_ok ? "PAGAS" : "PENDENTES") === filtroInscricao.toUpperCase();
   });
 
-  const categoriasPesoPermitidas = [
-    "Galo (Até 57.500 kg)",
-    "Pluma (Até 64.500 kg)",
-    "Leve (Até 72.500 kg)",
-    "Médio (Até 82.300 kg)",
-    "Meio Pesado (Até 88.300 kg)",
-    "Pesado (Até 94.300 kg)",
-    "Super Pesado (Até 100.500 kg)",
-    "Pesadíssimo (Acima de 100.5 kg)"
-  ];
-
   const checagemAbertaParaEdicao = (insc: any) => {
     const evento = insc?.eventos;
     const agora = new Date();
     const inicio = evento?.data_inicio_checagem ? new Date(evento.data_inicio_checagem) : null;
     const fim = evento?.data_fim_checagem ? new Date(evento.data_fim_checagem) : null;
-    if (!inicio && !fim) return true;
-    return Boolean((!inicio || agora >= inicio) && (!fim || agora <= fim));
+    if (!inicio || !fim) return false;
+    return agora >= inicio && agora <= fim;
   };
 
   async function abrirEditorInscricao(insc: any) {
     setErro("");
+    if (insc.pesagem_ok) {
+      alert("A pesagem oficial já foi confirmada. Procure a organização para corrigir a categoria.");
+      return;
+    }
     
     if (!checagemAbertaParaEdicao(insc)) {
-      alert("⚠️ ACESSO NEGADO: A edição da inscrição fica disponível apenas no período de checagem definido pelo organizador.");
+      alert("A mudança de peso fica disponível apenas no período de checagem definido pelo organizador.");
       return;
     }
 
@@ -534,13 +528,24 @@ export default function PerfilPage() {
       return;
     }
 
-    let indiceAtual = categoriasPesoPermitidas.findIndex(c => c === insc.categoria);
-    if (indiceAtual === -1) indiceAtual = 0; 
-    const categoriasDisponiveis = categoriasPesoPermitidas.slice(indiceAtual);
+    const { data, error } = await supabase.from('categorias_evento').select('*')
+      .eq('evento_id', insc.evento_id).eq('ativa', true).eq('tipo', 'peso');
+    if (error) {
+      alert("Não foi possível carregar as categorias do campeonato.");
+      return;
+    }
+    const categoriasDisponiveis = ((data || []) as CategoriaCompeticao[])
+      .filter(c => categoriaCompativelSemPeso(c, insc))
+      .sort((a, b) => (a.peso_max ?? Infinity) - (b.peso_max ?? Infinity));
+    if (!categoriasDisponiveis.length) {
+      alert("Não há categorias de peso cadastradas para a idade, faixa e sexo desta inscrição. Procure a organização.");
+      return;
+    }
 
     setEditandoInscricao({ 
       ...insc, 
-      categoriaNova: insc.categoria || categoriasDisponiveis[0], 
+      categoriaNova: categoriasDisponiveis.some(c => c.id === insc.categoria_id) ? insc.categoria_id : '',
+      pesoAtual: '',
       absolutoNovo: Boolean(insc.absoluto),
       categoriasDisponiveis 
     });
@@ -548,28 +553,26 @@ export default function PerfilPage() {
 
   async function salvarEdicaoInscricao() {
     if (!editandoInscricao) return;
+    if (!editandoInscricao.categoriaNova) { setErro("Selecione a nova categoria de peso."); return; }
     setSalvandoInscricao(true);
     setErro("");
     setMensagem("");
 
-    const payload = {
-      categoria: editandoInscricao.categoriaNova,
-      absoluto: Boolean(editandoInscricao.absolutoNovo)
-    };
-
-    const { error } = await supabase
-      .from("inscricoes")
-      .update(payload)
-      .eq("id", editandoInscricao.id)
-      .eq("user_id", editandoInscricao.user_id); 
-
-    if (error) {
-      setErro("Não foi possível atualizar a inscrição: " + error.message);
+    const { data: sessao } = await supabase.auth.getSession();
+    const resposta = await fetch('/api/inscricoes/ajustar-categoria', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessao.session?.access_token || ''}` },
+      body: JSON.stringify({ inscricaoId: editandoInscricao.id, categoriaId: editandoInscricao.categoriaNova,
+        pesoAtual: editandoInscricao.pesoAtual, manterAbsoluto: Boolean(editandoInscricao.absolutoNovo) }),
+    }).catch(() => null);
+    const resultado = await resposta?.json().catch(() => ({}));
+    if (!resposta?.ok || !resultado?.inscricao) {
+      setErro(resultado?.error || "Não foi possível atualizar a inscrição.");
       setSalvandoInscricao(false);
       return;
     }
 
-    setMinhasInscricoes((prev) => prev.map((insc) => insc.id === editandoInscricao.id ? { ...insc, categoria: payload.categoria, absoluto: payload.absoluto } : insc));
+    setMinhasInscricoes((prev) => prev.map((insc) => insc.id === editandoInscricao.id ? { ...insc, ...resultado.inscricao } : insc));
     setMensagem("Inscrição atualizada. Confira a checagem do evento novamente.");
     setTimeout(() => {
         setEditandoInscricao(null);
@@ -584,6 +587,9 @@ export default function PerfilPage() {
   };
 
   const totalAlunos = minhaEquipe.length;
+  const categoriaDestinoEdicao: CategoriaCompeticao | undefined = editandoInscricao?.categoriasDisponiveis?.find((c: CategoriaCompeticao) => c.id === editandoInscricao.categoriaNova);
+  const categoriaOriginalEdicao: CategoriaCompeticao | null = editandoInscricao?.categoriasDisponiveis?.find((c: CategoriaCompeticao) => c.id === editandoInscricao.categoria_id) || null;
+  const mudancaParaPesoMenor = Boolean(categoriaDestinoEdicao && categoriaMaisLeve(categoriaOriginalEdicao, categoriaDestinoEdicao));
   const ourosEquipe = minhaEquipe.reduce((acc, aluno) => acc + (aluno.ouro || 0), 0);
   const pratasEquipe = minhaEquipe.reduce((acc, aluno) => acc + (aluno.prata || 0), 0);
   const bronzesEquipe = minhaEquipe.reduce((acc, aluno) => acc + (aluno.bronze || 0), 0);
@@ -1378,13 +1384,13 @@ export default function PerfilPage() {
                 <p className="text-cyan-400 text-[10px] font-black uppercase tracking-widest mb-1">Ajuste de checagem</p>
                 <h3 className="text-xl font-black text-white">Mudar de Peso</h3>
               </div>
-              <button onClick={() => setEditandoInscricao(null)} className="text-zinc-500 hover:text-white text-xl leading-none">?</button>
+              <button onClick={() => setEditandoInscricao(null)} aria-label="Fechar" className="text-zinc-500 hover:text-white text-xl leading-none">×</button>
             </div>
             
             <div className="mb-4 bg-red-500/10 border border-red-500/20 p-3 rounded-xl">
               <p className="text-red-400 text-[10px] font-medium leading-relaxed">
-                <strong className="font-black uppercase tracking-widest block mb-1">Regra Oficial:</strong>
-                Durante a checagem, você só tem permissão para migrar para categorias de peso <strong>superiores</strong> à sua inscrição original.
+                <strong className="font-black uppercase tracking-widest block mb-1">Ajuste durante a checagem:</strong>
+                Você pode escolher uma categoria mais leve ou mais pesada disponível para sua idade, faixa e sexo. Para descer de peso, informe o peso atual medido na academia. A pesagem oficial do evento ainda será necessária.
               </p>
             </div>
 
@@ -1396,25 +1402,37 @@ export default function PerfilPage() {
                   onChange={(event) => setEditandoInscricao({ ...editandoInscricao, categoriaNova: event.target.value })} 
                   className="w-full bg-black border border-white/10 rounded-xl px-3 py-3 text-white text-xs font-bold outline-none focus:border-cyan-400 cursor-pointer"
                 >
-                  {/* Usa as categorias limitadas criadas na função abrirEditorInscricao */}
-                  {editandoInscricao.categoriasDisponiveis.map((categoria: string) => (
-                    <option key={categoria} value={categoria}>{categoria}</option>
+                  <option value="">Selecione uma categoria</option>
+                  {editandoInscricao.categoriasDisponiveis.map((categoria: CategoriaCompeticao) => (
+                    <option key={categoria.id} value={categoria.id}>{rotuloCategoria(categoria)}</option>
                   ))}
                 </select>
               </div>
 
-              <label className="flex items-start gap-3 bg-black/50 border border-white/10 rounded-xl p-3 cursor-pointer">
+              {mudancaParaPesoMenor && (
+                <label className="block text-[10px] text-zinc-400 font-black uppercase tracking-widest">
+                  Peso atual medido na academia (kg)
+                  <input type="number" min="0.1" max="500" step="0.01" inputMode="decimal" required value={editandoInscricao.pesoAtual}
+                    onChange={(event) => setEditandoInscricao({ ...editandoInscricao, pesoAtual: event.target.value })}
+                    className="mt-1.5 w-full bg-black border border-white/10 rounded-xl px-3 py-3 text-white text-xs font-bold outline-none focus:border-cyan-400" placeholder="Ex.: 31,50" />
+                  <span className="mt-1 block normal-case font-normal tracking-normal text-zinc-500">Categoria escolhida: acima de {categoriaDestinoEdicao?.peso_min} kg{categoriaDestinoEdicao?.peso_max != null ? ` até ${categoriaDestinoEdicao.peso_max} kg` : ', sem limite máximo'}.</span>
+                </label>
+              )}
+
+              {editandoInscricao.absoluto && <label className="flex items-start gap-3 bg-black/50 border border-white/10 rounded-xl p-3 cursor-pointer">
                 <input type="checkbox" checked={Boolean(editandoInscricao.absolutoNovo)} onChange={(event) => setEditandoInscricao({ ...editandoInscricao, absolutoNovo: event.target.checked })} className="mt-0.5 w-4 h-4 accent-yellow-500 cursor-pointer" />
                 <span>
                   <strong className="block text-white text-xs uppercase tracking-widest">Manter no Absoluto</strong>
                   <span className="block text-zinc-500 text-[10px] mt-1 leading-relaxed">O absoluto continua permitido se você confirmar a mudança de peso.</span>
                 </span>
-              </label>
+              </label>}
             </div>
+
+            {erro && <p role="alert" className="mt-4 text-xs text-red-300">{erro}</p>}
 
             <div className="grid grid-cols-2 gap-3 mt-6">
               <button onClick={() => setEditandoInscricao(null)} className="cursor-pointer bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-xl py-3 text-[10px] font-black uppercase tracking-widest">Cancelar</button>
-              <button onClick={salvarEdicaoInscricao} disabled={salvandoInscricao} className="cursor-pointer disabled:opacity-60 bg-cyan-500 hover:bg-cyan-400 text-black rounded-xl py-3 text-[10px] font-black uppercase tracking-widest">{salvandoInscricao ? "Salvando..." : "Confirmar Mudança"}</button>
+              <button onClick={salvarEdicaoInscricao} disabled={salvandoInscricao || !editandoInscricao.categoriaNova || (mudancaParaPesoMenor && !editandoInscricao.pesoAtual)} className="cursor-pointer disabled:opacity-60 bg-cyan-500 hover:bg-cyan-400 text-black rounded-xl py-3 text-[10px] font-black uppercase tracking-widest">{salvandoInscricao ? "Salvando..." : "Confirmar Mudança"}</button>
             </div>
           </div>
         </div>

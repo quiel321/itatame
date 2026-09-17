@@ -36,14 +36,25 @@ export function rotuloCategoria(c: CategoriaCompeticao) {
   return `${c.modalidade} · ${semFaixaDuplicada(c.nome, c.faixa)} · ${c.idade_min}-${c.idade_max} anos · ${c.sexo} · ${peso}`;
 }
 
-export function categoriaCompativel(c: CategoriaCompeticao, i: InscricaoCompeticao) {
-  const idade = Number(i.idade), peso = Number(String(i.peso ?? '').replace(',', '.'));
+export function categoriaCompativelSemPeso(c: CategoriaCompeticao, i: InscricaoCompeticao) {
+  const idade = Number(i.idade);
   return c.ativa && i.idade !== '' && i.idade != null && Number.isInteger(idade)
     && idade >= c.idade_min && idade <= c.idade_max
     && normalizarCompeticao(i.sexo) === normalizarCompeticao(c.sexo)
     && normalizarCompeticao(i.faixa) === normalizarCompeticao(c.faixa)
-    && (!i.modalidade || normalizarCompeticao(i.modalidade) === normalizarCompeticao(c.modalidade))
+    && (!i.modalidade || normalizarCompeticao(i.modalidade) === normalizarCompeticao(c.modalidade));
+}
+
+export function categoriaCompativel(c: CategoriaCompeticao, i: InscricaoCompeticao) {
+  const peso = Number(String(i.peso ?? '').replace(',', '.'));
+  return categoriaCompativelSemPeso(c, i)
     && (c.tipo === 'absoluto' || (i.peso !== '' && i.peso != null && Number.isFinite(peso) && peso > c.peso_min && (c.peso_max == null || peso <= c.peso_max)));
+}
+
+/** Sem categoria de origem estruturada, exige nova medição para qualquer migração. */
+export function categoriaMaisLeve(atual: CategoriaCompeticao | null, destino: CategoriaCompeticao) {
+  if (atual) return (destino.peso_max ?? Infinity) < (atual.peso_max ?? Infinity);
+  return true;
 }
 
 export function validarCategoria(c: Omit<CategoriaCompeticao, 'id' | 'evento_id'>) {
