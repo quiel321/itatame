@@ -59,6 +59,7 @@ export async function POST(request: Request) {
         atleta,
         categoria,
         absoluto,
+        idade,
         pagamento_ok,
         cupom_id,
         evento_id,

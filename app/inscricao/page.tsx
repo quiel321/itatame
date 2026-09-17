@@ -5,7 +5,7 @@ import { supabase } from "../lib/supabase";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { categoriaCompativel, idadeCompetitiva, rotuloCategoria, type CategoriaCompeticao } from '@/app/lib/categorias-competicao';
-import { valorAddonAbsoluto, valorLoteVigente } from '@/app/lib/valor-inscricao';
+import { tarifaInfantilAplicavel, valorAddonAbsoluto, valorLoteVigente, type EventoValoresInscricao } from '@/app/lib/valor-inscricao';
 
 type PerfilCompetidor = {
   id: number;
@@ -34,8 +34,7 @@ function FormularioInscricao() {
   const [tabelaCarregando, setTabelaCarregando] = useState(true);
   const [tabelaErro, setTabelaErro] = useState('');
   const [eventoNome, setEventoNome] = useState("");
-  const [valorLoteAtual, setValorLoteAtual] = useState<number>(0);
-  const [valorAbsoluto, setValorAbsoluto] = useState<number>(0);
+  const [eventoValores, setEventoValores] = useState<EventoValoresInscricao | null>(null);
   const [nomeLoteAtual, setNomeLoteAtual] = useState<string>("");
   const [loading, setLoading] = useState(true);
 
@@ -107,6 +106,10 @@ function FormularioInscricao() {
     setNascimentoAtleta(pessoa.nascimento || "");
     const idadeCalc = idadeCompetitiva(pessoa.nascimento, dataRef);
     setIdade(Number.isInteger(idadeCalc) ? String(idadeCalc) : "");
+    setCupom("");
+    setDesconto(0);
+    setCupomAplicado("");
+    setCupomMensagem("");
     const equipeNome = String(pessoa.equipe || "").trim();
     const oficial = equipesOficiais.find(eq => eq.nome.trim().toLocaleLowerCase('pt-BR') === equipeNome.toLocaleLowerCase('pt-BR'));
     if (oficial) {
@@ -177,8 +180,7 @@ function FormularioInscricao() {
           else if (ev.lote2_data_fim && agora <= new Date(ev.lote2_data_fim)) nomeLote = "2º Lote";
           else if (ev.lote3_data_fim && agora <= new Date(ev.lote3_data_fim)) nomeLote = "3º Lote";
 
-          setValorLoteAtual(valorLoteVigente(ev, agora));
-          setValorAbsoluto(valorAddonAbsoluto(ev));
+          setEventoValores(ev);
           setNomeLoteAtual(nomeLote);
         }
       }
@@ -202,6 +204,9 @@ function FormularioInscricao() {
     if (categoriaId && !categoriasElegiveis.some(c => c.id === categoriaId)) { setCategoriaId(''); setCategoria(''); }
   }, [idade, sexo, faixa, pesoReal, categoriaId, categoriasEvento]);
 
+  const valorLoteAtual = eventoValores ? valorLoteVigente(eventoValores, new Date(), idade) : 0;
+  const valorAbsoluto = eventoValores ? valorAddonAbsoluto(eventoValores, idade) : 0;
+  const usaTarifaInfantil = Boolean(eventoValores && tarifaInfantilAplicavel(eventoValores, idade));
   const valorBase = (tipoInscricao === "ambos") ? valorLoteAtual + valorAbsoluto : valorLoteAtual;
   const valorTotal = Math.max(0, valorBase - desconto);
   const isGratis = valorBase === 0;
@@ -550,7 +555,7 @@ function FormularioInscricao() {
           {/* PACOTE */}
           <section className="bg-[#0a0a0e] border border-white/5 rounded-2xl p-5 md:p-6 shadow-xl">
             <h2 className="text-xs font-black text-white uppercase tracking-widest mb-2">Escolha seu Pacote</h2>
-            <p className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest mb-5">Modalidade: <strong className="text-white">{nomeLoteAtual}</strong></p>
+            <p className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest mb-5">Modalidade: <strong className="text-white">{nomeLoteAtual}</strong>{usaTarifaInfantil ? <span className="ml-2 rounded bg-cyan-500/20 px-2 py-0.5 text-cyan-300">Tarifa infantil</span> : null}</p>
 
             <div className="space-y-2.5">
               <label className={`block relative p-4 rounded-xl border cursor-pointer transition-all ${tipoInscricao === 'peso' ? 'border-red-500 bg-red-500/5' : 'border-white/5 bg-black'}`}>
@@ -589,7 +594,7 @@ function FormularioInscricao() {
             <h3 className="text-xs font-black text-white uppercase tracking-widest mb-5 border-b border-white/5 pb-3">Resumo da Inscrição</h3>
 
             <div className="space-y-3 mb-5 text-xs">
-              <div className="flex justify-between"><span className="text-zinc-400">Inscrição Campeonato</span><span className="text-white font-bold">{isGratis ? "R$ 0,00" : `R$ ${valorLoteAtual.toFixed(2)}`}</span></div>
+              <div className="flex justify-between"><span className="text-zinc-400">Inscrição Campeonato{usaTarifaInfantil ? " (infantil)" : ""}</span><span className="text-white font-bold">{isGratis ? "R$ 0,00" : `R$ ${valorLoteAtual.toFixed(2)}`}</span></div>
               {tipoInscricao === 'ambos' && valorAbsoluto > 0 && <div className="flex justify-between"><span className="text-zinc-400">Add-on: Absoluto</span><span className="text-white font-bold">R$ {valorAbsoluto.toFixed(2)}</span></div>}
               {desconto > 0 && <div className="flex justify-between text-green-400"><span className="font-bold">Desconto Validado</span><span className="font-bold">- R$ {desconto.toFixed(2)}</span></div>}
             </div>

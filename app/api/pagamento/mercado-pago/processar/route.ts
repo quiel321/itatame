@@ -8,6 +8,7 @@ import { enviarEmailPagamentoPendente } from "@/app/lib/email-pagamento-pendente
 import { obterAccessTokenOrganizador } from "@/app/lib/mercado-pago-integracao";
 import { autenticarRequest } from "@/app/lib/api-auth";
 import { calcularValorInscricao } from "@/app/lib/valor-inscricao";
+import { usuarioGerenciaInscricao } from "@/app/lib/inscricao-autorizacao";
 
 type EventoPagamento = {
   id: string | number;
@@ -81,6 +82,7 @@ export async function POST(request: Request) {
         atleta,
         categoria,
         absoluto,
+        idade,
         pagamento_ok,
         cupom_id,
         evento_id,
@@ -102,7 +104,7 @@ export async function POST(request: Request) {
     if (inscricaoError || !inscricao) {
       return NextResponse.json({ error: "Inscricao nao encontrada." }, { status: 404 });
     }
-    if (inscricao.user_id !== usuario.id) {
+    if (!(await usuarioGerenciaInscricao(supabase, usuario.id, inscricao.user_id))) {
       return NextResponse.json({ error: "Inscrição não autorizada para este usuário." }, { status: 403 });
     }
 

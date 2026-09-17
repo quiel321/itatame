@@ -446,6 +446,7 @@ export default function PerfilPage() {
       role: "atleta",
       nome: formDependente.nome,
       email: null,
+      telefone: null,
       cpf: formDependente.cpf ? formatarCpf(formDependente.cpf) : null,
       nascimento: formDependente.nascimento,
       sexo: formDependente.sexo,
@@ -461,11 +462,13 @@ export default function PerfilPage() {
     };
 
     let { error } = await supabase.from("atletas").upsert(dadosDependente, { onConflict: "user_id" });
-    if (error && /email/i.test(error.message)) {
-      const retry = await supabase.from("atletas").upsert({
-        ...dadosDependente,
-        email: `dep.${dependenteId}@itatame.invalid`,
-      }, { onConflict: "user_id" });
+    for (let tentativa = 0; tentativa < 8 && error; tentativa++) {
+      const colunaNula = error.message.match(/null value in column "([^"]+)"/i)?.[1];
+      if (!colunaNula) break;
+      dadosDependente[colunaNula] = colunaNula === "email"
+        ? `dep.${dependenteId}@itatame.invalid`
+        : "";
+      const retry = await supabase.from("atletas").upsert(dadosDependente, { onConflict: "user_id" });
       error = retry.error;
     }
 

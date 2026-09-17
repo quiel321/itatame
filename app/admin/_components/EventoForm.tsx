@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { dataHoraLocalParaIso, fusoHorarioEvento, paraInputDateTimeEvento } from "../../lib/evento-datas";
+import { IDADE_MAX_INFANTIL_PADRAO, regrasValoresInscricao, valorOpcional } from "../../lib/valor-inscricao";
 
 type ModoFormulario = "criar" | "editar";
 
@@ -35,7 +36,17 @@ type RegrasPontuacao = {
   absoluto_pontua?: boolean;
   wo_pontua?: boolean;
   valor_absoluto?: number;
+  valor_absoluto_infantil?: number;
+  lote1_valor_infantil?: number;
+  lote2_valor_infantil?: number;
+  lote3_valor_infantil?: number;
+  idade_max_infantil?: number;
 };
+
+function textoValorOpcional(valor: unknown) {
+  const parsed = valorOpcional(valor);
+  return parsed === undefined ? "" : String(parsed);
+}
 
 const inputClass = "w-full rounded-lg border border-white/10 bg-black px-3 py-3 text-sm text-white outline-none transition focus:border-red-500 placeholder:text-zinc-700";
 const labelClass = "mb-1.5 block text-[10px] font-black uppercase tracking-[0.16em] text-zinc-500";
@@ -100,6 +111,11 @@ export default function EventoForm({ modo, eventoId }: EventoFormProps) {
   const [lote3Valor, setLote3Valor] = useState(0);
   const [lote3DataFim, setLote3DataFim] = useState("");
   const [valorAbsoluto, setValorAbsoluto] = useState(0);
+  const [lote1ValorInfantil, setLote1ValorInfantil] = useState("");
+  const [lote2ValorInfantil, setLote2ValorInfantil] = useState("");
+  const [lote3ValorInfantil, setLote3ValorInfantil] = useState("");
+  const [valorAbsolutoInfantil, setValorAbsolutoInfantil] = useState("");
+  const [idadeMaxInfantil, setIdadeMaxInfantil] = useState(IDADE_MAX_INFANTIL_PADRAO);
 
   const [bannerAtualUrl, setBannerAtualUrl] = useState("");
   const [regulamentoAtualUrl, setRegulamentoAtualUrl] = useState("");
@@ -122,16 +138,22 @@ export default function EventoForm({ modo, eventoId }: EventoFormProps) {
           .single();
 
         if (error || !evento) throw new Error("Evento não encontrado.");
+        const regras = regrasValoresInscricao(evento) as RegrasPontuacao;
         originalRef.current = {
           data_evento: evento.data_evento || "",
           status: evento.status || "ABERTO",
           lote1_valor: Number(evento.lote1_valor) || 0,
           lote2_valor: Number(evento.lote2_valor) || 0,
           lote3_valor: Number(evento.lote3_valor) || 0,
-          valor_absoluto: Number(evento.valor_absoluto ?? (evento.regras_pontuacao_equipes as RegrasPontuacao | null)?.valor_absoluto) || 0,
+          valor_absoluto: Number(evento.valor_absoluto ?? regras.valor_absoluto) || 0,
           lote1_data_fim: paraInputDateTimeEvento(evento.lote1_data_fim, evento.estado),
           lote2_data_fim: paraInputDateTimeEvento(evento.lote2_data_fim, evento.estado),
           lote3_data_fim: paraInputDateTimeEvento(evento.lote3_data_fim, evento.estado),
+          lote1_valor_infantil: valorOpcional(regras.lote1_valor_infantil) ?? null,
+          lote2_valor_infantil: valorOpcional(regras.lote2_valor_infantil) ?? null,
+          lote3_valor_infantil: valorOpcional(regras.lote3_valor_infantil) ?? null,
+          valor_absoluto_infantil: valorOpcional(regras.valor_absoluto_infantil) ?? null,
+          idade_max_infantil: Number(regras.idade_max_infantil) || IDADE_MAX_INFANTIL_PADRAO,
         };
         const [{ count: inscricoes }, { data: lutas }] = await Promise.all([
           supabase.from("inscricoes").select("id", { count: "exact", head: true }).eq("evento_id", eventoId),
@@ -168,8 +190,12 @@ export default function EventoForm({ modo, eventoId }: EventoFormProps) {
         setDataDivulgacaoChaves(paraInputDateTimeEvento(evento.data_divulgacao_chaves, evento.estado));
         setDataDivulgacaoCronograma(paraInputDateTimeEvento(evento.data_divulgacao_cronograma, evento.estado));
 
-        const regras = (evento.regras_pontuacao_equipes || {}) as RegrasPontuacao;
         setValorAbsoluto(Number(evento.valor_absoluto ?? regras.valor_absoluto) || 0);
+        setLote1ValorInfantil(textoValorOpcional(regras.lote1_valor_infantil));
+        setLote2ValorInfantil(textoValorOpcional(regras.lote2_valor_infantil));
+        setLote3ValorInfantil(textoValorOpcional(regras.lote3_valor_infantil));
+        setValorAbsolutoInfantil(textoValorOpcional(regras.valor_absoluto_infantil));
+        setIdadeMaxInfantil(Number(regras.idade_max_infantil) || IDADE_MAX_INFANTIL_PADRAO);
         setPontosEquipeOuro(Number(regras.ouro) || 9);
         setPontosEquipePrata(Number(regras.prata) || 3);
         setPontosEquipeBronze(Number(regras.bronze) || 1);
@@ -245,10 +271,25 @@ export default function EventoForm({ modo, eventoId }: EventoFormProps) {
           supabase.from("inscricoes").select("id", { count: "exact", head: true }).eq("evento_id", eventoId),
           supabase.from("chaves").select("id,status_luta,iniciada_em,vencedor").eq("evento_id", eventoId),
         ]);
+        const infantilAtual = {
+          lote1_valor_infantil: lote1ValorInfantil === "" ? null : Number(lote1ValorInfantil),
+          lote2_valor_infantil: lote2ValorInfantil === "" ? null : Number(lote2ValorInfantil),
+          lote3_valor_infantil: lote3ValorInfantil === "" ? null : Number(lote3ValorInfantil),
+          valor_absoluto_infantil: valorAbsolutoInfantil === "" ? null : Number(valorAbsolutoInfantil),
+        };
+        const alterouInfantilJaDefinido = (Object.keys(infantilAtual) as (keyof typeof infantilAtual)[]).some((campo) => {
+          const original = originalRef.current[campo];
+          if (original === null || original === undefined || original === "") return false;
+          return original !== infantilAtual[campo];
+        });
+        const tinhaInfantil = ["lote1_valor_infantil", "lote2_valor_infantil", "lote3_valor_infantil", "valor_absoluto_infantil"]
+          .some((campo) => originalRef.current[campo] !== null && originalRef.current[campo] !== undefined && originalRef.current[campo] !== "");
         const alterouPrecos = [
           ['lote1_valor', lote1Valor], ['lote2_valor', lote2Valor], ['lote3_valor', lote3Valor],
           ['lote1_data_fim', lote1DataFim], ['lote2_data_fim', lote2DataFim], ['lote3_data_fim', lote3DataFim],
-        ].some(([campo, valor]) => originalRef.current[String(campo)] !== valor);
+        ].some(([campo, valor]) => originalRef.current[String(campo)] !== valor)
+          || alterouInfantilJaDefinido
+          || (tinhaInfantil && originalRef.current.idade_max_infantil !== idadeMaxInfantil);
         if ((inscricoes || lutas?.length) && alterouPrecos) throw new Error("Já há inscrições ou chaves. Os preços e prazos dos lotes não podem mais ser alterados; restaure os valores anteriores para salvar as outras informações.");
         if (lutas?.length && originalRef.current.data_evento !== dataEvento) throw new Error("As chaves já foram geradas. A data do evento está bloqueada para preservar o cronograma.");
         if ((lutas || []).some(luta => luta.iniciada_em || luta.vencedor || ['em_andamento', 'concluida'].includes(luta.status_luta)) && originalRef.current.status !== status) {
@@ -279,7 +320,7 @@ export default function EventoForm({ modo, eventoId }: EventoFormProps) {
         finalRegulamentoUrl = supabase.storage.from("eventos").getPublicUrl(filePath).data.publicUrl;
       }
 
-      const regrasPontuacaoEquipes = {
+      const regrasPontuacaoEquipes: RegrasPontuacao = {
         ouro: pontosEquipeOuro,
         prata: pontosEquipePrata,
         bronze: pontosEquipeBronze,
@@ -287,7 +328,12 @@ export default function EventoForm({ modo, eventoId }: EventoFormProps) {
         absoluto_pontua: absolutoPontuaEquipe,
         wo_pontua: woPontuaEquipe,
         valor_absoluto: valorAbsoluto,
+        idade_max_infantil: idadeMaxInfantil,
       };
+      if (lote1ValorInfantil !== "") regrasPontuacaoEquipes.lote1_valor_infantil = Number(lote1ValorInfantil);
+      if (lote2ValorInfantil !== "") regrasPontuacaoEquipes.lote2_valor_infantil = Number(lote2ValorInfantil);
+      if (lote3ValorInfantil !== "") regrasPontuacaoEquipes.lote3_valor_infantil = Number(lote3ValorInfantil);
+      if (valorAbsolutoInfantil !== "") regrasPontuacaoEquipes.valor_absoluto_infantil = Number(valorAbsolutoInfantil);
 
       const payload = {
         nome,
@@ -413,16 +459,27 @@ export default function EventoForm({ modo, eventoId }: EventoFormProps) {
                 <Field label="Fim das inscrições"><input type="datetime-local" value={dataFimInscricoes} onChange={(e) => setDataFimInscricoes(e.target.value)} className={inputClass + " [color-scheme:dark]"} /></Field>
               </div>
               <div className="mt-4 grid gap-3 md:grid-cols-3">
-                <LoteCard numero="1" valor={lote1Valor} setValor={setLote1Valor} dataFim={lote1DataFim} setDataFim={setLote1DataFim} destaque="Promocional" />
-                <LoteCard numero="2" valor={lote2Valor} setValor={setLote2Valor} dataFim={lote2DataFim} setDataFim={setLote2DataFim} destaque="Intermediário" />
-                <LoteCard numero="3" valor={lote3Valor} setValor={setLote3Valor} dataFim={lote3DataFim} setDataFim={setLote3DataFim} destaque="Final" />
+                <LoteCard numero="1" valor={lote1Valor} setValor={setLote1Valor} valorInfantil={lote1ValorInfantil} setValorInfantil={setLote1ValorInfantil} dataFim={lote1DataFim} setDataFim={setLote1DataFim} destaque="Promocional" />
+                <LoteCard numero="2" valor={lote2Valor} setValor={setLote2Valor} valorInfantil={lote2ValorInfantil} setValorInfantil={setLote2ValorInfantil} dataFim={lote2DataFim} setDataFim={setLote2DataFim} destaque="Intermediário" />
+                <LoteCard numero="3" valor={lote3Valor} setValor={setLote3Valor} valorInfantil={lote3ValorInfantil} setValorInfantil={setLote3ValorInfantil} dataFim={lote3DataFim} setDataFim={setLote3DataFim} destaque="Final" />
               </div>
-              <div className="mt-4 rounded-xl border border-white/10 bg-black p-3">
-                <Field label="Valor extra do Absoluto">
-                  <input type="number" min={0} step="0.01" value={valorAbsoluto} onChange={(e) => setValorAbsoluto(Number(e.target.value))} className={inputClass} />
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                <Field label={`Idade máxima da tarifa infantil`}>
+                  <input type="number" min={4} max={17} step="1" value={idadeMaxInfantil} onChange={(e) => setIdadeMaxInfantil(Number(e.target.value) || IDADE_MAX_INFANTIL_PADRAO)} className={inputClass} />
                 </Field>
+              </div>
+              <p className="mt-2 text-xs leading-relaxed text-zinc-500">Deixe o valor infantil em branco para cobrar o mesmo preço do adulto. A tarifa vale até {idadeMaxInfantil} anos na data do evento. O Mercado Pago continua cobrando o valor calculado da inscrição.</p>
+              <div className="mt-4 rounded-xl border border-white/10 bg-black p-3">
+                <div className="grid gap-3 md:grid-cols-2">
+                  <Field label="Valor extra do Absoluto (adulto)">
+                    <input type="number" min={0} step="0.01" value={valorAbsoluto} onChange={(e) => setValorAbsoluto(Number(e.target.value))} className={inputClass} />
+                  </Field>
+                  <Field label="Absoluto infantil">
+                    <input type="number" min={0} step="0.01" value={valorAbsolutoInfantil} onChange={(e) => setValorAbsolutoInfantil(e.target.value)} placeholder="Igual ao adulto" className={inputClass} />
+                  </Field>
+                </div>
                 <p className="mt-3 text-xs leading-relaxed text-zinc-500">Somado ao lote vigente só quando o atleta escolhe Categoria de Peso + Absoluto. Os lotes acima cobram a categoria de peso. Use 0 se o absoluto não tiver custo à parte.</p>
-                <p className="mt-2 text-xs font-bold text-zinc-500">Prévia: <span className="text-white">{dinheiro(valorAbsoluto)}</span></p>
+                <p className="mt-2 text-xs font-bold text-zinc-500">Prévia adulto: <span className="text-white">{dinheiro(valorAbsoluto)}</span>{valorAbsolutoInfantil !== "" ? <> · infantil: <span className="text-white">{dinheiro(Number(valorAbsolutoInfantil))}</span></> : null}</p>
               </div>
             </div>
 
@@ -537,7 +594,7 @@ function NumberField({ label, value, onChange }: { label: string; value: number;
   return <Field label={label}><input type="number" min={0} value={value} onChange={(e) => onChange(Number(e.target.value))} className={inputClass} /></Field>;
 }
 
-function LoteCard({ numero, destaque, valor, setValor, dataFim, setDataFim }: { numero: string; destaque: string; valor: number; setValor: (value: number) => void; dataFim: string; setDataFim: (value: string) => void }) {
+function LoteCard({ numero, destaque, valor, setValor, valorInfantil, setValorInfantil, dataFim, setDataFim }: { numero: string; destaque: string; valor: number; setValor: (value: number) => void; valorInfantil: string; setValorInfantil: (value: string) => void; dataFim: string; setDataFim: (value: string) => void }) {
   return (
     <div className="rounded-xl border border-white/10 bg-black p-3">
       <div className="mb-3 flex items-center justify-between">
@@ -545,10 +602,11 @@ function LoteCard({ numero, destaque, valor, setValor, dataFim, setDataFim }: { 
         <span className="rounded border border-white/10 px-2 py-1 text-[10px] font-bold uppercase text-zinc-500">{destaque}</span>
       </div>
       <div className="grid gap-3">
-        <Field label="Valor"><input type="number" min={0} step="0.01" value={valor} onChange={(e) => setValor(Number(e.target.value))} className={inputClass} /></Field>
+        <Field label="Valor adulto"><input type="number" min={0} step="0.01" value={valor} onChange={(e) => setValor(Number(e.target.value))} className={inputClass} /></Field>
+        <Field label="Valor infantil"><input type="number" min={0} step="0.01" value={valorInfantil} onChange={(e) => setValorInfantil(e.target.value)} placeholder="Igual ao adulto" className={inputClass} /></Field>
         <Field label="Término"><input type="datetime-local" value={dataFim} onChange={(e) => setDataFim(e.target.value)} className={inputClass + " [color-scheme:dark]"} /></Field>
       </div>
-      <p className="mt-3 text-xs font-bold text-zinc-500">Prévia: <span className="text-white">{dinheiro(valor)}</span></p>
+      <p className="mt-3 text-xs font-bold text-zinc-500">Prévia adulto: <span className="text-white">{dinheiro(valor)}</span>{valorInfantil !== "" ? <> · infantil: <span className="text-white">{dinheiro(Number(valorInfantil))}</span></> : null}</p>
     </div>
   );
 }

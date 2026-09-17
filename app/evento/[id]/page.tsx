@@ -12,7 +12,7 @@ import {
   type TomEtapaEvento,
 } from "@/app/lib/evento-etapas";
 import Link from "next/link";
-import { formatarValorInscricao, valorAddonAbsoluto, valorComboPesoAbsoluto } from "@/app/lib/valor-inscricao";
+import { formatarValorInscricao, idadeMaxInfantil, valorAddonAbsoluto, valorComboPesoAbsoluto, valorInfantilLote } from "@/app/lib/valor-inscricao";
 import { ChatEvento } from "@/app/components/ChatEvento";
 
 const estiloEtapa: Record<TomEtapaEvento, { badge: string; aviso: string; ponto: string }> = {
@@ -127,6 +127,7 @@ export default function EventoDetalhesPage() {
   else if (fimLote3 && agora <= fimLote3) loteAtivo = 3;
   else loteAtivo = 4; // Todos os lotes encerrados
   const addonAbsoluto = valorAddonAbsoluto(evento);
+  const addonAbsolutoInfantil = valorAddonAbsoluto(evento, idadeMaxInfantil(evento));
 
   return (
     <main className="min-h-screen bg-[#050505] flex flex-col pb-20">
@@ -306,11 +307,13 @@ export default function EventoDetalhesPage() {
                   {/* LISTAGEM DINÂMICA DE LOTES */}
                   <div className="space-y-3 mb-6">
                     {([
-                      { lote: 1, titulo: "1º Lote (Promocional)", valor: evento.lote1_valor, ate: evento.lote1_data_fim },
-                      { lote: 2, titulo: "2º Lote", valor: evento.lote2_valor, ate: evento.lote2_data_fim },
-                      { lote: 3, titulo: "3º Lote (Final)", valor: evento.lote3_valor, ate: evento.lote3_data_fim },
-                    ] as const).filter(item => Number(item.valor) > 0).map(item => {
+                      { lote: 1 as const, titulo: "1º Lote (Promocional)", valor: evento.lote1_valor, ate: evento.lote1_data_fim },
+                      { lote: 2 as const, titulo: "2º Lote", valor: evento.lote2_valor, ate: evento.lote2_data_fim },
+                      { lote: 3 as const, titulo: "3º Lote (Final)", valor: evento.lote3_valor, ate: evento.lote3_data_fim },
+                    ]).filter(item => Number(item.valor) > 0 || valorInfantilLote(evento, item.lote) !== undefined).map(item => {
                       const combo = valorComboPesoAbsoluto(Number(item.valor), evento);
+                      const infantil = valorInfantilLote(evento, item.lote);
+                      const comboInfantil = infantil !== undefined ? valorComboPesoAbsoluto(infantil, evento, idadeMaxInfantil(evento)) : null;
                       return (
                       <div key={item.lote} className={`p-4 rounded-xl border flex justify-between items-center gap-3 transition-all ${loteAtivo === item.lote ? 'bg-red-500/10 border-red-500/50 text-white shadow-[0_0_15px_rgba(239,68,68,0.1)]' : 'bg-[#050505] border-white/5 text-zinc-500 opacity-60'}`}>
                         <div>
@@ -321,6 +324,9 @@ export default function EventoDetalhesPage() {
                           <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-400">Categoria de peso</p>
                           <p className="font-black text-lg">{formatarValorInscricao(Number(item.valor))}</p>
                           <p className="mt-1 text-[10px] font-bold text-amber-200/90">Peso + Absoluto: {formatarValorInscricao(combo)}</p>
+                          {infantil !== undefined && (
+                            <p className="mt-1 text-[10px] font-bold text-cyan-300">Infantil até {idadeMaxInfantil(evento)} anos: {formatarValorInscricao(infantil)}{comboInfantil != null ? ` · peso + absoluto ${formatarValorInscricao(comboInfantil)}` : ""}</p>
+                          )}
                           {loteAtivo === item.lote && <span className="text-[9px] bg-red-500 text-white px-2 py-0.5 rounded uppercase font-bold tracking-widest inline-block mt-1">Lote Vigente</span>}
                         </div>
                       </div>
@@ -333,7 +339,12 @@ export default function EventoDetalhesPage() {
                         <h4 className="font-black uppercase tracking-widest text-xs md:text-sm">Add-on Absoluto</h4>
                         <p className="text-[10px] md:text-xs mt-1 text-zinc-400">Valor extra do combo Categoria de Peso + Absoluto, somado ao lote vigente.</p>
                       </div>
-                      <p className="font-black text-lg">+ R$ {addonAbsoluto.toFixed(2).replace('.', ',')}</p>
+                      <div className="text-right">
+                        <p className="font-black text-lg">+ R$ {addonAbsoluto.toFixed(2).replace('.', ',')}</p>
+                        {addonAbsolutoInfantil !== addonAbsoluto && (
+                          <p className="mt-1 text-[10px] font-bold text-cyan-300">Infantil: + R$ {addonAbsolutoInfantil.toFixed(2).replace('.', ',')}</p>
+                        )}
+                      </div>
                     </div>
                   )}
 
