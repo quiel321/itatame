@@ -410,8 +410,8 @@ export default function PerfilPage() {
 
   async function salvarDependente() {
     setSalvando(true); setMensagem(""); setErro("");
-    if (!formDependente.nome || !formDependente.nascimento || !formDependente.sexo) {
-      setErro("Nome, Sexo e Data de Nascimento do dependente são obrigatórios.");
+    if (!formDependente.nome || !formDependente.nascimento || !formDependente.sexo || !formDependente.faixa) {
+      setErro("Nome, sexo, data de nascimento e faixa do dependente são obrigatórios.");
       setSalvando(false); return;
     }
     if (formDependente.cpf && !cpfValido(formDependente.cpf)) {
@@ -703,6 +703,15 @@ export default function PerfilPage() {
                 <button onClick={() => setAbaAtiva("equipe")} className={`cursor-pointer w-full py-2.5 px-4 rounded-xl text-[11px] font-bold text-left transition-colors flex justify-between items-center ${abaAtiva === "equipe" ? "bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 shadow-sm" : "text-zinc-500 hover:text-yellow-500 hover:bg-yellow-500/5"}`}>
                   <span className="flex items-center gap-3"><svg className="w-3.5 h-3.5 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg> Lista de Alunos</span>
                   <span className="bg-zinc-800 text-zinc-400 text-[9px] px-1.5 py-0.5 rounded-full pointer-events-none">{totalAlunos}</span>
+                </button>
+                <button onClick={() => setAbaAtiva("dependentes")} className={`cursor-pointer w-full py-2.5 px-4 rounded-xl text-[11px] font-bold text-left transition-colors flex justify-between items-center ${abaAtiva === "dependentes" ? "bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 shadow-sm" : "text-zinc-500 hover:text-white hover:bg-white/5"}`}>
+                  <span className="flex items-center gap-3"><svg className="w-3.5 h-3.5 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg> Família / Dependentes</span>
+                  {dependentes.length > 0 && <span className="bg-zinc-800 text-zinc-400 text-[9px] px-1.5 py-0.5 rounded-full pointer-events-none">{dependentes.length}</span>}
+                </button>
+                <button onClick={() => setAbaAtiva("inscricoes")} className={`relative cursor-pointer w-full py-2.5 px-4 rounded-xl text-[11px] font-bold text-left transition-colors flex justify-between items-center ${abaAtiva === "inscricoes" ? "bg-white/10 text-white border border-white/5 shadow-sm" : "text-zinc-500 hover:text-white hover:bg-white/5"}`}>
+                  <span className="flex items-center gap-3"><svg className="w-3.5 h-3.5 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg> Minhas Inscrições</span>
+                  {minhasInscricoes.length > 0 && <span className="bg-zinc-800 text-white text-[9px] px-1.5 py-0.5 rounded-full pointer-events-none">{minhasInscricoes.length}</span>}
+                  <SeloNaoLidas quantidade={chatNaoLidas} discreto />
                 </button>
               </>
             ) : (
@@ -1135,7 +1144,7 @@ export default function PerfilPage() {
                         <svg className="w-5 h-5 text-cyan-500 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
                         Família / Dependentes
                       </h3>
-                      <p className="text-zinc-400 text-xs mt-1">Gerencie os perfis de filhos e menores sob sua responsabilidade.</p>
+                      <p className="text-zinc-400 text-xs mt-1">Gerencie os perfis de filhos e menores sob sua responsabilidade. Na inscrição do campeonato, escolha quem vai competir.</p>
                     </div>
                     <button
                       onClick={() => setFormDependente({ nome: "", cpf: "", nascimento: "", sexo: "", professor: "", professor_id: "", equipe: "", academia: "", faixa: "", peso: "", modalidade: "", professorPersonalizado: false })}
@@ -1219,7 +1228,7 @@ export default function PerfilPage() {
                       <input type="text" value={formDependente.academia || ""} onChange={(e) => setFormDependente({...formDependente, academia: e.target.value})} disabled={!formDependente.professorPersonalizado && formDependente.professor !== ""} placeholder="Auto-preenchido" className={`w-full outline-none rounded-xl px-3 py-2 text-xs transition-colors ${(!formDependente.professorPersonalizado && formDependente.professor !== "") ? 'bg-black/30 border-transparent text-zinc-500 cursor-not-allowed' : 'cursor-text border bg-black/50 border-white/5 text-white focus:border-cyan-500/50'}`} />
                     </div>
 
-                    <div><label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 pl-1 cursor-default">Faixa Atual</label><select value={formDependente.faixa || ""} onChange={(e) => setFormDependente({...formDependente, faixa: e.target.value})} className="cursor-pointer w-full bg-black/50 border border-white/5 focus:border-cyan-500/50 outline-none rounded-xl px-3 py-2 text-xs text-white transition-colors appearance-none"><option value="" className="bg-[#0a0a0e] text-white">Selecione...</option><option value="Cinza" className="bg-[#0a0a0e] text-white">Cinza</option><option value="Amarela" className="bg-[#0a0a0e] text-white">Amarela</option><option value="Laranja" className="bg-[#0a0a0e] text-white">Laranja</option><option value="Verde" className="bg-[#0a0a0e] text-white">Verde</option><option value="Branca" className="bg-[#0a0a0e] text-white">Branca</option><option value="Azul" className="bg-[#0a0a0e] text-white">Azul</option></select></div>
+                    <div><label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 pl-1 cursor-default">Faixa Atual *</label><select value={formDependente.faixa || ""} onChange={(e) => setFormDependente({...formDependente, faixa: e.target.value})} className="cursor-pointer w-full bg-black/50 border border-white/5 focus:border-cyan-500/50 outline-none rounded-xl px-3 py-2 text-xs text-white transition-colors appearance-none"><option value="" className="bg-[#0a0a0e] text-white">Selecione...</option><option value="Cinza" className="bg-[#0a0a0e] text-white">Cinza</option><option value="Amarela" className="bg-[#0a0a0e] text-white">Amarela</option><option value="Laranja" className="bg-[#0a0a0e] text-white">Laranja</option><option value="Verde" className="bg-[#0a0a0e] text-white">Verde</option><option value="Branca" className="bg-[#0a0a0e] text-white">Branca</option><option value="Azul" className="bg-[#0a0a0e] text-white">Azul</option></select></div>
                     <div><label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 pl-1 cursor-default">Peso (KG)</label><input type="number" step="0.1" value={formDependente.peso || ""} onChange={(e) => setFormDependente({...formDependente, peso: e.target.value})} className="cursor-text w-full bg-black/50 border border-white/5 focus:border-cyan-500/50 outline-none rounded-xl px-3 py-2 text-xs text-white transition-colors" /></div>
 
                     <div className="md:col-span-2">
@@ -1256,7 +1265,7 @@ export default function PerfilPage() {
           )}
 
           {/* 🔵 ABA 3: MINHAS INSCRIÇÕES */}
-          {abaAtiva === "inscricoes" && role !== "professor" && (
+          {abaAtiva === "inscricoes" && (
             <div className="animate-in fade-in slide-in-from-right-4 duration-500 w-full">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-3">
                 <h3 className="text-xl font-black text-white">Minhas Inscrições</h3>

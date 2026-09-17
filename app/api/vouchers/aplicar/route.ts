@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { autenticarRequest } from "@/app/lib/api-auth";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
 import { enviarEmailIngressoConfirmado } from "@/app/lib/email-ingresso";
+import { usuarioGerenciaInscricao } from "@/app/lib/inscricao-autorizacao";
 
 function numero(value: unknown) {
   const parsed = Number(value);
@@ -24,9 +25,8 @@ export async function POST(request: Request) {
     .maybeSingle();
   if (!inscricao) return NextResponse.json({ error: "Inscrição não autorizada." }, { status: 403 });
 
-  if (inscricao.user_id !== usuario.id) {
-    const { data: atleta } = await supabase.from("atletas").select("responsavel_id").eq("user_id", inscricao.user_id).maybeSingle();
-    if (atleta?.responsavel_id !== usuario.id) return NextResponse.json({ error: "Inscrição não autorizada." }, { status: 403 });
+  if (!(await usuarioGerenciaInscricao(supabase, usuario.id, inscricao.user_id))) {
+    return NextResponse.json({ error: "Inscrição não autorizada." }, { status: 403 });
   }
 
   if (inscricao.pagamento_ok) return NextResponse.json({ error: "Esta inscrição já está paga." }, { status: 409 });

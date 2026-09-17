@@ -23,6 +23,25 @@ export function semFaixaDuplicada(categoria: string, faixa: string) {
     .join(' · ');
 }
 
+export function dataCompeticao(valor?: string | Date | null) {
+  if (!valor) return null;
+  if (valor instanceof Date) return Number.isNaN(valor.getTime()) ? null : valor;
+  const texto = String(valor).slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(texto)) return null;
+  const data = new Date(`${texto}T12:00:00`);
+  return Number.isNaN(data.getTime()) ? null : data;
+}
+
+export function idadeCompetitiva(nascimento?: string | Date | null, referencia?: string | Date | null) {
+  const nasc = dataCompeticao(nascimento);
+  const ref = dataCompeticao(referencia) || new Date();
+  if (!nasc) return NaN;
+  let idade = ref.getFullYear() - nasc.getFullYear();
+  const mes = ref.getMonth() - nasc.getMonth();
+  if (mes < 0 || (mes === 0 && ref.getDate() < nasc.getDate())) idade--;
+  return idade;
+}
+
 export function divisaoEtaria(idade: number) {
   if (!Number.isInteger(idade) || idade < 4 || idade > 100) throw new Error('Idade competitiva inválida (4 a 100 anos).');
   if (idade < 16) return `${idade} anos`;

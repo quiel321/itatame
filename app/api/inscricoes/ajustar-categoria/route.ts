@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { autenticarRequest } from "@/app/lib/api-auth";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
 import { CategoriaCompeticao, categoriaCompativel, categoriaCompativelSemPeso, rotuloCategoria } from "@/app/lib/categorias-competicao";
+import { usuarioGerenciaInscricao } from "@/app/lib/inscricao-autorizacao";
 
 export async function POST(request: Request) {
   const usuario = await autenticarRequest(request);
@@ -18,10 +19,8 @@ export async function POST(request: Request) {
     .eq("id", inscricaoId).maybeSingle();
   if (erroInscricao || !inscricao) return NextResponse.json({ error: "Inscrição não encontrada." }, { status: 404 });
 
-  if (inscricao.user_id !== usuario.id) {
-    const { data: dependente } = await supabase.from("atletas").select("user_id")
-      .eq("user_id", inscricao.user_id).eq("responsavel_id", usuario.id).maybeSingle();
-    if (!dependente) return NextResponse.json({ error: "Você não pode alterar esta inscrição." }, { status: 403 });
+  if (!(await usuarioGerenciaInscricao(supabase, usuario.id, inscricao.user_id))) {
+    return NextResponse.json({ error: "Você não pode alterar esta inscrição." }, { status: 403 });
   }
 
   const [{ data: evento }, { count: chaves, error: erroChaves }, { data: categorias, error: erroCategorias }] = await Promise.all([

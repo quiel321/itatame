@@ -4,8 +4,23 @@ import { useEffect, useState, Suspense } from "react";
 import { supabase } from "../lib/supabase";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { categoriaCompativel, rotuloCategoria, type CategoriaCompeticao } from '@/app/lib/categorias-competicao';
+import { categoriaCompativel, idadeCompetitiva, rotuloCategoria, type CategoriaCompeticao } from '@/app/lib/categorias-competicao';
 import { valorAddonAbsoluto, valorLoteVigente } from '@/app/lib/valor-inscricao';
+
+type PerfilCompetidor = {
+  id: number;
+  user_id: string;
+  nome: string;
+  equipe?: string | null;
+  professor?: string | null;
+  faixa?: string | null;
+  peso?: string | number | null;
+  sexo?: string | null;
+  modalidade?: string | null;
+  foto_url?: string | null;
+  cpf?: string | null;
+  nascimento?: string | null;
+};
 
 function FormularioInscricao() {
   const searchParams = useSearchParams();
@@ -37,6 +52,10 @@ function FormularioInscricao() {
   const [fotoUrl, setFotoUrl] = useState("");
   const [cpfAtleta, setCpfAtleta] = useState("");
   const [emailAtleta, setEmailAtleta] = useState("");
+  const [nascimentoAtleta, setNascimentoAtleta] = useState("");
+  const [competidorUserId, setCompetidorUserId] = useState("");
+  const [familia, setFamilia] = useState<PerfilCompetidor[]>([]);
+  const [dataEvento, setDataEvento] = useState("");
   const [inscricoesEncerradas, setInscricoesEncerradas] = useState(false);
   const [motivoInscricaoIndisponivel, setMotivoInscricaoIndisponivel] = useState("");
   const [limiteVagas, setLimiteVagas] = useState(0);
@@ -58,6 +77,7 @@ function FormularioInscricao() {
   const [processando, setProcessando] = useState(false);
 
   const perfilIncompleto = !nome || !equipe || !faixa || !atletaId;
+  const idadePeloCadastro = Number.isInteger(idadeCompetitiva(nascimentoAtleta, dataEvento));
 
   function calcularCategoria(peso: number) {
     if (peso <= 64.5) return "Pluma (Até 64.500 kg)";
@@ -65,6 +85,40 @@ function FormularioInscricao() {
     if (peso <= 80) return "Meio Pesado (Até 80.000 kg)";
     if (peso <= 85.5) return "Super Pesado (Até 85.500 kg)";
     return "Pesadíssimo (Acima de 85.5 kg)";
+  }
+
+  function aplicarCompetidor(
+    pessoa: PerfilCompetidor,
+    equipesOficiais: { id: string; nome: string }[] = equipesEvento,
+    dataRef = dataEvento,
+  ) {
+    setCompetidorUserId(pessoa.user_id);
+    setAtletaId(pessoa.id);
+    setNome(pessoa.nome || "");
+    setProfessor(pessoa.professor || "");
+    setFaixa(pessoa.faixa || "");
+    setPesoReal(pessoa.peso ? String(pessoa.peso) : "");
+    setSexo(pessoa.sexo || "Masculino");
+    setCategoria(calcularCategoria(Number(pessoa.peso || 0)));
+    setCategoriaId('');
+    setModalidade(pessoa.modalidade || "");
+    setFotoUrl(pessoa.foto_url || "");
+    setCpfAtleta(pessoa.cpf || "");
+    setNascimentoAtleta(pessoa.nascimento || "");
+    const idadeCalc = idadeCompetitiva(pessoa.nascimento, dataRef);
+    setIdade(Number.isInteger(idadeCalc) ? String(idadeCalc) : "");
+    const equipeNome = String(pessoa.equipe || "").trim();
+    const oficial = equipesOficiais.find(eq => eq.nome.trim().toLocaleLowerCase('pt-BR') === equipeNome.toLocaleLowerCase('pt-BR'));
+    if (oficial) {
+      setEquipeId(oficial.id);
+      setEquipe(oficial.nome);
+    } else if (equipesOficiais.length === 1) {
+      setEquipeId(equipesOficiais[0].id);
+      setEquipe(equipesOficiais[0].nome);
+    } else {
+      setEquipe(equipeNome);
+      if (equipesOficiais.length > 1) setEquipeId('');
+    }
   }
 
   useEffect(() => {
@@ -79,10 +133,13 @@ function FormularioInscricao() {
       setEmailAtleta(authData.user.email || "");
 
       let equipesCarregadas: { id: string; nome: string; academia: string; professor: string }[] = [];
+      let dataEventoAtual = "";
       if (eventoId) {
         const { data: ev } = await supabase.from("eventos").select("*").eq("id", eventoId).single();
         if (ev) {
           setEventoNome(ev.nome);
+          dataEventoAtual = String(ev.data_evento || "").slice(0, 10);
+          setDataEvento(dataEventoAtual);
           const [cats, eqs] = await Promise.all([
             supabase.from('categorias_evento').select('*').eq('evento_id', eventoId).eq('ativa', true),
             supabase.from('equipes_evento').select('id,nome,academia,professor').eq('evento_id', eventoId).eq('ativa', true).order('nome'),
@@ -127,25 +184,13 @@ function FormularioInscricao() {
       }
 
       const { data: atleta, error } = await supabase.from("atletas").select("*").eq("user_id", authData.user.id).single();
-
-      if (!error && atleta) {
-        setAtletaId(atleta.id);
-        setNome(atleta.nome || "");
-        setEquipe(atleta.equipe || "");
-        setProfessor(atleta.professor || "");
-        setFaixa(atleta.faixa || "");
-        setPesoReal(atleta.peso || "");
-        setSexo(atleta.sexo || "Masculino");
-        setCategoria(calcularCategoria(Number(atleta.peso)));
-        setModalidade(atleta.modalidade || "");
-        setFotoUrl(atleta.foto_url || "");
-        setCpfAtleta(atleta.cpf || "");
-      }
-
-      if (equipesCarregadas.length === 1) {
-        setEquipeId(equipesCarregadas[0].id);
-        setEquipe(equipesCarregadas[0].nome);
-      }
+      const { data: depsData } = await supabase.from("atletas").select("id,user_id,nome,equipe,professor,faixa,peso,sexo,modalidade,foto_url,cpf,nascimento").eq("responsavel_id", authData.user.id).order("nome");
+      const titular = !error && atleta ? atleta as PerfilCompetidor : null;
+      const dependentes = (depsData || []) as PerfilCompetidor[];
+      const pessoas = [...(titular ? [titular] : []), ...dependentes];
+      setFamilia(pessoas);
+      if (titular) aplicarCompetidor(titular, equipesCarregadas, dataEventoAtual);
+      else if (dependentes[0]) aplicarCompetidor(dependentes[0], equipesCarregadas, dataEventoAtual);
 
       setLoading(false);
     }
@@ -202,7 +247,7 @@ function FormularioInscricao() {
     setErro("");
 
     if (perfilIncompleto) {
-      setErro("Seu perfil está incompleto. Atualize seu cadastro antes de prosseguir.");
+      setErro("Complete nome, equipe e faixa deste atleta no perfil antes de inscrever.");
       setProcessando(false);
       return;
     }
@@ -253,15 +298,21 @@ function FormularioInscricao() {
 
     const { data } = await supabase.auth.getUser();
     const usuarioAtualId = data.user?.id || userId;
+    const userIdInscricao = competidorUserId || usuarioAtualId;
+    if (familia.length && !familia.some(pessoa => pessoa.user_id === userIdInscricao)) {
+      setErro("Escolha um atleta da sua conta ou um dependente cadastrado.");
+      setProcessando(false);
+      return;
+    }
 
     const { data: inscricaoExistente } = await supabase
       .from("inscricoes")
       .select("id")
       .eq("evento_id", eventoId)
-      .or(`user_id.eq.${usuarioAtualId},atleta_id.eq.${atletaId || 0}`);
+      .or(`user_id.eq.${userIdInscricao},atleta_id.eq.${atletaId || 0}`);
 
     if (inscricaoExistente && inscricaoExistente.length > 0) {
-      setErro("Você já possui uma inscrição registrada para este campeonato.");
+      setErro("Este atleta já está inscrito neste campeonato.");
       setProcessando(false);
       return;
     }
@@ -285,7 +336,7 @@ function FormularioInscricao() {
       }
     }
 
-    if (emailAtleta) {
+    if (emailAtleta && userIdInscricao === usuarioAtualId) {
       const { data: inscricaoMesmoEmail, error: erroEmail } = await supabase
         .from("inscricoes")
         .select("id")
@@ -302,7 +353,7 @@ function FormularioInscricao() {
     const equipeOficial = equipesEvento.find(eq => eq.id === equipeId);
     let isLiberado = !cupomAplicado && valorTotal === 0;
     const inscricaoParaSalvar = {
-      user_id: usuarioAtualId,
+      user_id: userIdInscricao,
       atleta_id: atletaId,
       atleta: nome,
       equipe: equipeOficial?.nome || equipe,
@@ -349,7 +400,7 @@ function FormularioInscricao() {
       });
       const resultado = await response.json();
       if (!response.ok) {
-        await supabase.from("inscricoes").delete().eq("id", inscricaoCriada.id).eq("user_id", usuarioAtualId);
+        await supabase.from("inscricoes").delete().eq("id", inscricaoCriada.id);
         setErro(resultado.error || "Não foi possível reservar esta cortesia.");
         setProcessando(false);
         return;
@@ -395,7 +446,7 @@ function FormularioInscricao() {
           <Link href={`/pagamento`} className="cursor-pointer inline-block bg-red-600 hover:bg-red-500 text-white font-black uppercase tracking-widest text-xs px-8 py-3.5 rounded-xl shadow-[0_0_20px_rgba(239,68,68,0.3)] transition-all">Ir para Pagamento</Link>
         ) : (
           // 🔥 ROTA CORRIGIDA PARA O QR CODE BLINDADO (eventoId / userId)
-          <Link href={`/ingresso/${eventoId}/${userId}`} className="cursor-pointer inline-block bg-green-600 hover:bg-green-500 text-white font-black uppercase tracking-widest text-xs px-8 py-3.5 rounded-xl shadow-[0_0_20px_rgba(34,197,94,0.3)] transition-all">
+          <Link href={`/ingresso/${eventoId}/${competidorUserId || userId}`} className="cursor-pointer inline-block bg-green-600 hover:bg-green-500 text-white font-black uppercase tracking-widest text-xs px-8 py-3.5 rounded-xl shadow-[0_0_20px_rgba(34,197,94,0.3)] transition-all">
             Ver Meu Passaporte & QR Code
           </Link>
         )}
@@ -422,7 +473,7 @@ function FormularioInscricao() {
           {perfilIncompleto && (
             <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4">
               <p className="text-yellow-500 font-bold text-xs uppercase tracking-widest mb-1">Perfil Incompleto</p>
-              <p className="text-yellow-200/70 text-xs">Faltam dados obrigatórios no seu cadastro. <Link href="/perfil" className="underline font-bold text-yellow-400">Clique aqui para Editar</Link></p>
+              <p className="text-yellow-200/70 text-xs">Faltam dados obrigatórios no cadastro deste atleta (nome, equipe e faixa). <Link href="/perfil" className="underline font-bold text-yellow-400">Complete em Família / Dependentes</Link></p>
             </div>
           )}
 
@@ -430,6 +481,25 @@ function FormularioInscricao() {
           <section className="bg-[#0a0a0e] border border-white/5 rounded-2xl p-5 md:p-6 shadow-xl relative overflow-hidden">
             <div className="absolute top-0 left-0 w-1 h-full bg-red-600"></div>
             <h2 className="text-xs font-black text-white uppercase tracking-widest flex items-center gap-2 mb-5">Credencial do Atleta</h2>
+            {familia.length > 1 && (
+              <label className="block mb-4 text-[9px] text-zinc-500 font-bold uppercase">
+                Quem vai competir
+                <select
+                  value={competidorUserId}
+                  onChange={e => {
+                    const pessoa = familia.find(item => item.user_id === e.target.value);
+                    if (pessoa) aplicarCompetidor(pessoa);
+                  }}
+                  className="mt-1.5 w-full bg-black border border-white/10 rounded-lg px-3 py-2.5 text-white text-xs"
+                >
+                  {familia.map(pessoa => (
+                    <option key={pessoa.user_id} value={pessoa.user_id}>
+                      {pessoa.user_id === userId ? `${pessoa.nome} (titular)` : pessoa.nome}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <div className="flex flex-col sm:flex-row gap-5 items-center sm:items-start bg-black/40 p-4 rounded-xl border border-white/5">
               <div className="shrink-0">
                 {fotoUrl ? <img src={fotoUrl} alt="Foto" className="w-24 h-24 rounded-full object-cover border border-white/10" /> : <div className="w-24 h-24 rounded-full bg-zinc-900 border border-white/10 flex items-center justify-center text-zinc-600">🥋</div>}
@@ -449,8 +519,9 @@ function FormularioInscricao() {
             <h2 className="text-xs font-black text-white uppercase tracking-widest mb-5">Encaixe na Chave</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
               <div>
-                <label className="text-[9px] text-zinc-500 font-bold uppercase block mb-1.5">Sua Idade</label>
-                <input type="number" placeholder="Ex: 28" value={idade} onChange={(e) => setIdade(e.target.value)} className="w-full bg-black border border-white/10 rounded-lg px-3 py-2.5 text-white text-xs" />
+                <label className="text-[9px] text-zinc-500 font-bold uppercase block mb-1.5">Idade na data do evento</label>
+                <input type="number" placeholder="Ex: 8" value={idade} onChange={(e) => setIdade(e.target.value)} disabled={idadePeloCadastro} className={`w-full bg-black border border-white/10 rounded-lg px-3 py-2.5 text-white text-xs ${idadePeloCadastro ? 'opacity-70 cursor-not-allowed' : ''}`} />
+                {idadePeloCadastro ? <p className="text-[10px] text-zinc-500 mt-1">Calculada pela data de nascimento do cadastro.</p> : <p className="text-[10px] text-zinc-500 mt-1">Informe a idade ou complete a data de nascimento no perfil.</p>}
               </div>
               <div>
                 <label className="text-[9px] text-zinc-500 font-bold uppercase block mb-1.5">Sexo Competitivo</label>

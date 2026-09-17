@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from "@/app/lib/supabase-server";
 import { enviarEmailIngressoConfirmado } from "@/app/lib/email-ingresso";
 import { obterAccessTokenOrganizador } from "@/app/lib/mercado-pago-integracao";
 import { autenticarRequest } from "@/app/lib/api-auth";
+import { usuarioGerenciaInscricao } from "@/app/lib/inscricao-autorizacao";
 
 function dadosDeExibicao(paymentData: any) {
   return {
@@ -51,7 +52,8 @@ export async function POST(request: Request) {
     if (!evento?.organizador_id) {
       return NextResponse.json({ error: "Evento sem organizador vinculado." }, { status: 409 });
     }
-    if (inscricao.user_id !== usuario.id && evento.organizador_id !== usuario.id) {
+    if (inscricao.user_id !== usuario.id && evento.organizador_id !== usuario.id
+      && !(await usuarioGerenciaInscricao(supabase, usuario.id, inscricao.user_id))) {
       return NextResponse.json({ error: "Pagamento não autorizado para este usuário." }, { status: 403 });
     }
 

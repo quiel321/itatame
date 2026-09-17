@@ -92,7 +92,9 @@ export default function ChavesPublicoPage() {
     if (!idEvento) return;
     const { data: authData } = await supabase.auth.getUser();
     if (!authData?.user) return; 
-    const { data: inscricoes } = await supabase.from("inscricoes").select("pagamento_ok").eq("evento_id", idEvento).eq("user_id", authData.user.id);
+    const { data: depsData } = await supabase.from("atletas").select("user_id").eq("responsavel_id", authData.user.id);
+    const idsFamilia = [authData.user.id, ...(depsData || []).map(item => item.user_id)];
+    const { data: inscricoes } = await supabase.from("inscricoes").select("pagamento_ok").eq("evento_id", idEvento).in("user_id", idsFamilia);
     if (inscricoes && inscricoes.length > 0) {
       setTemPendencia(inscricoes.some(insc => insc.pagamento_ok === false));
     }

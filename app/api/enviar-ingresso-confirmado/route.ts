@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { enviarEmailIngressoConfirmado } from "@/app/lib/email-ingresso";
 import { autenticarRequest } from "@/app/lib/api-auth";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
+import { usuarioGerenciaInscricao } from "@/app/lib/inscricao-autorizacao";
 
 export async function POST(request: Request) {
   try {
@@ -21,7 +22,8 @@ export async function POST(request: Request) {
       .eq("id", inscricaoId)
       .maybeSingle();
     const evento = Array.isArray(inscricao?.eventos) ? inscricao.eventos[0] : inscricao?.eventos;
-    if (!inscricao || (inscricao.user_id !== usuario.id && evento?.organizador_id !== usuario.id)) {
+    if (!inscricao || (inscricao.user_id !== usuario.id && evento?.organizador_id !== usuario.id
+      && !(await usuarioGerenciaInscricao(supabase, usuario.id, inscricao.user_id)))) {
       return NextResponse.json({ error: "Inscrição não autorizada." }, { status: 403 });
     }
 

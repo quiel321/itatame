@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { prepararGrupos, montarChaves } from '../app/lib/gerar-chaves';
-import { grupoInscricao, categoriaCompativel, type CategoriaCompeticao, type InscricaoCompeticao } from '../app/lib/categorias-competicao';
+import { grupoInscricao, categoriaCompativel, idadeCompetitiva, type CategoriaCompeticao, type InscricaoCompeticao } from '../app/lib/categorias-competicao';
 import { criarChavesImpressao, tituloEventoImpressao, type LutaImpressao } from '../app/lib/chaves-impressao';
 import { limiteParcelas, validarParcelas } from '../app/lib/parcelamento';
 import { calcularResultadosChaves, lerRegrasPontuacao } from '../app/lib/ranking-eventos';
@@ -13,6 +13,9 @@ const atleta=(id:number, extras: Partial<InscricaoCompeticao> = {}):InscricaoCom
 assert.notEqual(grupoInscricao(atleta(1),'peso').categoria,grupoInscricao(atleta(2,{sexo:'Feminino'}),'peso').categoria);
 assert.notEqual(grupoInscricao(atleta(1),'peso').categoria,grupoInscricao(atleta(2,{idade:32}),'peso').categoria);
 assert.notEqual(grupoInscricao(atleta(1,{idade:8}),'peso').categoria,grupoInscricao(atleta(2,{idade:9}),'peso').categoria);
+assert.equal(idadeCompetitiva('2018-09-17','2026-09-17'),8);
+assert.equal(idadeCompetitiva('2018-09-18','2026-09-17'),7);
+assert.equal(grupoInscricao(atleta(1,{idade:idadeCompetitiva('2018-03-01','2026-09-17')}),'peso').categoria.includes('8 anos'),true);
 assert.throws(()=>grupoInscricao(atleta(1,{idade:null}),'peso'));
 assert.throws(()=>grupoInscricao(atleta(1,{sexo:''}),'peso'));
 const categoria:CategoriaCompeticao={id:'cat',evento_id:evento,nome:'Adulto Leve',modalidade:'Jiu-Jitsu',sexo:'Masculino',faixa:'Branca',idade_min:18,idade_max:29,peso_min:64,peso_max:76,tempo_minutos:5,tipo:'peso',ativa:true};
