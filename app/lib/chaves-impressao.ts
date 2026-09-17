@@ -58,7 +58,7 @@ export function criarChavesImpressao({ eventoNome, lutas }: { eventoNome: string
   }
 
   function linhaCampo(x: number, y: number, w: number) {
-    doc.setDrawColor(160);
+    doc.setDrawColor(160, 160, 160);
     doc.setLineWidth(0.22);
     doc.line(x, y, x + w, y);
   }
@@ -92,7 +92,7 @@ export function criarChavesImpressao({ eventoNome, lutas }: { eventoNome: string
 
     doc.setFillColor(24, 24, 27);
     doc.rect(0, 25.7, 297, 16.2, 'F');
-    doc.setTextColor(255);
+    doc.setTextColor(255, 255, 255);
     doc.setFont('helvetica', 'bold');
     texto(`${limpo(base.categoria) || 'Categoria'}  ·  Faixa ${limpo(base.faixa) || '—'}`, 10, 31.4, 200, 9, 1);
     doc.setFont('helvetica', 'normal');
@@ -158,7 +158,7 @@ export function criarChavesImpressao({ eventoNome, lutas }: { eventoNome: string
     doc.text('LEGENDA: BYE = sem adversário  ·  TBD = aguarda o resultado da luta anterior  ·  Número à esquerda = posição na chave', 10, 201);
     doc.text(`itatame.com.br  ·  Página ${doc.getNumberOfPages()}`, 287, 201, { align: 'right' });
     doc.setTextColor(24, 24, 27);
-    doc.setDrawColor(100);
+    doc.setDrawColor(100, 100, 100);
     doc.setLineWidth(0.25);
     return doc.getNumberOfPages();
   }
@@ -172,7 +172,7 @@ export function criarChavesImpressao({ eventoNome, lutas }: { eventoNome: string
       const ordenadas = [...grupo].sort((a, b) => Number(a.id_visual) - Number(b.id_visual));
       ordenadas.forEach((l, i) => {
         const x = 10 + i * 69;
-        doc.setFillColor(255);
+        doc.setFillColor(255, 255, 255);
         doc.setDrawColor(212, 212, 216);
         doc.roundedRect(x, 48, 65, 88, 2, 2, 'FD');
         doc.setFont('helvetica', 'bold');
@@ -243,7 +243,7 @@ export function criarChavesImpressao({ eventoNome, lutas }: { eventoNome: string
           doc.roundedRect(x, y - 4.6, 7.2, 6.2, 0.6, 0.6, 'F');
           doc.setFont('helvetica', 'bold');
           doc.setFontSize(6);
-          doc.setTextColor(255);
+          doc.setTextColor(255, 255, 255);
           doc.text(numero, x + 3.6, y - 0.5, { align: 'center' });
           doc.setTextColor(24, 24, 27);
           doc.setFont('helvetica', 'bold');
@@ -251,13 +251,13 @@ export function criarChavesImpressao({ eventoNome, lutas }: { eventoNome: string
           doc.setFont('helvetica', 'normal');
           doc.setTextColor(82, 82, 91);
           texto(no.pagina ? `Origem: página ${no.pagina}` : (no.equipe || ''), x + 8.6, y + 1.8, largura - 12, 6, 1);
-          doc.setDrawColor(120);
+          doc.setDrawColor(120, 120, 120);
           doc.line(x, y + 3.4, x + largura - 4, y + 3.4);
           return { x: x + largura - 4, y: y + 3.4 };
         }
         const filhos = no.filhos.map(desenhar);
         const y = (filhos[0].y + filhos[1].y) / 2;
-        doc.setDrawColor(90);
+        doc.setDrawColor(90, 90, 90);
         doc.setLineWidth(0.35);
         for (const f of filhos) {
           doc.line(f.x, f.y, x - 1, f.y);
