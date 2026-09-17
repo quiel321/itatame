@@ -3,18 +3,19 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { calcularResultadosChaves } from "../lib/ranking-eventos";
-import imageCompression from 'browser-image-compression';
 import QRCode from "react-qr-code";
 import { formatarTelefone } from '@/app/lib/formatar-telefone';
 import { cpfValido, formatarCpf } from '@/app/lib/validar-cpf';
 import { CategoriaCompeticao, categoriaCompativel, categoriaCompativelSemPeso, rotuloCategoria } from '@/app/lib/categorias-competicao';
 import { ChatEvento, BotaoChatInscricao, useMensagensNaoLidas, SeloNaoLidas } from '@/app/components/ChatEvento';
+import { comprimirAvatar } from '@/app/lib/comprimir-avatar';
 
 export default function PerfilPage() {
   const [perfilId, setPerfilId] = useState<number | null>(null);
 
   const [fotoUrl, setFotoUrl] = useState("");
   const [uploadingFoto, setUploadingFoto] = useState(false);
+  const [fotoAlvoId, setFotoAlvoId] = useState("");
   const [loading, setLoading] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [apagando, setApagando] = useState(false);
@@ -423,8 +424,7 @@ export default function PerfilPage() {
       setSalvando(false); return;
     }
 
-    const isNew = !formDependente.user_id;
-    const dependenteId = isNew ? crypto.randomUUID() : formDependente.user_id;
+    const dependenteId = formDependente.user_id || crypto.randomUUID();
 
     if (formDependente.cpf) {
       const { data: documento, error: documentoError } = await supabase.rpc('documento_em_uso', {
@@ -455,7 +455,8 @@ export default function PerfilPage() {
       faixa: formDependente.faixa,
       peso: formDependente.peso ? formDependente.peso : null,
       modalidade: formDependente.modalidade,
-      cidade: formDependente.cidade || cidade
+      cidade: formDependente.cidade || cidade,
+      foto_url: formDependente.foto_url || null,
     };
 
     const { error } = await supabase.from("atletas").upsert(dadosDependente, { onConflict: "user_id" });
@@ -490,44 +491,49 @@ export default function PerfilPage() {
     window.location.href = "/login";
   }
 
+  async function enviarFotoAvatar(alvoUserId: string, arquivo: File) {
+    const compressedFile = await comprimirAvatar(arquivo);
+    const fileName = `avatar-${userId}-${alvoUserId}-${Date.now()}.webp`;
+    const { error: uploadError } = await supabase.storage.from('avatars').upload(fileName, compressedFile, { contentType: 'image/webp', upsert: false });
+    if (uploadError) throw uploadError;
+    const { data: publicUrlData } = supabase.storage.from('avatars').getPublicUrl(fileName);
+    const url = publicUrlData.publicUrl;
+    await supabase.from('atletas').update({ foto_url: url }).eq('user_id', alvoUserId);
+    return url;
+  }
+
   async function handleUploadFoto(event: React.ChangeEvent<HTMLInputElement>) {
     try {
       if (!event.target.files || event.target.files.length === 0) return;
-      let file = event.target.files[0];
+      const file = event.target.files[0];
       setUploadingFoto(true);
-
-      const isHeic = file.type === "image/heic" || file.type === "image/heif" || file.name.toLowerCase().endsWith(".heic");
-      if (isHeic) {
-        try {
-          const heic2any = (await import("heic2any")).default;
-          const convertedBlob = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.8 });
-          file = new File([Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob], file.name.replace(/\.[^/.]+$/, ".jpg"), { type: "image/jpeg" });
-        } catch (err) {
-          alert("Não foi possível processar a foto."); setUploadingFoto(false); return;
-        }
-      }
-
-      if (file.size > 10 * 1024 * 1024) { alert("Foto muito grande."); setUploadingFoto(false); return; }
-
-      const options = {
-        maxSizeMB: 0.2,
-        maxWidthOrHeight: 500,
-        useWebWorker: true,
-        fileType: "image/webp"
-      };
-      const compressedFile = await imageCompression(file, options);
-
-      const fileName = `avatar-${userId}-${Date.now()}.webp`;
-      const { error: uploadError } = await supabase.storage.from('avatars').upload(fileName, compressedFile);
-      if (uploadError) throw uploadError;
-
-      const { data: publicUrlData } = supabase.storage.from('avatars').getPublicUrl(fileName);
-      await supabase.from('atletas').update({ foto_url: publicUrlData.publicUrl }).eq('user_id', userId);
-      setFotoUrl(publicUrlData.publicUrl);
-    } catch (error: any) {
+      setFotoAlvoId(userId);
+      const url = await enviarFotoAvatar(userId, file);
+      setFotoUrl(url);
+    } catch {
       alert("Erro ao enviar a foto.");
     } finally {
+      event.target.value = "";
       setUploadingFoto(false);
+      setFotoAlvoId("");
+    }
+  }
+
+  async function handleUploadFotoDependente(event: React.ChangeEvent<HTMLInputElement>, alvoUserId: string) {
+    try {
+      if (!event.target.files || event.target.files.length === 0 || !alvoUserId) return;
+      const file = event.target.files[0];
+      setUploadingFoto(true);
+      setFotoAlvoId(alvoUserId);
+      const url = await enviarFotoAvatar(alvoUserId, file);
+      setDependentes(atual => atual.map(dep => dep.user_id === alvoUserId ? { ...dep, foto_url: url } : dep));
+      setFormDependente((atual: any) => atual?.user_id === alvoUserId ? { ...atual, foto_url: url } : atual);
+    } catch {
+      alert("Erro ao enviar a foto da criança.");
+    } finally {
+      event.target.value = "";
+      setUploadingFoto(false);
+      setFotoAlvoId("");
     }
   }
 
@@ -1144,10 +1150,10 @@ export default function PerfilPage() {
                         <svg className="w-5 h-5 text-cyan-500 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
                         Família / Dependentes
                       </h3>
-                      <p className="text-zinc-400 text-xs mt-1">Gerencie os perfis de filhos e menores sob sua responsabilidade. Na inscrição do campeonato, escolha quem vai competir.</p>
+                      <p className="text-zinc-400 text-xs mt-1">Cadastre os filhos aqui. Você não precisa competir: na inscrição do campeonato escolha só a criança, ou os dois em inscrições separadas.</p>
                     </div>
                     <button
-                      onClick={() => setFormDependente({ nome: "", cpf: "", nascimento: "", sexo: "", professor: "", professor_id: "", equipe: "", academia: "", faixa: "", peso: "", modalidade: "", professorPersonalizado: false })}
+                      onClick={() => setFormDependente({ user_id: crypto.randomUUID(), nome: "", cpf: "", nascimento: "", sexo: "", professor: "", professor_id: "", equipe: "", academia: "", faixa: "", peso: "", modalidade: "", foto_url: "", professorPersonalizado: false })}
                       className="cursor-pointer bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest shadow-[0_0_15px_rgba(6,182,212,0.2)] shrink-0"
                     >
                       + Adicionar Dependente
@@ -1157,30 +1163,44 @@ export default function PerfilPage() {
                   {dependentes.length === 0 ? (
                     <div className="bg-black/30 border border-dashed border-white/10 p-10 rounded-2xl text-center">
                       <p className="text-zinc-500 text-sm font-medium">Você ainda não tem dependentes cadastrados.</p>
-                      <p className="text-zinc-600 text-[10px] mt-2 uppercase tracking-widest">Adicione seus filhos para poder inscrevê-los em eventos com a sua conta.</p>
+                      <p className="text-zinc-600 text-[10px] mt-2 uppercase tracking-widest">Você não precisa competir. Cadastre o filho e inscreva só ele no campeonato.</p>
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {dependentes.map(dep => (
-                        <div key={dep.id} className="bg-black/40 border border-white/5 rounded-2xl p-4 flex items-center justify-between group hover:border-cyan-500/30 transition-colors">
-                          <div className="flex items-center gap-4 overflow-hidden">
-                            <div className="w-12 h-12 bg-zinc-800 rounded-full flex items-center justify-center text-zinc-500 font-black text-lg shrink-0 border border-zinc-700 cursor-default">
-                              {dep.nome.charAt(0)}
-                            </div>
-                            <div className="truncate">
-                              <h4 className="text-white font-bold text-sm truncate">{dep.nome}</h4>
-                              <div className="flex items-center gap-2 mt-1">
-                                <span className={`text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${getCorFaixa(dep.faixa)}`}>{dep.faixa || "S/ Faixa"}</span>
-                                <span className="text-zinc-400 text-[10px] font-bold">{dep.nascimento ? `${calcularIdade(dep.nascimento)} Anos` : ""} • {dep.peso ? `${dep.peso}kg` : ""} • {dep.sexo ? dep.sexo : "S/ Sexo"}</span>
+                        <div key={dep.id} className="bg-black/40 border border-white/5 rounded-2xl p-4 group hover:border-cyan-500/30 transition-colors">
+                          <div className="flex items-start gap-4">
+                            <label className="relative w-16 h-16 shrink-0 cursor-pointer">
+                              <div className="w-16 h-16 rounded-full overflow-hidden bg-zinc-800 border border-zinc-700 flex items-center justify-center">
+                                {uploadingFoto && fotoAlvoId === dep.user_id ? (
+                                  <span className="text-[8px] text-cyan-400 font-bold uppercase">Enviando</span>
+                                ) : dep.foto_url ? (
+                                  <img src={dep.foto_url} alt={dep.nome} className="w-full h-full object-cover" />
+                                ) : (
+                                  <span className="text-zinc-500 font-black text-lg">{dep.nome.charAt(0)}</span>
+                                )}
                               </div>
+                              <span className="absolute -bottom-1 -right-1 bg-cyan-500 text-black text-[8px] font-black uppercase tracking-widest rounded-full px-1.5 py-0.5">Foto</span>
+                              <input type="file" accept="image/*" className="hidden" disabled={uploadingFoto} onChange={e => handleUploadFotoDependente(e, dep.user_id)} />
+                            </label>
+                            <div className="min-w-0 flex-1">
+                              <h4 className="text-white font-bold text-sm truncate">{dep.nome}</h4>
+                              <div className="flex flex-wrap items-center gap-2 mt-1">
+                                <span className={`text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${getCorFaixa(dep.faixa)}`}>{dep.faixa || "S/ Faixa"}</span>
+                                <span className="text-zinc-400 text-[10px] font-bold">{dep.nascimento ? `${calcularIdade(dep.nascimento)} anos` : ""}{dep.peso ? ` · ${dep.peso}kg` : ""}</span>
+                              </div>
+                              <p className="text-zinc-500 text-[10px] mt-1 truncate">{[dep.equipe, dep.academia].filter(Boolean).join(" · ") || "Sem equipe"}</p>
                             </div>
                           </div>
-                          <button
-                            onClick={() => setFormDependente({ ...dep, professorPersonalizado: Boolean(dep.professor) && !professoresDisponiveis.some(p => p.user_id === dep.professor_id) })}
-                            className="cursor-pointer bg-white/5 hover:bg-white/10 text-white p-2.5 rounded-lg transition-colors border border-transparent hover:border-white/10 shrink-0"
-                          >
-                            <svg className="w-4 h-4 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
-                          </button>
+                          <div className="mt-4 grid grid-cols-2 gap-2">
+                            <a href={`/atleta/${dep.user_id}`} className="rounded-xl border border-white/10 px-3 py-2 text-center text-[9px] font-black uppercase tracking-widest text-zinc-300 hover:text-white hover:border-cyan-500/40">Ver no ranking</a>
+                            <button
+                              onClick={() => setFormDependente({ ...dep, professorPersonalizado: Boolean(dep.professor) && !professoresDisponiveis.some(p => p.user_id === dep.professor_id) })}
+                              className="cursor-pointer rounded-xl border border-white/10 px-3 py-2 text-[9px] font-black uppercase tracking-widest text-zinc-300 hover:text-white"
+                            >
+                              Editar perfil
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -1192,6 +1212,23 @@ export default function PerfilPage() {
                     <h3 className="text-xl font-black text-white">{formDependente.id ? "Editar Dependente" : "Novo Dependente"}</h3>
                     <button onClick={() => setFormDependente(null)} className="cursor-pointer text-zinc-500 hover:text-white text-xs font-bold uppercase tracking-widest">Voltar</button>
                   </div>
+
+                  <label className="mb-6 flex cursor-pointer items-center gap-4 rounded-2xl border border-white/5 bg-black/40 p-4 hover:border-cyan-500/30">
+                    <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-full border border-zinc-700 bg-zinc-800">
+                      {uploadingFoto && fotoAlvoId === formDependente.user_id ? (
+                        <span className="flex h-full w-full items-center justify-center text-[8px] font-bold uppercase text-cyan-400">Enviando</span>
+                      ) : formDependente.foto_url ? (
+                        <img src={formDependente.foto_url} alt="" className="h-full w-full object-cover" />
+                      ) : (
+                        <span className="flex h-full w-full items-center justify-center text-2xl font-black text-zinc-500">{(formDependente.nome || "?").charAt(0)}</span>
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-white">Foto da criança</p>
+                      <p className="mt-1 text-[10px] text-zinc-500">Aparece no ranking e na chave. A foto é comprimida automaticamente.</p>
+                    </div>
+                    <input type="file" accept="image/*" className="hidden" disabled={uploadingFoto || !formDependente.user_id} onChange={e => handleUploadFotoDependente(e, formDependente.user_id)} />
+                  </label>
 
                   <div className="grid md:grid-cols-2 gap-3 mb-6">
                     <div className="md:col-span-2"><label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 pl-1 cursor-default">Nome Completo (Criança/Atleta) *</label><input type="text" value={formDependente.nome} onChange={(e) => setFormDependente({...formDependente, nome: e.target.value})} className="cursor-text w-full bg-black/50 border border-white/5 focus:border-cyan-500/50 outline-none rounded-xl px-3 py-2 text-xs text-white transition-colors" /></div>

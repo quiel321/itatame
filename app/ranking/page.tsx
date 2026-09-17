@@ -514,6 +514,11 @@ export default function RankingPage() {
                 <div className="bg-white/5 border border-white/10 rounded-xl p-2 text-center flex flex-col justify-center items-center"><span className="block text-xs font-extrabold text-white">{atletaSelecionado.pontos}</span><span className="block text-[7px] text-zinc-400 font-extrabold uppercase mt-0.5">Pts</span></div>
               </div>
             </div>
+            {atletaSelecionado.user_id ? (
+              <Link href={`/atleta/${atletaSelecionado.user_id}`} className="w-full rounded-xl border border-white/10 py-2.5 text-center text-[10px] font-black uppercase tracking-widest text-zinc-300 hover:text-white">
+                Ver perfil e foto
+              </Link>
+            ) : null}
           </div>
         </div>
       )}

@@ -74,7 +74,7 @@ export default function ChavesPage() {
   const [abaAtual, setAbaAtual] = useState(1) 
   const [modoAdmin, setModoAdmin] = useState(false)
   
-  const [atletasDB, setAtletasDB] = useState<any[]>([])
+  const [atletasDB, setAtletasDB] = useState<{ id?: number; nome: string; foto_url: string | null }[]>([])
 
   async function carregarCategorias() {
     const { data } = await supabase.from("chaves").select("categoria, faixa").eq("evento_id", params.id)
@@ -85,7 +85,7 @@ export default function ChavesPage() {
   }
 
   async function carregarFotos() {
-    const { data } = await supabase.from('atletas_publico').select('nome, foto_url');
+    const { data } = await supabase.from('atletas_publico').select('id, nome, foto_url');
     if (data) setAtletasDB(data);
   }
 
@@ -136,8 +136,12 @@ export default function ChavesPage() {
     return String(nome);
   }
 
-  const buscarFoto = (nomeLimpo: string) => {
-    if (!nomeLimpo || nomeLimpo === "") return null;
+  const buscarFoto = (idNumerico?: number | null, nomeLimpo?: string) => {
+    if (idNumerico) {
+      const porId = atletasDB.find(a => Number(a.id) === Number(idNumerico) && a.foto_url);
+      if (porId?.foto_url) return porId.foto_url;
+    }
+    if (!nomeLimpo) return null;
     const upper = nomeLimpo.toUpperCase();
     let match = atletasDB.find(a => a.nome && a.nome.toUpperCase() === upper && a.foto_url);
     if (!match) {
@@ -157,12 +161,13 @@ export default function ChavesPage() {
 
     const nomeBruto = slot === 1 ? luta.atleta_1 : luta.atleta_2;
     const nomeLimpo = limparNome(nomeBruto);
+    const idBruto = slot === 1 ? luta.atleta_1_id : luta.atleta_2_id;
 
     return {
       numero: slot === 1 ? luta.numero_1 : luta.numero_2,
       nome: nomeLimpo,
       equipe: nomeLimpo === "" ? "" : (slot === 1 ? luta.equipe_1 : luta.equipe_2),
-      foto: buscarFoto(nomeLimpo),
+      foto: buscarFoto(idBruto, nomeLimpo),
       luta_id: luta.id_visual,
       id_banco: luta.id,
       onAvancar: modoAdmin ? handleAvancar : undefined
@@ -176,11 +181,12 @@ export default function ChavesPage() {
 
     const nomeBruto = slot === 1 ? luta.atleta_1 : luta.atleta_2;
     const nomeLimpo = limparNome(nomeBruto);
+    const idBruto = slot === 1 ? luta.atleta_1_id : luta.atleta_2_id;
     
     return {
       nome: nomeLimpo,
       equipe: nomeLimpo === "" ? "" : (slot === 1 ? luta.equipe_1 : luta.equipe_2),
-      foto: buscarFoto(nomeLimpo),
+      foto: buscarFoto(idBruto, nomeLimpo),
       luta_id: luta.id_visual,
       id_banco: luta.id,
       onAvancar: modoAdmin ? handleAvancar : undefined
@@ -193,11 +199,12 @@ export default function ChavesPage() {
 
     const nomeBruto = slot === 1 ? luta.atleta_1 : luta.atleta_2;
     const nomeLimpo = limparNome(nomeBruto);
+    const idBruto = slot === 1 ? luta.atleta_1_id : luta.atleta_2_id;
     
     return {
       nome: nomeLimpo,
       equipe: nomeLimpo === "" ? "" : (slot === 1 ? luta.equipe_1 : luta.equipe_2),
-      foto: buscarFoto(nomeLimpo),
+      foto: buscarFoto(idBruto, nomeLimpo),
       luta_id: luta.id_visual,
       id_banco: luta.id,
       onAvancar: modoAdmin ? handleAvancar : undefined
@@ -210,7 +217,7 @@ export default function ChavesPage() {
     return {
       nome: campeao,
       equipe: "",
-      foto: buscarFoto(campeao),
+      foto: buscarFoto(lutaFinal?.vencedor_id, campeao),
       luta_id: lutaFinal?.id_visual,
       id_banco: lutaFinal?.id,
       onAvancar: modoAdmin ? handleAvancar : undefined
@@ -386,8 +393,8 @@ export default function ChavesPage() {
               {lutasMobile.map(luta => {
                 const a1 = limparNome(luta.atleta_1);
                 const a2 = limparNome(luta.atleta_2);
-                const foto1 = buscarFoto(a1);
-                const foto2 = buscarFoto(a2);
+                const foto1 = buscarFoto(luta.atleta_1_id, a1);
+                const foto2 = buscarFoto(luta.atleta_2_id, a2);
 
                 const handleClickA1 = () => modoAdmin && a1 && a1 !== "BYE" ? handleAvancar(luta.id, luta.id_visual, a1, luta.equipe_1) : undefined;
                 const handleClickA2 = () => modoAdmin && a2 && a2 !== "BYE" ? handleAvancar(luta.id, luta.id_visual, a2, luta.equipe_2) : undefined;

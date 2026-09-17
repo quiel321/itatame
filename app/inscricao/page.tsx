@@ -189,8 +189,8 @@ function FormularioInscricao() {
       const dependentes = (depsData || []) as PerfilCompetidor[];
       const pessoas = [...(titular ? [titular] : []), ...dependentes];
       setFamilia(pessoas);
-      if (titular) aplicarCompetidor(titular, equipesCarregadas, dataEventoAtual);
-      else if (dependentes[0]) aplicarCompetidor(dependentes[0], equipesCarregadas, dataEventoAtual);
+      if (dependentes[0]) aplicarCompetidor(dependentes[0], equipesCarregadas, dataEventoAtual);
+      else if (titular) aplicarCompetidor(titular, equipesCarregadas, dataEventoAtual);
 
       setLoading(false);
     }
@@ -481,9 +481,9 @@ function FormularioInscricao() {
           <section className="bg-[#0a0a0e] border border-white/5 rounded-2xl p-5 md:p-6 shadow-xl relative overflow-hidden">
             <div className="absolute top-0 left-0 w-1 h-full bg-red-600"></div>
             <h2 className="text-xs font-black text-white uppercase tracking-widest flex items-center gap-2 mb-5">Credencial do Atleta</h2>
-            {familia.length > 1 && (
+            {familia.some(pessoa => pessoa.user_id !== userId) && (
               <label className="block mb-4 text-[9px] text-zinc-500 font-bold uppercase">
-                Quem vai competir
+                Quem vai competir neste campeonato
                 <select
                   value={competidorUserId}
                   onChange={e => {
@@ -492,12 +492,14 @@ function FormularioInscricao() {
                   }}
                   className="mt-1.5 w-full bg-black border border-white/10 rounded-lg px-3 py-2.5 text-white text-xs"
                 >
-                  {familia.map(pessoa => (
-                    <option key={pessoa.user_id} value={pessoa.user_id}>
-                      {pessoa.user_id === userId ? `${pessoa.nome} (titular)` : pessoa.nome}
-                    </option>
+                  {familia.filter(pessoa => pessoa.user_id !== userId).map(pessoa => (
+                    <option key={pessoa.user_id} value={pessoa.user_id}>{pessoa.nome}</option>
+                  ))}
+                  {familia.filter(pessoa => pessoa.user_id === userId).map(pessoa => (
+                    <option key={pessoa.user_id} value={pessoa.user_id}>{pessoa.nome || "Eu"} — só se eu também competir</option>
                   ))}
                 </select>
+                <span className="mt-1.5 block text-[10px] font-medium normal-case tracking-normal text-zinc-500">O responsável não precisa se inscrever. Escolha o filho, ou faça uma inscrição para cada um.</span>
               </label>
             )}
             <div className="flex flex-col sm:flex-row gap-5 items-center sm:items-start bg-black/40 p-4 rounded-xl border border-white/5">

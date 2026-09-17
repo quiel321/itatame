@@ -260,7 +260,7 @@ function FormularioLogin() {
                 <svg className="w-3.5 h-3.5 text-cyan-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                 <p className="text-[9px] text-zinc-400 leading-relaxed">
                   <strong className="text-cyan-400 block mb-0.5">É responsável por um menor?</strong>
-                  Crie como &quot;Atleta&quot; usando os <span className="text-white">seus dados</span>. Dentro do painel você adiciona dependentes.
+                  Crie a conta com os <span className="text-white">seus dados</span>. Você não precisa competir: no painel adiciona os filhos e inscreve só eles.
                 </p>
               </div>
             </div>
@@ -274,7 +274,7 @@ function FormularioLogin() {
               <div className="bg-cyan-900/10 border border-cyan-500/20 rounded-lg p-2.5 flex items-center gap-2">
                 <svg className="w-3.5 h-3.5 text-cyan-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
                 <p className="text-[9px] text-zinc-400 leading-tight">
-                  <strong className="text-cyan-400">Responsáveis:</strong> Façam login com a conta titular para gerir dependentes.
+                  <strong className="text-cyan-400">Responsáveis:</strong> Entrem com a conta titular. O pai não atleta também inscreve o filho por aqui.
                 </p>
               </div>
             </div>
