@@ -553,6 +553,7 @@ export default function AdminPage() {
                 <Link href={`/admin/equipes?evento=${eventoSelecionado}`} className={`rounded-xl border px-3 py-2 ${preparacao.solicitacoes ? 'border-yellow-500/40 bg-yellow-500/10 text-yellow-300' : 'border-white/10 bg-black/40'}`}><strong className="block text-lg">{preparacao.solicitacoes}</strong><span className="text-[9px] uppercase text-zinc-500">Pedidos</span></Link>
               </div>
               <div className="flex flex-wrap gap-2">
+                <Link href={`/admin/eventos/${eventoSelecionado}/editar`} className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-red-300 hover:bg-red-500/20"><Edit3 size={13} className="mr-2 inline" />Editar campeonato</Link>
                 <button onClick={copiarLinkInscricao} className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-[10px] font-black uppercase tracking-widest hover:bg-white/10"><Copy size={13} className="mr-2 inline" />Copiar inscrição</button>
                 <Link href={`/evento/${eventoSelecionado}`} className="rounded-xl bg-red-600 px-4 py-3 text-[10px] font-black uppercase tracking-widest hover:bg-red-500">Ver página pública</Link>
               </div>
@@ -657,7 +658,7 @@ export default function AdminPage() {
                   href={`/admin/eventos/${eventoSelecionado}/editar`} 
                   className="cursor-pointer w-full md:w-auto shrink-0 bg-red-600/10 hover:bg-red-600/20 border border-red-500/30 text-red-500 hover:text-red-400 text-[10px] font-bold uppercase tracking-widest px-4 py-3 rounded-xl transition-all flex items-center justify-center gap-2 active:scale-95 shadow-sm"
                 >
-                  <Edit3 size={14} /> Editar Regras e Banner
+                  <Edit3 size={14} /> Editar campeonato
                 </Link>
               )}
 
