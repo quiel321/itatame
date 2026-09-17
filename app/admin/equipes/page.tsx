@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/app/lib/supabase';
 import { CompeticaoShell, campoCompeticao as campo, useEventoCompeticao } from '../_components/CompeticaoShell';
+import { encontrarEquipeSemelhante } from '@/app/lib/equipes-nome';
 
 type Equipe = { id: string; nome: string; academia: string; professor: string; cidade: string };
 type Solicitacao = { id: string; equipe_nome: string; academia: string; professor: string; cidade: string; status: 'pendente' | 'aprovada' | 'recusada'; equipe_id: string | null };
@@ -44,6 +45,8 @@ function Editor({ eventoId }: { eventoId: string }) {
   const [origens,setOrigens] = useState<{ equipe: string; equipe_id?: string | null }[]>([]);
   const [selecionadas,setSelecionadas] = useState<string[]>([]);
   const [destino,setDestino] = useState('');
+  const [origemUniao,setOrigemUniao] = useState('');
+  const [destinoUniao,setDestinoUniao] = useState('');
   const [busca,setBusca] = useState('');
 
   useEffect(() => {
@@ -107,6 +110,8 @@ function Editor({ eventoId }: { eventoId: string }) {
         cancelarEdicao();
         setMensagem('Academia atualizada.');
       } else {
+        const semelhante = encontrarEquipeSemelhante(equipes, payload.nome);
+        if (semelhante) throw new Error(`Já existe a equipe "${semelhante.nome}". Entre nela ou unifique, em vez de cadastrar outro nome.`);
         const {data,error}=await supabase.from('equipes_evento').insert({...payload,evento_id:eventoId}).select().single();
         if(error) throw new Error(error.code==='23505'?'Já existe uma equipe com este nome no campeonato.':error.message);
         setEquipes([...equipes,data]); setForm({nome:'',academia:'',professor:'',cidade:''});
@@ -160,6 +165,17 @@ function Editor({ eventoId }: { eventoId: string }) {
       if (error) setMensagem(error.message);
       else { setSolicitacoes(atual => atual.map(item => item.id === solicitacao.id ? { ...item, status: 'recusada' } : item)); setMensagem('Solicitação recusada. O professor poderá corrigir e reenviar.'); }
     }
+    setSalvando(false);
+  }
+
+  async function unirOficiais() {
+    setSalvando(true); setMensagem('');
+    try {
+      await chamarAdmin('PATCH', { tipo: 'unir', origemId: origemUniao, destinoId: destinoUniao });
+      await recarregar();
+      setOrigemUniao(''); setDestinoUniao('');
+      setMensagem('Equipes unificadas. Inscrições, chaves e ranking passam a usar o nome oficial.');
+    } catch (error) { setMensagem((error as Error).message); }
     setSalvando(false);
   }
 
@@ -246,6 +262,28 @@ function Editor({ eventoId }: { eventoId: string }) {
         })}</div>
       </section>
     </div>
+
+    {equipes.length > 1 && (
+      <section className="mt-6 rounded-2xl border border-yellow-500/20 bg-yellow-500/5 p-5">
+        <h2 className="font-bold">Unificar equipes duplicadas</h2>
+        <p className="mt-2 text-sm text-zinc-400">Se alguém cadastrou LEGADO e outra pessoa cadastrou LEGADO JIU, junte as duas no nome oficial. Inscrições e chaves passam a contar juntas no ranking.</p>
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          <label className="block text-xs">Equipe digitada errado
+            <select className={campo+' mt-1'} value={origemUniao} onChange={e=>setOrigemUniao(e.target.value)}>
+              <option value="">Selecione</option>
+              {equipes.filter(equipe => equipe.id !== destinoUniao).map(equipe => <option key={equipe.id} value={equipe.id}>{equipe.nome}</option>)}
+            </select>
+          </label>
+          <label className="block text-xs">Nome oficial que permanece
+            <select className={campo+' mt-1'} value={destinoUniao} onChange={e=>setDestinoUniao(e.target.value)}>
+              <option value="">Selecione</option>
+              {equipes.filter(equipe => equipe.id !== origemUniao).map(equipe => <option key={equipe.id} value={equipe.id}>{equipe.nome}</option>)}
+            </select>
+          </label>
+        </div>
+        <button disabled={salvando||!origemUniao||!destinoUniao} onClick={unirOficiais} className="mt-4 rounded-xl bg-red-600 px-4 py-3 text-sm font-bold disabled:opacity-40">Unificar no ranking</button>
+      </section>
+    )}
 
     <details className="mt-6 rounded-2xl border border-white/10 p-5">
       <summary className="cursor-pointer font-bold">Vincular inscrições antigas a uma equipe oficial <span className="ml-2 text-xs text-zinc-500">{nomesNaoVinculados.length} nomes pendentes</span></summary>

@@ -23,7 +23,10 @@ export async function PATCH(request: Request) {
   const academia = limpar(body.academia);
   const professor = limpar(body.professor);
   const cidade = limpar(body.cidade);
-  if (!eventoId || !tipo || !id || [nome, academia, professor, cidade].some(item => item.length > 120)) {
+  if (!eventoId || !tipo || [nome, academia, professor, cidade].some(item => item.length > 120)) {
+    return NextResponse.json({ error: "Informe os dados da equipe ou da academia (até 120 caracteres)." }, { status: 400 });
+  }
+  if (tipo !== "unir" && !id) {
     return NextResponse.json({ error: "Informe os dados da equipe ou da academia (até 120 caracteres)." }, { status: 400 });
   }
   const supabase = await autorizarOrganizador(eventoId, usuario.id);
@@ -63,6 +66,29 @@ export async function PATCH(request: Request) {
         await supabase.from("equipes_evento").update({ academia, professor, cidade }).eq("id", equipeId).eq("evento_id", eventoId);
       }
     }
+    return NextResponse.json({ success: true });
+  }
+
+  if (tipo === "unir") {
+    const origemId = limpar(body.origemId);
+    const destinoId = limpar(body.destinoId);
+    if (!origemId || !destinoId || origemId === destinoId) {
+      return NextResponse.json({ error: "Escolha duas equipes diferentes para unificar." }, { status: 400 });
+    }
+    const [{ data: origem }, { data: destino }] = await Promise.all([
+      supabase.from("equipes_evento").select("id,nome").eq("id", origemId).eq("evento_id", eventoId).maybeSingle(),
+      supabase.from("equipes_evento").select("id,nome").eq("id", destinoId).eq("evento_id", eventoId).maybeSingle(),
+    ]);
+    if (!origem || !destino) return NextResponse.json({ error: "Equipe não encontrada." }, { status: 404 });
+    await Promise.all([
+      supabase.from("inscricoes").update({ equipe_id: destino.id, equipe: destino.nome }).eq("evento_id", eventoId).eq("equipe_id", origem.id),
+      supabase.from("inscricoes").update({ equipe_id: destino.id, equipe: destino.nome }).eq("evento_id", eventoId).eq("equipe", origem.nome),
+      supabase.from("solicitacoes_equipe_evento").update({ equipe_id: destino.id, equipe_nome: destino.nome, atualizado_em: new Date().toISOString() }).eq("evento_id", eventoId).eq("equipe_id", origem.id),
+      supabase.from("chaves").update({ equipe_1: destino.nome }).eq("evento_id", eventoId).eq("equipe_1", origem.nome),
+      supabase.from("chaves").update({ equipe_2: destino.nome }).eq("evento_id", eventoId).eq("equipe_2", origem.nome),
+    ]);
+    const { error } = await supabase.from("equipes_evento").delete().eq("id", origem.id).eq("evento_id", eventoId);
+    if (error) return NextResponse.json({ error: "As inscrições foram unificadas, mas a equipe duplicada não pôde ser removida." }, { status: 409 });
     return NextResponse.json({ success: true });
   }
 

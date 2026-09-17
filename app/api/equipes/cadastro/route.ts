@@ -2,9 +2,7 @@ import { NextResponse } from "next/server";
 import { autenticarRequest } from "@/app/lib/api-auth";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
 
-function nomesIguais(a: string, b: string) {
-  return a.trim().toLocaleLowerCase("pt-BR") === b.trim().toLocaleLowerCase("pt-BR");
-}
+import { encontrarEquipeSemelhante } from "@/app/lib/equipes-nome";
 
 export async function POST(request: Request) {
   const usuario = await autenticarRequest(request);
@@ -42,7 +40,7 @@ export async function POST(request: Request) {
 
   const destino = equipeIdInformada
     ? (equipesEvento || []).find(item => item.id === equipeIdInformada) || null
-    : (equipesEvento || []).find(item => nomesIguais(item.nome, nome)) || null;
+    : encontrarEquipeSemelhante(equipesEvento || [], nome);
   if (equipeIdInformada && !destino) {
     return NextResponse.json({ error: "Esta equipe não está neste campeonato." }, { status: 404 });
   }
@@ -67,7 +65,7 @@ export async function POST(request: Request) {
   if (equipeError) {
     if (equipeError.code === "23505") {
       const { data: existentes } = await supabase.from("equipes_evento").select("id,nome").eq("evento_id", eventoId);
-      const concorrente = (existentes || []).find(item => nomesIguais(item.nome, nome));
+      const concorrente = encontrarEquipeSemelhante(existentes || [], nome);
       if (concorrente) {
         const erroVinculo = await vincularProfessor(supabase, {
           anteriorId: anterior?.id,

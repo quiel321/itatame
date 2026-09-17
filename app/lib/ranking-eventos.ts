@@ -1,6 +1,16 @@
-  export function calcularResultadosChaves(lutas: any[], regrasPorEvento?: Record<string, any>) {
-    const rankingEquipes: Record<string, { ouro: number, prata: number, bronze: number, pts: number }> = {};
+import { chaveRankingEquipe, nomeExibicaoEquipe } from './equipes-nome';
+
+export function calcularResultadosChaves(lutas: any[], regrasPorEvento?: Record<string, any>) {
+    const rankingEquipes: Record<string, { nome: string, ouro: number, prata: number, bronze: number, pts: number }> = {};
     const rankingAtletas: Record<string, { ouro: number, prata: number, bronze: number, vitorias: number, lutas: number, vitorias_wo: number, pts: number, nome: string, equipe: string }> = {};
+
+    function registrarEquipe(nomeBruto?: string | null) {
+      const chave = chaveRankingEquipe(nomeBruto);
+      if (!chave) return '';
+      if (!rankingEquipes[chave]) rankingEquipes[chave] = { nome: String(nomeBruto || '').trim(), ouro: 0, prata: 0, bronze: 0, pts: 0 };
+      else rankingEquipes[chave].nome = nomeExibicaoEquipe(rankingEquipes[chave].nome, nomeBruto);
+      return chave;
+    }
 
     lutas.forEach(luta => {
       if (luta.status_luta !== 'concluida') return;
@@ -58,47 +68,47 @@
 
       if (isWO) rankingAtletas[vId].vitorias_wo += 1;
 
-      if (equipeVencedor && !rankingEquipes[equipeVencedor]) rankingEquipes[equipeVencedor] = { ouro: 0, prata: 0, bronze: 0, pts: 0 };
-      if (equipePerdedora && perdedorEhCompetidorReal && !rankingEquipes[equipePerdedora]) rankingEquipes[equipePerdedora] = { ouro: 0, prata: 0, bronze: 0, pts: 0 };
+      const chaveEquipeVencedor = registrarEquipe(equipeVencedor);
+      const chaveEquipePerdedora = perdedorEhCompetidorReal ? registrarEquipe(equipePerdedora) : '';
 
       if (ehFinal) {
         rankingAtletas[vId].ouro += 1;
         if(devePontuar) rankingAtletas[vId].pts += ptsOuro;
         
-        if (equipeVencedor) {
-          rankingEquipes[equipeVencedor].ouro += 1;
-          if(devePontuar) rankingEquipes[equipeVencedor].pts += ptsOuro;
+        if (chaveEquipeVencedor) {
+          rankingEquipes[chaveEquipeVencedor].ouro += 1;
+          if(devePontuar) rankingEquipes[chaveEquipeVencedor].pts += ptsOuro;
         }
         
         if (perdedorEhCompetidorReal) {
             rankingAtletas[perdedorId].prata += 1;
             rankingAtletas[perdedorId].pts += ptsPrata; 
-            if (equipePerdedora) {
-              rankingEquipes[equipePerdedora].prata += 1;
-              rankingEquipes[equipePerdedora].pts += ptsPrata;
+            if (chaveEquipePerdedora) {
+              rankingEquipes[chaveEquipePerdedora].prata += 1;
+              rankingEquipes[chaveEquipePerdedora].pts += ptsPrata;
             }
-        }
+          }
       } 
       else if (ehSemifinal) {
           if(devePontuar) rankingAtletas[vId].pts += ptsVitoriaNormal;
-          if (equipeVencedor && devePontuar) rankingEquipes[equipeVencedor].pts += ptsVitoriaNormal;
+          if (chaveEquipeVencedor && devePontuar) rankingEquipes[chaveEquipeVencedor].pts += ptsVitoriaNormal;
 
           if (perdedorEhCompetidorReal) {
               rankingAtletas[perdedorId].bronze += 1;
               rankingAtletas[perdedorId].pts += ptsBronze;
-              if (equipePerdedora) {
-                rankingEquipes[equipePerdedora].bronze += 1;
-                rankingEquipes[equipePerdedora].pts += ptsBronze;
+              if (chaveEquipePerdedora) {
+                rankingEquipes[chaveEquipePerdedora].bronze += 1;
+                rankingEquipes[chaveEquipePerdedora].pts += ptsBronze;
               }
           }
       } else {
           if(devePontuar) rankingAtletas[vId].pts += ptsVitoriaNormal;
-          if (equipeVencedor && devePontuar) rankingEquipes[equipeVencedor].pts += ptsVitoriaNormal;
+          if (chaveEquipeVencedor && devePontuar) rankingEquipes[chaveEquipeVencedor].pts += ptsVitoriaNormal;
       }
     });
 
     return {
-      equipes: Object.entries(rankingEquipes).map(([nome, dados]) => ({ nome, ...dados })),
+      equipes: Object.values(rankingEquipes),
       atletas: Object.entries(rankingAtletas).map(([atleta_id, dados]) => ({ atleta_id, ...dados }))
     };
   }

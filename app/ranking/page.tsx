@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabase";
 import Link from "next/link";
 import { ChevronRight, Medal, Search, Trophy, Clock } from "lucide-react";
 import { calcularResultadosChaves, isCompetidorReal } from "../lib/ranking-eventos";
+import { chaveRankingEquipe, nomeExibicaoEquipe } from "../lib/equipes-nome";
 
 export default function RankingPage() {
   const [loading, setLoading] = useState(true);
@@ -191,15 +192,16 @@ export default function RankingPage() {
     } else {
       const mapaEquipes: Record<string, any> = {};
       atletasProcessados.forEach(atleta => {
-        const nomeEquipe = atleta.equipe ? atleta.equipe.trim().toUpperCase() : "";
-        if (!nomeEquipe || nomeEquipe === "SEM EQUIPE") return;
-        if (!mapaEquipes[nomeEquipe]) mapaEquipes[nomeEquipe] = { nome: nomeEquipe, pontos: 0, ouro: 0, prata: 0, bronze: 0, vitorias: 0, lutas: 0 };
-        mapaEquipes[nomeEquipe].pontos += atleta.pontos;
-        mapaEquipes[nomeEquipe].ouro += atleta.ouro;
-        mapaEquipes[nomeEquipe].prata += atleta.prata;
-        mapaEquipes[nomeEquipe].bronze += atleta.bronze;
-        mapaEquipes[nomeEquipe].vitorias += atleta.vitorias;
-        mapaEquipes[nomeEquipe].lutas += atleta.lutas;
+        const chave = chaveRankingEquipe(atleta.equipe);
+        if (!chave) return;
+        if (!mapaEquipes[chave]) mapaEquipes[chave] = { nome: String(atleta.equipe || '').trim(), pontos: 0, ouro: 0, prata: 0, bronze: 0, vitorias: 0, lutas: 0 };
+        else mapaEquipes[chave].nome = nomeExibicaoEquipe(mapaEquipes[chave].nome, atleta.equipe);
+        mapaEquipes[chave].pontos += atleta.pontos;
+        mapaEquipes[chave].ouro += atleta.ouro;
+        mapaEquipes[chave].prata += atleta.prata;
+        mapaEquipes[chave].bronze += atleta.bronze;
+        mapaEquipes[chave].vitorias += atleta.vitorias;
+        mapaEquipes[chave].lutas += atleta.lutas;
       });
       setRankingEquipes(Object.values(mapaEquipes).sort((a: any, b: any) => {
         if (b.pontos !== a.pontos) return b.pontos - a.pontos;

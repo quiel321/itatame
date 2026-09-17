@@ -9,9 +9,7 @@ type Solicitacao = { id: string; status: 'pendente' | 'aprovada' | 'recusada'; e
 type EquipeEvento = { id: string; nome: string; academia: string; professor: string; cidade: string };
 const campo = 'mt-1 w-full rounded-xl border border-white/10 bg-black px-3 py-3 text-sm text-white outline-none focus:border-yellow-500';
 
-function nomeIgual(a: string, b: string) {
-  return a.trim().toLocaleLowerCase('pt-BR') === b.trim().toLocaleLowerCase('pt-BR');
-}
+import { encontrarEquipeSemelhante } from '@/app/lib/equipes-nome';
 
 export default function SolicitarEquipeEventoPage() {
   const params = useParams<{ id: string }>();
@@ -71,7 +69,7 @@ export default function SolicitarEquipeEventoPage() {
     return filtradas.slice(0, 12);
   }, [equipes, termoBusca]);
   const equipeEscolhida = equipes.find(equipe => equipe.id === equipeEscolhidaId) || null;
-  const equipePeloNome = equipes.find(equipe => nomeIgual(equipe.nome, form.equipe_nome)) || null;
+  const equipePeloNome = encontrarEquipeSemelhante(equipes, form.equipe_nome);
   const equipeDestino = equipeEscolhida || equipePeloNome;
 
   async function enviar(e: React.FormEvent) {
@@ -119,7 +117,11 @@ export default function SolicitarEquipeEventoPage() {
         <input maxLength={120} className={campo} placeholder="Digite para buscar ou clique para ver as equipes" value={busca} onChange={e => { setBusca(e.target.value); setListaAberta(true); if (equipeEscolhidaId) setEquipeEscolhidaId(''); }} onFocus={() => setListaAberta(true)} onBlur={() => window.setTimeout(() => setListaAberta(false), 120)} />
       </label>
       {listaAberta && !equipeEscolhida && <ul className="overflow-hidden rounded-xl border border-white/10">{sugestoes.length ? sugestoes.map(equipe => <li key={equipe.id} className="border-t border-white/10 first:border-t-0"><button type="button" onMouseDown={e => e.preventDefault()} onClick={() => { setEquipeEscolhidaId(equipe.id); setForm({ ...form, equipe_nome: equipe.nome }); setBusca(equipe.nome); setListaAberta(false); }} className="flex w-full flex-col items-start gap-0.5 px-3 py-3 text-left hover:bg-white/5"><span className="text-sm font-bold text-white">{equipe.nome}</span><span className="text-xs text-zinc-500">{[equipe.academia, equipe.cidade].filter(Boolean).join(' · ') || 'Entrar nesta equipe'}</span></button></li>) : <li className="px-3 py-3 text-xs text-zinc-500">Nenhuma equipe encontrada. Cadastre um nome novo abaixo.</li>}</ul>}
-      {equipeDestino && <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-3 text-xs text-emerald-100">Esta equipe já está no campeonato. Informe sua academia e entre nela, sem criar outro nome.</div>}
+      {equipeDestino && <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-3 text-xs text-emerald-100">
+        {equipeDestino.nome.toLocaleLowerCase('pt-BR') === form.equipe_nome.trim().toLocaleLowerCase('pt-BR')
+          ? 'Esta equipe já está no campeonato. Informe sua academia e entre nela, sem criar outro nome.'
+          : `"${form.equipe_nome}" parece a mesma equipe que "${equipeDestino.nome}". Entre nela para não duplicar no ranking.`}
+      </div>}
       <label className="block text-xs">Nome da equipe<input required maxLength={120} className={campo} placeholder="Escolha na busca ou digite um nome novo" value={form.equipe_nome} onChange={e => { setForm({ ...form, equipe_nome: e.target.value }); setEquipeEscolhidaId(''); }} /></label>
       <label className="block text-xs">Academia ou unidade<input maxLength={120} className={campo} value={form.academia} onChange={e => setForm({ ...form, academia: e.target.value })} /></label>
       <label className="block text-xs">Professor responsável<input required maxLength={120} className={campo} value={form.professor} onChange={e => setForm({ ...form, professor: e.target.value })} /></label>
