@@ -363,7 +363,7 @@ export default function EventoForm({ modo, eventoId }: EventoFormProps) {
       <div className="mx-auto max-w-7xl space-y-5">
         <header className="flex flex-col gap-3 border-b border-white/10 pb-4 md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-3">
-            <button type="button" onClick={() => router.back()} className="rounded-lg border border-white/10 bg-white/5 p-3 text-zinc-300 hover:bg-white/10" aria-label="Voltar">
+            <button type="button" onClick={() => router.push("/admin")} className="rounded-lg border border-white/10 bg-white/5 p-3 text-zinc-300 hover:bg-white/10" aria-label="Voltar">
               <ArrowLeft size={18} />
             </button>
             <div>

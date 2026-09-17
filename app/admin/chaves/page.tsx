@@ -220,7 +220,7 @@ export default function GerarChavesPage() {
       <div className="w-full max-w-xl mx-auto relative z-10">
         
         <div className="flex items-center gap-3 mb-6">
-          <button onClick={() => router.back()} className="cursor-pointer p-2.5 bg-white/5 hover:bg-white/10 rounded-lg transition-colors text-zinc-400 hover:text-white border border-white/5 shrink-0">
+          <button onClick={() => router.push("/admin")} className="cursor-pointer p-2.5 bg-white/5 hover:bg-white/10 rounded-lg transition-colors text-zinc-400 hover:text-white border border-white/5 shrink-0">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
           </button>
           <div>

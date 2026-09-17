@@ -2,12 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 import { supabase } from "@/app/lib/supabase"; // Ajuste o caminho se necessário
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const [autorizado, setAutorizado] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
+  const noPainelInicial = pathname === "/admin";
 
   useEffect(() => {
     async function verificarAcesso() {
@@ -56,5 +59,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   // Acesso Liberado! Mostra a página do painel.
-  return <>{children}</>;
+  return (
+    <>
+      {!noPainelInicial && (
+        <div className="sticky top-[60px] z-40 border-b border-white/10 bg-[#050505]/95 px-4 py-3 backdrop-blur md:top-[65px] md:px-6">
+          <Link href="/admin" className="inline-flex items-center gap-2 text-zinc-400 transition-colors hover:text-white">
+            <ArrowLeft size={18} />
+            <span className="text-sm font-bold">Voltar ao painel</span>
+          </Link>
+        </div>
+      )}
+      {children}
+    </>
+  );
 }

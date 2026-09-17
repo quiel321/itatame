@@ -19,6 +19,7 @@ export default function LoginOrganizadorPage() {
   const [mostrarPendencia, setMostrarPendencia] = useState(false);
   const [mostrarSenha, setMostrarSenha] = useState(false);
   const [emailPendente, setEmailPendente] = useState(false);
+  const [restaurandoSessao, setRestaurandoSessao] = useState(true);
 
   // CAMPOS DO FORMULÁRIO
   const [email, setEmail] = useState("");
@@ -35,11 +36,44 @@ export default function LoginOrganizadorPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const falha = new URLSearchParams(window.location.hash.slice(1)).get('error_code');
-    queueMicrotask(() => {
-      if (falha) { setErro('O link de confirmação não pôde ser usado ou expirou. Informe o e-mail e solicite outro abaixo.'); setEmailPendente(true); }
-      else if (params.get('email_confirmado') === '1') setSucesso('E-mail confirmado. Entre com sua senha para acompanhar a homologação.');
-    });
-  }, []);
+    let ativo = true;
+
+    async function restaurarSessao() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token) {
+          const resposta = await fetch('/api/organizador/acesso', {
+            headers: { Authorization: `Bearer ${session.access_token}` },
+            cache: 'no-store',
+          });
+          const acesso = await resposta.json() as { destino?: string };
+          if (!ativo) return;
+          if (acesso.destino === 'admin') {
+            router.replace('/admin');
+            return;
+          }
+          if (acesso.destino === 'super-admin') {
+            router.replace('/super-admin');
+            return;
+          }
+          if (acesso.destino === 'pendente') setMostrarPendencia(true);
+        }
+      } catch {
+        // Sem sessão válida, segue para o formulário de login.
+      }
+      if (!ativo) return;
+      if (falha) {
+        setErro('O link de confirmação não pôde ser usado ou expirou. Informe o e-mail e solicite outro abaixo.');
+        setEmailPendente(true);
+      } else if (params.get('email_confirmado') === '1') {
+        setSucesso('E-mail confirmado. Entre com sua senha para acompanhar a homologação.');
+      }
+      setRestaurandoSessao(false);
+    }
+
+    void restaurarSessao();
+    return () => { ativo = false; };
+  }, [router]);
 
   async function reenviarConfirmacao() {
     setLoading(true); setErro(''); setSucesso('');
@@ -176,6 +210,16 @@ export default function LoginOrganizadorPage() {
   const whatsappNumber = "5565993059729";
   const whatsappMessage = encodeURIComponent("Olá! Acabei de registar a minha organização no iTatame e gostaria de solicitar a libertação do meu painel administrativo.");
   const whatsappLink = `https://wa.me/${whatsappNumber}?text=${whatsappMessage}`;
+
+  if (restaurandoSessao) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[#050505]">
+        <span className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-zinc-500">
+          Abrindo o painel...
+        </span>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-[#050505] flex justify-center p-4 py-8 md:p-8 relative overflow-x-hidden font-sans">

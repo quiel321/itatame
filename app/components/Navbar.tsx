@@ -89,7 +89,7 @@ export default function Navbar() {
           <div className="hidden md:flex items-center gap-6 text-xs font-medium">
             
             {/* A EXCLUSIVIDADE: O Único elemento com borda dourada VIP */}
-            <Link href="/login-organizador" className="flex items-center gap-1.5 border border-yellow-500/40 bg-yellow-500/5 text-yellow-500 hover:bg-yellow-500/10 hover:border-yellow-500/60 px-4 py-2 rounded-lg font-black uppercase tracking-widest text-[10px] transition-all shadow-[0_0_15px_rgba(234,179,8,0.05)]">
+            <Link href="/admin" className="flex items-center gap-1.5 border border-yellow-500/40 bg-yellow-500/5 text-yellow-500 hover:bg-yellow-500/10 hover:border-yellow-500/60 px-4 py-2 rounded-lg font-black uppercase tracking-widest text-[10px] transition-all shadow-[0_0_15px_rgba(234,179,8,0.05)]">
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
               Organizador
             </Link>
@@ -145,7 +145,7 @@ export default function Navbar() {
             <span className="text-[9px] font-medium">Placar</span>
           </Link>
 
-          <Link href="/login-organizador" className="flex flex-col items-center justify-center flex-1 gap-1 text-yellow-600 hover:text-yellow-400 transition-colors relative">
+          <Link href="/admin" className="flex flex-col items-center justify-center flex-1 gap-1 text-yellow-600 hover:text-yellow-400 transition-colors relative">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
             <span className="text-[9px] font-bold">Org.</span>
           </Link>

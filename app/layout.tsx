@@ -122,7 +122,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
                     Falar com a Equipe
                   </a>
                   
-                  <Link href="/login-organizador" className="flex items-center justify-center gap-2 w-full bg-white/5 hover:bg-white/10 border border-white/10 text-white py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all">
+                  <Link href="/admin" className="flex items-center justify-center gap-2 w-full bg-white/5 hover:bg-white/10 border border-white/10 text-white py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all">
                     Portal do Organizador
                   </Link>
                 </div>
