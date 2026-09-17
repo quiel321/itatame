@@ -23,7 +23,7 @@ export default function PerfilPublicoAtleta() {
       // 1. Busca os dados do Atleta
       const { data: atlData } = await supabase
         .from("atletas_publico")
-        .select("id, user_id, nome, foto_url, faixa, equipe, academia, professor, cidade, nascimento, peso, ouro, prata, bronze, vitorias, derrotas, vitorias_wo")
+        .select("id, user_id, nome, foto_url, faixa, equipe, academia, professor, cidade, nascimento, peso, ouro, prata, bronze, vitorias, derrotas, vitorias_wo, lutas")
         .eq("user_id", userId)
         .single();
 
@@ -54,7 +54,7 @@ export default function PerfilPublicoAtleta() {
         const resultadoChaves = calcularResultadosChaves((lutasAtletaData || []) as any[]);
         const estatisticaAtleta = resultadoChaves.atletas.find((item) => item.atleta_id && String(item.atleta_id) === String(atlData.id));
         const numeroAtleta = (valor: any) => Number(valor || 0);
-        const vitoriasSalvas = numeroAtleta(atlData.vitorias ?? atlData.vitorias_n ?? atlData["vit\u00f3rias"] ?? atlData["vit\u00f3rias_n"]);
+        const vitoriasSalvas = numeroAtleta(atlData.vitorias);
 
         setEstatisticas({
           ouro: Math.max(numeroAtleta(estatisticaAtleta?.ouro), numeroAtleta(atlData.ouro)),

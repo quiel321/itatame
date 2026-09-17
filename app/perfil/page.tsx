@@ -237,7 +237,7 @@ export default function PerfilPage() {
       );
 
       const numeroPerfil = (valor: any) => Number(valor || 0);
-      const vitoriasSalvas = numeroPerfil(perfilData.vitorias ?? perfilData.vitorias_n ?? perfilData["vit\u00f3rias"] ?? perfilData["vit\u00f3rias_n"]);
+      const vitoriasSalvas = numeroPerfil(perfilData.vitorias);
 
       setStats({
         eventos: totalEventosParticipados,
