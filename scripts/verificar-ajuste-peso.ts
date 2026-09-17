@@ -18,4 +18,6 @@ assert.equal(categoriaCompativelSemPeso(base, { ...inscricao, idade: 9 }), false
 assert.equal(categoriaCompativelSemPeso(base, { ...inscricao, sexo: 'Masculino' }), false);
 assert.equal(categoriaMaisLeve(null, base), true);
 assert.equal(categoriaMaisLeve(base, atual), false);
+assert.equal(categoriaCompativel(atual, inscricao), true);
+assert.equal(categoriaCompativel(atual, { ...inscricao, peso: 27.5 }), false);
 console.log('Ajuste de peso infantil: limites, idade, sexo e direção verificados.');

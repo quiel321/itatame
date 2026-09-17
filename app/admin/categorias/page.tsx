@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/app/lib/supabase';
 import { rotuloCategoria, validarCategoria, type CategoriaCompeticao } from '@/app/lib/categorias-competicao';
-import { fonteCategoriasIBJJF, modelosPesoIBJJF } from '@/app/lib/categorias-ibjjf';
+import { fonteCategoriasIBJJF, modelosPesoIBJJF, opcoesFaixaCategoria } from '@/app/lib/categorias-ibjjf';
 import { CompeticaoShell, campoCompeticao as campo, useEventoCompeticao } from '../_components/CompeticaoShell';
 
 type ModoCadastro = 'modelo' | 'copiar' | 'manual';
@@ -170,7 +170,13 @@ function Editor({ eventoId }: { eventoId: string }) {
   }
 
   const seletorBase = <>
-    {(['modalidade','faixa'] as const).map(k => <label key={k} className="block text-xs capitalize">{k}<input required maxLength={80} className={campo + ' mt-1'} value={form[k]} onChange={e => setForm({ ...form, [k]: e.target.value })} />{k === 'faixa' && <span className="mt-1 block text-zinc-400">A faixa aparecerá automaticamente na descrição da categoria.</span>}</label>)}
+    <label className="block text-xs">Modalidade<input required maxLength={80} className={campo + ' mt-1'} value={form.modalidade} onChange={e => setForm({ ...form, modalidade: e.target.value })} /></label>
+    <label className="block text-xs">Faixa
+      <select required className={campo + ' mt-1'} value={form.faixa} onChange={e => setForm({ ...form, faixa: e.target.value })}>
+        {opcoesFaixaCategoria(form.faixa).map(faixa => <option key={faixa} value={faixa}>{faixa}</option>)}
+      </select>
+      <span className="mt-1 block text-zinc-400">A faixa aparecerá automaticamente na descrição da categoria.</span>
+    </label>
     <label className="block text-xs">Sexo competitivo<select className={campo + ' mt-1'} value={form.sexo} onChange={e => setForm({ ...form, sexo: e.target.value })}><option>Masculino</option><option>Feminino</option></select></label>
     <div className="grid grid-cols-2 gap-3">{(['idade_min','idade_max','tempo_minutos'] as const).map(k => <label key={k} className="text-xs">{{ idade_min:'Idade mínima', idade_max:'Idade máxima', tempo_minutos:'Tempo de luta' }[k]}<input required type="number" min={k.startsWith('idade') ? 4 : 1} max={k.startsWith('idade') ? 100 : 30} step="1" className={campo + ' mt-1'} value={form[k]} onChange={e => setForm({ ...form, [k]: Number(e.target.value) })} /></label>)}</div>
   </>;

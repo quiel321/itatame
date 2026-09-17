@@ -12,7 +12,8 @@ import {
   type TomEtapaEvento,
 } from "@/app/lib/evento-etapas";
 import Link from "next/link";
-import { valorAddonAbsoluto } from "@/app/lib/valor-inscricao";
+import { formatarValorInscricao, valorAddonAbsoluto, valorComboPesoAbsoluto } from "@/app/lib/valor-inscricao";
+import { ChatEvento } from "@/app/components/ChatEvento";
 
 const estiloEtapa: Record<TomEtapaEvento, { badge: string; aviso: string; ponto: string }> = {
   cyan: { badge: "border-cyan-400/30 bg-cyan-500/15 text-cyan-300", aviso: "border-cyan-500/25 bg-cyan-500/[0.07]", ponto: "bg-cyan-400" },
@@ -102,6 +103,8 @@ export default function EventoDetalhesPage() {
   const formatarDataHora = (dataISO: string) => formatarDataHoraEvento(dataISO, false, evento.estado);
 
   const totalInscritos = inscricoes.length;
+  const limiteVagas = Math.max(1, Number(evento.limite_vagas) || 500);
+  const vagasEsgotadas = totalInscritos >= limiteVagas;
 
   // O mesmo motor temporal alimenta o card público, os avisos e esta página.
   const agora = new Date();
@@ -149,8 +152,8 @@ export default function EventoDetalhesPage() {
                   <span className="text-zinc-500 text-[9px] md:text-[10px] font-black uppercase tracking-widest border border-white/10 px-2 md:px-3 py-1 rounded-full bg-white/5">
                     {evento.descricao || "Evento Esportivo"}
                   </span>
-                  <span className="text-red-500 font-bold text-[10px] md:text-xs flex items-center gap-1">
-                    🔥 {totalInscritos} / {evento.limite_vagas || 500} vagas
+                  <span className={`font-bold text-[10px] md:text-xs flex items-center gap-1 ${vagasEsgotadas ? "text-amber-400" : "text-red-500"}`}>
+                    🔥 {totalInscritos} / {limiteVagas} vagas{vagasEsgotadas ? " · esgotadas" : ""}
                   </span>
                 </div>
                 <Link href={`/evento/${evento.id}/equipe`} className="text-[9px] md:text-[10px] font-bold uppercase tracking-widest text-zinc-500 hover:text-yellow-400 transition-colors">
@@ -192,10 +195,19 @@ export default function EventoDetalhesPage() {
               </div>
             </div>
 
+            {vagasEsgotadas && etapaAtual.inscricoesAbertas && (
+              <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 md:mb-5 md:p-4">
+                <p className="text-[9px] font-black uppercase tracking-[0.18em] text-amber-300">Inscrições encerradas</p>
+                <p className="mt-1 text-xs font-medium leading-relaxed text-amber-50/90 md:text-sm">
+                  As vagas deste campeonato esgotaram ({totalInscritos}/{limiteVagas}). Novas inscrições ficam bloqueadas. Se o organizador ampliar o limite, a inscrição volta a abrir.
+                </p>
+              </div>
+            )}
+
             <div className="flex flex-wrap items-center gap-2 md:gap-3">
-              {!etapaAtual.inscricoesAbertas ? (
+              {!etapaAtual.inscricoesAbertas || vagasEsgotadas ? (
                 <button disabled className="bg-zinc-800 text-zinc-500 font-black uppercase tracking-widest text-[10px] md:text-xs px-3 py-2.5 md:px-6 md:py-3.5 rounded-lg text-center flex-1 md:flex-none cursor-not-allowed border border-white/5">
-                  {etapaAtual.codigo === "EM_BREVE" ? "Inscrições em breve" : "Inscrições fechadas"}
+                  {etapaAtual.codigo === "EM_BREVE" ? "Inscrições em breve" : vagasEsgotadas && etapaAtual.inscricoesAbertas ? "Vagas esgotadas" : "Inscrições fechadas"}
                 </button>
               ) : (
                 evento.link_inscricao ? (
@@ -229,6 +241,8 @@ export default function EventoDetalhesPage() {
               <Link href={`/evento/${evento.id}/publico`} className="bg-white/5 hover:bg-white/10 border border-white/10 text-white font-bold uppercase tracking-widest text-[10px] md:text-xs px-3 py-2.5 md:px-6 md:py-3.5 rounded-lg transition-all text-center flex-1 md:flex-none">
                 Chaves e Resultados
               </Link>
+
+              <ChatEvento eventoId={evento.id} compacto />
               
               {evento.regulamento_url && (
                 <a href={evento.regulamento_url} target="_blank" rel="noopener noreferrer" className="text-zinc-400 hover:text-white font-bold uppercase tracking-widest text-[10px] md:text-xs px-3 py-2.5 md:px-4 md:py-3.5 transition-all flex items-center justify-center gap-1.5 w-full md:w-auto">
@@ -266,51 +280,33 @@ export default function EventoDetalhesPage() {
                   
                   {/* LISTAGEM DINÂMICA DE LOTES */}
                   <div className="space-y-3 mb-6">
-                    {evento.lote1_valor > 0 && (
-                      <div className={`p-4 rounded-xl border flex justify-between items-center transition-all ${loteAtivo === 1 ? 'bg-red-500/10 border-red-500/50 text-white shadow-[0_0_15px_rgba(239,68,68,0.1)]' : 'bg-[#050505] border-white/5 text-zinc-500 opacity-60'}`}>
+                    {([
+                      { lote: 1, titulo: "1º Lote (Promocional)", valor: evento.lote1_valor, ate: evento.lote1_data_fim },
+                      { lote: 2, titulo: "2º Lote", valor: evento.lote2_valor, ate: evento.lote2_data_fim },
+                      { lote: 3, titulo: "3º Lote (Final)", valor: evento.lote3_valor, ate: evento.lote3_data_fim },
+                    ] as const).filter(item => Number(item.valor) > 0).map(item => {
+                      const combo = valorComboPesoAbsoluto(Number(item.valor), evento);
+                      return (
+                      <div key={item.lote} className={`p-4 rounded-xl border flex justify-between items-center gap-3 transition-all ${loteAtivo === item.lote ? 'bg-red-500/10 border-red-500/50 text-white shadow-[0_0_15px_rgba(239,68,68,0.1)]' : 'bg-[#050505] border-white/5 text-zinc-500 opacity-60'}`}>
                         <div>
-                          <h4 className="font-black uppercase tracking-widest text-xs md:text-sm">1º Lote (Promocional)</h4>
-                          <p className="text-[10px] md:text-xs mt-1">Válido até: {formatarDataHora(evento.lote1_data_fim)}</p>
+                          <h4 className="font-black uppercase tracking-widest text-xs md:text-sm">{item.titulo}</h4>
+                          <p className="text-[10px] md:text-xs mt-1">Válido até: {formatarDataHora(item.ate)}</p>
                         </div>
-                        <div className="text-right">
-                          <p className="font-black text-lg">R$ {Number(evento.lote1_valor).toFixed(2).replace('.', ',')}</p>
-                          {loteAtivo === 1 && <span className="text-[9px] bg-red-500 text-white px-2 py-0.5 rounded uppercase font-bold tracking-widest inline-block mt-1">Lote Vigente</span>}
+                        <div className="text-right shrink-0">
+                          <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-400">Categoria de peso</p>
+                          <p className="font-black text-lg">{formatarValorInscricao(Number(item.valor))}</p>
+                          <p className="mt-1 text-[10px] font-bold text-amber-200/90">Peso + Absoluto: {formatarValorInscricao(combo)}</p>
+                          {loteAtivo === item.lote && <span className="text-[9px] bg-red-500 text-white px-2 py-0.5 rounded uppercase font-bold tracking-widest inline-block mt-1">Lote Vigente</span>}
                         </div>
                       </div>
-                    )}
-
-                    {evento.lote2_valor > 0 && (
-                      <div className={`p-4 rounded-xl border flex justify-between items-center transition-all ${loteAtivo === 2 ? 'bg-red-500/10 border-red-500/50 text-white shadow-[0_0_15px_rgba(239,68,68,0.1)]' : 'bg-[#050505] border-white/5 text-zinc-500 opacity-60'}`}>
-                        <div>
-                          <h4 className="font-black uppercase tracking-widest text-xs md:text-sm">2º Lote</h4>
-                          <p className="text-[10px] md:text-xs mt-1">Válido até: {formatarDataHora(evento.lote2_data_fim)}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-black text-lg">R$ {Number(evento.lote2_valor).toFixed(2).replace('.', ',')}</p>
-                          {loteAtivo === 2 && <span className="text-[9px] bg-red-500 text-white px-2 py-0.5 rounded uppercase font-bold tracking-widest inline-block mt-1">Lote Vigente</span>}
-                        </div>
-                      </div>
-                    )}
-
-                    {evento.lote3_valor > 0 && (
-                      <div className={`p-4 rounded-xl border flex justify-between items-center transition-all ${loteAtivo === 3 ? 'bg-red-500/10 border-red-500/50 text-white shadow-[0_0_15px_rgba(239,68,68,0.1)]' : 'bg-[#050505] border-white/5 text-zinc-500 opacity-60'}`}>
-                        <div>
-                          <h4 className="font-black uppercase tracking-widest text-xs md:text-sm">3º Lote (Final)</h4>
-                          <p className="text-[10px] md:text-xs mt-1">Válido até: {formatarDataHora(evento.lote3_data_fim)}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-black text-lg">R$ {Number(evento.lote3_valor).toFixed(2).replace('.', ',')}</p>
-                          {loteAtivo === 3 && <span className="text-[9px] bg-red-500 text-white px-2 py-0.5 rounded uppercase font-bold tracking-widest inline-block mt-1">Lote Vigente</span>}
-                        </div>
-                      </div>
-                    )}
+                    );})}
                   </div>
 
                   {addonAbsoluto > 0 && (
                     <div className="p-4 rounded-xl border border-amber-500/20 bg-amber-500/5 mb-6 flex justify-between items-center text-white">
                       <div>
                         <h4 className="font-black uppercase tracking-widest text-xs md:text-sm">Add-on Absoluto</h4>
-                        <p className="text-[10px] md:text-xs mt-1 text-zinc-400">Somado ao lote vigente na opção Categoria de Peso + Absoluto.</p>
+                        <p className="text-[10px] md:text-xs mt-1 text-zinc-400">Valor extra do combo Categoria de Peso + Absoluto, somado ao lote vigente.</p>
                       </div>
                       <p className="font-black text-lg">+ R$ {addonAbsoluto.toFixed(2).replace('.', ',')}</p>
                     </div>

@@ -23,12 +23,12 @@ const etapas = [
   },
   {
     numero: '05', titulo: 'Abrir e acompanhar inscrições', href: '/admin', acao: 'Voltar ao painel',
-    texto: 'Copie o link pelo cartão Campeonato em foco. Acompanhe inscritos em Lista ou Detalhado e filtre pagos e pendentes. Evite aprovar manualmente um pagamento sem comprovante.',
+    texto: 'Copie o link pelo cartão Campeonato em foco. Acompanhe inscritos em Lista ou Detalhado e filtre pagos e pendentes. Evite aprovar manualmente um pagamento sem comprovante. Dúvidas dos atletas chegam no chat interno do campeonato.',
     pronto: 'O professor recebeu o link e consegue orientar um atleta do início ao fim.',
   },
   {
     numero: '06', titulo: 'Fechar, conferir e gerar chaves', href: '/admin/chaves', acao: 'Preparar chaves',
-    texto: 'Depois do prazo, resolva inscrições sem categoria ou equipe. Gere a prévia, confira a cobertura e confirme as chaves. Imprima uma categoria ou o evento inteiro.',
+    texto: 'Deixe um intervalo entre o fim da checagem e a divulgação das chaves. Nesse tempo o atleta ainda corrige a inscrição. Na hora marcada, o sistema gera as chaves sozinho. O botão manual continua disponível para conferir ou refazer.',
     pronto: 'Todos os atletas aptos aparecem uma única vez e nenhuma divisão foi misturada.',
   },
   {

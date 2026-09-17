@@ -10,7 +10,7 @@ import { useRouter } from "next/navigation";
 import imageCompression from 'browser-image-compression';
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
-import { ShieldCheck, Map, Trash2, Key, Users, CheckCircle, Copy, RefreshCw, Play, Edit3, Trophy, Search, ChevronDown, Megaphone } from "lucide-react";
+import { ShieldCheck, Map, Trash2, Key, Users, CheckCircle, Copy, RefreshCw, Play, Edit3, Trophy, Search, ChevronDown, Megaphone, MessageCircle } from "lucide-react";
 import MercadoPagoConnectButton from "@/app/admin/_components/MercadoPagoConnectButton";
 import { formatarDocumento } from '@/app/lib/formatar-documento';
 import { formatarTelefone } from '@/app/lib/formatar-telefone';
@@ -487,6 +487,7 @@ export default function AdminPage() {
           <Link href={`/admin/equipes?evento=${eventoSelecionado}`} className="rounded-lg bg-white/5 px-3 py-2">Equipes e professores</Link>
           <Link href={`/admin/resultados?evento=${eventoSelecionado}`} className="rounded-lg bg-white/5 px-3 py-2">Resultados manuais</Link>
           <Link href="/admin/financeiro" className="rounded-lg bg-white/5 px-3 py-2">Financeiro</Link>
+          <Link href="/admin/mensagens" className="rounded-lg bg-white/5 px-3 py-2">Chat com atletas</Link>
         </nav>
         {/* HEADER VIP C/ FOTO */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 pb-6 border-b border-white/10">
@@ -610,6 +611,16 @@ export default function AdminPage() {
                   <p className="text-zinc-500 text-[9px] md:text-[10px] font-medium mt-1 hidden md:block">PINs de Segurança.</p>
                 </div>
               </button>
+
+              <Link href="/admin/mensagens" className="group cursor-pointer bg-black/40 border border-white/5 hover:border-white/20 rounded-2xl p-4 md:p-5 transition-all flex flex-col xl:flex-row xl:items-center gap-3 md:gap-4 shadow-xl hover:-translate-y-1">
+                <div className="w-10 h-10 md:w-12 md:h-12 bg-black text-cyan-400 border border-white/5 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-cyan-500 group-hover:border-cyan-500 group-hover:text-black transition-all shadow-inner">
+                  <MessageCircle className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-xs md:text-sm font-black text-white transition-colors leading-tight">Chat com atletas</h3>
+                  <p className="text-zinc-500 text-[9px] md:text-[10px] font-medium mt-1 hidden md:block">Dúvidas do campeonato.</p>
+                </div>
+              </Link>
 
               <Link href="/admin/vouchers" className="col-span-2 sm:col-span-1 md:col-span-1 lg:col-span-1 group cursor-pointer bg-black/40 border border-white/5 hover:border-white/20 rounded-2xl p-4 md:p-5 transition-all flex flex-col xl:flex-row xl:items-center gap-3 md:gap-4 shadow-xl hover:-translate-y-1">
                 <div className="w-10 h-10 md:w-12 md:h-12 bg-black text-purple-400 border border-white/5 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-purple-500 group-hover:border-purple-500 group-hover:text-white transition-all shadow-inner">

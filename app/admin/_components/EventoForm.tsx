@@ -435,6 +435,7 @@ export default function EventoForm({ modo, eventoId }: EventoFormProps) {
                 <Field label="Divulgação das chaves"><input type="datetime-local" value={dataDivulgacaoChaves} onChange={(e) => setDataDivulgacaoChaves(e.target.value)} className={inputClass + " [color-scheme:dark]"} /></Field>
                 <Field label="Divulgação do cronograma"><input type="datetime-local" value={dataDivulgacaoCronograma} onChange={(e) => setDataDivulgacaoCronograma(e.target.value)} className={inputClass + " [color-scheme:dark]"} /></Field>
               </div>
+              <p className="mt-3 text-xs leading-relaxed text-zinc-500">Deixe um intervalo depois do fim da checagem até a divulgação das chaves. Nesse espaço o atleta ainda corrige peso e categoria. Na hora da divulgação, o sistema gera as chaves sozinho se as inscrições e a checagem já tiverem encerrado. O botão manual continua disponível.</p>
             </div>
 
             <div className={cardClass}>

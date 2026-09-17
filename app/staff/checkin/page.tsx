@@ -210,7 +210,8 @@ export default function CheckinOperador() {
       peso_aferido: peso,
       kimono_aprovado: status === 'desclassificado_kimono' ? false : kimonoAprovado,
       checkin_realizado_em: new Date().toISOString(),
-      pesagem_ok: status === 'aprovado'
+      pesagem_ok: status === 'aprovado',
+      ...(status === 'aprovado' ? { peso: String(peso) } : {}),
     };
 
     // Atualização segura: Atualiza usando o cruzamento absoluto (Evento + User_ID)

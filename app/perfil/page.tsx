@@ -7,7 +7,8 @@ import imageCompression from 'browser-image-compression';
 import QRCode from "react-qr-code";
 import { formatarTelefone } from '@/app/lib/formatar-telefone';
 import { cpfValido, formatarCpf } from '@/app/lib/validar-cpf';
-import { CategoriaCompeticao, categoriaCompativelSemPeso, categoriaMaisLeve, rotuloCategoria } from '@/app/lib/categorias-competicao';
+import { CategoriaCompeticao, categoriaCompativel, categoriaCompativelSemPeso, rotuloCategoria } from '@/app/lib/categorias-competicao';
+import { ChatEvento } from '@/app/components/ChatEvento';
 
 export default function PerfilPage() {
   const [perfilId, setPerfilId] = useState<number | null>(null);
@@ -22,6 +23,7 @@ export default function PerfilPage() {
 
   const [abaAtiva, setAbaAtiva] = useState("resumo");
   const [filtroInscricao, setFiltroInscricao] = useState("Todas");
+  const [chatEvento, setChatEvento] = useState<{ id: string; nome: string } | null>(null);
 
   const [userId, setUserId] = useState("");
   const [role, setRole] = useState("atleta");
@@ -581,7 +583,7 @@ export default function PerfilPage() {
     setEditandoInscricao({ 
       ...insc, 
       categoriaNova: categoriasDisponiveis.some(c => c.id === insc.categoria_id) ? insc.categoria_id : '',
-      pesoAtual: '',
+      pesoAtual: String(insc.peso ?? ''),
       absolutoNovo: Boolean(insc.absoluto),
       categoriasDisponiveis 
     });
@@ -609,6 +611,12 @@ export default function PerfilPage() {
     }
 
     setMinhasInscricoes((prev) => prev.map((insc) => insc.id === editandoInscricao.id ? { ...insc, ...resultado.inscricao } : insc));
+    if (editandoInscricao.user_id === userId && resultado.inscricao.peso != null) {
+      setPeso(String(resultado.inscricao.peso));
+    }
+    setEditandoInscricao((atual) => atual && atual.id === editandoInscricao.id
+      ? { ...atual, ...resultado.inscricao, categoriaNova: resultado.inscricao.categoria_id, pesoAtual: String(resultado.inscricao.peso ?? atual.pesoAtual) }
+      : atual);
     setMensagem("Inscrição atualizada. Confira a checagem do evento novamente.");
     setTimeout(() => {
         setEditandoInscricao(null);
@@ -625,8 +633,11 @@ export default function PerfilPage() {
   const totalAlunos = minhaEquipe.length;
   const vinculoEquipePendente = !nome.trim() || (!equipe.trim() && !academia.trim());
   const categoriaDestinoEdicao: CategoriaCompeticao | undefined = editandoInscricao?.categoriasDisponiveis?.find((c: CategoriaCompeticao) => c.id === editandoInscricao.categoriaNova);
-  const categoriaOriginalEdicao: CategoriaCompeticao | null = editandoInscricao?.categoriasDisponiveis?.find((c: CategoriaCompeticao) => c.id === editandoInscricao.categoria_id) || null;
-  const mudancaParaPesoMenor = Boolean(categoriaDestinoEdicao && categoriaMaisLeve(categoriaOriginalEdicao, categoriaDestinoEdicao));
+  const pesoEdicaoInformado = String(editandoInscricao?.pesoAtual ?? '').trim();
+  const pesoCompativelComDestino = Boolean(categoriaDestinoEdicao && categoriaCompativel(categoriaDestinoEdicao, {
+    ...editandoInscricao,
+    peso: pesoEdicaoInformado || editandoInscricao?.peso,
+  }));
   const ourosEquipe = minhaEquipe.reduce((acc, aluno) => acc + (aluno.ouro || 0), 0);
   const pratasEquipe = minhaEquipe.reduce((acc, aluno) => acc + (aluno.prata || 0), 0);
   const bronzesEquipe = minhaEquipe.reduce((acc, aluno) => acc + (aluno.bronze || 0), 0);
@@ -1023,6 +1034,7 @@ export default function PerfilPage() {
                         <option value="Feminino" className="bg-[#0a0a0e] text-white">Feminino</option>
                       </select>
                     </div>
+                    <div><label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 pl-1 cursor-default">Peso (KG)</label><input type="number" step="0.1" min="0.1" max="500" value={peso} onChange={(e) => setPeso(e.target.value)} placeholder="Necessário para se inscrever como competidor" className="cursor-text w-full bg-black/50 border border-white/5 focus:border-yellow-500/50 outline-none rounded-xl px-3 py-2 text-xs text-white transition-colors" /></div>
                   </>
                 ) : (
                   <>
@@ -1328,6 +1340,9 @@ export default function PerfilPage() {
                             </button>
                           </>
                         )}
+                        <button onClick={() => setChatEvento({ id: insc.evento_id, nome: insc.eventos?.nome || 'Organização' })} className="cursor-pointer w-full bg-white/5 hover:bg-white/10 border border-white/10 text-white px-4 py-2.5 rounded-xl font-bold uppercase tracking-widest transition-colors text-[9px] text-center flex items-center justify-center gap-1.5">
+                          Dúvidas com a organização
+                        </button>
                         <button onClick={() => window.location.href = `/evento/${insc.evento_id}/ao-vivo`} className="cursor-pointer w-full bg-red-600 hover:bg-red-500 border border-red-400/30 text-white px-4 py-3 rounded-xl font-black uppercase tracking-widest transition-colors text-[10px] text-center shadow-[0_0_15px_rgba(239,68,68,0.2)] flex items-center justify-center gap-2">
                           <svg className="w-4 h-4 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
                           Lutas ao Vivo
@@ -1461,7 +1476,7 @@ export default function PerfilPage() {
             <div className="mb-4 bg-red-500/10 border border-red-500/20 p-3 rounded-xl">
               <p className="text-red-400 text-[10px] font-medium leading-relaxed">
                 <strong className="font-black uppercase tracking-widest block mb-1">Ajuste durante a checagem:</strong>
-                Você pode escolher uma categoria mais leve ou mais pesada disponível para sua idade, faixa e sexo. Para descer de peso, informe o peso atual medido na academia. A pesagem oficial do evento ainda será necessária.
+                Você pode escolher uma categoria mais leve ou mais pesada disponível para sua idade, faixa e sexo, e repetir o ajuste enquanto a checagem estiver aberta. Informe o peso atual medido na academia: ele atualiza a inscrição e o cadastro. A pesagem oficial do evento ainda será necessária.
               </p>
             </div>
 
@@ -1480,13 +1495,13 @@ export default function PerfilPage() {
                 </select>
               </div>
 
-              {mudancaParaPesoMenor && (
+              {categoriaDestinoEdicao && (
                 <label className="block text-[10px] text-zinc-400 font-black uppercase tracking-widest">
                   Peso atual medido na academia (kg)
                   <input type="number" min="0.1" max="500" step="0.01" inputMode="decimal" required value={editandoInscricao.pesoAtual}
                     onChange={(event) => setEditandoInscricao({ ...editandoInscricao, pesoAtual: event.target.value })}
                     className="mt-1.5 w-full bg-black border border-white/10 rounded-xl px-3 py-3 text-white text-xs font-bold outline-none focus:border-cyan-400" placeholder="Ex.: 31,50" />
-                  <span className="mt-1 block normal-case font-normal tracking-normal text-zinc-500">Categoria escolhida: acima de {categoriaDestinoEdicao?.peso_min} kg{categoriaDestinoEdicao?.peso_max != null ? ` até ${categoriaDestinoEdicao.peso_max} kg` : ', sem limite máximo'}.</span>
+                  <span className="mt-1 block normal-case font-normal tracking-normal text-zinc-500">Categoria escolhida: acima de {categoriaDestinoEdicao.peso_min} kg{categoriaDestinoEdicao.peso_max != null ? ` até ${categoriaDestinoEdicao.peso_max} kg` : ', sem limite máximo'}. Esse peso também atualiza o cadastro do atleta.</span>
                 </label>
               )}
 
@@ -1503,7 +1518,7 @@ export default function PerfilPage() {
 
             <div className="grid grid-cols-2 gap-3 mt-6">
               <button onClick={() => setEditandoInscricao(null)} className="cursor-pointer bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-xl py-3 text-[10px] font-black uppercase tracking-widest">Cancelar</button>
-              <button onClick={salvarEdicaoInscricao} disabled={salvandoInscricao || !editandoInscricao.categoriaNova || (mudancaParaPesoMenor && !editandoInscricao.pesoAtual)} className="cursor-pointer disabled:opacity-60 bg-cyan-500 hover:bg-cyan-400 text-black rounded-xl py-3 text-[10px] font-black uppercase tracking-widest">{salvandoInscricao ? "Salvando..." : "Confirmar Mudança"}</button>
+              <button onClick={salvarEdicaoInscricao} disabled={salvandoInscricao || !editandoInscricao.categoriaNova || !pesoCompativelComDestino} className="cursor-pointer disabled:opacity-60 bg-cyan-500 hover:bg-cyan-400 text-black rounded-xl py-3 text-[10px] font-black uppercase tracking-widest">{salvandoInscricao ? "Salvando..." : "Confirmar Mudança"}</button>
             </div>
           </div>
         </div>
@@ -1558,6 +1573,16 @@ export default function PerfilPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {chatEvento && (
+        <ChatEvento
+          eventoId={chatEvento.id}
+          titulo={chatEvento.nome}
+          compacto
+          inicialAberto
+          onFechar={() => setChatEvento(null)}
+        />
       )}
 
     </div>

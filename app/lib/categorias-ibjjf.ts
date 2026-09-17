@@ -1,3 +1,17 @@
+export const faixasCadastradas = [
+  'Cinza', 'Amarela', 'Laranja', 'Verde',
+  'Branca', 'Azul', 'Roxa', 'Marrom', 'Preta',
+  'Coral', 'Vermelha',
+] as const;
+
+export function opcoesFaixaCategoria(faixaAtual?: string) {
+  const atual = String(faixaAtual ?? '').trim();
+  if (atual && !faixasCadastradas.some(faixa => faixa.toLowerCase() === atual.toLowerCase())) {
+    return [...faixasCadastradas, atual];
+  }
+  return [...faixasCadastradas];
+}
+
 export type ModeloPesoIBJJF = {
   id: string;
   titulo: string;

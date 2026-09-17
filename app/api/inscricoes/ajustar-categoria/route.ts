@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { autenticarRequest } from "@/app/lib/api-auth";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
-import { CategoriaCompeticao, categoriaCompativel, categoriaCompativelSemPeso, categoriaMaisLeve, rotuloCategoria } from "@/app/lib/categorias-competicao";
+import { CategoriaCompeticao, categoriaCompativel, categoriaCompativelSemPeso, rotuloCategoria } from "@/app/lib/categorias-competicao";
 
 export async function POST(request: Request) {
   const usuario = await autenticarRequest(request);
@@ -46,12 +46,11 @@ export async function POST(request: Request) {
   if (!destino || !categoriaCompativelSemPeso(destino, inscricao)) {
     return NextResponse.json({ error: "Categoria indisponível para idade, faixa, sexo ou modalidade desta inscrição." }, { status: 400 });
   }
-  const original = lista.find(c => c.id === inscricao.categoria_id) || null;
-  const mudancaParaMenor = categoriaMaisLeve(original, destino);
   const pesoInformado = String(body.pesoAtual ?? '').trim().replace(',', '.');
-  const pesoAtual = Number(pesoInformado);
-  if (mudancaParaMenor && (!pesoInformado || !Number.isFinite(pesoAtual) || pesoAtual <= 0
-    || !categoriaCompativel(destino, { ...inscricao, peso: pesoAtual }))) {
+  const pesoMedido = Number(pesoInformado);
+  const pesoInscricao = Number(String(inscricao.peso ?? '').replace(',', '.'));
+  const pesoFinal = Number.isFinite(pesoMedido) && pesoMedido > 0 ? pesoMedido : pesoInscricao;
+  if (!Number.isFinite(pesoFinal) || pesoFinal <= 0 || !categoriaCompativel(destino, { ...inscricao, peso: pesoFinal })) {
     return NextResponse.json({ error: "Informe o peso atual medido na academia, dentro do intervalo da categoria escolhida." }, { status: 400 });
   }
   const manterAbsoluto = body.manterAbsoluto === undefined ? Boolean(inscricao.absoluto) : body.manterAbsoluto === true;
@@ -59,15 +58,26 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "O absoluto só pode ser mantido se já fazia parte da inscrição." }, { status: 400 });
   }
 
+  const pesoGravado = String(pesoFinal);
   const payload = {
     categoria_id: destino.id,
     categoria: rotuloCategoria(destino),
     absoluto: Boolean(inscricao.absoluto && manterAbsoluto),
-    ...(mudancaParaMenor ? { peso: pesoAtual } : {}),
+    peso: pesoGravado,
   };
   const { data: atualizada, error: erroUpdate } = await supabase.from("inscricoes")
     .update(payload).eq("id", inscricao.id).eq("user_id", inscricao.user_id)
     .select("id,categoria,categoria_id,peso,absoluto").maybeSingle();
-  if (erroUpdate || !atualizada) return NextResponse.json({ error: "Não foi possível salvar o ajuste. Recarregue a inscrição e tente novamente." }, { status: 409 });
+  if (erroUpdate || !atualizada) {
+    return NextResponse.json({ error: erroUpdate?.message || "Não foi possível salvar o ajuste. Recarregue a inscrição e tente novamente." }, { status: 409 });
+  }
+
+  const { error: erroCadastro } = await supabase.from("atletas")
+    .update({ peso: pesoGravado })
+    .eq("user_id", inscricao.user_id);
+  if (erroCadastro) {
+    return NextResponse.json({ error: "A inscrição foi ajustada, mas o peso do cadastro não foi atualizado. Recarregue e tente novamente." }, { status: 409 });
+  }
+
   return NextResponse.json({ success: true, inscricao: atualizada });
 }

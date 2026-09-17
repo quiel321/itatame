@@ -4,20 +4,38 @@ import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/app/lib/supabase';
 import { useParams, useRouter } from 'next/navigation';
 import { grupoInscricao, type CategoriaCompeticao } from '@/app/lib/categorias-competicao';
-import { Search, Users, Layers, Shield, ArrowLeft, Trophy } from 'lucide-react';
+import { Search, Users, Layers, Shield, ArrowLeft, Trophy, Building2 } from 'lucide-react';
+
+type EquipeEvento = { id: string; nome: string; academia: string | null; professor: string | null };
 
 type InscricaoCompleta = {
   id: string;
   categoria: string;
   atleta_nome: string;
   equipe: string;
+  academia: string;
   professor: string;
   faixa: string;
   peso: string;
   sexo: string;
+  absoluto: boolean;
+  sozinho: boolean;
   chave_categoria: string;
   categoria_rotulo: string;
 };
+
+function normalizarChecagem(valor?: string | null) {
+  return String(valor ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().replace(/\s+/g, ' ').toUpperCase();
+}
+
+function equipeOficialDaInscricao(insc: { equipe?: string | null; equipe_id?: string | null }, equipes: EquipeEvento[]) {
+  const porId = insc.equipe_id ? equipes.find(eq => eq.id === insc.equipe_id) : undefined;
+  if (porId) return porId;
+  const porNome = equipes.find(eq => normalizarChecagem(eq.nome) === normalizarChecagem(insc.equipe));
+  if (porNome) return porNome;
+  if (equipes.length === 1) return equipes[0];
+  return null;
+}
 
 export default function ChecagemGeralPage() {
   const params = useParams();
@@ -31,7 +49,8 @@ export default function ChecagemGeralPage() {
   // Controle de Abas e Filtros
   const [abaAtiva, setAbaAtiva] = useState<'atleta' | 'categoria' | 'equipe'>('atleta');
   
-  const [buscaAtleta, setBuscaAtleta] = useState(''); // Busca geral da aba "Por Atleta"
+  const [buscaAtleta, setBuscaAtleta] = useState('');
+  const [filtroAcademia, setFiltroAcademia] = useState('');
   
   // Filtros da aba "Por Categoria"
   const [catSelecionada, setCatSelecionada] = useState('');
@@ -46,18 +65,17 @@ export default function ChecagemGeralPage() {
       const { data: ev } = await supabase.from('eventos').select('*').eq('id', eventoId).single();
       if (ev) setEvento(ev);
 
-      const { data: inscData } = await supabase
-        .from('inscricoes')
-        .select('*')
-        .eq('evento_id', eventoId)
-        .eq('pagamento_ok', true);
-
-      const { data: categorias } = await supabase.from('categorias_evento').select('*').eq('evento_id', eventoId);
+      const [{ data: inscData }, { data: categorias }, { data: equipesData }] = await Promise.all([
+        supabase.from('inscricoes').select('*').eq('evento_id', eventoId).eq('pagamento_ok', true),
+        supabase.from('categorias_evento').select('*').eq('evento_id', eventoId),
+        supabase.from('equipes_evento').select('id,nome,academia,professor').eq('evento_id', eventoId).eq('ativa', true),
+      ]);
+      const equipesOficiais = (equipesData || []) as EquipeEvento[];
       if (inscData && inscData.length > 0) {
         const userIds = [...new Set(inscData.map(i => i.user_id))];
         const { data: atletasData } = await supabase
           .from('atletas_publico')
-          .select('user_id, nome, equipe, professor, faixa, peso, sexo')
+          .select('user_id, nome, equipe, academia, professor, faixa, peso, sexo')
           .in('user_id', userIds);
 
         const dadosCompletos: InscricaoCompleta[] = inscData.map(insc => {
@@ -65,20 +83,29 @@ export default function ChecagemGeralPage() {
           let categoria = insc.categoria || 'NÃO INFORMADA';
           const faixa = insc.faixa || 'FAIXA NÃO INFORMADA';
           try { categoria = grupoInscricao(insc, 'peso', (categorias || []) as CategoriaCompeticao[]).categoria; } catch { categoria += ' · Dados a conferir'; }
+          const equipeOficial = equipeOficialDaInscricao(insc, equipesOficiais);
           return {
             id: insc.id,
             categoria,
             atleta_nome: insc.atleta || atl?.nome || 'Atleta Desconhecido',
-            equipe: insc.equipe || 'SEM EQUIPE',
-            professor: atl?.professor || 'Sem Professor',
+            equipe: equipeOficial?.nome || 'SEM EQUIPE OFICIAL',
+            academia: atl?.academia || equipeOficial?.academia || '',
+            professor: atl?.professor || equipeOficial?.professor || 'Sem Professor',
             faixa,
             peso: insc.peso || '',
             sexo: insc.sexo || '',
+            absoluto: Boolean(insc.absoluto),
+            sozinho: false,
             chave_categoria: faixa + '__' + categoria,
             categoria_rotulo: faixa + ' / ' + categoria
           };
         });
 
+        const totaisCategoria = dadosCompletos.reduce((acc, insc) => {
+          acc[insc.chave_categoria] = (acc[insc.chave_categoria] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>);
+        dadosCompletos.forEach(insc => { insc.sozinho = totaisCategoria[insc.chave_categoria] === 1; });
         dadosCompletos.sort((a, b) => a.atleta_nome.localeCompare(b.atleta_nome));
         setInscricoes(dadosCompletos);
       }
@@ -91,6 +118,9 @@ export default function ChecagemGeralPage() {
   // Extrair listas únicas para os dropdowns
   const gruposCategoriaFaixa = useMemo(() => [...new Map(inscricoes.map(i => [i.chave_categoria, i.categoria_rotulo])).entries()].sort((a, b) => a[1].localeCompare(b[1])), [inscricoes]);
   const equipesUnicas = useMemo(() => [...new Set(inscricoes.map(i => i.equipe))].sort(), [inscricoes]);
+  const academiasUnicas = useMemo(() => [...new Set(inscricoes.map(i => i.academia).filter(Boolean))].sort(), [inscricoes]);
+  const totalAbsoluto = useMemo(() => inscricoes.filter(i => i.absoluto).length, [inscricoes]);
+  const totalSozinhos = useMemo(() => inscricoes.filter(i => i.sozinho).length, [inscricoes]);
 
   // Ações de clique nos links da tabela (Navegação Cruzada)
   const irParaCategoria = (categoria: string) => {
@@ -107,15 +137,22 @@ export default function ChecagemGeralPage() {
 
   // Filtros calculados para as tabelas
   const atletasFiltradosGeral = useMemo(() => {
-    if (!buscaAtleta) return inscricoes;
-    const termo = buscaAtleta.toLowerCase();
-    return inscricoes.filter(i => [i.atleta_nome, i.equipe, i.professor, i.categoria, i.faixa, i.categoria_rotulo].join(' ').toLowerCase().includes(termo));
-  }, [inscricoes, buscaAtleta]);
+    const termo = buscaAtleta.toLowerCase().trim();
+    const academia = filtroAcademia.toLowerCase().trim();
+    return inscricoes.filter(i => {
+      const bateBusca = !termo || [i.atleta_nome, i.equipe, i.academia, i.professor, i.categoria, i.faixa, i.categoria_rotulo, i.peso].join(' ').toLowerCase().includes(termo);
+      const bateAcademia = !academia || i.academia.toLowerCase() === academia;
+      return bateBusca && bateAcademia;
+    });
+  }, [inscricoes, buscaAtleta, filtroAcademia]);
 
   const atletasNaCategoria = useMemo(() => {
     if (!catSelecionada) return [];
     let filtrado = inscricoes.filter(i => i.chave_categoria === catSelecionada);
-    if (nomeFiltroCat) filtrado = filtrado.filter(i => i.atleta_nome.toLowerCase().includes(nomeFiltroCat.toLowerCase()));
+    if (nomeFiltroCat) {
+      const termo = nomeFiltroCat.toLowerCase();
+      filtrado = filtrado.filter(i => [i.atleta_nome, i.equipe, i.academia, i.professor].join(' ').toLowerCase().includes(termo));
+    }
     return filtrado;
   }, [inscricoes, catSelecionada, nomeFiltroCat]);
 
@@ -178,12 +215,30 @@ export default function ChecagemGeralPage() {
             Checagem do evento "{evento?.nome || "Carregando..."}"
           </h1>
           <p className="text-zinc-400 text-xs uppercase tracking-widest font-medium">
-            Confira atentamente à todos os seus dados, como nome, categoria, graduação e peso.
+            Confira nome, equipe do evento, academia, faixa, peso e quem está na sua categoria.
           </p>
         </div>
       </header>
 
       <div className="max-w-6xl mx-auto px-4 mt-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+          <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+            <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Inscritos</p>
+            <p className="mt-1 text-lg font-black text-white">{inscricoes.length}</p>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+            <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Categorias</p>
+            <p className="mt-1 text-lg font-black text-white">{gruposCategoriaFaixa.length}</p>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+            <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Absoluto</p>
+            <p className="mt-1 text-lg font-black text-amber-300">{totalAbsoluto}</p>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+            <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Sozinhos na chave</p>
+            <p className="mt-1 text-lg font-black text-yellow-300">{totalSozinhos}</p>
+          </div>
+        </div>
         
         {/* NAVEGAÇÃO DE ABAS */}
         <div className="flex border-b border-white/10 mb-6 overflow-x-auto scrollbar-hide">
@@ -203,16 +258,27 @@ export default function ChecagemGeralPage() {
         {/* ================================================= */}
         {abaAtiva === 'atleta' && (
           <div className="animate-in fade-in duration-300">
-            <div className="mb-4">
-              <div className="relative max-w-sm">
+            <div className="mb-4 grid gap-3 md:grid-cols-[1fr_220px]">
+              <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
                 <input 
                   type="text" 
-                  placeholder="Pesquisar atleta..." 
+                  placeholder="Pesquisar atleta, equipe, academia ou professor..." 
                   value={buscaAtleta}
                   onChange={(e) => setBuscaAtleta(e.target.value)}
                   className="w-full bg-white/5 border border-white/10 focus:border-red-500 outline-none rounded-md pl-9 pr-4 py-2 text-xs text-white transition-colors placeholder:text-zinc-600"
                 />
+              </div>
+              <div className="relative">
+                <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                <select
+                  value={filtroAcademia}
+                  onChange={(e) => setFiltroAcademia(e.target.value)}
+                  className="w-full bg-white/5 border border-white/10 focus:border-red-500 outline-none rounded-md pl-9 pr-4 py-2 text-xs text-white uppercase cursor-pointer"
+                >
+                  <option value="">Todas as academias</option>
+                  {academiasUnicas.map(academia => <option key={academia} value={academia}>{academia}</option>)}
+                </select>
               </div>
             </div>
 
@@ -222,8 +288,10 @@ export default function ChecagemGeralPage() {
                   <tr>
                     <th className="px-3 py-2 text-[10px] font-black uppercase tracking-widest">Nome do Atleta</th>
                     <th className="px-3 py-2 text-[10px] font-black uppercase tracking-widest">Equipe</th>
+                    <th className="px-3 py-2 text-[10px] font-black uppercase tracking-widest">Academia</th>
                     <th className="px-3 py-2 text-[10px] font-black uppercase tracking-widest">Professor</th>
                     <th className="px-3 py-2 text-[10px] font-black uppercase tracking-widest">Categoria</th>
+                    <th className="px-3 py-2 text-[10px] font-black uppercase tracking-widest">Peso</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/10 text-[10px] md:text-xs">
@@ -231,22 +299,26 @@ export default function ChecagemGeralPage() {
                     <tr key={insc.id} className={index % 2 === 0 ? 'bg-transparent' : 'bg-black/20'}>
                       <td className="px-3 py-2.5 font-black text-white uppercase flex items-center gap-2">
                         <span className="text-[10px]">🇧🇷</span> {insc.atleta_nome}
+                        {insc.absoluto && <span className="text-[8px] font-black tracking-widest px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30">ABS</span>}
+                        {insc.sozinho && <span className="text-[8px] font-black tracking-widest px-1.5 py-0.5 rounded bg-yellow-500/15 text-yellow-200 border border-yellow-500/30">SOZINHO</span>}
                       </td>
                       <td className="px-3 py-2.5 font-bold">
                         <button onClick={() => irParaEquipe(insc.equipe)} className="text-blue-400 hover:text-blue-300 hover:underline uppercase transition-colors text-left cursor-pointer">
                           {insc.equipe}
                         </button>
                       </td>
+                      <td className="px-3 py-2.5 text-zinc-300 uppercase">{insc.academia || "-"}</td>
                       <td className="px-3 py-2.5 text-zinc-400 uppercase">{insc.professor}</td>
                       <td className="px-3 py-2.5 font-bold">
                         <button onClick={() => irParaCategoria(insc.chave_categoria)} className="text-blue-400 hover:text-blue-300 hover:underline uppercase transition-colors text-left cursor-pointer">
                           {insc.categoria_rotulo}
                         </button>
                       </td>
+                      <td className="px-3 py-2.5 font-bold text-zinc-300">{insc.peso ? `${insc.peso} kg` : "-"}</td>
                     </tr>
                   ))}
                   {atletasFiltradosGeral.length === 0 && (
-                    <tr><td colSpan={4} className="p-4 text-center text-zinc-500 text-xs">Nenhum atleta encontrado.</td></tr>
+                    <tr><td colSpan={6} className="p-4 text-center text-zinc-500 text-xs">Nenhum atleta encontrado.</td></tr>
                   )}
                 </tbody>
               </table>
@@ -271,7 +343,7 @@ export default function ChecagemGeralPage() {
                 </select>
                 <input 
                   type="text" 
-                  placeholder="Nome, equipe ou professor (opcional)" 
+                  placeholder="Nome, equipe, academia ou professor (opcional)" 
                   value={nomeFiltroCat}
                   onChange={(e) => setNomeFiltroCat(e.target.value)}
                   className="w-full bg-[#0a0a0e] border border-white/10 text-white text-xs p-3 rounded outline-none focus:border-red-500 uppercase placeholder:text-zinc-600"
@@ -321,6 +393,7 @@ export default function ChecagemGeralPage() {
                         <th className="px-3 py-2 text-[10px] font-black uppercase tracking-widest w-10 text-center">Status</th>
                         <th className="px-3 py-2 text-[10px] font-black uppercase tracking-widest">Nome do Atleta</th>
                         <th className="px-3 py-2 text-[10px] font-black uppercase tracking-widest">Equipe</th>
+                        <th className="px-3 py-2 text-[10px] font-black uppercase tracking-widest">Academia</th>
                         <th className="px-3 py-2 text-[10px] font-black uppercase tracking-widest">Professor</th>
                         {/* 🔥 NOVAS COLUNAS AQUI */}
                         <th className="px-3 py-2 text-[10px] font-black uppercase tracking-widest">Graduação</th>
@@ -339,6 +412,7 @@ export default function ChecagemGeralPage() {
                             <span className="text-[8px] font-black text-zinc-500 uppercase tracking-widest">BR</span> {insc.atleta_nome}
                           </td>
                           <td className="px-3 py-2.5 font-bold text-blue-400 uppercase cursor-pointer hover:underline" onClick={() => irParaEquipe(insc.equipe)}>{insc.equipe}</td>
+                          <td className="px-3 py-2.5 text-zinc-300 uppercase">{insc.academia || "-"}</td>
                           <td className="px-3 py-2.5 text-zinc-400 uppercase">{insc.professor}</td>
                           {/* 🔥 DADOS DAS NOVAS COLUNAS AQUI */}
                           <td className="px-3 py-2.5 font-bold text-zinc-300 uppercase">{insc.faixa || "-"}</td>
@@ -346,7 +420,7 @@ export default function ChecagemGeralPage() {
                         </tr>
                       ))}
                       {atletasNaCategoria.length === 0 && (
-                        <tr><td colSpan={6} className="p-4 text-center text-zinc-500 text-xs">Nenhum atleta nesta categoria.</td></tr>
+                        <tr><td colSpan={7} className="p-4 text-center text-zinc-500 text-xs">Nenhum atleta nesta categoria.</td></tr>
                       )}
                     </tbody>
                   </table>
@@ -393,6 +467,7 @@ export default function ChecagemGeralPage() {
                     <thead className="bg-[#cc0000] text-white">
                       <tr>
                         <th className="px-3 py-2 text-[10px] font-black uppercase tracking-widest">Nome do Atleta</th>
+                        <th className="px-3 py-2 text-[10px] font-black uppercase tracking-widest">Academia</th>
                         <th className="px-3 py-2 text-[10px] font-black uppercase tracking-widest">Professor</th>
                         <th className="px-3 py-2 text-[10px] font-black uppercase tracking-widest">Categoria</th>
                       </tr>
@@ -402,7 +477,9 @@ export default function ChecagemGeralPage() {
                         <tr key={insc.id} className={index % 2 === 0 ? 'bg-transparent' : 'bg-black/20'}>
                           <td className="px-3 py-2.5 font-black text-white uppercase flex items-center gap-2">
                             <span className="text-[10px]">🇧🇷</span> {insc.atleta_nome}
+                            {insc.absoluto && <span className="text-[8px] font-black tracking-widest px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30">ABS</span>}
                           </td>
+                          <td className="px-3 py-2.5 text-zinc-300 uppercase">{insc.academia || "-"}</td>
                           <td className="px-3 py-2.5 text-zinc-400 uppercase">{insc.professor}</td>
                           <td className="px-3 py-2.5 font-bold text-blue-400 uppercase cursor-pointer hover:underline" onClick={() => irParaCategoria(insc.chave_categoria)}>
                             {insc.categoria_rotulo}
@@ -410,7 +487,7 @@ export default function ChecagemGeralPage() {
                         </tr>
                       ))}
                       {atletasNaEquipe.length === 0 && (
-                        <tr><td colSpan={3} className="p-4 text-center text-zinc-500 text-xs">Nenhum atleta nesta equipe.</td></tr>
+                        <tr><td colSpan={4} className="p-4 text-center text-zinc-500 text-xs">Nenhum atleta nesta equipe.</td></tr>
                       )}
                     </tbody>
                   </table>

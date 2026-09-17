@@ -19,6 +19,8 @@ type EventoOrganizador = {
   lote1_data_fim?: string | null;
   lote2_data_fim?: string | null;
   lote3_data_fim?: string | null;
+  data_fim_checagem?: string | null;
+  data_divulgacao_chaves?: string | null;
 };
 
 export default function GerarChavesPage() {
@@ -74,7 +76,7 @@ export default function GerarChavesPage() {
 
       const { data, error } = await supabase
         .from("eventos")
-        .select("id, nome, data_fim_inscricoes, lote1_data_fim, lote2_data_fim, lote3_data_fim")
+        .select("id, nome, data_fim_inscricoes, lote1_data_fim, lote2_data_fim, lote3_data_fim, data_fim_checagem, data_divulgacao_chaves")
         .eq("organizador_id", authData.user.id)
         .order("id", { ascending: false })
 
@@ -252,6 +254,11 @@ export default function GerarChavesPage() {
                 <>Data de encerramento não definida. Configure o evento antes de gerar as chaves.</>
               )}
             </div>
+            {eventoSelecionado?.data_divulgacao_chaves && (
+              <p className="mt-2 text-[10px] leading-relaxed text-zinc-400 md:text-xs">
+                Geração automática: após o fim da checagem ({formatarDataHora(eventoSelecionado.data_fim_checagem ? new Date(eventoSelecionado.data_fim_checagem) : null)}), as chaves são criadas na divulgação ({formatarDataHora(new Date(eventoSelecionado.data_divulgacao_chaves))}). O botão abaixo continua valendo para antecipar ou refazer, enquanto nenhuma luta tiver começado.
+              </p>
+            )}
           </div>
 
           <div className="space-y-4 mb-6">

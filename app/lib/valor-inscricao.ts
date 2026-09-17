@@ -34,6 +34,14 @@ export function valorAddonAbsoluto(evento: EventoValoresInscricao) {
   return primeiroNumeroDefinido(evento.valor_absoluto, evento.regras_pontuacao_equipes?.valor_absoluto);
 }
 
+export function formatarValorInscricao(valor: number) {
+  return `R$ ${numeroValor(valor).toFixed(2).replace('.', ',')}`;
+}
+
+export function valorComboPesoAbsoluto(valorLote: number, evento: EventoValoresInscricao) {
+  return numeroValor(valorLote) + valorAddonAbsoluto(evento);
+}
+
 export function valorLoteVigente(evento: EventoValoresInscricao, agora = new Date()) {
   const lote1Fim = dataFimLote(evento.lote1_data_fim);
   const lote2Fim = dataFimLote(evento.lote2_data_fim);

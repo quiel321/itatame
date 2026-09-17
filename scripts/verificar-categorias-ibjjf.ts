@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { modelosPesoIBJJF } from '../app/lib/categorias-ibjjf';
+import { faixasCadastradas, modelosPesoIBJJF, opcoesFaixaCategoria } from '../app/lib/categorias-ibjjf';
 
 const kids = modelosPesoIBJJF.filter(modelo => modelo.id.startsWith('kids_'));
 assert.equal(kids.length, 12, 'Devem existir modelos Kids para as idades de 4 a 15 anos.');
@@ -24,5 +24,9 @@ const quinzeAnos = kids.find(modelo => modelo.idade_min === 15)!;
 assert.equal(quinzeAnos.tempo_minutos, 4);
 assert.deepEqual(quinzeAnos.faixasPermitidas, ['Cinza', 'Amarela', 'Laranja', 'Verde']);
 assert.deepEqual(quinzeAnos.pesos.map(peso => peso.peso_max), [44.3, 48.3, 52.5, 56.5, 60.5, 65, 69, 73, null]);
+
+assert.deepEqual([...faixasCadastradas], ['Cinza', 'Amarela', 'Laranja', 'Verde', 'Branca', 'Azul', 'Roxa', 'Marrom', 'Preta', 'Coral', 'Vermelha']);
+assert.ok(opcoesFaixaCategoria('Preta').includes('Preta'));
+assert.ok(opcoesFaixaCategoria('Faixa Extra').includes('Faixa Extra'));
 
 console.log('Modelos IBJJF Kids 2026 verificados: 12 idades e 108 divisões de peso.');

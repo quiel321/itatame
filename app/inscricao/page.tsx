@@ -39,6 +39,7 @@ function FormularioInscricao() {
   const [emailAtleta, setEmailAtleta] = useState("");
   const [inscricoesEncerradas, setInscricoesEncerradas] = useState(false);
   const [motivoInscricaoIndisponivel, setMotivoInscricaoIndisponivel] = useState("");
+  const [limiteVagas, setLimiteVagas] = useState(0);
   // Estados do Formulário
   const [categoria, setCategoria] = useState("");
   const [idade, setIdade] = useState("");
@@ -77,6 +78,7 @@ function FormularioInscricao() {
       setUserId(authData.user.id);
       setEmailAtleta(authData.user.email || "");
 
+      let equipesCarregadas: { id: string; nome: string; academia: string; professor: string }[] = [];
       if (eventoId) {
         const { data: ev } = await supabase.from("eventos").select("*").eq("id", eventoId).single();
         if (ev) {
@@ -86,11 +88,15 @@ function FormularioInscricao() {
             supabase.from('equipes_evento').select('id,nome,academia,professor').eq('evento_id', eventoId).eq('ativa', true).order('nome'),
           ]);
           if (cats.error && !['PGRST205','42P01'].includes(cats.error.code)) setTabelaErro('Não foi possível carregar as categorias. Recarregue a página antes de se inscrever.');
-          setCategoriasEvento(cats.data || []); setEquipesEvento(eqs.data || []);setTabelaCarregando(false);
+          equipesCarregadas = eqs.data || [];
+          setCategoriasEvento(cats.data || []); setEquipesEvento(equipesCarregadas);setTabelaCarregando(false);
           const dataFimInscricoes = ev.data_fim_inscricoes || ev.lote3_data_fim || ev.lote2_data_fim || ev.lote1_data_fim;
           const agoraInscricao = new Date();
           const inicioInscricoes = ev.data_inicio_inscricoes ? new Date(ev.data_inicio_inscricoes) : null;
           const statusAberto = String(ev.status || "").trim().toUpperCase() === "ABERTO";
+          const limite = Math.max(1, Number(ev.limite_vagas) || 500);
+          setLimiteVagas(limite);
+          const { count: ocupadas } = await supabase.from("inscricoes").select("id", { count: "exact", head: true }).eq("evento_id", eventoId);
           if (!statusAberto) {
             setInscricoesEncerradas(true);
             setMotivoInscricaoIndisponivel("Este evento ainda não está com as inscrições abertas.");
@@ -100,6 +106,9 @@ function FormularioInscricao() {
           } else if (dataFimInscricoes && agoraInscricao > new Date(dataFimInscricoes)) {
             setInscricoesEncerradas(true);
             setMotivoInscricaoIndisponivel("O período de inscrições deste evento terminou.");
+          } else if ((ocupadas || 0) >= limite) {
+            setInscricoesEncerradas(true);
+            setMotivoInscricaoIndisponivel(`As vagas deste campeonato esgotaram (${ocupadas}/${limite}). Novas inscrições ficam bloqueadas até o organizador ampliar o limite.`);
           } else {
             setInscricoesEncerradas(false);
             setMotivoInscricaoIndisponivel("");
@@ -131,7 +140,12 @@ function FormularioInscricao() {
         setModalidade(atleta.modalidade || "");
         setFotoUrl(atleta.foto_url || "");
         setCpfAtleta(atleta.cpf || "");
-}
+      }
+
+      if (equipesCarregadas.length === 1) {
+        setEquipeId(equipesCarregadas[0].id);
+        setEquipe(equipesCarregadas[0].nome);
+      }
 
       setLoading(false);
     }
@@ -197,6 +211,23 @@ function FormularioInscricao() {
       setErro(motivoInscricaoIndisponivel || "As inscrições deste evento não estão disponíveis.");
       setProcessando(false);
       return;
+    }
+
+    if (equipesEvento.length > 0 && !equipeId) {
+      setErro("Selecione a equipe oficial deste campeonato.");
+      setProcessando(false);
+      return;
+    }
+
+    if (limiteVagas > 0 && eventoId) {
+      const { count: ocupadas } = await supabase.from("inscricoes").select("id", { count: "exact", head: true }).eq("evento_id", eventoId);
+      if ((ocupadas || 0) >= limiteVagas) {
+        setInscricoesEncerradas(true);
+        setMotivoInscricaoIndisponivel(`As vagas deste campeonato esgotaram (${ocupadas}/${limiteVagas}). Novas inscrições ficam bloqueadas até o organizador ampliar o limite.`);
+        setErro(`As vagas deste campeonato esgotaram (${ocupadas}/${limiteVagas}).`);
+        setProcessando(false);
+        return;
+      }
     }
 
     if (tipoInscricao === "absoluto") {
@@ -268,12 +299,13 @@ function FormularioInscricao() {
       }
     }
 
+    const equipeOficial = equipesEvento.find(eq => eq.id === equipeId);
     let isLiberado = !cupomAplicado && valorTotal === 0;
     const inscricaoParaSalvar = {
       user_id: usuarioAtualId,
       atleta_id: atletaId,
       atleta: nome,
-      equipe,
+      equipe: equipeOficial?.nome || equipe,
       faixa,
       sexo,
       categoria,
@@ -437,7 +469,7 @@ function FormularioInscricao() {
                 </select>)}
                 {categoriasEvento.length > 0 && !categoriasElegiveis.length && <p className="text-amber-300 text-xs mt-2">Preencha sua idade. Se nenhuma categoria estiver disponível, confira faixa e peso no perfil ou fale com a organização.</p>}
                 {tabelaErro && <p role="alert" className="text-red-400 text-xs mt-2">{tabelaErro}</p>}
-                {equipesEvento.length > 0 && <label className="block mt-4 text-xs text-zinc-400">Equipe no campeonato<select value={equipeId} onChange={e => {const eq=equipesEvento.find(q=>q.id===e.target.value);setEquipeId(e.target.value);if(eq){setEquipe(eq.nome);setProfessor(eq.professor);}}} className="w-full bg-black border border-white/10 rounded-lg p-3 text-white mt-1"><option value="">{equipe} (cadastro atual)</option>{equipesEvento.map(eq=><option key={eq.id} value={eq.id}>{eq.nome}</option>)}</select></label>}
+                {equipesEvento.length > 0 && <label className="block mt-4 text-xs text-zinc-400">Equipe no campeonato<select value={equipeId} onChange={e => {const eq=equipesEvento.find(q=>q.id===e.target.value);setEquipeId(e.target.value);if(eq){setEquipe(eq.nome);}}} className="w-full bg-black border border-white/10 rounded-lg p-3 text-white mt-1"><option value="">Selecione a equipe deste evento</option>{equipesEvento.map(eq=><option key={eq.id} value={eq.id}>{eq.nome}</option>)}</select></label>}
 
               </div>
           </section>
@@ -508,7 +540,7 @@ function FormularioInscricao() {
 
             {erro && <div className="mb-4 bg-red-500/10 border border-red-500/20 text-red-400 text-[10px] rounded-lg p-3 text-center font-bold">❌ {erro}</div>}
 
-            <button disabled={processando || perfilIncompleto || !categoria || !termoAceito || inscricoesEncerradas || tabelaCarregando || !!tabelaErro || (categoriasEvento.length > 0 && !categoriaId)} className="cursor-pointer w-full bg-red-600 hover:bg-red-500 text-white font-black uppercase tracking-widest text-[11px] py-4 rounded-xl shadow-[0_0_15px_rgba(239,68,68,0.3)] transition-all disabled:opacity-50 flex items-center justify-center" onClick={finalizarInscricao}>
+            <button disabled={processando || perfilIncompleto || !categoria || !termoAceito || inscricoesEncerradas || tabelaCarregando || !!tabelaErro || (categoriasEvento.length > 0 && !categoriaId) || (equipesEvento.length > 0 && !equipeId)} className="cursor-pointer w-full bg-red-600 hover:bg-red-500 text-white font-black uppercase tracking-widest text-[11px] py-4 rounded-xl shadow-[0_0_15px_rgba(239,68,68,0.3)] transition-all disabled:opacity-50 flex items-center justify-center" onClick={finalizarInscricao}>
               {processando ? "Salvando Inscrição..." : "Confirmar Inscrição Oficial"}
             </button>
           </div>
