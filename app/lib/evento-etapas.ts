@@ -1,5 +1,8 @@
+import { dataOperacionalEvento, formatarDataHoraNoFuso, fusoHorarioEvento } from "./evento-datas";
+
 export type EventoComEtapas = {
   status?: string | null;
+  estado?: string | null;
   data_evento?: string | null;
   data_inicio_inscricoes?: string | null;
   data_fim_inscricoes?: string | null;
@@ -57,44 +60,27 @@ export type MarcoEvento = {
 
 const TOTAL_ETAPAS = 6;
 
-export function dataOperacional(valor?: string | null, fimDoDia = false) {
-  if (!valor) return null;
-
-  const somenteData = /^\d{4}-\d{2}-\d{2}$/.test(valor);
-  const normalizado = somenteData
-    ? `${valor}T${fimDoDia ? "23:59:59.999" : "00:00:00"}`
-    : valor;
-  const data = new Date(normalizado);
-
-  return Number.isNaN(data.getTime()) ? null : data;
+export function dataOperacional(valor?: string | null, fimDoDia = false, estado?: string | null) {
+  return dataOperacionalEvento(valor, fimDoDia, estado);
 }
 
-function formatarCurto(data: Date | null) {
+function formatarCurto(data: Date | null, estado?: string | null) {
   if (!data) return "data a definir";
-  return data.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+  return data.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", timeZone: fusoHorarioEvento(estado) });
 }
 
-export function formatarDataHoraEvento(valor?: string | null, fimDoDia = false) {
-  const data = dataOperacional(valor, fimDoDia);
-  if (!data) return "A definir";
-
-  const possuiHorario = Boolean(valor && valor.includes("T"));
-  return data.toLocaleString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    ...(possuiHorario ? { hour: "2-digit", minute: "2-digit" } : {}),
-  }).replace(",", " às");
+export function formatarDataHoraEvento(valor?: string | null, fimDoDia = false, estado?: string | null) {
+  return formatarDataHoraNoFuso(valor, fimDoDia, estado);
 }
 
 function fimDasInscricoes(evento: EventoComEtapas) {
-  const fimExplicito = dataOperacional(evento.data_fim_inscricoes, true);
+  const fimExplicito = dataOperacional(evento.data_fim_inscricoes, true, evento.estado);
   if (fimExplicito) return fimExplicito;
 
   return [
-    dataOperacional(evento.lote3_data_fim, true),
-    dataOperacional(evento.lote2_data_fim, true),
-    dataOperacional(evento.lote1_data_fim, true),
+    dataOperacional(evento.lote3_data_fim, true, evento.estado),
+    dataOperacional(evento.lote2_data_fim, true, evento.estado),
+    dataOperacional(evento.lote1_data_fim, true, evento.estado),
   ].find(Boolean) || null;
 }
 
@@ -128,14 +114,14 @@ export function obterEtapaEvento(
   resumoLutas?: ResumoLutasEvento | null,
 ): EtapaEvento {
   const status = String(evento.status || "").toUpperCase();
-  const inicioInscricoes = dataOperacional(evento.data_inicio_inscricoes);
+  const inicioInscricoes = dataOperacional(evento.data_inicio_inscricoes, false, evento.estado);
   const fimInscricoes = fimDasInscricoes(evento);
-  const fimPagamento = dataOperacional(evento.data_fim_pagamento, true);
-  const inicioChecagem = dataOperacional(evento.data_inicio_checagem);
-  const fimChecagem = dataOperacional(evento.data_fim_checagem, true);
-  const divulgacaoChaves = dataOperacional(evento.data_divulgacao_chaves);
-  const inicioEvento = dataOperacional(evento.data_evento);
-  const fimEvento = dataOperacional(evento.data_evento, true);
+  const fimPagamento = dataOperacional(evento.data_fim_pagamento, true, evento.estado);
+  const inicioChecagem = dataOperacional(evento.data_inicio_checagem, false, evento.estado);
+  const fimChecagem = dataOperacional(evento.data_fim_checagem, true, evento.estado);
+  const divulgacaoChaves = dataOperacional(evento.data_divulgacao_chaves, false, evento.estado);
+  const inicioEvento = dataOperacional(evento.data_evento, false, evento.estado);
+  const fimEvento = dataOperacional(evento.data_evento, true, evento.estado);
 
   if (resumoLutas && resumoLutas.total > 0) {
     const concluidas = Math.min(resumoLutas.concluidas, resumoLutas.total);
@@ -219,7 +205,7 @@ export function obterEtapaEvento(
       "CHAVES_PUBLICADAS",
       "Chaves publicadas",
       "Confira categoria, horário e caminho até o pódio",
-      inicioEvento ? `Próxima etapa: lutas em ${formatarCurto(inicioEvento)}` : "Próxima etapa: início das lutas",
+      inicioEvento ? `Próxima etapa: lutas em ${formatarCurto(inicioEvento, evento.estado)}` : "Próxima etapa: início das lutas",
       "blue",
       4,
     );
@@ -229,7 +215,7 @@ export function obterEtapaEvento(
     return criarEtapa(
       "CHECAGEM_ABERTA",
       "Checagem aberta",
-      fimChecagem ? `Correções até ${formatarCurto(fimChecagem)}` : "Revise seus dados e sua categoria",
+      fimChecagem ? `Correções até ${formatarCurto(fimChecagem, evento.estado)}` : "Revise seus dados e sua categoria",
       "Confirme peso, faixa, equipe e categoria",
       "amber",
       2,
@@ -244,7 +230,7 @@ export function obterEtapaEvento(
       "EM_CHAVEAMENTO",
       "Chaveamento em preparação",
       "Inscrições e correções foram concluídas",
-      divulgacaoChaves ? `Chaves previstas para ${formatarCurto(divulgacaoChaves)}` : "Aguarde a publicação das chaves",
+      divulgacaoChaves ? `Chaves previstas para ${formatarCurto(divulgacaoChaves, evento.estado)}` : "Aguarde a publicação das chaves",
       "violet",
       3,
     );
@@ -258,7 +244,7 @@ export function obterEtapaEvento(
     return criarEtapa(
       "AGUARDANDO_CHECAGEM",
       "Inscrições encerradas",
-      inicioChecagem ? `Checagem abre em ${formatarCurto(inicioChecagem)}` : "Aguarde a checagem dos atletas",
+      inicioChecagem ? `Checagem abre em ${formatarCurto(inicioChecagem, evento.estado)}` : "Aguarde a checagem dos atletas",
       "Próxima etapa: revisão das categorias",
       "amber",
       1,
@@ -269,7 +255,7 @@ export function obterEtapaEvento(
     return criarEtapa(
       "EM_BREVE",
       "Inscrições em breve",
-      inicioInscricoes ? `Abertura em ${formatarCurto(inicioInscricoes)}` : "Acompanhe a abertura das inscrições",
+      inicioInscricoes ? `Abertura em ${formatarCurto(inicioInscricoes, evento.estado)}` : "Acompanhe a abertura das inscrições",
       "Prepare seus dados de atleta",
       "cyan",
       0,
@@ -279,8 +265,8 @@ export function obterEtapaEvento(
   return criarEtapa(
     "INSCRICOES_ABERTAS",
     "Inscrições abertas",
-    fimInscricoes ? `Garanta sua vaga até ${formatarCurto(fimInscricoes)}` : "Garanta sua vaga",
-    fimPagamento ? `Pagamento até ${formatarCurto(fimPagamento)}` : "Finalize inscrição e pagamento",
+    fimInscricoes ? `Garanta sua vaga até ${formatarCurto(fimInscricoes, evento.estado)}` : "Garanta sua vaga",
+    fimPagamento ? `Pagamento até ${formatarCurto(fimPagamento, evento.estado)}` : "Finalize inscrição e pagamento",
     "emerald",
     1,
     true,
@@ -296,13 +282,13 @@ function estadoPorIndice(indiceMarco: number, indiceAtual: number): EstadoMarco 
 export function obterLinhaDoTempoEvento(evento: EventoComEtapas, agora = new Date()): MarcoEvento[] {
   const etapa = obterEtapaEvento(evento, agora);
   const indiceAtual = etapa.codigo === "EM_BREVE" ? 0 : etapa.indice;
-  const inicioInscricoes = formatarDataHoraEvento(evento.data_inicio_inscricoes);
-  const fimInscricoesFormatado = formatarDataHoraEvento(evento.data_fim_inscricoes, true);
-  const pagamento = formatarDataHoraEvento(evento.data_fim_pagamento, true);
-  const inicioChecagem = formatarDataHoraEvento(evento.data_inicio_checagem);
-  const fimChecagem = formatarDataHoraEvento(evento.data_fim_checagem, true);
-  const divulgacaoChaves = formatarDataHoraEvento(evento.data_divulgacao_chaves);
-  const dataEvento = formatarDataHoraEvento(evento.data_evento);
+  const inicioInscricoes = formatarDataHoraEvento(evento.data_inicio_inscricoes, false, evento.estado);
+  const fimInscricoesFormatado = formatarDataHoraEvento(evento.data_fim_inscricoes, true, evento.estado);
+  const pagamento = formatarDataHoraEvento(evento.data_fim_pagamento, true, evento.estado);
+  const inicioChecagem = formatarDataHoraEvento(evento.data_inicio_checagem, false, evento.estado);
+  const fimChecagem = formatarDataHoraEvento(evento.data_fim_checagem, true, evento.estado);
+  const divulgacaoChaves = formatarDataHoraEvento(evento.data_divulgacao_chaves, false, evento.estado);
+  const dataEvento = formatarDataHoraEvento(evento.data_evento, false, evento.estado);
 
   return [
     {

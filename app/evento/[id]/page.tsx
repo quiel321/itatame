@@ -98,7 +98,7 @@ export default function EventoDetalhesPage() {
     return `${dia}/${mes}/${ano}`;
   };
 
-  const formatarDataHora = (dataISO: string) => formatarDataHoraEvento(dataISO);
+  const formatarDataHora = (dataISO: string) => formatarDataHoraEvento(dataISO, false, evento.estado);
 
   const totalInscritos = inscricoes.length;
 
@@ -108,14 +108,14 @@ export default function EventoDetalhesPage() {
   const linhaDoTempo = obterLinhaDoTempoEvento(evento, agora);
   const estiloAtual = estiloEtapa[etapaAtual.tom];
   const lutasEmAndamento = resumoLutas.emAndamento;
-  const fimPagamento = dataOperacional(evento.data_fim_pagamento, true);
+  const fimPagamento = dataOperacional(evento.data_fim_pagamento, true, evento.estado);
   const pagamentoDisponivel =
     (etapaAtual.codigo === "INSCRICOES_ABERTAS" || etapaAtual.codigo === "AGUARDANDO_CHECAGEM") &&
     (!fimPagamento || agora <= fimPagamento);
   
-  const fimLote1 = dataOperacional(evento.lote1_data_fim, true);
-  const fimLote2 = dataOperacional(evento.lote2_data_fim, true);
-  const fimLote3 = dataOperacional(evento.lote3_data_fim, true);
+  const fimLote1 = dataOperacional(evento.lote1_data_fim, true, evento.estado);
+  const fimLote2 = dataOperacional(evento.lote2_data_fim, true, evento.estado);
+  const fimLote3 = dataOperacional(evento.lote3_data_fim, true, evento.estado);
   let loteAtivo = 0;
   if (fimLote1 && agora <= fimLote1) loteAtivo = 1;
   else if (fimLote2 && agora <= fimLote2) loteAtivo = 2;

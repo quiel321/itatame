@@ -18,6 +18,7 @@ import {
   Users,
 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
+import { dataHoraLocalParaIso, fusoHorarioEvento, paraInputDateTimeEvento } from "../../lib/evento-datas";
 
 type ModoFormulario = "criar" | "editar";
 
@@ -38,11 +39,6 @@ type RegrasPontuacao = {
 const inputClass = "w-full rounded-lg border border-white/10 bg-black px-3 py-3 text-sm text-white outline-none transition focus:border-red-500 placeholder:text-zinc-700";
 const labelClass = "mb-1.5 block text-[10px] font-black uppercase tracking-[0.16em] text-zinc-500";
 const cardClass = "rounded-xl border border-white/10 bg-[#0b0b0f] p-4 md:p-5";
-
-function paraInputDateTime(valor?: string | null) {
-  if (!valor) return "";
-  return String(valor).slice(0, 16);
-}
 
 function dinheiro(valor: number) {
   return Number(valor || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -130,9 +126,9 @@ export default function EventoForm({ modo, eventoId }: EventoFormProps) {
           lote1_valor: Number(evento.lote1_valor) || 0,
           lote2_valor: Number(evento.lote2_valor) || 0,
           lote3_valor: Number(evento.lote3_valor) || 0,
-          lote1_data_fim: paraInputDateTime(evento.lote1_data_fim),
-          lote2_data_fim: paraInputDateTime(evento.lote2_data_fim),
-          lote3_data_fim: paraInputDateTime(evento.lote3_data_fim),
+          lote1_data_fim: paraInputDateTimeEvento(evento.lote1_data_fim, evento.estado),
+          lote2_data_fim: paraInputDateTimeEvento(evento.lote2_data_fim, evento.estado),
+          lote3_data_fim: paraInputDateTimeEvento(evento.lote3_data_fim, evento.estado),
         };
         const [{ count: inscricoes }, { data: lutas }] = await Promise.all([
           supabase.from("inscricoes").select("id", { count: "exact", head: true }).eq("evento_id", eventoId),
@@ -155,19 +151,19 @@ export default function EventoForm({ modo, eventoId }: EventoFormProps) {
         setLimiteVagas(Number(evento.limite_vagas) || 500);
 
         setLote1Valor(Number(evento.lote1_valor) || 0);
-        setLote1DataFim(paraInputDateTime(evento.lote1_data_fim));
+        setLote1DataFim(paraInputDateTimeEvento(evento.lote1_data_fim, evento.estado));
         setLote2Valor(Number(evento.lote2_valor) || 0);
-        setLote2DataFim(paraInputDateTime(evento.lote2_data_fim));
+        setLote2DataFim(paraInputDateTimeEvento(evento.lote2_data_fim, evento.estado));
         setLote3Valor(Number(evento.lote3_valor) || 0);
-        setLote3DataFim(paraInputDateTime(evento.lote3_data_fim));
+        setLote3DataFim(paraInputDateTimeEvento(evento.lote3_data_fim, evento.estado));
 
-        setDataInicioInscricoes(paraInputDateTime(evento.data_inicio_inscricoes));
-        setDataFimInscricoes(paraInputDateTime(evento.data_fim_inscricoes));
-        setDataFimPagamento(paraInputDateTime(evento.data_fim_pagamento));
-        setDataInicioChecagem(paraInputDateTime(evento.data_inicio_checagem));
-        setDataFimChecagem(paraInputDateTime(evento.data_fim_checagem));
-        setDataDivulgacaoChaves(paraInputDateTime(evento.data_divulgacao_chaves));
-        setDataDivulgacaoCronograma(paraInputDateTime(evento.data_divulgacao_cronograma));
+        setDataInicioInscricoes(paraInputDateTimeEvento(evento.data_inicio_inscricoes, evento.estado));
+        setDataFimInscricoes(paraInputDateTimeEvento(evento.data_fim_inscricoes, evento.estado));
+        setDataFimPagamento(paraInputDateTimeEvento(evento.data_fim_pagamento, evento.estado));
+        setDataInicioChecagem(paraInputDateTimeEvento(evento.data_inicio_checagem, evento.estado));
+        setDataFimChecagem(paraInputDateTimeEvento(evento.data_fim_checagem, evento.estado));
+        setDataDivulgacaoChaves(paraInputDateTimeEvento(evento.data_divulgacao_chaves, evento.estado));
+        setDataDivulgacaoCronograma(paraInputDateTimeEvento(evento.data_divulgacao_cronograma, evento.estado));
 
         const regras = (evento.regras_pontuacao_equipes || {}) as RegrasPontuacao;
         setPontosEquipeOuro(Number(regras.ouro) || 9);
@@ -304,18 +300,18 @@ export default function EventoForm({ modo, eventoId }: EventoFormProps) {
         regulamento_url: finalRegulamentoUrl,
         limite_vagas: limiteVagas,
         lote1_valor: lote1Valor,
-        lote1_data_fim: lote1DataFim || null,
+        lote1_data_fim: dataHoraLocalParaIso(lote1DataFim, estado),
         lote2_valor: lote2Valor,
-        lote2_data_fim: lote2DataFim || null,
+        lote2_data_fim: dataHoraLocalParaIso(lote2DataFim, estado),
         lote3_valor: lote3Valor,
-        lote3_data_fim: lote3DataFim || null,
-        data_inicio_inscricoes: dataInicioInscricoes || null,
-        data_fim_inscricoes: fimInscricoesFinal || null,
-        data_fim_pagamento: dataFimPagamento || null,
-        data_inicio_checagem: dataInicioChecagem || null,
-        data_fim_checagem: dataFimChecagem || null,
-        data_divulgacao_chaves: dataDivulgacaoChaves || null,
-        data_divulgacao_cronograma: dataDivulgacaoCronograma || null,
+        lote3_data_fim: dataHoraLocalParaIso(lote3DataFim, estado),
+        data_inicio_inscricoes: dataHoraLocalParaIso(dataInicioInscricoes, estado),
+        data_fim_inscricoes: dataHoraLocalParaIso(fimInscricoesFinal, estado),
+        data_fim_pagamento: dataHoraLocalParaIso(dataFimPagamento, estado),
+        data_inicio_checagem: dataHoraLocalParaIso(dataInicioChecagem, estado),
+        data_fim_checagem: dataHoraLocalParaIso(dataFimChecagem, estado),
+        data_divulgacao_chaves: dataHoraLocalParaIso(dataDivulgacaoChaves, estado),
+        data_divulgacao_cronograma: dataHoraLocalParaIso(dataDivulgacaoCronograma, estado),
         regras_pontuacao_equipes: regrasPontuacaoEquipes,
       };
 
@@ -405,6 +401,7 @@ export default function EventoForm({ modo, eventoId }: EventoFormProps) {
 
             <div className={cardClass}>
               <SectionTitle icon={<Users size={16} />} title="Inscrições e lotes" subtitle="Controle de vagas, datas e valores por etapa." />
+              <p className="mt-3 text-xs text-cyan-300">Todos os horários abaixo seguem o fuso do evento: {fusoHorarioEvento(estado).replace("America/", "").replaceAll("_", " ")} ({estado || "UF não informada"}).</p>
               <div className="mt-4 grid gap-3 md:grid-cols-3">
                 <Field label="Limite de vagas"><input type="number" min={1} value={limiteVagas} onChange={(e) => setLimiteVagas(Number(e.target.value))} className={inputClass} /></Field>
                 <Field label="Início das inscrições"><input type="datetime-local" value={dataInicioInscricoes} onChange={(e) => setDataInicioInscricoes(e.target.value)} className={inputClass + " [color-scheme:dark]"} /></Field>
