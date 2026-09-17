@@ -103,6 +103,29 @@
     };
   }
 
+  export type RegrasPontuacaoEvento = {
+    ouro?: number;
+    prata?: number;
+    bronze?: number;
+    vitoria?: number;
+    wo_pontua?: boolean;
+    ranking_publicado?: boolean;
+    ranking_aplicado?: boolean;
+  };
+
+  export function lerRegrasPontuacao(valor: unknown): RegrasPontuacaoEvento {
+    if (!valor) return {};
+    if (typeof valor === 'string') {
+      try {
+        const lido = JSON.parse(valor);
+        return lido && typeof lido === 'object' ? lido as RegrasPontuacaoEvento : {};
+      } catch {
+        return {};
+      }
+    }
+    return typeof valor === 'object' ? valor as RegrasPontuacaoEvento : {};
+  }
+
   export function isCompetidorReal(nome: string | null | undefined): boolean {
     if (!nome) return false;
     const cleanName = nome.trim().toUpperCase();

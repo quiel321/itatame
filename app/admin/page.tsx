@@ -487,6 +487,7 @@ export default function AdminPage() {
           <Link href="/admin/guia" className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-red-300">Guia rápido</Link>
           <Link href={`/admin/categorias?evento=${eventoSelecionado}`} className="rounded-lg bg-white/5 px-3 py-2">Categorias</Link>
           <Link href={`/admin/equipes?evento=${eventoSelecionado}`} className="rounded-lg bg-white/5 px-3 py-2">Equipes e professores</Link>
+          <Link href={`/admin/ranking?evento=${eventoSelecionado}`} className="rounded-lg bg-white/5 px-3 py-2">Resultados e ranking</Link>
           <Link href={`/admin/resultados?evento=${eventoSelecionado}`} className="rounded-lg bg-white/5 px-3 py-2">Resultados manuais</Link>
           <Link href="/admin/financeiro" className="rounded-lg bg-white/5 px-3 py-2">Financeiro</Link>
           <Link href="/admin/mensagens" className="relative rounded-lg bg-white/5 px-3 py-2">Chat com atletas<SeloNaoLidas quantidade={chatNaoLidas} /></Link>
@@ -588,6 +589,16 @@ export default function AdminPage() {
                 <div>
                   <h3 className="text-xs md:text-sm font-black text-white transition-colors leading-tight">Chaveamento</h3>
                   <p className="text-zinc-500 text-[9px] md:text-[10px] font-medium mt-1 hidden md:block">Sortear atletas.</p>
+                </div>
+              </Link>
+
+              <Link href="/admin/ranking" className="group cursor-pointer bg-black/40 border border-white/5 hover:border-white/20 rounded-2xl p-4 md:p-5 transition-all flex flex-col xl:flex-row xl:items-center gap-3 md:gap-4 shadow-xl hover:-translate-y-1">
+                <div className="w-10 h-10 md:w-12 md:h-12 bg-black text-yellow-400 border border-white/5 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-yellow-500 group-hover:border-yellow-500 group-hover:text-black transition-all shadow-inner">
+                  <Trophy className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-xs md:text-sm font-black text-white transition-colors leading-tight">Resultados e ranking</h3>
+                  <p className="text-zinc-500 text-[9px] md:text-[10px] font-medium mt-1 hidden md:block">Publicar o pódio.</p>
                 </div>
               </Link>
 

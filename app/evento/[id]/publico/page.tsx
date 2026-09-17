@@ -323,8 +323,11 @@ export default function ChavesPublicoPage() {
           </div>
         )}
 
-        <div className="flex flex-col justify-between items-center mb-6 md:mb-10 px-4 md:px-0 mt-8">
-          <h1 className="text-white text-3xl md:text-5xl font-black uppercase tracking-tighter w-full">Chaveamento Oficial</h1>
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 mb-6 md:mb-10 px-4 md:px-0 mt-8">
+          <h1 className="text-white text-3xl md:text-5xl font-black uppercase tracking-tighter">Chaveamento Oficial</h1>
+          <Link href={`/ranking?evento=${idEvento}`} className="rounded-xl border border-yellow-500/40 bg-yellow-500/10 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-yellow-400 hover:bg-yellow-500/20">
+            Ranking deste campeonato
+          </Link>
         </div>
 
         <div className="bg-[#050816] border-y md:border border-white/10 md:rounded-3xl p-4 md:p-6 mb-4 mx-0 flex flex-col md:flex-row gap-4 items-end shadow-lg">

@@ -189,6 +189,16 @@ export default function EventoDetalhesPage() {
                     <p className="text-[9px] font-black uppercase tracking-[0.18em] text-zinc-500">Estado atual do evento</p>
                     <p className="mt-1 text-xs font-black uppercase tracking-wide text-white md:text-sm">{etapaAtual.titulo}</p>
                     <p className="mt-1 text-[10px] font-medium leading-relaxed text-zinc-400 md:text-xs">{etapaAtual.detalhe}. {etapaAtual.proximoPasso}.</p>
+                    {etapaAtual.codigo === "ENCERRADO" && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <Link href={`/evento/${evento.id}/publico`} className="inline-flex rounded-lg bg-yellow-500 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-black hover:bg-yellow-400">
+                          Ver pódio e chaves
+                        </Link>
+                        <Link href={`/ranking?evento=${evento.id}`} className="inline-flex rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-white hover:bg-white/10">
+                          Ver ranking
+                        </Link>
+                      </div>
+                    )}
                     </div>
                   </div>
                   {lutasEmAndamento > 0 && <Link href={`/evento/${evento.id}/ao-vivo`} className="flex shrink-0 items-center justify-center gap-2 rounded-lg border border-red-400/40 bg-red-950/70 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-red-100 shadow-[0_0_18px_rgba(239,68,68,0.2)] hover:bg-red-900/80"><span className="h-2 w-2 animate-pulse rounded-full bg-red-400" />{lutasEmAndamento} {lutasEmAndamento === 1 ? 'Luta ao Vivo' : 'Lutas ao Vivo'}</Link>}
@@ -206,6 +216,18 @@ export default function EventoDetalhesPage() {
             )}
 
             <div className="flex flex-wrap items-center gap-2 md:gap-3">
+              {etapaAtual.codigo === "ENCERRADO" ? (
+                <>
+                  <Link href={`/evento/${evento.id}/publico`} className="bg-yellow-500 hover:bg-yellow-400 text-black font-black uppercase tracking-widest text-[10px] md:text-xs px-3 py-2.5 md:px-6 md:py-3.5 rounded-lg text-center flex-1 md:flex-none">
+                    Ver pódio e chaves oficiais
+                  </Link>
+                  <Link href={`/ranking?evento=${evento.id}`} className="bg-white/5 hover:bg-white/10 border border-white/10 text-white font-black uppercase tracking-widest text-[10px] md:text-xs px-3 py-2.5 md:px-6 md:py-3.5 rounded-lg text-center flex-1 md:flex-none">
+                    Ver ranking do campeonato
+                  </Link>
+                  <ChatEvento eventoId={evento.id} compacto />
+                </>
+              ) : (
+                <>
               {!etapaAtual.inscricoesAbertas || vagasEsgotadas ? (
                 <button disabled className="bg-zinc-800 text-zinc-500 font-black uppercase tracking-widest text-[10px] md:text-xs px-3 py-2.5 md:px-6 md:py-3.5 rounded-lg text-center flex-1 md:flex-none cursor-not-allowed border border-white/5">
                   {etapaAtual.codigo === "EM_BREVE" ? "Inscrições em breve" : vagasEsgotadas && etapaAtual.inscricoesAbertas ? "Vagas esgotadas" : "Inscrições fechadas"}
@@ -250,6 +272,8 @@ export default function EventoDetalhesPage() {
                   <svg className="w-3.5 h-3.5 md:w-4 md:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                   Regulamento
                 </a>
+              )}
+                </>
               )}
             </div>
           </div>

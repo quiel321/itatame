@@ -22,6 +22,7 @@ export default function RankingPage() {
   const [atletaSelecionado, setAtletaSelecionado] = useState<any>(null);
   const [historicoLoading, setHistoricoLoading] = useState(false);
   const [historicoEventos, setHistoricoEventos] = useState<any[]>([]);
+  const [pronto, setPronto] = useState(false);
 
   useEffect(() => {
     carregarDadosIniciais();
@@ -41,15 +42,13 @@ export default function RankingPage() {
 
     const { data: atls } = await supabase.from("atletas_publico").select("id, user_id, nome, foto_url, faixa, academia, equipe, ouro, prata, bronze, vitorias, lutas, vitorias_wo");
     if (atls) setTodosAtletas(atls);
-    
+    setPronto(true);
     setLoading(false);
   }
 
   useEffect(() => {
-    if (todosAtletas.length > 0) {
-      calcularRanking();
-    }
-  }, [filtroEvento, todosAtletas, eventos]);
+    if (pronto) void calcularRanking();
+  }, [filtroEvento, todosAtletas, eventos, pronto]);
 
   async function calcularRanking() {
     try {
@@ -73,8 +72,9 @@ export default function RankingPage() {
       const num = (valor: any) => Number(valor || 0);
       const normalizeName = (name: any) => name ? String(name).trim().toUpperCase() : "";
       
-      // MAPA MESTRE: Usa o nome padronizado para impedir duplicação
+      // MAPA MESTRE: cruza id oficial e nome para não perder quem lutou
       const mapAtletas = new Map();
+      const idsPorNome = new Map<string, string>();
 
       // 1. Regista todo mundo que está no banco de dados primeiro
       todosAtletas.forEach(atleta => {
@@ -87,15 +87,17 @@ export default function RankingPage() {
           bronze: num(atleta.bronze), 
           vitorias: num(atleta.vitorias), 
           lutas: num(atleta.lutas),
-          vitorias_wo: 0, // Ignoramos o WO do BD porque os dados manuais estão corrompidos (ex: 149)
+          vitorias_wo: 0,
           pts_calculados: 0
         });
+        if (atleta.id) idsPorNome.set(String(atleta.id), key);
       });
 
       // 2. Cruza com os resultados lidos das chaves (Motor)
       resultado.atletas.forEach((r: any) => {
         if (!isCompetidorReal(r.nome)) return;
-        const key = normalizeName(r.nome);
+        const keyPorId = r.atleta_id ? idsPorNome.get(String(r.atleta_id)) : undefined;
+        const key = keyPorId || normalizeName(r.nome);
 
         if (mapAtletas.has(key)) {
           const base = mapAtletas.get(key);
@@ -137,7 +139,7 @@ export default function RankingPage() {
       mapAtletas.forEach((atleta, key) => {
         // Se for filtro de evento, remove quem não participou do evento!
         if (filtroEvento !== "Geral") {
-           const participou = resultado.atletas.find((res: any) => normalizeName(res.nome) === key);
+           const participou = resultado.atletas.find((res: any) => String(res.atleta_id) === String(atleta.id) || normalizeName(res.nome) === key);
            if (!participou) return; 
         }
 
@@ -298,7 +300,9 @@ export default function RankingPage() {
               Ranking Oficial
             </h1>
             <p className="text-zinc-400 text-[11px] md:text-xs max-w-sm font-medium leading-relaxed">
-              Acompanhe a elite do circuito. Pontuação com base nas regras do evento selecionado.
+              {filtroEvento === "Geral"
+                ? "Acompanhe a elite do circuito. Pontuação com base nas regras de cada campeonato."
+                : `Pódio e pontos de ${eventos.find((evento) => String(evento.id) === String(filtroEvento))?.nome || "este campeonato"}.`}
             </p>
           </div>
 
@@ -345,7 +349,16 @@ export default function RankingPage() {
           <div className="py-16 text-center bg-[#0a0a0e]/50 border border-dashed border-white/10 rounded-2xl max-w-xl mx-auto">
             <span className="text-2xl mb-2 block opacity-50">!</span>
             <h3 className="text-sm font-extrabold text-white mb-1.5">Sem registros no momento</h3>
-            <p className="text-zinc-500 text-[11px] max-w-sm mx-auto leading-relaxed">Não há lutas concluídas ou dados suficientes para montar este ranking.</p>
+            <p className="text-zinc-500 text-[11px] max-w-sm mx-auto leading-relaxed">
+              {filtroEvento === "Geral"
+                ? "Não há lutas pontuadas o suficiente para montar o ranking global."
+                : "Este campeonato ainda não pontuou no ranking. W.O. contra adversário real não conta; o pódio oficial está nas chaves."}
+            </p>
+            {filtroEvento !== "Geral" && (
+              <Link href={`/evento/${filtroEvento}/publico`} className="mt-4 inline-flex rounded-lg bg-yellow-500 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-black">
+                Ver pódio e chaves
+              </Link>
+            )}
           </div>
         ) : (
           <div className="animate-in fade-in slide-in-from-bottom-8 duration-700">

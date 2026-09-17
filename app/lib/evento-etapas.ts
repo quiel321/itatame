@@ -135,7 +135,7 @@ export function obterEtapaEvento(
           "ENCERRADO",
           "Evento encerrado",
           `${concluidas} de ${resumoLutas.total} lutas concluídas`,
-          "Consulte os resultados oficiais",
+          "Abra o pódio, as chaves e o ranking deste campeonato",
           "zinc",
           6,
         ),
@@ -181,7 +181,7 @@ export function obterEtapaEvento(
       "ENCERRADO",
       "Evento encerrado",
       "Resultados e chaves permanecem disponíveis",
-      "Consulte os resultados oficiais",
+      "Abra o pódio, as chaves e o ranking deste campeonato",
       "zinc",
       6,
     );

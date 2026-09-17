@@ -4,7 +4,7 @@ import { prepararGrupos, montarChaves } from '../app/lib/gerar-chaves';
 import { grupoInscricao, categoriaCompativel, type CategoriaCompeticao, type InscricaoCompeticao } from '../app/lib/categorias-competicao';
 import { criarChavesImpressao, tituloEventoImpressao, type LutaImpressao } from '../app/lib/chaves-impressao';
 import { limiteParcelas, validarParcelas } from '../app/lib/parcelamento';
-import { calcularResultadosChaves } from '../app/lib/ranking-eventos';
+import { calcularResultadosChaves, lerRegrasPontuacao } from '../app/lib/ranking-eventos';
 import { processarAvancosAutomaticosChaves } from '../app/lib/chaves-auto-avanco';
 
 const evento='11111111-1111-4111-8111-111111111111';
@@ -95,6 +95,7 @@ const woAdversarioReal = calcularResultadosChaves([{
   atleta_2:'Bia', atleta_2_id:2, equipe_2:'B',
 }]);
 assert.equal(woAdversarioReal.atletas.length,0);
+assert.equal(JSON.stringify(lerRegrasPontuacao('{"ranking_publicado":true}')).includes('ranking_publicado'), true);
 
 function memoriaChaves(lutas:any[], inscricoes:any[]) {
   return {
