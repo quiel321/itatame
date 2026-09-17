@@ -53,6 +53,7 @@ export function dataOperacionalEvento(valor?: string | null, fimDoDia = false, e
     ? dataHoraLocalParaIso(`${valor}T${fimDoDia ? "23:59:59" : "00:00:00"}`, estado)
     : valor;
   const data = new Date(normalizado || "");
+  if (somenteData && fimDoDia && !Number.isNaN(data.getTime())) data.setMilliseconds(999);
   return Number.isNaN(data.getTime()) ? null : data;
 }
 

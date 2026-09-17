@@ -16,7 +16,7 @@ test("horários do evento em Cuiabá sobrevivem ao ciclo salvar, ler e exibir", 
 
 test("a data do evento e o fim do dia não mudam com o fuso da máquina", () => {
   assert.equal(dataOperacionalEvento("2026-09-18", false, "MT")?.toISOString(), "2026-09-18T04:00:00.000Z");
-  assert.equal(dataOperacionalEvento("2026-09-18", true, "MT")?.toISOString(), "2026-09-19T03:59:59.000Z");
+  assert.equal(dataOperacionalEvento("2026-09-18", true, "MT")?.toISOString(), "2026-09-19T03:59:59.999Z");
   assert.equal(formatarDataHoraNoFuso("2026-09-18", false, "MT"), "18/09/2026");
 });
 
