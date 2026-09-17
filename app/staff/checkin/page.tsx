@@ -7,6 +7,7 @@ import { CheckCircle, XCircle, Scale, ArrowLeft, QrCode } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { obterTempoRegulamentar } from '../../lib/cronograma';
 import { garantirVinculoStaff } from '../../lib/staff-sessao';
+import { processarAvancosAutomaticosChaves } from '../../lib/chaves-auto-avanco';
 
 export default function CheckinOperador() {
   const router = useRouter();
@@ -267,6 +268,11 @@ export default function CheckinOperador() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ atleta_id: atleta.atleta_id, titulo: 'Check-in aprovado', mensagem: mensagemPush, url: `/evento/${atleta.evento_id}/ao-vivo` }),
         }).catch(() => null);
+        try {
+          await processarAvancosAutomaticosChaves(supabase, atleta.evento_id);
+        } catch {
+          // O check-in já foi gravado; o avanço na chave pode ser refeito no painel.
+        }
         alert(`Atleta ${atleta.atleta} aprovado no check-in.`);
     } else {
         alert(`Atleta ${atleta.atleta} desclassificado no check-in.`);

@@ -86,6 +86,7 @@ export default function ChavesPublicoPage() {
   const [abaAtual, setAbaAtual] = useState(1) 
   const [atletasDB, setAtletasDB] = useState<any[]>([])
   const [temPendencia, setTemPendencia] = useState(false)
+  const [versaoChaves, setVersaoChaves] = useState(0)
 
   async function verificarPagamento() {
     if (!idEvento) return;
@@ -122,6 +123,12 @@ export default function ChavesPublicoPage() {
     verificarPagamento();
     carregarCategorias();
     carregarFotos();
+    if (idEvento) {
+      void fetch(`/api/eventos/${idEvento}/gerar-chaves-auto`).then(() => {
+        carregarCategorias();
+        setVersaoChaves(atual => atual + 1);
+      });
+    }
   }, [])
 
   useEffect(() => { 
@@ -133,7 +140,7 @@ export default function ChavesPublicoPage() {
       })
       .subscribe();
     return () => { supabase.removeChannel(subscription); }
-  }, [categoriaSelecionada])
+  }, [categoriaSelecionada, versaoChaves])
 
   const categoriasFiltradas = categoriasMenu.filter((cat) => {
     const isAbsoluto = cat.toLowerCase().includes("absoluto");
@@ -270,7 +277,14 @@ export default function ChavesPublicoPage() {
     },
   ])).filter((item) => isAtletaValido(item.nome) && item.controle.presente);
 
-  const atletasAguardandoDefinicao = lutasAtivas.filter(l => (isAtletaValido(l.atleta_1) && !isAtletaValido(l.atleta_2)) || (!isAtletaValido(l.atleta_1) && isAtletaValido(l.atleta_2)));
+  const atletasAguardandoDefinicao = lutasAtivas.filter(luta => {
+    const umSo = (isAtletaValido(luta.atleta_1) && !isAtletaValido(luta.atleta_2)) || (!isAtletaValido(luta.atleta_1) && isAtletaValido(luta.atleta_2));
+    if (!umSo) return false;
+    const fantasma = isAtletaValido(luta.atleta_1) ? luta.atleta_2 : luta.atleta_1;
+    const aguardaChaveAnterior = lutas.some(item => String(item.proxima_luta) === String(luta.id_visual));
+    const nomeFantasma = String(fantasma || '').trim().toUpperCase();
+    return aguardaChaveAnterior || nomeFantasma === 'TBD' || nomeFantasma === '' || nomeFantasma === 'BYE' || nomeFantasma.includes('SEM OPONENTE');
+  });
 
   // Descobre de onde vem o oponente do atleta que está na Baia
   const getTextoBaia = (lutaWait: any) => {
@@ -283,7 +297,7 @@ export default function ChavesPublicoPage() {
         return `Aguardando vencedor da ${rotuloLuta(feederOponente)}`;
       }
     }
-    return "Avanço Direto - Aguardando oponente";
+    return "Aguardando checagem · ouro só após a presença";
   };
 
   return (
@@ -468,7 +482,7 @@ export default function ChavesPublicoPage() {
 
           {atletasAguardandoDefinicao.length > 0 && (
             <div className="mb-10 rounded-xl border border-yellow-500/15 bg-yellow-500/5 p-4">
-              <h3 className="mb-3 text-[10px] font-black uppercase tracking-widest text-yellow-400">Atletas de chapéu · aguardando definição</h3>
+              <h3 className="mb-3 text-[10px] font-black uppercase tracking-widest text-yellow-400">Aguardando definição</h3>
               <div className="flex flex-wrap gap-2">
                 {atletasAguardandoDefinicao.map((luta) => {
                   const isA1 = isAtletaValido(luta.atleta_1);

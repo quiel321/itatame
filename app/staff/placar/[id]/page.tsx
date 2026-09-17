@@ -214,7 +214,7 @@ export default function PlacarMesarioDB() {
       // A decisao do arbitro fica identificada no JSON do placar sem enviar
       // um novo valor ao enum durante a operacao do campeonato.
       const decisaoArbitro = metodo === "decisao_arbitro";
-      const metodoCompativel = decisaoArbitro ? "pontos" : metodo;
+      const metodoCompativel = decisaoArbitro ? "pontos" : (metodo === "ausencia" ? "wo" : metodo);
       const { error } = await supabase.from("chaves").update({
         vencedor: nomeVencedor,
         vencedor_id: idVencedor,
@@ -246,7 +246,9 @@ export default function PlacarMesarioDB() {
         finalizada_em: finalizadaEm,
       } : atual);
 
-      const ganhouPorWO = metodo === "wo";
+      const ganhouPorWO = metodo === "wo" || metodo === "ausencia";
+      const perdedorEhReal = Boolean(limparNome(nomePerdedor));
+      const ignoraMedalha = ganhouPorWO && perdedorEhReal;
       const isFinal = String(lutaAtual.fase || '').toLowerCase().startsWith('final') || String(lutaAtual.id_visual) === "999";
       const primeiraDaChaveDeTres = String(lutaAtual.id_visual) === '1' && String(lutaAtual.fase || '').toUpperCase().includes('CHAVE DE 3');
       const isSemifinal = String(lutaAtual.proxima_luta) === "999" && !primeiraDaChaveDeTres;
@@ -260,14 +262,14 @@ export default function PlacarMesarioDB() {
         }
       };
 
-      if (ganhouPorWO && idVencedor) await updateEstatistica(idVencedor, "vitorias_wo", 1);
+      if (!ignoraMedalha && ganhouPorWO && idVencedor) await updateEstatistica(idVencedor, "vitorias_wo", 1);
 
-      if (isFinal) {
+      if (!ignoraMedalha && isFinal) {
         if (idVencedor) await updateEstatistica(idVencedor, "ouro", 1);
         if (idPerdedor) await updateEstatistica(idPerdedor, "prata", 1);
       }
 
-      if (isSemifinal) {
+      if (!ignoraMedalha && isSemifinal) {
         if (idPerdedor) await updateEstatistica(idPerdedor, "bronze", 1);
       }
 
@@ -497,11 +499,13 @@ export default function PlacarMesarioDB() {
     const nomePerdedor = lado === 'azul' ? lutaAtual.atleta_2 : lutaAtual.atleta_1;
     const perdedorNormalizado = String(nomePerdedor || '').trim().toUpperCase();
     const perdedorEhReal = Boolean(perdedorNormalizado) && !['BYE', 'TBD'].includes(perdedorNormalizado) && !perdedorNormalizado.includes('SEM OPONENTE');
-    const metodoFinal = metodoCorrecao === 'wo' && perdedorEhReal ? 'ausencia' : metodoCorrecao;
+    const metodoFinal = metodoCorrecao === 'ausencia' ? 'wo' : metodoCorrecao;
     const antigoVencedorId = lutaAtual.vencedor_id;
     const antigoPerdedorId = String(antigoVencedorId) === String(lutaAtual.atleta_1_id) ? lutaAtual.atleta_2_id : lutaAtual.atleta_1_id;
     const mudouVencedor = String(antigoVencedorId || '') !== String(novoId || '');
     const metodoAntigo = lutaAtual.metodo_vitoria || 'pontos';
+    const ignoraAntigo = (metodoAntigo === 'wo' || metodoAntigo === 'ausencia') && perdedorEhReal;
+    const ignoraNovo = metodoFinal === 'wo' && perdedorEhReal;
     const isFinal = String(lutaAtual.fase || '').toLowerCase().startsWith('final') || String(lutaAtual.id_visual) === '999';
     const primeiraDaChaveDeTres = String(lutaAtual.id_visual) === '1' && String(lutaAtual.fase || '').toUpperCase().includes('CHAVE DE 3');
     const isSemifinal = String(lutaAtual.proxima_luta) === '999' && !primeiraDaChaveDeTres;
@@ -515,18 +519,22 @@ export default function PlacarMesarioDB() {
 
     if (mudouVencedor) {
       if (isFinal) {
-        await ajustar(antigoVencedorId, 'ouro', -1);
-        await ajustar(antigoPerdedorId, 'prata', -1);
-        await ajustar(novoId, 'ouro', 1);
-        await ajustar(novoPerdedorId, 'prata', 1);
+        if (!ignoraAntigo) {
+          await ajustar(antigoVencedorId, 'ouro', -1);
+          await ajustar(antigoPerdedorId, 'prata', -1);
+        }
+        if (!ignoraNovo) {
+          await ajustar(novoId, 'ouro', 1);
+          await ajustar(novoPerdedorId, 'prata', 1);
+        }
       }
       if (isSemifinal) {
-        await ajustar(antigoPerdedorId, 'bronze', -1);
-        await ajustar(novoPerdedorId, 'bronze', 1);
+        if (!ignoraAntigo) await ajustar(antigoPerdedorId, 'bronze', -1);
+        if (!ignoraNovo) await ajustar(novoPerdedorId, 'bronze', 1);
       }
     }
-    if (metodoAntigo === 'wo' && (mudouVencedor || metodoFinal !== 'wo')) await ajustar(antigoVencedorId, 'vitorias_wo', -1);
-    if (metodoFinal === 'wo' && (mudouVencedor || metodoAntigo !== 'wo')) await ajustar(novoId, 'vitorias_wo', 1);
+    if (!ignoraAntigo && metodoAntigo === 'wo' && (mudouVencedor || metodoFinal !== 'wo')) await ajustar(antigoVencedorId, 'vitorias_wo', -1);
+    if (!ignoraNovo && metodoFinal === 'wo' && (mudouVencedor || metodoAntigo !== 'wo')) await ajustar(novoId, 'vitorias_wo', 1);
 
     const { error } = await supabase.from('chaves').update({
       vencedor: novoNome,

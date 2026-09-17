@@ -179,7 +179,7 @@ export default function PainelMesario() {
       return;
     }
 
-    const houveAvanco = await processarAvancosAutomaticosChaves(supabase, sessao.evento_id);
+    const houveAvanco = await processarAvancosAutomaticosChaves(supabase, sessao.evento_id).catch(() => false);
     if (houveAvanco) {
       const { data: atualizadas } = await supabase
         .from('chaves')

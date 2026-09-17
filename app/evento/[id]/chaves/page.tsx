@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react"
 import { useParams } from "next/navigation"
 import { supabase } from "@/app/lib/supabase"
-import { processarAvancosAutomaticosChaves, propagarResultadoChave } from "@/app/lib/chaves-auto-avanco"
 import { rotuloLuta } from "@/app/lib/lutas-rotulos"
 
 // 1. Componente Atleta (COM FOTO E INTELIGÊNCIA DE LAYOUT)
@@ -98,6 +97,8 @@ export default function ChavesPage() {
   }
 
   useEffect(() => { 
+    if (!params.id) return;
+    void fetch(`/api/eventos/${params.id}/gerar-chaves-auto`).then(() => { carregarCategorias(); carregarChaves(); });
     carregarCategorias();
     carregarFotos();
   }, [])
@@ -187,7 +188,7 @@ export default function ChavesPage() {
   }
 
   const getAtletaDaFinal = (slot: number) => {
-    const luta = lutas.find(l => String(l.id_visual) === "999");
+    const luta = lutas.find(l => String(l.id_visual) === "999") || lutas.find(l => !l.proxima_luta);
     if (!luta) return { nome: "", equipe: "", foto: null };
 
     const nomeBruto = slot === 1 ? luta.atleta_1 : luta.atleta_2;
@@ -204,7 +205,7 @@ export default function ChavesPage() {
   }
 
   const getCampeao = () => {
-    const lutaFinal = lutas.find(l => String(l.id_visual) === "999");
+    const lutaFinal = lutas.find(l => String(l.id_visual) === "999") || lutas.find(l => !l.proxima_luta);
     const campeao = limparNome(lutaFinal?.vencedor || null);
     return {
       nome: campeao,

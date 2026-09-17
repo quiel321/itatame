@@ -335,7 +335,7 @@ export default function PainelChamador() {
       return;
     }
     setAcaoId(luta.id);
-    const { error } = await supabase.from('chaves').update({ status_luta: 'concluida', vencedor: nomeVencedor, vencedor_id: idVencedor || null, metodo_vitoria: 'ausencia', finalizada_em: new Date().toISOString() }).eq('id', luta.id).eq('evento_id', sessao.evento_id);
+    const { error } = await supabase.from('chaves').update({ status_luta: 'concluida', vencedor: nomeVencedor, vencedor_id: idVencedor || null, metodo_vitoria: 'wo', finalizada_em: new Date().toISOString() }).eq('id', luta.id).eq('evento_id', sessao.evento_id);
     if (error) setToast({ mensagem: `Não foi possível registrar a ausência: ${error.message}`, tipo: 'erro' });
     else {
       await propagarResultadoChave(supabase, lutas as any[], luta as any, {

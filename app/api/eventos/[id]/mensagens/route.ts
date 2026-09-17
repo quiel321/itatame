@@ -34,7 +34,18 @@ export async function GET(request: Request, contexto: { params: Promise<{ id: st
   const acesso = await contextoMensagens(eventoId, usuario.id);
   if (!acesso.evento || !acesso.papel) return NextResponse.json({ error: 'Você não tem acesso a este chat.' }, { status: 403 });
 
-  const atletaFiltro = new URL(request.url).searchParams.get('atleta') || '';
+  const busca = new URL(request.url).searchParams;
+  if (busca.get('resumo') === '1') {
+    const remetente = acesso.papel === 'atleta' ? 'organizador' : 'atleta';
+    let consulta = acesso.db.from('mensagens_evento').select('id', { count: 'exact', head: true })
+      .eq('evento_id', eventoId).eq('remetente', remetente).eq('lida', false);
+    if (acesso.papel === 'atleta') consulta = consulta.eq('atleta_user_id', usuario.id);
+    const { count, error } = await consulta;
+    if (error) return NextResponse.json({ error: 'Chat ainda não está disponível neste campeonato.' }, { status: 409 });
+    return NextResponse.json({ papel: acesso.papel, naoLidas: count || 0 });
+  }
+
+  const atletaFiltro = busca.get('atleta') || '';
   if (acesso.papel === 'atleta') {
     const { data, error } = await acesso.db.from('mensagens_evento')
       .select('id,evento_id,atleta_user_id,remetente,texto,lida,criado_em')

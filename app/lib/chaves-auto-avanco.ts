@@ -16,9 +16,11 @@ export type ChaveLutaAuto = {
   equipe_2?: string | null;
   atleta_1_id?: number | null;
   atleta_2_id?: number | null;
+  vencedor_id?: number | null;
   status_luta?: string | null;
   vencedor?: string | null;
   fase?: string | null;
+  metodo_vitoria?: string | null;
 };
 
 export type ResultadoChave = {
@@ -38,6 +40,11 @@ export function normalizarChaveNome(value?: string | null) {
 export function isChaveTbd(nome?: string | null) {
   const clean = normalizarChaveNome(nome);
   return clean === '' || clean === 'TBD';
+}
+
+export function isChaveBye(nome?: string | null) {
+  const clean = normalizarChaveNome(nome);
+  return clean === 'BYE' || clean.includes('SEM OPONENTE');
 }
 
 export function isChaveFantasma(nome?: string | null) {
@@ -157,6 +164,36 @@ async function concluirWo(supabase: SupabaseLike, todas: ChaveLutaAuto[], luta: 
   });
 }
 
+async function reabrirWoSemChecagem(supabase: SupabaseLike, todas: ChaveLutaAuto[], checkinPorAtleta: Map<number, string>) {
+  for (const luta of todas) {
+    if (luta.status_luta !== 'concluida' || luta.metodo_vitoria !== 'wo') continue;
+    const a1Real = isChaveAtletaReal(luta.atleta_1);
+    const a2Real = isChaveAtletaReal(luta.atleta_2);
+    const byeEstrutural = (a1Real && isChaveBye(luta.atleta_2)) || (a2Real && isChaveBye(luta.atleta_1));
+    if (!byeEstrutural) continue;
+    const vencedorId = Number(luta.vencedor_id || (a1Real ? luta.atleta_1_id : luta.atleta_2_id) || 0);
+    if (vencedorId && checkinPorAtleta.get(vencedorId) === 'aprovado') continue;
+
+    await supabase.from('chaves').update({
+      status_luta: 'agendada',
+      vencedor: null,
+      vencedor_id: null,
+      metodo_vitoria: null,
+      finalizada_em: null,
+    }).eq('id', luta.id);
+
+    const proxima = lutaDestino(todas, luta);
+    if (!proxima || statusConcluido(proxima)) continue;
+    const lado = ladoDoDestino(luta);
+    const nomeNoDestino = lado === 'atleta_1' ? proxima.atleta_1 : proxima.atleta_2;
+    if (normalizarChaveNome(nomeNoDestino) !== normalizarChaveNome(luta.vencedor)) continue;
+    const limpar = lado === 'atleta_1'
+      ? { atleta_1: 'TBD', equipe_1: '', atleta_1_id: null }
+      : { atleta_2: 'TBD', equipe_2: '', atleta_2_id: null };
+    await supabase.from('chaves').update(limpar).eq('id', proxima.id);
+  }
+}
+
 export async function processarAvancosAutomaticosChaves(supabase: SupabaseLike, eventoId: string | number) {
   let houveAvanco = false;
 
@@ -172,8 +209,12 @@ export async function processarAvancosAutomaticosChaves(supabase: SupabaseLike, 
     const idsComAvanco = Array.from(new Set(todas.flatMap((luta) => [luta.atleta_1_id, luta.atleta_2_id]).filter(Boolean))) as number[];
     const { data: inscricoes } = idsComAvanco.length > 0
       ? await supabase.from('inscricoes').select('atleta_id, status_checkin').eq('evento_id', eventoId).in('atleta_id', idsComAvanco)
-      : { data: [] };
-    const checkinPorAtleta = new Map((inscricoes || []).map((item: any) => [Number(item.atleta_id), String(item.status_checkin || 'pendente')]));
+      : { data: [] as Array<{ atleta_id: number; status_checkin: string }> };
+    const checkinPorAtleta = new Map<number, string>((inscricoes || []).map((item: { atleta_id: number; status_checkin: string }) => [Number(item.atleta_id), String(item.status_checkin || 'pendente')]));
+    if (rodada === 0) {
+      await reabrirWoSemChecagem(supabase, todas, checkinPorAtleta);
+      continue;
+    }
     let processouNestaRodada = false;
 
     for (const luta of todas) {

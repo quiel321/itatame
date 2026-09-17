@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/app/lib/supabase-server';
 import { chaveamentoAutomaticoLiberado, gerarChavesAutomaticasEvento, type EventoChaveamento } from '@/app/lib/chaveamento-evento';
+import { processarAvancosAutomaticosChaves } from '@/app/lib/chaves-auto-avanco';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -15,6 +16,7 @@ export async function GET(_request: Request, contexto: { params: Promise<{ id: s
     .eq('id', eventoId)
     .maybeSingle();
   if (error || !evento) return NextResponse.json({ error: 'Evento não encontrado.' }, { status: 404 });
+  await processarAvancosAutomaticosChaves(db, eventoId);
   if (!chaveamentoAutomaticoLiberado(evento as EventoChaveamento)) {
     return NextResponse.json({ ok: true, gerados: [] });
   }

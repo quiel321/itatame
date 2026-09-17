@@ -40,7 +40,9 @@ function Editor({ eventoId }: { eventoId: string }) {
     }
     void carregar();
     const timer = window.setInterval(() => { void carregar(); }, 10000);
-    return () => { ativo = false; window.clearInterval(timer); };
+    const ouvir = () => { void carregar(); };
+    window.addEventListener('itatame-chat-atualizado', ouvir);
+    return () => { ativo = false; window.clearInterval(timer); window.removeEventListener('itatame-chat-atualizado', ouvir); };
   }, [eventoId]);
 
   const selecionada = conversas.find(item => item.atleta_user_id === ativa);
@@ -54,7 +56,10 @@ function Editor({ eventoId }: { eventoId: string }) {
           {conversas.map(conversa => (
             <button
               key={conversa.atleta_user_id}
-              onClick={() => setAtiva(conversa.atleta_user_id)}
+              onClick={() => {
+                setAtiva(conversa.atleta_user_id);
+                setConversas(atual => atual.map(item => item.atleta_user_id === conversa.atleta_user_id ? { ...item, naoLidas: 0 } : item));
+              }}
               className={`w-full rounded-xl px-3 py-3 text-left ${ativa === conversa.atleta_user_id ? 'bg-red-500/10 border border-red-500/30' : 'hover:bg-white/5'}`}
             >
               <span className="flex items-center justify-between gap-2">
@@ -62,6 +67,7 @@ function Editor({ eventoId }: { eventoId: string }) {
                 {conversa.naoLidas > 0 && <span className="rounded-full bg-red-500 text-white text-[9px] font-black px-2 py-0.5">{conversa.naoLidas}</span>}
               </span>
               <span className="mt-1 block text-[11px] text-zinc-500 truncate">{conversa.texto}</span>
+              {conversa.ultima && <span className="mt-1 block text-[9px] text-zinc-600">{new Date(conversa.ultima).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>}
             </button>
           ))}
         </div>

@@ -3,7 +3,6 @@
     const rankingAtletas: Record<string, { ouro: number, prata: number, bronze: number, vitorias: number, lutas: number, vitorias_wo: number, pts: number, nome: string, equipe: string }> = {};
 
     lutas.forEach(luta => {
-      // Só processa lutas oficiais (Concluídas)
       if (luta.status_luta !== 'concluida') return;
 
       const vId = String(luta.vencedor_id || luta.vencedor);
@@ -14,12 +13,12 @@
       
       const nomeVencedor = isAtleta1Vencedor ? luta.atleta_1 : isAtleta2Vencedor ? luta.atleta_2 : luta.vencedor;
       const equipeVencedor = isAtleta1Vencedor ? luta.equipe_1 : isAtleta2Vencedor ? luta.equipe_2 : null;
+      if (!isCompetidorReal(nomeVencedor)) return;
       
       const perdedorId = isAtleta1Vencedor ? String(luta.atleta_2_id || luta.atleta_2) : String(luta.atleta_1_id || luta.atleta_1);
       const nomePerdedor = isAtleta1Vencedor ? luta.atleta_2 : luta.atleta_1;
       const equipePerdedora = isAtleta1Vencedor ? luta.equipe_2 : luta.equipe_1;
 
-      // --- LEITURA DAS REGRAS DO ORGANIZADOR ---
       let regras: any = null;
       if (regrasPorEvento && luta.evento_id) {
         try {
@@ -33,24 +32,26 @@
       const ptsPrata = regras?.prata !== undefined ? Number(regras.prata) : 3;
       const ptsBronze = regras?.bronze !== undefined ? Number(regras.bronze) : 1;
       const ptsVitoriaNormal = regras?.vitoria !== undefined ? Number(regras.vitoria) : 0;
+      const fase = String(luta.fase || '').toLowerCase();
+      const ehFinal = fase.startsWith('final') || String(luta.id_visual) === '999';
+      const ehPrimeiraSemifinalDeTres = String(luta.id_visual) === '1' && fase.includes('chave de 3');
+      const ehSemifinal = !ehFinal && !ehPrimeiraSemifinalDeTres && (fase.includes('semi') || fase.includes('3º lugar') || String(luta.proxima_luta) === '999');
       
-      const isWO = luta.metodo_vitoria === "wo" || perdedorId === "BYE" || !perdedorId || perdedorId === "null";
+      const metodo = String(luta.metodo_vitoria || '').toLowerCase();
       const perdedorEhCompetidorReal = isCompetidorReal(nomePerdedor);
+      const isWO = metodo === 'wo' || perdedorId === 'BYE' || !perdedorId || perdedorId === 'null' || !perdedorEhCompetidorReal;
 
-      // W.O. de ranking é somente o avanço do atleta presente que ficou sem
-      // oponente. Ausência/desclassificação de um adversário real encerra a
-      // operação da chave, mas não vira vitória nem pontuação no ranking.
-      if (luta.metodo_vitoria === "wo" && perdedorEhCompetidorReal) return;
+      // Ausência de adversário real e W.O. operacional não pontuam. Bye sem oponente, após checagem, pontua.
+      if ((metodo === 'wo' || metodo === 'ausencia') && perdedorEhCompetidorReal) return;
 
       const woPontua = regras?.wo_pontua !== undefined ? regras.wo_pontua : true; 
       const devePontuar = !(isWO && !woPontua);
 
-      // --- REGISTRO DO ATLETA ---
       if (!rankingAtletas[vId]) rankingAtletas[vId] = { ouro: 0, prata: 0, bronze: 0, vitorias: 0, lutas: 0, vitorias_wo: 0, pts: 0, nome: nomeVencedor, equipe: equipeVencedor || "Sem Equipe" };
       rankingAtletas[vId].lutas += 1;
       rankingAtletas[vId].vitorias += 1;
 
-      if (perdedorId && perdedorId !== "null" && perdedorId !== "BYE") {
+      if (perdedorEhCompetidorReal && perdedorId && perdedorId !== "null") {
           if (!rankingAtletas[perdedorId]) rankingAtletas[perdedorId] = { ouro: 0, prata: 0, bronze: 0, vitorias: 0, lutas: 0, vitorias_wo: 0, pts: 0, nome: nomePerdedor, equipe: equipePerdedora || "Sem Equipe" };
           rankingAtletas[perdedorId].lutas += 1;
       }
@@ -58,10 +59,9 @@
       if (isWO) rankingAtletas[vId].vitorias_wo += 1;
 
       if (equipeVencedor && !rankingEquipes[equipeVencedor]) rankingEquipes[equipeVencedor] = { ouro: 0, prata: 0, bronze: 0, pts: 0 };
-      if (equipePerdedora && perdedorId && perdedorId !== "null" && perdedorId !== "BYE" && !rankingEquipes[equipePerdedora]) rankingEquipes[equipePerdedora] = { ouro: 0, prata: 0, bronze: 0, pts: 0 };
+      if (equipePerdedora && perdedorEhCompetidorReal && !rankingEquipes[equipePerdedora]) rankingEquipes[equipePerdedora] = { ouro: 0, prata: 0, bronze: 0, pts: 0 };
 
-      // --- DISTRIBUIÇÃO DE PONTOS E MEDALHAS ---
-      if (String(luta.fase).toLowerCase() === 'final' || String(luta.id_visual) === "999") {
+      if (ehFinal) {
         rankingAtletas[vId].ouro += 1;
         if(devePontuar) rankingAtletas[vId].pts += ptsOuro;
         
@@ -70,7 +70,7 @@
           if(devePontuar) rankingEquipes[equipeVencedor].pts += ptsOuro;
         }
         
-        if (perdedorId && perdedorId !== "null" && perdedorId !== "BYE") {
+        if (perdedorEhCompetidorReal) {
             rankingAtletas[perdedorId].prata += 1;
             rankingAtletas[perdedorId].pts += ptsPrata; 
             if (equipePerdedora) {
@@ -79,11 +79,11 @@
             }
         }
       } 
-      else if (String(luta.fase).toLowerCase().includes('semi') || String(luta.fase).toLowerCase() === "3º lugar") {
+      else if (ehSemifinal) {
           if(devePontuar) rankingAtletas[vId].pts += ptsVitoriaNormal;
           if (equipeVencedor && devePontuar) rankingEquipes[equipeVencedor].pts += ptsVitoriaNormal;
 
-          if (perdedorId && perdedorId !== "null" && perdedorId !== "BYE") {
+          if (perdedorEhCompetidorReal) {
               rankingAtletas[perdedorId].bronze += 1;
               rankingAtletas[perdedorId].pts += ptsBronze;
               if (equipePerdedora) {

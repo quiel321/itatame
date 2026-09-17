@@ -1,4 +1,5 @@
 import { montarChaves, prepararGrupos } from '@/app/lib/gerar-chaves';
+import { processarAvancosAutomaticosChaves } from '@/app/lib/chaves-auto-avanco';
 import type { CategoriaCompeticao, InscricaoCompeticao } from '@/app/lib/categorias-competicao';
 
 type ClienteSupabase = {
@@ -91,6 +92,7 @@ export async function gravarChavesEvento(
     p_organizador: evento.organizador_id,
   });
   if (error) throw new Error(error.code === 'PGRST202' ? 'Instale a atualização do banco antes de gerar chaves.' : error.message);
+  await processarAvancosAutomaticosChaves(db, evento.id);
   return Number(total) || lutas.length;
 }
 
@@ -104,9 +106,10 @@ export async function gerarChavesAutomaticasEvento(db: ClienteSupabase, evento: 
       const total = await gravarChavesEvento(db, evento, tipo, preparado.lutas);
       gerados.push({ tipo, total });
     } catch (error) {
-      if (tipo === 'absoluto' && error instanceof Error && error.message.includes('Nenhuma inscrição apta')) continue;
+      if (error instanceof Error && (error.message.includes('Já existem lutas iniciadas') || error.message.includes('Nenhuma inscrição apta'))) continue;
       throw error;
     }
   }
+  await processarAvancosAutomaticosChaves(db, evento.id);
   return gerados;
 }
