@@ -18,12 +18,14 @@ export default function RecuperarSenha() {
   const [mensagem, setMensagem] = useState("");
   const [erro, setErro] = useState("");
   const [origemFotos, setOrigemFotos] = useState(false);
+  const [origemOrganizador, setOrigemOrganizador] = useState(false);
   const [perfilFotos, setPerfilFotos] = useState<PerfilFotosRecuperacao>("comprador");
 
   useEffect(() => {
     const parametros = new URLSearchParams(window.location.search);
     queueMicrotask(() => {
       setOrigemFotos(parametros.get("origem") === "fotos");
+      setOrigemOrganizador(parametros.get('origem') === 'organizador');
       setPerfilFotos(normalizarPerfilFotos(parametros.get("perfil")));
     });
   }, []);
@@ -37,21 +39,20 @@ export default function RecuperarSenha() {
     const parametros = new URLSearchParams(window.location.search);
     const recuperacaoFotos = parametros.get("origem") === "fotos";
     const perfilRecuperacao = normalizarPerfilFotos(parametros.get("perfil"));
-    const destinoNovaSenha = new URL("/nova-senha", window.location.origin);
     if (recuperacaoFotos) {
-      destinoNovaSenha.searchParams.set("origem", "fotos");
-      destinoNovaSenha.searchParams.set("perfil", perfilRecuperacao);
-    }
-
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: destinoNovaSenha.toString(),
-    });
-
-    if (error) {
-      setErro("Erro ao enviar o e-mail. Verifique se digitou corretamente.");
+      const destinoNovaSenha = new URL('/nova-senha', window.location.origin);
+      destinoNovaSenha.searchParams.set('origem', 'fotos');
+      destinoNovaSenha.searchParams.set('perfil', perfilRecuperacao);
+      const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: destinoNovaSenha.toString() });
+      if (error) setErro('Não foi possível solicitar a recuperação agora. Tente novamente mais tarde.');
+      else { setMensagem('Se este e-mail estiver cadastrado, você receberá um link para criar outra senha.'); setEmail(''); }
     } else {
-      setMensagem("Link enviado! Verifique sua caixa de entrada (e o Spam).");
-      setEmail("");
+      try {
+        const response = await fetch('/api/auth/recuperar-senha', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
+        const result = await response.json();
+        if (!response.ok) setErro(result.error || 'Não foi possível solicitar a recuperação agora.');
+        else { setMensagem(result.message); setEmail(''); }
+      } catch { setErro('Não foi possível solicitar a recuperação agora. Tente novamente.'); }
     }
     setLoading(false);
   };
@@ -90,7 +91,7 @@ export default function RecuperarSenha() {
         </form>
 
         <div className="mt-6 text-center">
-          <button onClick={() => router.push(origemFotos ? `/fotos/login?perfil=${perfilFotos}` : "/login")} className="cursor-pointer text-zinc-500 hover:text-white text-[10px] font-bold uppercase tracking-widest transition-colors">
+          <button onClick={() => router.push(origemFotos ? `/fotos/login?perfil=${perfilFotos}` : origemOrganizador ? '/login-organizador' : "/login")} className="cursor-pointer text-zinc-500 hover:text-white text-[10px] font-bold uppercase tracking-widest transition-colors">
             {origemFotos ? "Voltar ao login do Fotos" : "Voltar para o Login"}
           </button>
         </div>

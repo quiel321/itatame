@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/app/lib/supabase";
 import { useRouter } from "next/navigation";
 import FotosShell from "@/app/fotos/_components/FotosShell";
+import { Eye, EyeOff } from 'lucide-react';
 
 type PerfilFotosRecuperacao = "comprador" | "fotografo" | "organizador";
 
@@ -14,6 +15,7 @@ function normalizarPerfilFotos(valor: string | null): PerfilFotosRecuperacao {
 export default function NovaSenha() {
   const router = useRouter();
   const [senha, setSenha] = useState("");
+  const [mostrarSenha, setMostrarSenha] = useState(false);
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState("");
   const [destinoAposRecuperacao, setDestinoAposRecuperacao] = useState("/perfil");
@@ -25,7 +27,7 @@ export default function NovaSenha() {
     const perfilFotos = normalizarPerfilFotos(parametros.get("perfil"));
     queueMicrotask(() => {
       setRecuperacaoFotos(origemFotos);
-      setDestinoAposRecuperacao(origemFotos ? `/fotos/login?perfil=${perfilFotos}` : "/perfil");
+      setDestinoAposRecuperacao(origemFotos ? `/fotos/login?perfil=${perfilFotos}` : "/login");
     });
 
     const { data } = supabase.auth.onAuthStateChange(async (event) => {
@@ -54,8 +56,17 @@ export default function NovaSenha() {
     if (error) {
       setErro("Erro ao atualizar a senha. O link pode ter expirado.");
     } else {
+      let destino = destinoAposRecuperacao;
+      if (!recuperacaoFotos) {
+        const { data: usuario } = await supabase.auth.getUser();
+        if (usuario.user) {
+          const { data: organizador } = await supabase.from('organizadores').select('user_id').eq('user_id', usuario.user.id).maybeSingle();
+          if (organizador) destino = '/login-organizador';
+        }
+      }
+      await supabase.auth.signOut();
       alert("Senha atualizada com sucesso! Você já pode acessar sua conta.");
-      router.push(destinoAposRecuperacao);
+      router.push(destino);
     }
     setLoading(false);
   };
@@ -69,16 +80,20 @@ export default function NovaSenha() {
         <p className="text-zinc-400 text-xs mb-8">Digite sua nova senha de acesso abaixo. Lembre-se de guardá-la em um local seguro.</p>
 
         <form onSubmit={handleUpdatePassword} className="space-y-4">
-          <div>
+          <div className="relative">
             <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1 pl-1">Nova Senha</label>
             <input 
-              type="password" 
+              type={mostrarSenha ? 'text' : 'password'}
               required
               value={senha}
               onChange={(e) => setSenha(e.target.value)}
-              className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-cyan-500 outline-none transition-colors"
+              className="w-full bg-black border border-white/10 rounded-xl pl-4 pr-12 py-3 text-sm text-white focus:border-cyan-500 outline-none transition-colors"
               placeholder="••••••••"
             />
+            <button type="button" onClick={() => setMostrarSenha(estado => !estado)} aria-label={mostrarSenha ? 'Ocultar senha' : 'Mostrar senha'}
+              className="absolute right-4 bottom-3 text-zinc-400 hover:text-white">
+              {mostrarSenha ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
           </div>
 
           {erro && <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold rounded-xl text-center">{erro}</div>}

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
 import { Resend } from "resend";
+import { enviarLinkAutenticacao } from "@/app/lib/email-autenticacao";
+import { consumirLimiteAuth, ipDaRequisicao } from '@/app/lib/limite-auth';
 
 function texto(value: FormDataEntryValue | null) {
   return typeof value === "string" ? value.trim() : "";
@@ -28,13 +29,14 @@ export async function POST(request: Request) {
     if (perfil === "organizador" && (!nome || telefone.length < 10 || telefone.length > 11)) {
       return NextResponse.json({ error: "Informe nome e telefone do organizador." }, { status: 400 });
     }
-    if (perfil !== "organizador" && cpf.length !== 11) {
-      return NextResponse.json({ error: "Informe um CPF válido." }, { status: 400 });
+    if (perfil !== "organizador" && (cpf.length !== 11 || telefone.length < 10 || telefone.length > 11)) {
+      return NextResponse.json({ error: "Informe CPF e telefone válidos." }, { status: 400 });
     }
 
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    if (!url || !anon) return NextResponse.json({ error: "Cadastro temporariamente indisponível." }, { status: 500 });
+    if (!url || !process.env.SUPABASE_SERVICE_ROLE_KEY || !process.env.RESEND_API_KEY) {
+      return NextResponse.json({ error: "Cadastro temporariamente indisponível." }, { status: 503 });
+    }
 
     const supabase = createSupabaseServerClient();
     if (perfil !== "organizador") {
@@ -60,21 +62,21 @@ export async function POST(request: Request) {
       }
     }
 
-    const auth = createClient(url, anon, { auth: { persistSession: false, autoRefreshToken: false } });
     const baseUrl = (process.env.NEXT_PUBLIC_BASE_URL || new URL(request.url).origin).replace(/\/$/, "");
     const destino = perfil === "organizador" ? "/login-organizador?email_confirmado=1" : "/login?email_confirmado=1";
-    const { data, error: signUpError } = await auth.auth.signUp({
+    // O envio só acontece depois que o perfil foi gravado: nunca enviamos link para conta incompleta.
+    if (!consumirLimiteAuth(`cadastro:${ipDaRequisicao(request)}`, 30, 5 * 60_000)) {
+      return NextResponse.json({ error: 'Muitos cadastros em sequência. Aguarde alguns minutos.' }, { status: 429 });
+    }
+    const { data, error: signUpError } = await supabase.auth.admin.createUser({
       email,
       password,
-      options: {
-        emailRedirectTo: `${baseUrl}${destino}`,
-        data: { role: perfil, cpf: cpf || undefined, nome: nome || undefined },
-      },
+      email_confirm: false,
+      user_metadata: { role: perfil, cpf: cpf || undefined, nome: nome || undefined },
     });
-    if (signUpError) return NextResponse.json({ error: signUpError.message }, { status: 400 });
-    if (!data.user || (Array.isArray(data.user.identities) && data.user.identities.length === 0)) {
-      return NextResponse.json({ error: "Este e-mail já possui cadastro. Use a opção de entrar ou recuperar senha." }, { status: 409 });
-    }
+    if (signUpError) return NextResponse.json({ error: signUpError.code === 'email_exists' || signUpError.message.toLowerCase().includes('already')
+      ? "Este e-mail já possui cadastro. Entre na conta existente ou recupere a senha." : "Não foi possível criar a conta. Tente novamente." }, { status: 400 });
+    if (!data.user) return NextResponse.json({ error: "Não foi possível criar a conta." }, { status: 500 });
 
     let fotoUrl = "";
     if (perfil === "organizador" && foto instanceof File && foto.size > 0) {
@@ -109,14 +111,35 @@ export async function POST(request: Request) {
           user_id: data.user.id,
           email,
           cpf,
+          telefone,
           role: perfil,
           nome: "",
           equipe: "Independente",
+          professor: "",
+          faixa: "",
+          cidade: "",
+          modalidade: "Jiu-Jitsu",
         });
 
     if (resultado.error) {
       await supabase.auth.admin.deleteUser(data.user.id);
-      return NextResponse.json({ error: resultado.error.message }, { status: 400 });
+      return NextResponse.json({ error: resultado.error.code === '23505' ? 'CPF, telefone ou e-mail já cadastrado.' : 'Não foi possível salvar o perfil. Confira os dados e tente novamente.' }, { status: 400 });
+    }
+
+    try {
+      const { data: confirmacao, error: linkError } = await supabase.auth.admin.generateLink({
+        type: 'signup', email, password, options: { redirectTo: `${baseUrl}${destino}` },
+      });
+      if (linkError || !confirmacao?.properties.action_link || confirmacao.user.id !== data.user.id) throw linkError || new Error('Link inválido');
+      await enviarLinkAutenticacao({
+        email, link: confirmacao.properties.action_link, assunto: 'Confirme seu e-mail no iTatame',
+        titulo: 'Confirmar meu e-mail', instrucao: 'Confirme seu endereço para acessar sua conta no iTatame.',
+      });
+    } catch (error) {
+      console.error('Falha ao gerar ou enviar confirmação:', error);
+      await supabase.from(perfil === 'organizador' ? 'organizadores' : 'atletas').delete().eq('user_id', data.user.id);
+      await supabase.auth.admin.deleteUser(data.user.id);
+      return NextResponse.json({ error: 'Não foi possível enviar a confirmação. Tente criar a conta novamente em instantes.' }, { status: 503 });
     }
 
     if (perfil === "organizador" && process.env.RESEND_API_KEY) {
@@ -133,7 +156,7 @@ export async function POST(request: Request) {
       }
     }
 
-    return NextResponse.json({ success: true, requiresEmailConfirmation: !data.session });
+    return NextResponse.json({ success: true, requiresEmailConfirmation: true });
   } catch (error) {
     console.error("Erro no cadastro:", error);
     return NextResponse.json({ error: "Não foi possível concluir o cadastro." }, { status: 500 });

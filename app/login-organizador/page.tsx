@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { supabase } from "../lib/supabase"; 
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import imageCompression from 'browser-image-compression';
 import { formatarTelefone } from '@/app/lib/formatar-telefone';
+import { Eye, EyeOff } from 'lucide-react';
 
 export default function LoginOrganizadorPage() {
   const router = useRouter();
@@ -16,6 +17,8 @@ export default function LoginOrganizadorPage() {
   const [erro, setErro] = useState("");
   const [sucesso, setSucesso] = useState("");
   const [mostrarPendencia, setMostrarPendencia] = useState(false);
+  const [mostrarSenha, setMostrarSenha] = useState(false);
+  const [emailPendente, setEmailPendente] = useState(false);
 
   // CAMPOS DO FORMULÁRIO
   const [email, setEmail] = useState("");
@@ -28,6 +31,27 @@ export default function LoginOrganizadorPage() {
   const [foto, setFoto] = useState<File | null>(null);
   const [fotoPreview, setFotoPreview] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const falha = new URLSearchParams(window.location.hash.slice(1)).get('error_code');
+    queueMicrotask(() => {
+      if (falha) { setErro('O link de confirmação não pôde ser usado ou expirou. Informe o e-mail e solicite outro abaixo.'); setEmailPendente(true); }
+      else if (params.get('email_confirmado') === '1') setSucesso('E-mail confirmado. Entre com sua senha para acompanhar a homologação.');
+    });
+  }, []);
+
+  async function reenviarConfirmacao() {
+    setLoading(true); setErro(''); setSucesso('');
+    try {
+      const response = await fetch('/api/auth/recuperar-senha', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, tipo: 'confirmacao' }) });
+      const resultado = await response.json();
+      if (!response.ok) setErro(resultado.error || 'Não foi possível reenviar agora.');
+      else setSucesso(resultado.message);
+    } catch { setErro('Não foi possível reenviar agora. Tente novamente.'); }
+    setLoading(false);
+  }
 
   // ==========================================
   // FUNÇÃO: PROCESSAR FOTO
@@ -66,6 +90,7 @@ export default function LoginOrganizadorPage() {
     setLoading(true);
     setErro("");
     setSucesso("");
+    setEmailPendente(false);
 
     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
       email,
@@ -73,7 +98,12 @@ export default function LoginOrganizadorPage() {
     });
 
     if (authError) {
-      setErro("Credenciais inválidas. Verifique o seu e-mail e palavra-passe.");
+      if (authError.code === 'email_not_confirmed') {
+        setErro('Confirme seu e-mail antes de entrar. Confira sua caixa de entrada ou solicite outro link.');
+        setEmailPendente(true);
+      } else {
+        setErro(authError.code === 'invalid_credentials' ? 'E-mail ou senha incorretos.' : 'Não foi possível entrar agora. Tente novamente.');
+      }
       setLoading(false);
       return;
     }
@@ -133,9 +163,11 @@ export default function LoginOrganizadorPage() {
       setSucesso(resultado.requiresEmailConfirmation
         ? "Cadastro recebido. Confirme seu e-mail e aguarde a homologação do perfil."
         : "Cadastro recebido. Aguarde a homologação do perfil.");
-      setMostrarPendencia(true);
-    } catch (err: any) {
-      setErro(err.message || "Erro ao realizar registo do organizador.");
+      setSenha('');
+      setAba('login');
+      setMostrarPendencia(false);
+    } catch (err: unknown) {
+      setErro(err instanceof Error ? err.message : "Erro ao realizar registo do organizador.");
     } finally {
       setLoading(false);
     }
@@ -245,6 +277,15 @@ export default function LoginOrganizadorPage() {
                 </div>
               )}
 
+              {sucesso && (
+                <div role="status" className="mb-4 rounded-xl border border-green-500/30 bg-green-500/10 p-3 text-xs font-bold text-green-300">{sucesso}</div>
+              )}
+              {aba === 'login' && emailPendente && email && (
+                <button type="button" disabled={loading} onClick={reenviarConfirmacao} className="mb-4 text-xs font-bold text-cyan-400 underline disabled:opacity-50">
+                  Reenviar confirmação para {email}
+                </button>
+              )}
+
               {/* ABA LOGIN */}
               {aba === "login" ? (
                 <form onSubmit={handleLogin} className="space-y-3.5 animate-in fade-in">
@@ -260,13 +301,16 @@ export default function LoginOrganizadorPage() {
                     <label className="text-zinc-500 text-[9px] font-black uppercase tracking-widest block mb-1.5 ml-1">Senha de Segurança</label>
                     <div className="relative cursor-text">
                       <svg className="w-4 h-4 text-zinc-600 absolute left-3.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-                      <input type="password" required value={senha} onChange={(e) => setSenha(e.target.value)} placeholder="••••••••" className="w-full bg-[#050505] border border-white/10 rounded-lg pl-10 pr-3 py-2.5 outline-none focus:border-yellow-600 text-white transition-colors text-xs font-bold placeholder:text-zinc-700 shadow-inner" />
+                      <input type={mostrarSenha ? 'text' : 'password'} required value={senha} onChange={(e) => setSenha(e.target.value)} placeholder="••••••••" className="w-full bg-[#050505] border border-white/10 rounded-lg pl-10 pr-11 py-2.5 outline-none focus:border-yellow-600 text-white transition-colors text-xs font-bold placeholder:text-zinc-700 shadow-inner" />
+                      <button type="button" onClick={() => setMostrarSenha(estado => !estado)} aria-label={mostrarSenha ? 'Ocultar senha' : 'Mostrar senha'} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white">
+                        {mostrarSenha ? <EyeOff size={17} /> : <Eye size={17} />}
+                      </button>
                     </div>
                     {/* 🔥 BOTÃO ESQUECI MINHA SENHA ADICIONADO AQUI 🔥 */}
                     <div className="flex justify-end mt-2 animate-in fade-in">
                       <button 
                         type="button" 
-                        onClick={() => router.push('/recuperar-senha')} 
+                        onClick={() => router.push('/recuperar-senha?origem=organizador')}
                         className="text-[10px] font-bold text-zinc-500 hover:text-yellow-500 uppercase tracking-widest transition-colors cursor-pointer"
                       >
                         Esqueci minha senha
@@ -347,7 +391,10 @@ export default function LoginOrganizadorPage() {
                     <label className="text-zinc-500 text-[9px] font-black uppercase tracking-widest block mb-1.5 ml-1">Criar Palavra-passe *</label>
                     <div className="relative cursor-text">
                       <svg className="w-4 h-4 text-zinc-600 absolute left-3.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-                      <input type="password" required value={senha} onChange={(e) => setSenha(e.target.value)} placeholder="Mínimo 6 caracteres" className="w-full bg-[#050505] border border-white/10 rounded-lg pl-10 pr-3 py-2.5 outline-none focus:border-yellow-600 text-white transition-colors text-xs font-bold placeholder:text-zinc-700 shadow-inner" />
+                      <input type={mostrarSenha ? 'text' : 'password'} required value={senha} onChange={(e) => setSenha(e.target.value)} placeholder="Mínimo 6 caracteres" className="w-full bg-[#050505] border border-white/10 rounded-lg pl-10 pr-11 py-2.5 outline-none focus:border-yellow-600 text-white transition-colors text-xs font-bold placeholder:text-zinc-700 shadow-inner" />
+                      <button type="button" onClick={() => setMostrarSenha(estado => !estado)} aria-label={mostrarSenha ? 'Ocultar senha' : 'Mostrar senha'} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white">
+                        {mostrarSenha ? <EyeOff size={17} /> : <Eye size={17} />}
+                      </button>
                     </div>
                   </div>
 

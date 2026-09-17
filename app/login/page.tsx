@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
+import { Eye, EyeOff } from 'lucide-react';
+import { formatarTelefone } from '@/app/lib/formatar-telefone';
 
 function FormularioLogin() {
   const router = useRouter();
@@ -18,6 +20,9 @@ function FormularioLogin() {
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [cpf, setCpf] = useState("");
+  const [telefone, setTelefone] = useState('');
+  const [mostrarSenha, setMostrarSenha] = useState(false);
+  const [emailPendente, setEmailPendente] = useState(false);
   
   // ESTADO PARA DEFINIR O TIPO DE CONTA (ATLETA OU PROFESSOR)
   const [tipoConta, setTipoConta] = useState<"atleta" | "professor">("atleta");
@@ -25,6 +30,26 @@ function FormularioLogin() {
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState("");
   const [mensagem, setMensagem] = useState("");
+
+  useEffect(() => {
+    const falha = new URLSearchParams(window.location.hash.slice(1)).get('error_code');
+    queueMicrotask(() => {
+      if (falha) { setErro('O link de confirmação não pôde ser usado ou expirou. Informe o e-mail e solicite outro abaixo.'); setEmailPendente(true); }
+      else if (searchParams.get('email_confirmado') === '1') setMensagem('E-mail confirmado. Agora entre com a senha cadastrada.');
+    });
+  }, [searchParams]);
+
+  async function reenviarConfirmacao() {
+    setLoading(true); setErro(''); setMensagem('');
+    try {
+      const response = await fetch('/api/auth/recuperar-senha', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, tipo: 'confirmacao' }) });
+      const resultado = await response.json();
+      if (!response.ok) setErro(resultado.error || 'Não foi possível reenviar agora.');
+      else setMensagem(resultado.message);
+    } catch { setErro('Não foi possível reenviar agora. Tente novamente.'); }
+    setLoading(false);
+  }
 
   // MÁSCARA DE CPF
   const formatarCpf = (value: string) => {
@@ -41,6 +66,7 @@ function FormularioLogin() {
     setLoading(true);
     setErro("");
     setMensagem("");
+    setEmailPendente(false);
 
     if (isLogin) {
       // ==========================================
@@ -52,7 +78,12 @@ function FormularioLogin() {
       });
 
       if (error) {
-        setErro("E-mail ou senha incorretos.");
+        if (error.code === 'email_not_confirmed') {
+          setErro('Confirme seu e-mail antes de entrar. Confira sua caixa de entrada ou solicite outro link.');
+          setEmailPendente(true);
+        } else {
+          setErro(error.code === 'invalid_credentials' ? 'E-mail ou senha incorretos.' : 'Não foi possível entrar agora. Tente novamente.');
+        }
       } else {
         const { data: atleta, error: atletaError } = await supabase
           .from("atletas")
@@ -82,24 +113,35 @@ function FormularioLogin() {
         setLoading(false);
         return;
       }
+      if (telefone.replace(/\D/g, '').length < 10) {
+        setErro('Informe um telefone com DDD para concluir o cadastro.');
+        setLoading(false);
+        return;
+      }
 
-      const cadastro = new FormData();
-      cadastro.set("perfil", tipoConta);
-      cadastro.set("email", email);
-      cadastro.set("password", senha);
-      cadastro.set("cpf", cpf);
-      const response = await fetch("/api/cadastro", { method: "POST", body: cadastro });
-      const resultado = await response.json();
+      try {
+        const cadastro = new FormData();
+        cadastro.set("perfil", tipoConta);
+        cadastro.set("email", email);
+        cadastro.set("password", senha);
+        cadastro.set("cpf", cpf);
+        cadastro.set('telefone', telefone);
+        const response = await fetch("/api/cadastro", { method: "POST", body: cadastro });
+        const resultado = await response.json();
 
-      if (!response.ok) {
-        setErro(resultado.error || "Não foi possível criar a conta.");
-      } else {
-        setMensagem(resultado.requiresEmailConfirmation
-          ? "Cadastro realizado. Abra o e-mail enviado pelo iTatame e confirme seu endereço antes de entrar."
-          : "Cadastro realizado. Você já pode entrar.");
-        setIsLogin(true);
-        setSenha("");
-        setCpf("");
+        if (!response.ok) {
+          setErro(resultado.error || "Não foi possível criar a conta.");
+        } else {
+          setMensagem(resultado.requiresEmailConfirmation
+            ? "Cadastro realizado. Abra o e-mail enviado pelo iTatame e confirme seu endereço antes de entrar."
+            : "Cadastro realizado. Você já pode entrar.");
+          setIsLogin(true);
+          setSenha("");
+          setCpf("");
+          setTelefone('');
+        }
+      } catch {
+        setErro('Não foi possível concluir o cadastro agora. Tente novamente.');
       }
     }
     setLoading(false);
@@ -172,6 +214,12 @@ function FormularioLogin() {
             <svg className="w-4 h-4 text-green-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a2 2 0 11-4 0 2 2 0 014 0zM15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
             <span className="text-green-400 text-[10px] md:text-xs font-bold leading-tight">{mensagem}</span>
           </div>
+        )}
+
+        {isLogin && emailPendente && email && (
+          <button type="button" disabled={loading} onClick={reenviarConfirmacao} className="mb-5 text-xs font-bold text-cyan-400 underline disabled:opacity-50">
+            Reenviar confirmação para {email}
+          </button>
         )}
 
         {/* FORMULÁRIO */}
@@ -259,6 +307,14 @@ function FormularioLogin() {
             </div>
           )}
 
+          {!isLogin && (
+            <div>
+              <label className="block text-[9px] font-black text-zinc-500 uppercase tracking-widest mb-1 ml-1">Telefone / WhatsApp</label>
+              <input type="tel" required autoComplete="tel" value={telefone} onChange={e => setTelefone(formatarTelefone(e.target.value))}
+                placeholder="(00) 00000-0000" className="w-full bg-black/60 border border-white/10 focus:border-red-500 outline-none rounded-lg px-3 py-2.5 text-white text-xs font-bold" />
+            </div>
+          )}
+
           {/* CAMPOS COMUNS (E-MAIL E SENHA) */}
           <div>
             <label className="block text-[9px] font-black text-zinc-500 uppercase tracking-widest mb-1 ml-1">E-mail</label>
@@ -282,14 +338,18 @@ function FormularioLogin() {
             <div className="relative">
               <svg className="w-3.5 h-3.5 text-zinc-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
               <input 
-                type="password" 
+                type={mostrarSenha ? 'text' : 'password'}
                 required
                 minLength={6}
                 value={senha}
                 onChange={(e) => setSenha(e.target.value)}
                 placeholder="••••••••" 
-                className="w-full bg-black/60 border border-white/10 focus:border-red-500 outline-none rounded-lg pl-9 pr-3 py-2.5 text-white transition-colors text-xs font-bold placeholder:text-zinc-700 shadow-inner" 
+                className="w-full bg-black/60 border border-white/10 focus:border-red-500 outline-none rounded-lg pl-9 pr-11 py-2.5 text-white transition-colors text-xs font-bold placeholder:text-zinc-700 shadow-inner"
               />
+              <button type="button" onClick={() => setMostrarSenha(estado => !estado)} aria-label={mostrarSenha ? 'Ocultar senha' : 'Mostrar senha'}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white">
+                {mostrarSenha ? <EyeOff size={17} /> : <Eye size={17} />}
+              </button>
             </div>
             {/* 🔥 BOTÃO ESQUECI MINHA SENHA ADICIONADO AQUI 🔥 */}
             {isLogin && (
