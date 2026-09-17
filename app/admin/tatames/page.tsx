@@ -3,11 +3,11 @@
 import { obterEventoOrganizador, guardarEventoOrganizador } from '@/app/lib/evento-organizador';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertCircle, CheckCircle, Clock, Map, Play, RefreshCw, Search, Users, X } from 'lucide-react';
+import Link from 'next/link';
+import { AlertCircle, CheckCircle, Clock, Map, Play, RefreshCw, Search, X } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { obterTempoRegulamentar } from '../../lib/cronograma';
 import { processarAvancosAutomaticosChaves } from '../../lib/chaves-auto-avanco';
-import { rotuloLuta } from '../../lib/lutas-rotulos';
 
 type Evento = { id: string | number; nome: string; data_evento?: string | null };
 type Luta = {
@@ -297,6 +297,13 @@ export default function GestaoTatames() {
     return categorias.filter((cat) => !termo || cat.nome.toLowerCase().includes(termo) || cat.faixa.toLowerCase().includes(termo) || cat.tatameAtual.toLowerCase().includes(termo));
   }, [busca, categorias]);
 
+  const nomesTatame = useMemo(() => {
+    return Array.from(new Set([
+      ...tatamesDisponiveis,
+      ...categorias.map((cat) => cat.tatameAtual).filter((tatame) => tatame && tatame !== 'Não definido'),
+    ]));
+  }, [categorias, tatamesDisponiveis]);
+
   const resumo = useMemo(() => {
     const total = categorias.reduce((acc, cat) => acc + cat.totalLutas, 0);
     const concluidas = categorias.reduce((acc, cat) => acc + cat.lutasConcluidas, 0);
@@ -327,6 +334,15 @@ export default function GestaoTatames() {
   const tatamesJaAgendados = Array.from(new Set(categorias.filter((cat) => Boolean(cat.proximaHora)).map((cat) => cat.tatameAtual)));
   const tatamesPendentesCrono = tatamesUsados.filter((tatame) => !tatamesJaAgendados.includes(tatame) && !tatamesCronometrados.includes(tatame));
 
+  const categoriasSemTatame = categoriasFiltradas.filter((cat) => cat.tatameAtual === 'Não definido');
+  const colunasTatame = nomesTatame.map((tatame) => ({
+    tatame,
+    categorias: categoriasFiltradas.filter((cat) => cat.tatameAtual === tatame),
+    operacao: operacaoPorTatame.find((grupo) => grupo.tatame === tatame) || null,
+    temHorario: tatamesJaAgendados.includes(tatame) || tatamesCronometrados.includes(tatame),
+  }));
+  const passoAtual = resumo.semTatame > 0 || temAlteracoesPendentes ? 1 : tatamesPendentesCrono.length > 0 || tatamesUsados.length === 0 ? 2 : 3;
+
   const abrirHorarios = () => {
     if (temAlteracoesPendentes) {
       setMensagem('Salve a distribuição dos tatames antes de configurar os horários.');
@@ -336,184 +352,190 @@ export default function GestaoTatames() {
     setShowCronoModal(true);
   };
 
-  return (
-    <main className="min-h-screen bg-[#050505] p-4 md:p-8 text-white">
-      <div className="mx-auto max-w-7xl">
-        <header className="mb-6 border-b border-white/10 pb-6">
-          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-            <div>
-              <span className="rounded-md border border-red-500/20 bg-red-500/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-red-400">Central de operação</span>
-              <h1 className="mt-3 text-2xl md:text-4xl font-black uppercase tracking-tight">Gestão de tatames</h1>
-              <p className="mt-2 max-w-2xl text-xs md:text-sm text-zinc-500">Distribua categorias, gere horários e mantenha mesários, painel ao vivo e atletas sincronizados.</p>
-            </div>
+  const seletorTatame = (cat: CategoriaTatame) => {
+    const concluida = cat.totalLutas > 0 && cat.lutasConcluidas === cat.totalLutas;
+    return (
+      <select value={cat.tatameAtual} onChange={(event) => alterarTatame(cat, event.target.value)} disabled={concluida || Boolean(salvando)} className="min-h-11 w-full rounded-xl border border-white/10 bg-black px-3 text-xs font-bold text-white outline-none disabled:opacity-50">
+        <option value="Não definido">Ainda sem tatame</option>
+        {nomesTatame.map((tatame) => <option key={tatame} value={tatame}>{tatame}</option>)}
+      </select>
+    );
+  };
 
-          </div>
+  return (
+    <main className="min-h-screen bg-[#050505] p-4 pb-32 md:p-8 md:pb-36 text-white">
+      <div className="mx-auto max-w-6xl">
+        <header className="mb-6 border-b border-white/10 pb-6">
+          <h1 className="text-2xl md:text-4xl font-black tracking-tight">Organizar tatames</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-zinc-400">Duas tarefas: escolher em qual tatame cada categoria luta, depois dizer que horas cada tatame começa.</p>
         </header>
 
-        <section className="mb-5 grid grid-cols-3 gap-3">
-          <div className="rounded-2xl border border-white/10 bg-[#0b0b10] p-4">
-            <span className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Lutas reais</span>
-            <strong className="mt-2 block text-xl md:text-2xl font-black">{resumo.total}</strong>
-          </div>
-          <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
-            <span className="text-[9px] font-black uppercase tracking-widest text-emerald-300">Concluídas</span>
-            <strong className="mt-2 block text-xl md:text-2xl font-black text-emerald-300">{resumo.concluidas}</strong>
-          </div>
-          <div className="rounded-2xl border border-yellow-500/20 bg-yellow-500/10 p-4">
-            <span className="text-[9px] font-black uppercase tracking-widest text-yellow-300">Sem tatame</span>
-            <strong className="mt-2 block text-xl md:text-2xl font-black text-yellow-300">{resumo.semTatame}</strong>
-          </div>
-        </section>
-
-        {operacaoPorTatame.length > 0 && (
-          <section className="mb-6">
-            <div className="mb-3 flex items-end justify-between gap-3">
-              <div>
-                <span className="text-[9px] font-black uppercase tracking-[0.18em] text-cyan-400">Mapa operacional</span>
-                <h2 className="mt-1 text-lg font-black uppercase text-white">Agora, baias e próximas lutas</h2>
-              </div>
-              <button onClick={() => carregarLutas()} className="rounded-xl border border-white/10 bg-white/5 p-2.5 text-zinc-400 hover:text-white" title="Atualizar mapa"><RefreshCw size={15} /></button>
-            </div>
-            <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
-              {operacaoPorTatame.map((grupo) => (
-                <article key={grupo.tatame} className="rounded-2xl border border-white/10 bg-[#0b0b10] p-4">
-                  <div className="flex items-center justify-between border-b border-white/10 pb-3">
-                    <h3 className="font-black uppercase text-white">{grupo.tatame}</h3>
-                    <span className={`rounded-full px-2 py-1 text-[8px] font-black uppercase ${grupo.atual ? 'bg-red-500 text-white' : grupo.chamadas.length ? 'bg-yellow-400 text-black' : 'bg-emerald-500 text-black'}`}>{grupo.atual ? 'Em luta' : grupo.chamadas.length ? 'Chamada' : 'Livre'}</span>
-                  </div>
-                  {grupo.atual && <div className="mt-3 rounded-xl border border-red-500/25 bg-red-500/10 p-3"><span className="text-[8px] font-black uppercase tracking-widest text-red-300">No tatame · {rotuloLuta(grupo.atual)}</span><strong className="mt-1 block truncate text-xs uppercase text-white">{grupo.atual.atleta_1} × {grupo.atual.atleta_2}</strong></div>}
-                  <div className="mt-3 grid grid-cols-2 gap-2">
-                    <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 p-3"><span className="text-[8px] font-black uppercase text-cyan-300">Na baia</span><strong className="mt-1 block text-xl text-cyan-200">{grupo.baias.length}</strong></div>
-                    <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/10 p-3"><span className="text-[8px] font-black uppercase text-yellow-300">Já chamadas</span><strong className="mt-1 block text-xl text-yellow-200">{grupo.chamadas.length}</strong></div>
-                  </div>
-                  {grupo.baias.length > 0 && <div className="mt-3 space-y-1.5">{grupo.baias.slice(0, 3).map((luta) => <div key={luta.id} className="rounded-lg bg-black/50 px-3 py-2 text-[9px] font-bold uppercase text-zinc-300"><span className="text-cyan-400">Baia:</span> {isFantasma(luta.atleta_1) ? luta.atleta_2 : luta.atleta_1}<span className="block truncate text-[8px] text-zinc-600">{luta.categoria} · aguarda definição do adversário</span></div>)}</div>}
-                  {grupo.proximas.length > 0 && <div className="mt-3 border-t border-white/5 pt-3"><span className="text-[8px] font-black uppercase tracking-widest text-zinc-600">Próximas</span>{grupo.proximas.map((luta, index) => <p key={luta.id} className="mt-1 truncate text-[9px] font-bold uppercase text-zinc-400">{index + 1}. {luta.atleta_1} × {luta.atleta_2}</p>)}</div>}
-                </article>
-              ))}
-            </div>
-          </section>
-        )}
-
-        <section className="mb-6 rounded-2xl border border-white/10 bg-[#0b0b10] p-4">
-          <div className="grid gap-3 md:grid-cols-[0.8fr_1.2fr]">
-            <select value={eventoSelecionado} onChange={(event) => setEventoSelecionado(event.target.value)} disabled={loadingInit || eventos.length === 0} className="rounded-xl border border-white/10 bg-black px-4 py-3 text-sm font-bold text-white outline-none">
+        <section className="mb-5 grid gap-3 md:grid-cols-[1fr_1fr_auto]">
+          <label className="block">
+            <span className="mb-1.5 block text-[11px] font-bold uppercase tracking-widest text-zinc-500">Campeonato</span>
+            <select value={eventoSelecionado} onChange={(event) => setEventoSelecionado(event.target.value)} disabled={loadingInit || eventos.length === 0} className="w-full rounded-xl border border-white/10 bg-[#0b0b10] px-4 py-3 text-sm font-bold text-white outline-none">
               {loadingInit && <option>Carregando eventos...</option>}
               {!loadingInit && eventos.length === 0 && <option value="">Nenhum evento criado</option>}
               {eventos.map((evento) => <option key={evento.id} value={String(evento.id)}>{evento.nome}</option>)}
             </select>
-            <label className="flex items-center gap-3 rounded-xl border border-white/10 bg-black px-3 py-2.5">
+          </label>
+          <label className="block">
+            <span className="mb-1.5 block text-[11px] font-bold uppercase tracking-widest text-zinc-500">Buscar categoria</span>
+            <span className="flex items-center gap-3 rounded-xl border border-white/10 bg-[#0b0b10] px-3 py-3">
               <Search size={16} className="text-zinc-600" />
-              <input value={busca} onChange={(event) => setBusca(event.target.value)} placeholder="Buscar categoria, faixa ou tatame" className="w-full bg-transparent text-sm text-white outline-none placeholder:text-zinc-700" />
-            </label>
-          </div>
-          {mensagem && <div className="mt-3 rounded-xl border border-cyan-500/20 bg-cyan-500/10 p-3 text-xs font-bold text-cyan-100">{mensagem}</div>}
+              <input value={busca} onChange={(event) => setBusca(event.target.value)} placeholder="Nome, faixa ou tatame" className="w-full bg-transparent text-sm text-white outline-none placeholder:text-zinc-600" />
+            </span>
+          </label>
+          <button onClick={() => carregarLutas()} className="self-end rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-zinc-400 hover:text-white" title="Atualizar"><RefreshCw size={16} /></button>
         </section>
 
+        <ol className="mb-6 grid gap-3 md:grid-cols-2">
+          <li className={`rounded-2xl border p-4 ${passoAtual === 1 ? 'border-yellow-500/40 bg-yellow-500/10' : 'border-white/10 bg-[#0b0b10]'}`}>
+            <p className="text-[11px] font-black uppercase tracking-widest text-yellow-300">Passo 1</p>
+            <p className="mt-1 font-bold text-white">Coloque cada categoria em um tatame e salve.</p>
+            <p className="mt-1 text-sm text-zinc-400">{resumo.semTatame === 0 ? 'Todas as categorias já têm tatame.' : `${resumo.semTatame} categoria(s) ainda sem tatame.`}</p>
+          </li>
+          <li className={`rounded-2xl border p-4 ${passoAtual === 2 ? 'border-yellow-500/40 bg-yellow-500/10' : 'border-white/10 bg-[#0b0b10]'}`}>
+            <p className="text-[11px] font-black uppercase tracking-widest text-yellow-300">Passo 2</p>
+            <p className="mt-1 font-bold text-white">Defina a hora de início de cada tatame.</p>
+            <p className="mt-1 text-sm text-zinc-400">{tatamesUsados.length === 0 ? 'Salve a distribuição primeiro.' : tatamesPendentesCrono.length === 0 ? 'Todos os tatames já têm horário.' : `${tatamesPendentesCrono.length} tatame(s) ainda sem horário.`}</p>
+          </li>
+        </ol>
+
+        <p className="mb-4 text-sm text-zinc-400">{resumo.total} luta(s) no evento · {resumo.concluidas} encerrada(s).</p>
+        {mensagem && <div className="mb-4 rounded-xl border border-cyan-500/20 bg-cyan-500/10 p-3 text-sm text-cyan-100">{mensagem}</div>}
+        {tatamesDisponiveis.length === 0 && (
+          <div className="mb-4 rounded-xl border border-yellow-500/20 bg-yellow-500/10 p-4 text-sm text-yellow-100">
+            Cadastre os mesários em <Link href="/admin" className="font-bold underline">Equipe de operação</Link>, com o nome do tatame (ex.: Tatame 1). Esses nomes aparecem aqui para você escolher.
+          </div>
+        )}
+
         {loadingInit || loadingLutas ? (
-          <div className="rounded-2xl border border-white/10 bg-[#0b0b10] p-12 text-center text-xs font-black uppercase tracking-widest text-zinc-500">Mapeando lutas...</div>
+          <div className="rounded-2xl border border-white/10 bg-[#0b0b10] p-12 text-center text-sm text-zinc-500">Carregando categorias...</div>
         ) : categoriasFiltradas.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-white/10 bg-[#0b0b10] p-12 text-center">
             <AlertCircle size={34} className="mx-auto mb-3 text-zinc-700" />
-            <h2 className="font-black uppercase text-white">Nenhuma chave mapeada</h2>
-            <p className="mt-1 text-xs text-zinc-600">Gere as chaves ou ajuste o filtro.</p>
+            <h2 className="font-black text-white">Nenhuma categoria para organizar</h2>
+            <p className="mt-2 text-sm text-zinc-500">Gere as chaves primeiro ou limpe a busca.</p>
+            <Link href="/admin/chaves" className="mt-4 inline-block rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-xs font-black uppercase tracking-widest">Ir para as chaves</Link>
           </div>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {categoriasFiltradas.map((cat) => {
-              const progresso = Math.round((cat.lutasConcluidas / cat.totalLutas) * 100) || 0;
-              const concluida = cat.totalLutas > 0 && cat.lutasConcluidas === cat.totalLutas;
-
-              return (
-                <article key={cat.idUnico} className={`rounded-2xl border bg-[#0b0b10] p-4 shadow-xl ${concluida ? 'border-emerald-500/20' : 'border-white/10 hover:border-white/20'}`}>
-                  <div className="mb-4 h-1.5 overflow-hidden rounded-full bg-black">
-                    <div className={concluida ? 'h-full bg-emerald-500' : 'h-full bg-red-600'} style={{ width: `${progresso}%` }} />
-                  </div>
-
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Faixa {cat.faixa}</span>
-                      <h3 className="mt-1 line-clamp-2 text-sm md:text-base font-black uppercase text-white">{cat.nome}</h3>
+          <div className="space-y-4">
+            {categoriasSemTatame.length > 0 && (
+              <section className="rounded-2xl border border-yellow-500/30 bg-yellow-500/5 p-4">
+                <h2 className="font-black text-yellow-200">Ainda sem tatame ({categoriasSemTatame.length})</h2>
+                <p className="mt-1 text-sm text-zinc-400">Escolha o tatame à direita. Depois use Salvar distribuição.</p>
+                <div className="mt-3 space-y-2">
+                  {categoriasSemTatame.map((cat) => (
+                    <div key={cat.idUnico} className="grid gap-2 rounded-xl border border-white/10 bg-black/40 p-3 sm:grid-cols-[1fr_180px] sm:items-center">
+                      <div>
+                        <p className="font-bold uppercase text-white">{cat.nome}</p>
+                        <p className="text-xs text-zinc-500">Faixa {cat.faixa} · {cat.lutasConcluidas}/{cat.totalLutas} lutas</p>
+                      </div>
+                      {seletorTatame(cat)}
                     </div>
-                    <span className="shrink-0 rounded-lg border border-white/10 bg-black px-2 py-1 text-[10px] font-black uppercase tracking-widest text-zinc-300">
-                      <Users size={12} className="mr-1 inline text-red-400" /> {cat.lutasConcluidas}/{cat.totalLutas}
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {colunasTatame.map((coluna) => (
+              <section key={coluna.tatame} className="rounded-2xl border border-white/10 bg-[#0b0b10] p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3 border-b border-white/10 pb-3">
+                  <div>
+                    <h2 className="flex items-center gap-2 font-black uppercase text-white"><Map size={16} className="text-red-400" /> {coluna.tatame}</h2>
+                    <p className="mt-1 text-sm text-zinc-500">{coluna.categorias.length} categoria(s) · {coluna.temHorario ? 'horário definido' : 'ainda sem horário'}</p>
+                  </div>
+                  {coluna.operacao && (
+                    <span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase ${coluna.operacao.atual ? 'bg-red-500 text-white' : coluna.operacao.chamadas.length ? 'bg-yellow-400 text-black' : 'bg-emerald-500/80 text-black'}`}>
+                      {coluna.operacao.atual ? 'Lutando agora' : coluna.operacao.chamadas.length ? 'Atleta chamado' : 'Livre'}
                     </span>
-                  </div>
+                  )}
+                </div>
 
-                  <div className="mt-4 rounded-xl border border-white/5 bg-black/50 p-3 text-xs text-zinc-400">
-                    Próxima luta: <strong className="text-cyan-200">{formatarHorario(cat.proximaHora)}</strong>
-                  </div>
+                {coluna.operacao?.atual && (
+                  <p className="mt-3 rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-100">Agora: {coluna.operacao.atual.atleta_1} × {coluna.operacao.atual.atleta_2}</p>
+                )}
+                {coluna.operacao && coluna.operacao.proximas.length > 0 && (
+                  <p className="mt-2 text-sm text-zinc-400">Próxima: {coluna.operacao.proximas[0].atleta_1} × {coluna.operacao.proximas[0].atleta_2}</p>
+                )}
+                {coluna.operacao && coluna.operacao.baias.length > 0 && (
+                  <p className="mt-1 text-sm text-cyan-300">Esperando adversário: {coluna.operacao.baias.slice(0, 2).map((luta) => isFantasma(luta.atleta_1) ? luta.atleta_2 : luta.atleta_1).join(', ')}</p>
+                )}
 
-                  <div className="mt-4 flex items-center gap-3 border-t border-white/5 pt-4">
-                    <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border bg-black ${cat.tatameAtual !== 'Não definido' ? 'border-red-500/30 text-red-400' : 'border-yellow-500/30 text-yellow-300'}`}>
-                      {salvando === cat.idUnico ? <RefreshCw size={16} className="animate-spin" /> : <Map size={16} />}
+                <div className="mt-3 space-y-2">
+                  {coluna.categorias.length === 0 ? (
+                    <p className="text-sm text-zinc-600">Nenhuma categoria neste tatame.</p>
+                  ) : coluna.categorias.map((cat) => (
+                    <div key={cat.idUnico} className="grid gap-2 rounded-xl border border-white/5 bg-black/30 p-3 sm:grid-cols-[1fr_180px] sm:items-center">
+                      <div>
+                        <p className="font-bold uppercase text-white">{cat.nome}</p>
+                        <p className="text-xs text-zinc-500">Faixa {cat.faixa} · {cat.lutasConcluidas}/{cat.totalLutas} lutas · {formatarHorario(cat.proximaHora)}</p>
+                      </div>
+                      {seletorTatame(cat)}
                     </div>
-                    <select value={cat.tatameAtual} onChange={(event) => alterarTatame(cat, event.target.value)} disabled={concluida || salvando === cat.idUnico} className="min-h-11 flex-1 rounded-xl border border-white/10 bg-black px-3 text-xs font-black uppercase tracking-widest text-white outline-none disabled:opacity-50">
-                      <option value="Não definido" disabled>Escolher tatame</option>
-                      {tatamesDisponiveis.map((tatame) => <option key={tatame} value={tatame}>{tatame}</option>)}
-                    </select>
-                    {cat.tatameAtual !== 'Não definido' && <CheckCircle size={16} className="text-emerald-400" />}
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        )}
-
-        {!loadingInit && !loadingLutas && categorias.length > 0 && (
-          <div className="mt-6 grid gap-3 border-t border-white/10 pt-6 sm:grid-cols-2">
-            <button onClick={salvarAlteracoes} disabled={Boolean(salvando)} className="flex items-center justify-center gap-2 rounded-xl bg-white px-5 py-4 text-[11px] font-black uppercase tracking-widest text-black transition hover:bg-zinc-200 disabled:opacity-50">
-              {salvando ? <RefreshCw size={16} className="animate-spin" /> : <CheckCircle size={16} />} Salvar alterações
-            </button>
-            <button onClick={abrirHorarios} disabled={tatamesUsados.length === 0 || temAlteracoesPendentes} className="flex items-center justify-center gap-2 rounded-xl border border-yellow-500/30 bg-yellow-500/10 px-5 py-4 text-[11px] font-black uppercase tracking-widest text-yellow-300 disabled:opacity-40">
-              <Clock size={16} /> Horários
-            </button>
+                  ))}
+                </div>
+              </section>
+            ))}
           </div>
         )}
       </div>
+
+      {!loadingInit && !loadingLutas && categorias.length > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-white/10 bg-[#050505]/95 p-4 backdrop-blur">
+          <div className="mx-auto flex max-w-6xl flex-col gap-3 sm:flex-row">
+            <button onClick={salvarAlteracoes} disabled={Boolean(salvando) || !temAlteracoesPendentes} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-white px-5 py-4 text-xs font-black uppercase tracking-widest text-black disabled:opacity-40">
+              {salvando ? <RefreshCw size={16} className="animate-spin" /> : <CheckCircle size={16} />} {temAlteracoesPendentes ? 'Salvar distribuição' : 'Distribuição salva'}
+            </button>
+            <button onClick={abrirHorarios} disabled={tatamesUsados.length === 0 || temAlteracoesPendentes} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-yellow-500 px-5 py-4 text-xs font-black uppercase tracking-widest text-black disabled:opacity-40">
+              <Clock size={16} /> {temAlteracoesPendentes ? 'Salve antes dos horários' : 'Definir horários'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {showCronoModal && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/90 p-4 backdrop-blur-sm">
           <div className="w-full max-w-md overflow-hidden rounded-3xl border border-white/10 bg-[#0b0b10] shadow-2xl">
             <div className="flex items-start justify-between gap-3 border-b border-white/10 bg-black/40 p-5">
               <div>
-                <h2 className="flex items-center gap-2 text-xl font-black uppercase text-white"><Clock size={20} className="text-yellow-300" /> Motor de horários</h2>
-                <p className="mt-1 text-xs text-zinc-500">Defina a hora de início e o intervalo médio entre lutas.</p>
+                <h2 className="flex items-center gap-2 text-xl font-black text-white"><Clock size={20} className="text-yellow-300" /> Horário do tatame</h2>
+                <p className="mt-1 text-sm text-zinc-400">Informe quando a primeira luta começa. O sistema preenche as seguintes.</p>
               </div>
-              <button onClick={() => setShowCronoModal(false)} disabled={tatamesPendentesCrono.length > 0} title={tatamesPendentesCrono.length > 0 ? 'Configure todos os tatames antes de concluir' : 'Concluir'} className="rounded-xl bg-white/5 p-2 text-zinc-400 hover:text-white disabled:cursor-not-allowed disabled:opacity-25"><X size={18} /></button>
+              <button onClick={() => setShowCronoModal(false)} className="rounded-xl bg-white/5 p-2 text-zinc-400 hover:text-white"><X size={18} /></button>
             </div>
 
             <div className="space-y-4 p-5">
-              <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 p-3 text-[10px] font-black uppercase tracking-widest text-cyan-100">
-                {tatamesPendentesCrono.length > 0 ? `${tatamesPendentesCrono.length} tatame(s) ainda sem horário` : 'Todos os tatames estão programados'}
-              </div>
+              <p className="rounded-xl border border-white/10 bg-black/40 p-3 text-sm text-zinc-300">
+                {tatamesPendentesCrono.length > 0 ? `Falta horário em ${tatamesPendentesCrono.length} tatame(s).` : 'Todos os tatames já têm horário. Você pode gerar de novo se mudar a ordem.'}
+              </p>
               <div>
-                <label className="mb-1.5 block text-[10px] font-black uppercase tracking-widest text-zinc-500">Tatame</label>
+                <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-widest text-zinc-500">Qual tatame?</label>
                 <select value={cronoTatame} onChange={(event) => setCronoTatame(event.target.value)} className="w-full rounded-xl border border-white/10 bg-black px-4 py-3 text-sm font-bold text-white outline-none">
-                  <option value="" disabled>Selecione um tatame</option>
-                  {(tatamesUsados.length > 0 ? tatamesUsados : tatamesDisponiveis).map((tatame) => <option key={tatame} value={tatame}>{tatame}{tatamesJaAgendados.includes(tatame) || tatamesCronometrados.includes(tatame) ? ' · programado' : ''}</option>)}
+                  <option value="" disabled>Selecione</option>
+                  {(tatamesUsados.length > 0 ? tatamesUsados : tatamesDisponiveis).map((tatame) => <option key={tatame} value={tatame}>{tatame}{tatamesJaAgendados.includes(tatame) || tatamesCronometrados.includes(tatame) ? ' · já tem horário' : ''}</option>)}
                 </select>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="mb-1.5 block text-[10px] font-black uppercase tracking-widest text-zinc-500">Inicio</label>
-                  <div className="flex gap-2"><input type="time" value={cronoHora} onChange={(event) => setCronoHora(event.target.value)} className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black px-3 py-3 text-sm font-black text-white outline-none" /><button type="button" onClick={() => setCronoHora(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }))} className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-3 text-[9px] font-black uppercase text-cyan-200">Agora</button></div>
+                  <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-widest text-zinc-500">Primeira luta</label>
+                  <div className="flex gap-2"><input type="time" value={cronoHora} onChange={(event) => setCronoHora(event.target.value)} className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black px-3 py-3 text-sm font-black text-white outline-none" /><button type="button" onClick={() => setCronoHora(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }))} className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-3 text-[10px] font-bold uppercase text-cyan-200">Agora</button></div>
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-[10px] font-black uppercase tracking-widest text-zinc-500">Transição</label>
+                  <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-widest text-zinc-500">Minutos entre lutas</label>
                   <input type="number" min="0" max="10" value={cronoTransicao} onChange={(event) => setCronoTransicao(Number(event.target.value))} className="w-full rounded-xl border border-white/10 bg-black px-4 py-3 text-sm font-black text-white outline-none" />
                 </div>
               </div>
 
-              <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/10 p-4 text-xs leading-relaxed text-yellow-100">
-                O cronograma ignora BYE/TBD e recalcula somente lutas reais pendentes. O painel do mesário, o ao vivo e os avisos push usam estes horários.
-              </div>
+              <p className="text-sm leading-relaxed text-zinc-400">Só entram lutas com dois atletas. Mesário, chamador e painel ao vivo usam este horário.</p>
 
               <button onClick={gerarCronogramaTatame} disabled={gerandoCrono || !cronoTatame} className="flex w-full items-center justify-center gap-2 rounded-xl bg-yellow-500 px-4 py-3.5 text-xs font-black uppercase tracking-widest text-black disabled:opacity-50">
                 {gerandoCrono ? <RefreshCw size={16} className="animate-spin" /> : <Play size={16} fill="currentColor" />}
-                {gerandoCrono ? 'Gerando...' : 'Gerar linha do tempo'}
+                {gerandoCrono ? 'Gerando...' : 'Aplicar horário neste tatame'}
               </button>
-              {tatamesPendentesCrono.length === 0 && <button onClick={() => setShowCronoModal(false)} className="w-full rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-xs font-black uppercase tracking-widest text-emerald-300">Concluir horários</button>}
+              {tatamesPendentesCrono.length === 0 && <button onClick={() => setShowCronoModal(false)} className="w-full rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-xs font-black uppercase tracking-widest text-emerald-300">Concluir</button>}
             </div>
           </div>
         </div>
