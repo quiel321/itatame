@@ -52,7 +52,8 @@ export function divisaoEtaria(idade: number) {
 
 export function rotuloCategoria(c: CategoriaCompeticao) {
   const peso = c.tipo === 'absoluto' ? 'Absoluto' : c.peso_max == null ? `Acima de ${c.peso_min} kg` : `${c.peso_min} a ${c.peso_max} kg`;
-  return [c.modalidade, semFaixaDuplicada(c.nome, c.faixa), c.faixa, `${c.idade_min}-${c.idade_max} anos`, c.sexo, peso]
+  const faixa = faixaEhLivre(c.faixa) ? FAIXA_TODAS_AS_FAIXAS : (faixasDaCategoria(c.faixa).join(' · ') || c.faixa);
+  return [c.modalidade, semFaixaDuplicada(c.nome, faixa), faixa, `${c.idade_min}-${c.idade_max} anos`, c.sexo, peso]
     .filter(Boolean).join(' · ');
 }
 
@@ -78,10 +79,43 @@ export function categoriaMaisLeve(atual: CategoriaCompeticao | null, destino: Ca
 }
 
 export const FAIXA_TODAS_AS_FAIXAS = 'Todas as faixas';
+const ORDEM_FAIXAS = ['Cinza', 'Amarela', 'Laranja', 'Verde', 'Branca', 'Azul', 'Roxa', 'Marrom', 'Preta', 'Coral', 'Vermelha'];
 
 export function faixaEhLivre(faixa?: string | null) {
   const n = normalizarCompeticao(faixa);
   return n === 'TODAS' || n === 'TODAS AS FAIXAS' || n === 'TODAS FAIXAS' || n === 'LIVRE';
+}
+
+export function faixasDaCategoria(faixa?: string | null) {
+  if (faixaEhLivre(faixa)) return [] as string[];
+  return String(faixa || '')
+    .split(/[,/·;]+/)
+    .map(item => item.trim())
+    .filter(Boolean);
+}
+
+export function serializarFaixasCategoria(faixas: string[], todas = false) {
+  if (todas || faixas.some(faixa => faixaEhLivre(faixa))) return FAIXA_TODAS_AS_FAIXAS;
+  const unicas = [...new Map(
+    faixas
+      .map(item => item.trim())
+      .filter(item => item.length > 0)
+      .map((item): [string, string] => [normalizarCompeticao(item), item]),
+  ).values()];
+  unicas.sort((a, b) => {
+    const ia = ORDEM_FAIXAS.findIndex(item => normalizarCompeticao(item) === normalizarCompeticao(a));
+    const ib = ORDEM_FAIXAS.findIndex(item => normalizarCompeticao(item) === normalizarCompeticao(b));
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.localeCompare(b, 'pt-BR');
+  });
+  if (!unicas.length) throw new Error('Escolha ao menos uma faixa para o absoluto.');
+  return unicas.join(' · ');
+}
+
+export function faixaAtletaCompativel(faixaCategoria: string, faixaAtleta?: string | null) {
+  if (faixaEhLivre(faixaCategoria)) return true;
+  const permitidas = faixasDaCategoria(faixaCategoria);
+  const atleta = normalizarCompeticao(faixaAtleta);
+  return permitidas.some(faixa => normalizarCompeticao(faixa) === atleta);
 }
 
 export function categoriaAbsolutoCompativel(c: CategoriaCompeticao, i: InscricaoCompeticao) {
@@ -91,13 +125,14 @@ export function categoriaAbsolutoCompativel(c: CategoriaCompeticao, i: Inscricao
   if (idade < c.idade_min || idade > c.idade_max) return false;
   if (normalizarCompeticao(i.sexo) !== normalizarCompeticao(c.sexo)) return false;
   if (i.modalidade && normalizarCompeticao(i.modalidade) !== normalizarCompeticao(c.modalidade)) return false;
-  return faixaEhLivre(c.faixa) || normalizarCompeticao(i.faixa) === normalizarCompeticao(c.faixa);
+  return faixaAtletaCompativel(c.faixa, i.faixa);
 }
 
 export function absolutoDaInscricao(i: InscricaoCompeticao, categorias: CategoriaCompeticao[]) {
   const candidatas = categorias.filter(c => categoriaAbsolutoCompativel(c, i));
   candidatas.sort((a, b) => {
-    const livre = Number(faixaEhLivre(a.faixa)) - Number(faixaEhLivre(b.faixa));
+    const amplitude = (faixa: string) => faixaEhLivre(faixa) ? 1000 : Math.max(1, faixasDaCategoria(faixa).length);
+    const livre = amplitude(a.faixa) - amplitude(b.faixa);
     if (livre) return livre;
     return (a.idade_max - a.idade_min) - (b.idade_max - b.idade_min);
   });
@@ -107,7 +142,8 @@ export function absolutoDaInscricao(i: InscricaoCompeticao, categorias: Categori
 export function validarCategoria(c: Omit<CategoriaCompeticao, 'id' | 'evento_id'>) {
   if (!['peso', 'absoluto'].includes(c.tipo)) throw new Error('Informe se a categoria é de peso ou absoluto.');
   if (!c.nome.trim() || !c.modalidade.trim() || !c.faixa.trim() || !['Masculino', 'Feminino'].includes(c.sexo)) throw new Error('Informe nome, modalidade, sexo e faixa.');
-  if (c.tipo === 'peso' && faixaEhLivre(c.faixa)) throw new Error('Categoria de peso precisa de uma faixa específica.');
+  if (c.tipo === 'peso' && (faixaEhLivre(c.faixa) || faixasDaCategoria(c.faixa).length !== 1)) throw new Error('Categoria de peso precisa de uma faixa específica.');
+  if (c.tipo === 'absoluto' && !faixaEhLivre(c.faixa) && !faixasDaCategoria(c.faixa).length) throw new Error('Escolha as faixas que entram neste absoluto.');
   if (![c.idade_min, c.idade_max].every(Number.isInteger) || c.idade_min < 4 || c.idade_max > 100 || c.idade_min > c.idade_max) throw new Error('Confira o intervalo de idades.');
   if (!Number.isFinite(c.peso_min) || c.peso_min < 0 || (c.peso_max != null && (!Number.isFinite(c.peso_max) || c.peso_max <= c.peso_min))) throw new Error('Confira o intervalo de peso.');
   if (!Number.isFinite(c.tempo_minutos) || c.tempo_minutos < 1 || c.tempo_minutos > 30) throw new Error('O tempo deve ficar entre 1 e 30 minutos.');

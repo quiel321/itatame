@@ -56,6 +56,8 @@ export function calcularResultadosChaves(lutas: any[], regrasPorEvento?: Record<
 
       const woPontua = regras?.wo_pontua !== undefined ? regras.wo_pontua : true; 
       const devePontuar = !(isWO && !woPontua);
+      const lutaAbsoluto = String(luta.categoria || '').toLowerCase().includes('absoluto');
+      if (lutaAbsoluto && regras?.absoluto_pontua === false) return;
 
       if (!rankingAtletas[vId]) rankingAtletas[vId] = { ouro: 0, prata: 0, bronze: 0, vitorias: 0, lutas: 0, vitorias_wo: 0, pts: 0, nome: nomeVencedor, equipe: equipeVencedor || "Sem Equipe" };
       rankingAtletas[vId].lutas += 1;
@@ -119,6 +121,7 @@ export function calcularResultadosChaves(lutas: any[], regrasPorEvento?: Record<
     bronze?: number;
     vitoria?: number;
     wo_pontua?: boolean;
+    absoluto_pontua?: boolean;
     ranking_publicado?: boolean;
     ranking_aplicado?: boolean;
   };

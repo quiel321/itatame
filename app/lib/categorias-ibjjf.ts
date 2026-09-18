@@ -6,7 +6,8 @@ export const faixasCadastradas = [
 
 export function opcoesFaixaCategoria(faixaAtual?: string) {
   const atual = String(faixaAtual ?? '').trim();
-  if (atual && !faixasCadastradas.some(faixa => faixa.toLowerCase() === atual.toLowerCase())) {
+  if (!atual || /[,/·;]/.test(atual) || atual.toLowerCase().includes('todas')) return [...faixasCadastradas];
+  if (!faixasCadastradas.some(faixa => faixa.toLowerCase() === atual.toLowerCase())) {
     return [...faixasCadastradas, atual];
   }
   return [...faixasCadastradas];
