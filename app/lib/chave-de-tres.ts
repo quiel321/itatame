@@ -30,16 +30,52 @@ export function placeholderSlotChaveDeTres(
   return null;
 }
 
-export function textoAguardandoChaveDeTres(luta: { id_visual?: string | number | null; fase?: string | null }) {
+function slotVazio(nome?: string | null) {
+  const limpo = String(nome || '').trim().toUpperCase();
+  return !limpo || limpo === 'BYE' || limpo === 'TBD' || limpo.includes('SEM OPONENTE');
+}
+
+export function textoAguardandoChaveDeTres(luta: {
+  id_visual?: string | number | null;
+  fase?: string | null;
+  atleta_1?: string | null;
+  atleta_2?: string | null;
+}) {
   if (!ehFaseChaveDeTres(luta.fase) && String(luta.id_visual) !== '999') return null;
   const id = String(luta.id_visual);
-  if (id === '2') return 'Na baia · espera o perdedor da luta 1 para ir à decisão';
-  if (id === '4') return 'Na baia · espera o perdedor da luta 1 da direita para ir à decisão';
-  if (id === '101' || id === '102') return 'Aguardando os vencedores da luta 1 e da baia';
-  if (id === '999') return String(luta.fase || '').toUpperCase().includes('CHAVE DE 6')
-    ? 'Aguardando os vencedores dos dois lados'
-    : 'Aguardando os vencedores da luta 1 e da baia';
+  const espera1 = slotVazio(luta.atleta_1);
+  const espera2 = slotVazio(luta.atleta_2);
+  if (id === '2') return espera1
+    ? 'Na baia · espera o perdedor da luta 1 para ir à decisão'
+    : 'Na baia · prontos quando a luta 1 terminar';
+  if (id === '4') return espera1
+    ? 'Na baia · espera o perdedor da luta 1 da direita para ir à decisão'
+    : 'Na baia · prontos quando a luta 1 da direita terminar';
+  if (id === '101' || id === '102') {
+    if (!espera1 && espera2) return 'Aguardando o vencedor da baia';
+    if (espera1 && !espera2) return 'Aguardando o vencedor da luta 1';
+    return 'Aguardando os vencedores da luta 1 e da baia';
+  }
+  if (id === '999') {
+    const seis = String(luta.fase || '').toUpperCase().includes('CHAVE DE 6');
+    if (!espera1 && espera2) return seis ? 'Aguardando o vencedor do lado direito' : 'Aguardando o vencedor da baia';
+    if (espera1 && !espera2) return seis ? 'Aguardando o vencedor do lado esquerdo' : 'Aguardando o vencedor da luta 1';
+    return seis ? 'Aguardando os vencedores dos dois lados' : 'Aguardando os vencedores da luta 1 e da baia';
+  }
   return null;
+}
+
+export function ordemOperacionalChaveTriangular(luta: { id_visual?: string | number | null; fase?: string | null }) {
+  if (!ehFaseChaveDeTres(luta.fase) && String(luta.id_visual) !== '999') return null;
+  const id = String(luta.id_visual);
+  if (id === '1') return 1;
+  if (id === '2') return 2;
+  if (id === '101') return 3;
+  if (id === '3') return 4;
+  if (id === '4') return 5;
+  if (id === '102') return 6;
+  if (id === '999') return 7;
+  return 8;
 }
 
 export function idBaiaDaPrimeiraChaveDeTres(idVisual?: string | number | null, fase?: string | null) {

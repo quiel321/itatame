@@ -138,10 +138,10 @@ export default function ChavesPage() {
     return String(nome);
   }
 
-  const buscarFoto = (idNumerico?: number | null, nomeLimpo?: string) => {
+  const buscarFoto = (idNumerico?: number | null, nomeLimpo?: string): string | null => {
     if (idNumerico) {
       const porId = atletasDB.find(a => Number(a.id) === Number(idNumerico) && a.foto_url);
-      if (porId?.foto_url) return porId.foto_url;
+      if (typeof porId?.foto_url === 'string' && porId.foto_url) return porId.foto_url;
     }
     if (!nomeLimpo) return null;
     const upper = nomeLimpo.toUpperCase();
@@ -149,7 +149,7 @@ export default function ChavesPage() {
     if (!match) {
         match = atletasDB.find(a => a.nome && a.nome.toUpperCase().includes(upper) && a.foto_url);
     }
-    return match ? match.foto_url : null;
+    return typeof match?.foto_url === 'string' && match.foto_url ? match.foto_url : null;
   }
 
   const handleAvancar = async (..._args: unknown[]) => {

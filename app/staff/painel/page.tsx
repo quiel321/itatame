@@ -9,6 +9,7 @@ import { obterTempoRegulamentar } from '../../lib/cronograma';
 import { processarAvancosAutomaticosChaves } from '../../lib/chaves-auto-avanco';
 import { rotuloLuta } from '../../lib/lutas-rotulos';
 import { garantirVinculoStaff } from '../../lib/staff-sessao';
+import { ordemOperacionalChaveTriangular, textoAguardandoChaveDeTres } from '@/app/lib/chave-de-tres';
 
 type StaffSession = {
   evento_id: string | number;
@@ -83,6 +84,11 @@ function displayNome(nome?: string | null) {
 }
 
 function ordenarLutas(a: Luta, b: Luta) {
+  if (a.categoria === b.categoria && (a.faixa || '') === (b.faixa || '')) {
+    const triangularA = ordemOperacionalChaveTriangular(a);
+    const triangularB = ordemOperacionalChaveTriangular(b);
+    if (triangularA != null && triangularB != null && triangularA !== triangularB) return triangularA - triangularB;
+  }
   const ordemA = a.ordem_tatame ?? a.ordem ?? 9999;
   const ordemB = b.ordem_tatame ?? b.ordem ?? 9999;
   if (ordemA !== ordemB) return ordemA - ordemB;
@@ -366,6 +372,8 @@ export default function PainelMesario() {
 
   // Descobre de onde vem o oponente do atleta que está na Baia
   const getTextoBaia = (lutaWait: Luta) => {
+    const textoTres = textoAguardandoChaveDeTres(lutaWait);
+    if (textoTres) return textoTres;
     const lutasAlimentadoras = todasLutasEvento.filter(l => String(l.proxima_luta) === String(lutaWait.id_visual));
     if (lutasAlimentadoras.length > 0) {
       const atletaPresente = isAtletaValido(lutaWait.atleta_1) ? lutaWait.atleta_1 : lutaWait.atleta_2;

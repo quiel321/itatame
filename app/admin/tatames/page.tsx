@@ -8,6 +8,7 @@ import { AlertCircle, CheckCircle, Clock, Play, RefreshCw, Search, X } from 'luc
 import { supabase } from '../../lib/supabase';
 import { obterTempoRegulamentar } from '../../lib/cronograma';
 import { processarAvancosAutomaticosChaves } from '../../lib/chaves-auto-avanco';
+import { ehFaseChaveDeTres, ordemOperacionalChaveTriangular } from '@/app/lib/chave-de-tres';
 
 type Evento = { id: string | number; nome: string; data_evento?: string | null };
 type Luta = {
@@ -103,6 +104,11 @@ function ordenarLutasCronograma(a: Luta, b: Luta) {
   if (ordemTatameA !== ordemTatameB) return ordemTatameA - ordemTatameB;
   if (a.categoria !== b.categoria) return a.categoria.localeCompare(b.categoria);
   if (a.faixa !== b.faixa) return a.faixa.localeCompare(b.faixa);
+  const triangularA = ordemOperacionalChaveTriangular(a);
+  const triangularB = ordemOperacionalChaveTriangular(b);
+  if (triangularA != null || triangularB != null) {
+    return (triangularA ?? 99) - (triangularB ?? 99) || (a.ordem || 0) - (b.ordem || 0);
+  }
   const faseA = fasePeso[normalizar(a.fase)] || 99;
   const faseB = fasePeso[normalizar(b.fase)] || 99;
   if (faseA !== faseB) return faseA - faseB;
@@ -205,7 +211,7 @@ export default function GestaoTatames() {
         };
       }
 
-      if (isLutaReal(luta)) grupos[chave].totalLutas += 1;
+      if (isLutaReal(luta) || ehFaseChaveDeTres(luta.fase)) grupos[chave].totalLutas += 1;
       if (isLutaReal(luta) && statusConcluido(luta)) grupos[chave].lutasConcluidas += 1;
       if (!statusConcluido(luta) && luta.horario_estimado && !grupos[chave].proximaHora) {
         grupos[chave].proximaHora = luta.horario_estimado;
@@ -269,7 +275,7 @@ export default function GestaoTatames() {
       const tatameAlvo = normalizar(cronoTatame);
       const lutasReais = (lutasDoEvento as Luta[])
         .filter((luta) => normalizar(luta.tatame) === tatameAlvo)
-        .filter((luta) => isLutaReal(luta))
+        .filter((luta) => isLutaReal(luta) || ehFaseChaveDeTres(luta.fase))
         .filter((luta) => !statusConcluido(luta))
         .sort(ordenarLutasCronograma);
 
@@ -568,7 +574,7 @@ export default function GestaoTatames() {
                 </div>
               </div>
 
-              <p className="text-sm leading-relaxed text-zinc-400">Só entram lutas com dois atletas. Mesário, chamador e painel ao vivo usam este horário.</p>
+              <p className="text-sm leading-relaxed text-zinc-400">Entram lutas com dois atletas e, na chave de 3 ou 6, também a baia e as decisões, na ordem: luta 1, baia, decisão, final.</p>
 
               <button onClick={gerarCronogramaTatame} disabled={gerandoCrono || !cronoTatame} className="flex w-full items-center justify-center gap-2 rounded-xl bg-yellow-500 px-4 py-3.5 text-xs font-black uppercase tracking-widest text-black disabled:opacity-50">
                 {gerandoCrono ? <RefreshCw size={16} className="animate-spin" /> : <Play size={16} fill="currentColor" />}

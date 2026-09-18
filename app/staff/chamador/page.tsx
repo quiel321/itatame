@@ -7,6 +7,7 @@ import { supabase } from '../../lib/supabase';
 import { processarAvancosAutomaticosChaves, propagarResultadoChave } from '../../lib/chaves-auto-avanco';
 import { obterTempoRegulamentar } from '../../lib/cronograma';
 import { rotuloLuta } from '../../lib/lutas-rotulos';
+import { ordemOperacionalChaveTriangular, placeholderSlotChaveDeTres, textoAguardandoChaveDeTres } from '@/app/lib/chave-de-tres';
 
 type StaffSession = {
   evento_id: string | number;
@@ -51,6 +52,11 @@ function atletaReal(nome?: string | null) {
 }
 
 function ordenar(a: Luta, b: Luta) {
+  if (a.categoria === b.categoria && (a.faixa || '') === (b.faixa || '')) {
+    const triangularA = ordemOperacionalChaveTriangular(a);
+    const triangularB = ordemOperacionalChaveTriangular(b);
+    if (triangularA != null && triangularB != null && triangularA !== triangularB) return triangularA - triangularB;
+  }
   const ordemA = a.ordem_tatame ?? a.ordem ?? 9999;
   const ordemB = b.ordem_tatame ?? b.ordem ?? 9999;
   if (ordemA !== ordemB) return ordemA - ordemB;
@@ -451,7 +457,7 @@ export default function PainelChamador() {
                 <button onClick={() => atualizarControle(luta, atleta.lado, 'chamada')} disabled={controleChamador(luta, atleta.lado).chamadas >= 2 || acaoId === `${luta.id}-${atleta.lado}`} className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-2 py-2 text-[8px] font-black uppercase text-yellow-200 disabled:opacity-40">{controleChamador(luta, atleta.lado).chamadas >= 2 ? '2 chamadas' : `${controleChamador(luta, atleta.lado).chamadas + 1}ª chamada`}</button>
               </div>}
               {tipo !== 'chamada' && controleChamador(luta, atleta.lado).chamadas >= 2 && !controleChamador(luta, atleta.lado).presente && controleChamador(luta, atleta.lado === 1 ? 2 : 1).presente && <button onClick={() => confirmarWo(luta, atleta.lado)} className="mt-2 w-full rounded-lg border border-red-500/30 bg-red-500/10 px-2 py-2 text-[8px] font-black uppercase text-red-300">Confirmar ausência</button>}
-            </> : <div className="flex min-h-24 flex-col items-center justify-center text-center"><Clock3 size={18} className="text-cyan-400" /><p className="mt-2 text-[9px] font-black uppercase text-cyan-200">Vaga do adversário</p><p className="mt-1 text-[8px] text-zinc-600">Aguardando vencedor da luta anterior</p></div>}
+            </> : <div className="flex min-h-24 flex-col items-center justify-center text-center"><Clock3 size={18} className="text-cyan-400" /><p className="mt-2 text-[9px] font-black uppercase text-cyan-200">{placeholderSlotChaveDeTres(luta, atleta.lado) || 'Vaga do adversário'}</p><p className="mt-1 text-[8px] text-zinc-600">{textoAguardandoChaveDeTres(luta) || 'Aguardando oponente da luta anterior'}</p></div>}
           </div>
         ))}
       </div>

@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 import { processarAvancosAutomaticosChaves, propagarResultadoChave } from "../../../lib/chaves-auto-avanco";
+import { idBaiaDaPrimeiraChaveDeTres } from "@/app/lib/chave-de-tres";
 import { garantirVinculoStaff } from "../../../lib/staff-sessao";
 
 export default function PlacarMesarioDB() {
@@ -250,7 +251,7 @@ export default function PlacarMesarioDB() {
       const perdedorEhReal = Boolean(limparNome(nomePerdedor));
       const ignoraMedalha = ganhouPorWO && perdedorEhReal;
       const isFinal = String(lutaAtual.fase || '').toLowerCase().startsWith('final') || String(lutaAtual.id_visual) === "999";
-      const primeiraDaChaveDeTres = String(lutaAtual.id_visual) === '1' && String(lutaAtual.fase || '').toUpperCase().includes('CHAVE DE 3');
+      const primeiraDaChaveDeTres = Boolean(idBaiaDaPrimeiraChaveDeTres(lutaAtual.id_visual, lutaAtual.fase));
       const isSemifinal = String(lutaAtual.proxima_luta) === "999" && !primeiraDaChaveDeTres;
 
       const updateEstatistica = async (idAtletaNum: number, coluna: string, incremento: number) => {
@@ -507,7 +508,7 @@ export default function PlacarMesarioDB() {
     const ignoraAntigo = (metodoAntigo === 'wo' || metodoAntigo === 'ausencia') && perdedorEhReal;
     const ignoraNovo = metodoFinal === 'wo' && perdedorEhReal;
     const isFinal = String(lutaAtual.fase || '').toLowerCase().startsWith('final') || String(lutaAtual.id_visual) === '999';
-    const primeiraDaChaveDeTres = String(lutaAtual.id_visual) === '1' && String(lutaAtual.fase || '').toUpperCase().includes('CHAVE DE 3');
+    const primeiraDaChaveDeTres = Boolean(idBaiaDaPrimeiraChaveDeTres(lutaAtual.id_visual, lutaAtual.fase));
     const isSemifinal = String(lutaAtual.proxima_luta) === '999' && !primeiraDaChaveDeTres;
 
     const ajustar = async (id: number | null | undefined, coluna: string, delta: number) => {

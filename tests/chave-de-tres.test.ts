@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  ordemOperacionalChaveTriangular,
   lutasFormamChaveDeSeis,
   lutasFormamChaveDeTres,
   placeholderSlotChaveDeTres,
@@ -81,7 +82,11 @@ test("chave de 6 distribui dois lados e deixa a baia esperando o perdedor", () =
   assert.equal(placeholderSlotChaveDeTres(chaveDeSeis[6], 1), "Vencedor do lado esquerdo");
   assert.equal(placeholderSlotChaveDeTres(chaveDeSeis[6], 2), "Vencedor do lado direito");
   assert.match(textoAguardandoChaveDeTres(chaveDeSeis[4]) || "", /perdedor da luta 1 da direita/i);
-  assert.equal(rotuloLuta(chaveDeSeis[0]), "Luta 1 · esquerda");
+  assert.equal(ordemOperacionalChaveTriangular(chaveDeTres[0]), 1);
+  assert.equal(ordemOperacionalChaveTriangular(chaveDeTres[1]), 2);
+  assert.equal(ordemOperacionalChaveTriangular(chaveDeSeis[2]), 3);
+  assert.equal(ordemOperacionalChaveTriangular(chaveDeSeis[3]), 4);
+  assert.equal(ordemOperacionalChaveTriangular(chaveDeSeis[6]), 7);
   assert.equal(rotuloLuta(chaveDeSeis[3]), "Luta 1 · direita");
   assert.equal(textoOuroAposChecagem(1), "Aguardando checagem · ouro só após a presença");
   assert.match(textoOuroAposChecagem(6), /baia/i);

@@ -193,10 +193,11 @@ export default function ChavesPublicoPage() {
     }
   };
 
-  const buscarFotoPorId = (idNumerico: number | null) => {
+  const buscarFotoPorId = (idNumerico?: number | null): string | null => {
     if (!idNumerico) return null;
-    const match = atletasDB.find(a => a.id === idNumerico);
-    return match ? match.foto_url : null;
+    const match = atletasDB.find(a => Number(a.id) === Number(idNumerico));
+    const foto = match?.foto_url;
+    return typeof foto === 'string' && foto ? foto : null;
   }
 
   const getLutaFinal = () => {

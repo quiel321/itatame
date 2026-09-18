@@ -12,6 +12,7 @@ export type ChaveLutaAuto = {
   id_visual?: string | number | null;
   proxima_luta?: string | number | null;
   tatame?: string | null;
+  ordem_tatame?: number | null;
   atleta_1?: string | null;
   atleta_2?: string | null;
   equipe_1?: string | null;
@@ -132,7 +133,11 @@ export async function propagarResultadoChave(
         atleta_2_id: resultado.vencedorId || null,
       };
 
-    const { error } = await supabase.from('chaves').update(updateData).eq('id', proxima.id);
+    const extraFila: Record<string, unknown> = {};
+    if (!proxima.tatame && luta.tatame) extraFila.tatame = luta.tatame;
+    if (!proxima.ordem_tatame && luta.ordem_tatame) extraFila.ordem_tatame = Number(luta.ordem_tatame) + 1;
+
+    const { error } = await supabase.from('chaves').update({ ...updateData, ...extraFila }).eq('id', proxima.id);
     if (error) throw error;
   }
 
@@ -146,10 +151,14 @@ export async function propagarResultadoChave(
     );
 
     if (lutaBaia) {
+      const extraBaia: Record<string, unknown> = {};
+      if (!lutaBaia.tatame && luta.tatame) extraBaia.tatame = luta.tatame;
+      if (!lutaBaia.ordem_tatame && luta.ordem_tatame) extraBaia.ordem_tatame = Number(luta.ordem_tatame) + 1;
       const { error } = await supabase.from('chaves').update({
         atleta_1: resultado.perdedorNome,
         equipe_1: resultado.perdedorEquipe || '',
         atleta_1_id: resultado.perdedorId || null,
+        ...extraBaia,
       }).eq('id', lutaBaia.id);
       if (error) throw error;
     }
@@ -211,6 +220,21 @@ async function reabrirWoSemChecagem(supabase: SupabaseLike, todas: ChaveLutaAuto
   }
 }
 
+async function alinharTatameDaCategoria(supabase: SupabaseLike, todas: ChaveLutaAuto[]) {
+  const referencia = new Map<string, string>();
+  for (const luta of todas) {
+    const chave = `${luta.categoria}__${luta.faixa || ''}`;
+    if (luta.tatame && !referencia.has(chave)) referencia.set(chave, luta.tatame);
+  }
+  for (const luta of todas) {
+    const tatame = referencia.get(`${luta.categoria}__${luta.faixa || ''}`);
+    if (!tatame || luta.tatame) continue;
+    luta.tatame = tatame;
+    const { error } = await supabase.from('chaves').update({ tatame }).eq('id', luta.id);
+    if (error) throw error;
+  }
+}
+
 export async function processarAvancosAutomaticosChaves(supabase: SupabaseLike, eventoId: string | number) {
   let houveAvanco = false;
 
@@ -223,6 +247,7 @@ export async function processarAvancosAutomaticosChaves(supabase: SupabaseLike, 
     if (error || !data) return houveAvanco;
 
     const todas = data as ChaveLutaAuto[];
+    await alinharTatameDaCategoria(supabase, todas);
     const idsComAvanco = Array.from(new Set(todas.flatMap((luta) => [luta.atleta_1_id, luta.atleta_2_id]).filter(Boolean))) as number[];
     const { data: inscricoes } = idsComAvanco.length > 0
       ? await supabase.from('inscricoes').select('atleta_id, status_checkin').eq('evento_id', eventoId).in('atleta_id', idsComAvanco)

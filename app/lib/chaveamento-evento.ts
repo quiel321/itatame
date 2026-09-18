@@ -85,13 +85,15 @@ async function enriquecerAcademiaInscricoes(db: ClienteSupabase, inscricoes: Ins
     if (atleta.academia && atleta.user_id) academiaPorUser.set(String(atleta.user_id), String(atleta.academia));
   }
   const academiaPorEquipe = new Map((equipes.data || []).map((equipe: { id: string; academia?: string | null }) => [equipe.id, equipe.academia || '']));
-  return inscricoes.map(inscricao => ({
+  return inscricoes.map((inscricao): InscricaoCompeticao => ({
     ...inscricao,
-    academia: inscricao.academia
+    academia: String(
+      inscricao.academia
       || (inscricao.atleta_id ? academiaPorAtletaId.get(Number(inscricao.atleta_id)) : '')
       || (inscricao.user_id ? academiaPorUser.get(String(inscricao.user_id)) : '')
-      || (inscricao.equipe_id ? academiaPorEquipe.get(inscricao.equipe_id) : '')
-      || null,
+      || (inscricao.equipe_id ? academiaPorEquipe.get(String(inscricao.equipe_id)) : '')
+      || '',
+    ).trim() || null,
   }));
 }
 

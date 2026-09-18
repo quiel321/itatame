@@ -1,4 +1,5 @@
 import { chaveRankingEquipe, nomeExibicaoEquipe } from './equipes-nome';
+import { idBaiaDaPrimeiraChaveDeTres } from './chave-de-tres';
 
 export function lutaEhAbsoluto(luta: { categoria?: string | null }) {
   return String(luta.categoria || '').toLowerCase().includes('absoluto');
@@ -48,7 +49,7 @@ export function calcularResultadosChaves(lutas: any[], regrasPorEvento?: Record<
       const ptsVitoriaNormal = regras?.vitoria !== undefined ? Number(regras.vitoria) : 0;
       const fase = String(luta.fase || '').toLowerCase();
       const ehFinal = fase.startsWith('final') || String(luta.id_visual) === '999';
-      const ehPrimeiraSemifinalDeTres = String(luta.id_visual) === '1' && fase.includes('chave de 3');
+      const ehPrimeiraSemifinalDeTres = Boolean(idBaiaDaPrimeiraChaveDeTres(luta.id_visual, luta.fase));
       const ehSemifinal = !ehFinal && !ehPrimeiraSemifinalDeTres && (fase.includes('semi') || fase.includes('3º lugar') || String(luta.proxima_luta) === '999');
       
       const metodo = String(luta.metodo_vitoria || '').toLowerCase();
