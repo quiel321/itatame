@@ -28,6 +28,18 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     ? `${evento.descricao}. Confira inscrições, checagem, chaves, lutas ao vivo e resultados no iTatame.`
     : `Confira inscrições, checagem, chaves, lutas ao vivo e resultados do ${evento.nome}${contexto ? ` — ${contexto}` : ""}.`;
   const canonical = `${baseUrl}/evento/${id}`;
+  const banner = evento.banner_url && /^https?:\/\//i.test(evento.banner_url)
+    ? evento.banner_url
+    : evento.banner_url
+      ? `${baseUrl}${evento.banner_url.startsWith("/") ? "" : "/"}${evento.banner_url}`
+      : "";
+  const imagemPrevia = {
+    url: `${baseUrl}/evento/${id}/opengraph-image`,
+    width: 1200,
+    height: 630,
+    alt: evento.nome,
+    type: "image/png",
+  };
 
   return {
     title: `${evento.nome} | Inscrições e Chaves | iTatame`,
@@ -40,13 +52,13 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
       siteName: "iTatame",
       title: `${evento.nome} | iTatame`,
       description: descricao,
-      images: [evento.banner_url || `${baseUrl}/capa-compartilhamento.jpg`],
+      images: banner ? [imagemPrevia, { url: banner, width: 1200, height: 630, alt: evento.nome }] : [imagemPrevia],
     },
     twitter: {
       card: "summary_large_image",
       title: `${evento.nome} | iTatame`,
       description: descricao,
-      images: [evento.banner_url || `${baseUrl}/capa-compartilhamento.jpg`],
+      images: [`${baseUrl}/evento/${id}/opengraph-image`],
     },
   };
 }

@@ -468,9 +468,9 @@ export default function AdminPage() {
 
   async function copiarLinkInscricao() {
     if (!eventoAtual) return;
-    const link = `${window.location.origin}/inscricao?evento=${eventoAtual.id}`;
+    const link = `${window.location.origin}/evento/${eventoAtual.id}`;
     await navigator.clipboard.writeText(link);
-    alert('Link de inscrição copiado.');
+    alert('Link do campeonato copiado. A prévia usa a capa do banner.');
   }
 
   function dataCurta(valor?: string | null) {
@@ -563,7 +563,7 @@ export default function AdminPage() {
               </div>
               <div className="grid grid-cols-3 gap-1.5">
                 <Link href={`/admin/eventos/${eventoSelecionado}/editar`} className="rounded-xl border border-red-500/40 bg-red-500/10 px-2 py-2.5 text-center text-[9px] font-black uppercase tracking-widest text-red-300 hover:bg-red-500/20 md:text-[10px]"><Edit3 size={12} className="mr-1 inline" />Editar</Link>
-                <button onClick={copiarLinkInscricao} className="rounded-xl border border-white/10 bg-white/5 px-2 py-2.5 text-[9px] font-black uppercase tracking-widest hover:bg-white/10 md:text-[10px]"><Copy size={12} className="mr-1 inline" />Copiar</button>
+                <button onClick={copiarLinkInscricao} title="Copiar link da página inicial do campeonato" className="rounded-xl border border-white/10 bg-white/5 px-2 py-2.5 text-[9px] font-black uppercase tracking-widest hover:bg-white/10 md:text-[10px]"><Copy size={12} className="mr-1 inline" />Copiar</button>
                 <Link href={`/evento/${eventoSelecionado}`} className="rounded-xl bg-red-600 px-2 py-2.5 text-center text-[9px] font-black uppercase tracking-widest hover:bg-red-500 md:text-[10px]">Pública</Link>
               </div>
             </div>

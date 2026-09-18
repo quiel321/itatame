@@ -153,9 +153,9 @@ export default function VouchersAdminPage() {
   }
 
   async function copiarOrientacao(cupomAtual: any) {
-    const link = `${window.location.origin}/inscricao?evento=${eventoId}`;
+    const link = `${window.location.origin}/evento/${eventoId}`;
     const quantidade = Math.max(0, Number(cupomAtual.limite_usos || 0) - Number(cupomAtual.usos_atualmente || 0));
-    const texto = `Inscrições de cortesia iTatame\n\n1. Acesse: ${link}\n2. Entre ou crie a conta do atleta.\n3. Preencha a inscrição e escolha a categoria.\n4. No resumo, informe o voucher ${cupomAtual.codigo} e clique em Validar.\n5. Confirme a inscrição.\n\nVagas disponíveis neste código: ${quantidade}. Cada atleta deve usar sua própria conta e e-mail para receber o QR Code.`;
+    const texto = `Inscrições de cortesia iTatame\n\n1. Acesse: ${link}\n2. Entre na página do campeonato e toque em Fazer Inscrição.\n3. Entre ou crie a conta do atleta.\n4. Preencha a inscrição e escolha a categoria.\n5. No resumo, informe o voucher ${cupomAtual.codigo} e clique em Validar.\n6. Confirme a inscrição.\n\nVagas disponíveis neste código: ${quantidade}. Cada atleta deve usar sua própria conta e e-mail para receber o QR Code.`;
     await navigator.clipboard.writeText(texto);
     setMensagem("Orientação e link copiados. Envie ao professor responsável.");
   }
