@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { grupoInscricao, absolutoDaInscricao, normalizarCompeticao, type InscricaoCompeticao, type CategoriaCompeticao } from './categorias-competicao';
+import { grupoInscricao, absolutoDaInscricao, chaveDoGrupo, normalizarCompeticao, type InscricaoCompeticao, type CategoriaCompeticao } from './categorias-competicao';
 type Participante = InscricaoCompeticao & { equipe_atleta: string; equipe_chave: string };
 
 function chaveEquipe(inscricao: InscricaoCompeticao) {
@@ -20,7 +20,7 @@ export function prepararGrupos(inscricoes: InscricaoCompeticao[], tipo: 'peso' |
     let grupo;
     try { grupo = grupoInscricao(inscricao, tipo, categorias); }
     catch (error) { throw new Error(`Inscrição ${inscricao.id} (${inscricao.atleta}): ${(error as Error).message}`); }
-    const chave = `${grupo.categoria}__${grupo.faixa}`;
+    const chave = chaveDoGrupo(grupo);
     (grupos[chave] ||= []).push({
       ...inscricao,
       equipe_atleta: inscricao.equipe?.trim() || 'SEM EQUIPE',

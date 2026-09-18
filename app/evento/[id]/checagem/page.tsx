@@ -3,7 +3,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/app/lib/supabase';
 import { useParams, useRouter } from 'next/navigation';
-import { grupoInscricao, type CategoriaCompeticao } from '@/app/lib/categorias-competicao';
+import { chavesDaInscricao, type CategoriaCompeticao, type ChaveChecagem } from '@/app/lib/categorias-competicao';
+import { nomeEquipeChecagem } from '@/app/lib/equipes-nome';
 import { Search, Users, Layers, Shield, ArrowLeft, Trophy, Building2 } from 'lucide-react';
 
 type EquipeEvento = { id: string; nome: string; academia: string | null; professor: string | null };
@@ -20,22 +21,10 @@ type InscricaoCompleta = {
   sexo: string;
   absoluto: boolean;
   sozinho: boolean;
+  chaves: ChaveChecagem[];
   chave_categoria: string;
   categoria_rotulo: string;
 };
-
-function normalizarChecagem(valor?: string | null) {
-  return String(valor ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().replace(/\s+/g, ' ').toUpperCase();
-}
-
-function equipeOficialDaInscricao(insc: { equipe?: string | null; equipe_id?: string | null }, equipes: EquipeEvento[]) {
-  const porId = insc.equipe_id ? equipes.find(eq => eq.id === insc.equipe_id) : undefined;
-  if (porId) return porId;
-  const porNome = equipes.find(eq => normalizarChecagem(eq.nome) === normalizarChecagem(insc.equipe));
-  if (porNome) return porNome;
-  if (equipes.length === 1) return equipes[0];
-  return null;
-}
 
 export default function ChecagemGeralPage() {
   const params = useParams();
@@ -65,12 +54,12 @@ export default function ChecagemGeralPage() {
       const { data: ev } = await supabase.from('eventos').select('*').eq('id', eventoId).single();
       if (ev) setEvento(ev);
 
-      const [{ data: inscData }, { data: categorias }, { data: equipesData }] = await Promise.all([
+      const [{ data: inscData }, checagemOficial] = await Promise.all([
         supabase.from('inscricoes').select('*').eq('evento_id', eventoId).eq('pagamento_ok', true),
-        supabase.from('categorias_evento').select('*').eq('evento_id', eventoId),
-        supabase.from('equipes_evento').select('id,nome,academia,professor').eq('evento_id', eventoId).eq('ativa', true),
+        fetch(`/api/eventos/${eventoId}/checagem`).then(async resposta => resposta.ok ? resposta.json() : { categorias: [], equipes: [] }).catch(() => ({ categorias: [], equipes: [] })),
       ]);
-      const equipesOficiais = (equipesData || []) as EquipeEvento[];
+      const categorias = (checagemOficial.categorias || []) as CategoriaCompeticao[];
+      const equipesOficiais = (checagemOficial.equipes || []) as EquipeEvento[];
       if (inscData && inscData.length > 0) {
         const userIds = [...new Set(inscData.map(i => i.user_id))];
         const { data: atletasData } = await supabase
@@ -80,32 +69,39 @@ export default function ChecagemGeralPage() {
 
         const dadosCompletos: InscricaoCompleta[] = inscData.map(insc => {
           const atl = atletasData?.find(a => a.user_id === insc.user_id);
-          let categoria = insc.categoria || 'NÃO INFORMADA';
-          const faixa = insc.faixa || 'FAIXA NÃO INFORMADA';
-          try { categoria = grupoInscricao(insc, 'peso', (categorias || []) as CategoriaCompeticao[]).categoria; } catch { categoria += ' · Dados a conferir'; }
-          const equipeOficial = equipeOficialDaInscricao(insc, equipesOficiais);
+          const faixa = insc.faixa || atl?.faixa || 'FAIXA NÃO INFORMADA';
+          const chaves = chavesDaInscricao({
+            ...insc,
+            faixa,
+            sexo: insc.sexo || atl?.sexo,
+            peso: insc.peso || atl?.peso,
+          }, categorias);
+          const principal = chaves[0];
+          const equipe = nomeEquipeChecagem(insc, equipesOficiais, atl?.equipe);
+          const academiaOficial = equipesOficiais.find(eq => eq.nome === equipe);
           return {
             id: insc.id,
-            categoria,
+            categoria: principal?.rotulo || insc.categoria || 'Sem categoria do organizador',
             atleta_nome: insc.atleta || atl?.nome || 'Atleta Desconhecido',
-            equipe: equipeOficial?.nome || 'SEM EQUIPE OFICIAL',
-            academia: atl?.academia || equipeOficial?.academia || '',
-            professor: atl?.professor || equipeOficial?.professor || 'Sem Professor',
+            equipe,
+            academia: atl?.academia || academiaOficial?.academia || '',
+            professor: atl?.professor || academiaOficial?.professor || 'Sem Professor',
             faixa,
             peso: insc.peso || '',
             sexo: insc.sexo || '',
-            absoluto: Boolean(insc.absoluto),
+            absoluto: Boolean(insc.absoluto) || chaves.some(chave => chave.tipo === 'absoluto'),
             sozinho: false,
-            chave_categoria: faixa + '__' + categoria,
-            categoria_rotulo: faixa + ' / ' + categoria
+            chaves,
+            chave_categoria: principal?.chave || '',
+            categoria_rotulo: principal?.rotulo || 'Sem categoria do organizador',
           };
         });
 
         const totaisCategoria = dadosCompletos.reduce((acc, insc) => {
-          acc[insc.chave_categoria] = (acc[insc.chave_categoria] || 0) + 1;
+          for (const chave of insc.chaves) acc[chave.chave] = (acc[chave.chave] || 0) + 1;
           return acc;
         }, {} as Record<string, number>);
-        dadosCompletos.forEach(insc => { insc.sozinho = totaisCategoria[insc.chave_categoria] === 1; });
+        dadosCompletos.forEach(insc => { insc.sozinho = insc.chaves.some(chave => totaisCategoria[chave.chave] === 1); });
         dadosCompletos.sort((a, b) => a.atleta_nome.localeCompare(b.atleta_nome));
         setInscricoes(dadosCompletos);
       }
@@ -116,7 +112,15 @@ export default function ChecagemGeralPage() {
   }, [eventoId]);
 
   // Extrair listas únicas para os dropdowns
-  const gruposCategoriaFaixa = useMemo(() => [...new Map(inscricoes.map(i => [i.chave_categoria, i.categoria_rotulo])).entries()].sort((a, b) => a[1].localeCompare(b[1])), [inscricoes]);
+  const gruposCategoriaFaixa = useMemo(() => {
+    const mapa = new Map<string, string>();
+    for (const insc of inscricoes) {
+      for (const chave of insc.chaves) {
+        mapa.set(chave.chave, chave.tipo === 'absoluto' ? `ABS · ${chave.rotulo}` : chave.rotulo);
+      }
+    }
+    return [...mapa.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  }, [inscricoes]);
   const equipesUnicas = useMemo(() => [...new Set(inscricoes.map(i => i.equipe))].sort(), [inscricoes]);
   const academiasUnicas = useMemo(() => [...new Set(inscricoes.map(i => i.academia).filter(Boolean))].sort(), [inscricoes]);
   const totalAbsoluto = useMemo(() => inscricoes.filter(i => i.absoluto).length, [inscricoes]);
@@ -140,7 +144,7 @@ export default function ChecagemGeralPage() {
     const termo = buscaAtleta.toLowerCase().trim();
     const academia = filtroAcademia.toLowerCase().trim();
     return inscricoes.filter(i => {
-      const bateBusca = !termo || [i.atleta_nome, i.equipe, i.academia, i.professor, i.categoria, i.faixa, i.categoria_rotulo, i.peso].join(' ').toLowerCase().includes(termo);
+      const bateBusca = !termo || [i.atleta_nome, i.equipe, i.academia, i.professor, i.categoria, i.faixa, i.categoria_rotulo, i.peso, ...i.chaves.map(chave => chave.rotulo)].join(' ').toLowerCase().includes(termo);
       const bateAcademia = !academia || i.academia.toLowerCase() === academia;
       return bateBusca && bateAcademia;
     });
@@ -148,7 +152,7 @@ export default function ChecagemGeralPage() {
 
   const atletasNaCategoria = useMemo(() => {
     if (!catSelecionada) return [];
-    let filtrado = inscricoes.filter(i => i.chave_categoria === catSelecionada);
+    let filtrado = inscricoes.filter(i => i.chaves.some(chave => chave.chave === catSelecionada));
     if (nomeFiltroCat) {
       const termo = nomeFiltroCat.toLowerCase();
       filtrado = filtrado.filter(i => [i.atleta_nome, i.equipe, i.academia, i.professor].join(' ').toLowerCase().includes(termo));
@@ -157,7 +161,7 @@ export default function ChecagemGeralPage() {
   }, [inscricoes, catSelecionada, nomeFiltroCat]);
 
   const gruposResumo = useMemo(() => gruposCategoriaFaixa.map(([chave, rotulo]) => {
-    const total = inscricoes.filter(i => i.chave_categoria === chave).length;
+    const total = inscricoes.filter(i => i.chaves.some(item => item.chave === chave)).length;
     return { chave, rotulo, total };
   }), [gruposCategoriaFaixa, inscricoes]);
 
@@ -299,7 +303,17 @@ export default function ChecagemGeralPage() {
                     <tr key={insc.id} className={index % 2 === 0 ? 'bg-transparent' : 'bg-black/20'}>
                       <td className="px-3 py-2.5 font-black text-white uppercase flex items-center gap-2">
                         <span className="text-[10px]">🇧🇷</span> {insc.atleta_nome}
-                        {insc.absoluto && <span className="text-[8px] font-black tracking-widest px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30">ABS</span>}
+                        {insc.chaves.some(chave => chave.tipo === 'absoluto') && (
+                          <button
+                            onClick={() => {
+                              const absoluto = insc.chaves.find(chave => chave.tipo === 'absoluto');
+                              if (absoluto) irParaCategoria(absoluto.chave);
+                            }}
+                            className="text-[8px] font-black tracking-widest px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30 cursor-pointer"
+                          >
+                            ABS
+                          </button>
+                        )}
                         {insc.sozinho && <span className="text-[8px] font-black tracking-widest px-1.5 py-0.5 rounded bg-yellow-500/15 text-yellow-200 border border-yellow-500/30">SOZINHO</span>}
                       </td>
                       <td className="px-3 py-2.5 font-bold">
@@ -309,10 +323,16 @@ export default function ChecagemGeralPage() {
                       </td>
                       <td className="px-3 py-2.5 text-zinc-300 uppercase">{insc.academia || "-"}</td>
                       <td className="px-3 py-2.5 text-zinc-400 uppercase">{insc.professor}</td>
-                      <td className="px-3 py-2.5 font-bold">
-                        <button onClick={() => irParaCategoria(insc.chave_categoria)} className="text-blue-400 hover:text-blue-300 hover:underline uppercase transition-colors text-left cursor-pointer">
-                          {insc.categoria_rotulo}
-                        </button>
+                      <td className="px-3 py-2.5 font-bold whitespace-normal">
+                        <div className="flex flex-col items-start gap-1">
+                          {insc.chaves.length > 0 ? insc.chaves.map(chave => (
+                            <button key={chave.chave} onClick={() => irParaCategoria(chave.chave)} className="text-blue-400 hover:text-blue-300 hover:underline uppercase transition-colors text-left cursor-pointer">
+                              {chave.tipo === 'absoluto' ? 'ABS · ' : ''}{chave.rotulo}
+                            </button>
+                          )) : (
+                            <span className="text-zinc-500 uppercase">{insc.categoria_rotulo}</span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-3 py-2.5 font-bold text-zinc-300">{insc.peso ? `${insc.peso} kg` : "-"}</td>
                     </tr>
@@ -382,7 +402,7 @@ export default function ChecagemGeralPage() {
                 
                 {grupoSelecionado?.total === 1 && (
                   <div className="mb-3 rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-3 text-yellow-100 text-xs font-bold leading-relaxed">
-                    Este atleta está sozinho nesta faixa + categoria. Durante a checagem, ele pode entrar no perfil e ajustar a inscrição para uma categoria de peso maior, se o regulamento permitir.
+                    Este atleta está sozinho nesta categoria cadastrada pelo organizador. Durante a checagem, ele pode ajustar a inscrição para outra categoria já criada, se o regulamento permitir.
                   </div>
                 )}
 
@@ -481,8 +501,14 @@ export default function ChecagemGeralPage() {
                           </td>
                           <td className="px-3 py-2.5 text-zinc-300 uppercase">{insc.academia || "-"}</td>
                           <td className="px-3 py-2.5 text-zinc-400 uppercase">{insc.professor}</td>
-                          <td className="px-3 py-2.5 font-bold text-blue-400 uppercase cursor-pointer hover:underline" onClick={() => irParaCategoria(insc.chave_categoria)}>
-                            {insc.categoria_rotulo}
+                          <td className="px-3 py-2.5 font-bold text-blue-400 uppercase whitespace-normal">
+                            <div className="flex flex-col items-start gap-1">
+                              {insc.chaves.map(chave => (
+                                <button key={chave.chave} onClick={() => irParaCategoria(chave.chave)} className="hover:underline text-left cursor-pointer">
+                                  {chave.tipo === 'absoluto' ? 'ABS · ' : ''}{chave.rotulo}
+                                </button>
+                              ))}
+                            </div>
                           </td>
                         </tr>
                       ))}

@@ -36,20 +36,20 @@ alter table public.categorias_evento enable row level security;
 alter table public.equipes_evento enable row level security;
 alter table public.resultados_manuais enable row level security;
 drop policy if exists categorias_consulta on public.categorias_evento;
-create policy categorias_consulta on public.categorias_evento for select to authenticated using (true);
+create policy categorias_consulta on public.categorias_evento for select to anon, authenticated using (true);
 drop policy if exists categorias_organizador on public.categorias_evento;
 create policy categorias_organizador on public.categorias_evento for all to authenticated
   using (exists(select 1 from public.eventos e where e.id=evento_id and e.organizador_id=auth.uid()))
   with check (exists(select 1 from public.eventos e where e.id=evento_id and e.organizador_id=auth.uid()));
 drop policy if exists equipes_consulta on public.equipes_evento;
-create policy equipes_consulta on public.equipes_evento for select to authenticated using (true);
+create policy equipes_consulta on public.equipes_evento for select to anon, authenticated using (true);
 drop policy if exists equipes_organizador on public.equipes_evento;
 create policy equipes_organizador on public.equipes_evento for all to authenticated
   using (exists(select 1 from public.eventos e where e.id=evento_id and e.organizador_id=auth.uid()))
   with check (exists(select 1 from public.eventos e where e.id=evento_id and e.organizador_id=auth.uid()));
 drop policy if exists resultados_consulta on public.resultados_manuais;
 create policy resultados_consulta on public.resultados_manuais for select to authenticated using (organizador_id=auth.uid());
-grant select on public.categorias_evento,public.equipes_evento to authenticated;
+grant select on public.categorias_evento,public.equipes_evento to anon, authenticated;
 grant insert,update,delete on public.categorias_evento,public.equipes_evento to authenticated;
 grant select on public.resultados_manuais to authenticated;
 

@@ -31,3 +31,17 @@ export function nomeExibicaoEquipe(atual: string, candidato?: string | null) {
   if (!atual) return nome;
   return nome.length > atual.length ? nome : atual;
 }
+
+export function nomeEquipeChecagem(
+  insc: { equipe?: string | null; equipe_id?: string | null },
+  equipes: Array<{ id: string; nome: string }>,
+  equipePerfil?: string | null,
+) {
+  const porId = insc.equipe_id ? equipes.find(equipe => equipe.id === insc.equipe_id) : undefined;
+  if (porId?.nome) return porId.nome;
+  const semelhante = encontrarEquipeSemelhante(equipes, insc.equipe) || encontrarEquipeSemelhante(equipes, equipePerfil);
+  if (semelhante?.nome) return semelhante.nome;
+  const nome = String(insc.equipe || equipePerfil || '').trim();
+  if (nome && chaveRankingEquipe(nome)) return nome;
+  return 'SEM EQUIPE OFICIAL';
+}

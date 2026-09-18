@@ -10,26 +10,41 @@ import { processarAvancosAutomaticosChaves } from '../app/lib/chaves-auto-avanco
 
 const evento='11111111-1111-4111-8111-111111111111';
 const atleta=(id:number, extras: Partial<InscricaoCompeticao> = {}):InscricaoCompeticao=>({ id,atleta_id:id,atleta:`Atleta de Teste ${id}`,equipe:`Academia ${id%3}`,categoria:'Leve',faixa:'Branca',sexo:'Masculino',idade:23,peso:70,modalidade:'Jiu-Jitsu',pagamento_ok:true,...extras });
-assert.notEqual(grupoInscricao(atleta(1),'peso').categoria,grupoInscricao(atleta(2,{sexo:'Feminino'}),'peso').categoria);
-assert.notEqual(grupoInscricao(atleta(1),'peso').categoria,grupoInscricao(atleta(2,{idade:32}),'peso').categoria);
-assert.notEqual(grupoInscricao(atleta(1,{idade:8}),'peso').categoria,grupoInscricao(atleta(2,{idade:9}),'peso').categoria);
+const catPeso=(id:string, extras: Partial<CategoriaCompeticao> = {}):CategoriaCompeticao=>({
+  id,evento_id:evento,nome:extras.nome || 'Leve',modalidade:'Jiu-Jitsu',sexo:extras.sexo || 'Masculino',faixa:extras.faixa || 'Branca',
+  idade_min:extras.idade_min ?? 18,idade_max:extras.idade_max ?? 29,peso_min:extras.peso_min ?? 0,peso_max:extras.peso_max ?? 200,
+  tempo_minutos:5,tipo:'peso',ativa:true,...extras,
+});
+const categoriasDivisao=[
+  catPeso('adulto-m',{nome:'Adulto',idade_min:18,idade_max:29,sexo:'Masculino'}),
+  catPeso('adulto-f',{nome:'Adulto',idade_min:18,idade_max:29,sexo:'Feminino'}),
+  catPeso('master-m',{nome:'Master 1',idade_min:30,idade_max:35,sexo:'Masculino'}),
+  catPeso('8-anos',{nome:'8 anos',idade_min:8,idade_max:8}),
+  catPeso('9-anos',{nome:'9 anos',idade_min:9,idade_max:9}),
+];
+assert.notEqual(grupoInscricao(atleta(1,{categoria_id:'adulto-m'}),'peso',categoriasDivisao).categoria,grupoInscricao(atleta(2,{sexo:'Feminino',categoria_id:'adulto-f'}),'peso',categoriasDivisao).categoria);
+assert.notEqual(grupoInscricao(atleta(1,{categoria_id:'adulto-m'}),'peso',categoriasDivisao).categoria,grupoInscricao(atleta(2,{idade:32,categoria_id:'master-m'}),'peso',categoriasDivisao).categoria);
+assert.notEqual(grupoInscricao(atleta(1,{idade:8,categoria_id:'8-anos'}),'peso',categoriasDivisao).categoria,grupoInscricao(atleta(2,{idade:9,categoria_id:'9-anos'}),'peso',categoriasDivisao).categoria);
 assert.equal(idadeCompetitiva('2018-09-17','2026-09-17'),8);
 assert.equal(idadeCompetitiva('2018-09-18','2026-09-17'),7);
-assert.equal(grupoInscricao(atleta(1,{idade:idadeCompetitiva('2018-03-01','2026-09-17')}),'peso').categoria.includes('8 anos'),true);
+assert.equal(grupoInscricao(atleta(1,{idade:idadeCompetitiva('2018-03-01','2026-09-17'),categoria_id:'8-anos'}),'peso',categoriasDivisao).categoria.includes('8 anos'),true);
 assert.throws(()=>grupoInscricao(atleta(1,{idade:null}),'peso'));
 assert.throws(()=>grupoInscricao(atleta(1,{sexo:''}),'peso'));
-const categoria:CategoriaCompeticao={id:'cat',evento_id:evento,nome:'Adulto Leve',modalidade:'Jiu-Jitsu',sexo:'Masculino',faixa:'Branca',idade_min:18,idade_max:29,peso_min:64,peso_max:76,tempo_minutos:5,tipo:'peso',ativa:true};
+assert.throws(()=>grupoInscricao(atleta(1),'peso'));
+const categoria:CategoriaCompeticao=catPeso('cat',{nome:'Adulto Leve',peso_min:64,peso_max:76});
 assert.equal(categoriaCompativel(categoria,atleta(1,{peso:76})),true);
 assert.equal(categoriaCompativel(categoria,atleta(1,{peso:64})),false);
 assert.equal(categoriaCompativel(categoria,atleta(1,{peso:76.1})),false);
 assert.equal(categoriaCompativel(categoria,atleta(1,{sexo:'Feminino'})),false);
 assert.throws(()=>grupoInscricao(atleta(1,{categoria_id:'ausente'}),'peso',[categoria]));
-assert.throws(()=>prepararGrupos([atleta(1),atleta(1)],'peso',[]));
-assert.throws(()=>prepararGrupos(Array.from({length:65},(_,i)=>atleta(i+1)),'peso',[]));
+assert.throws(()=>grupoInscricao(atleta(1,{categoria:'Absoluto',absoluto:true}),'peso',[categoria]));
+assert.throws(()=>prepararGrupos([atleta(1),atleta(1)],'peso',[categoria]));
+assert.throws(()=>prepararGrupos(Array.from({length:65},(_,i)=>atleta(i+1,{categoria_id:'cat'})),'peso',[categoria]));
 const exemplos:LutaImpressao[]=[];
 for(const tamanho of [1,2,3,4,5,8,16,17,32,64]) {
-  const entradas=Array.from({length:tamanho},(_,i)=>atleta(i+1,{categoria:`Divisão de teste com ${tamanho} atletas`}));
-  const lutas=montarChaves(evento,prepararGrupos(entradas,'peso',[]));
+  const catTamanho=catPeso(`cat-${tamanho}`,{nome:`Divisão de teste com ${tamanho} atletas`,peso_min:64,peso_max:76});
+  const entradas=Array.from({length:tamanho},(_,i)=>atleta(i+1,{categoria_id:catTamanho.id}));
+  const lutas=montarChaves(evento,prepararGrupos(entradas,'peso',[catTamanho]));
   const ids=new Set(lutas.flatMap(l=>[l.atleta_1_id,l.atleta_2_id]).filter(Boolean));
   assert.equal(ids.size,tamanho,`Nenhum atleta pode sumir (${tamanho})`);
   assert.equal(lutas.filter(l=>!l.proxima_luta).length,1);
@@ -38,7 +53,7 @@ for(const tamanho of [1,2,3,4,5,8,16,17,32,64]) {
   assert.equal(lutas.length,tamanho===3?3:Math.max(2,2**Math.ceil(Math.log2(tamanho)))-1);
   if([1,3,16,64].includes(tamanho))exemplos.push(...lutas.map((l,i)=>({...l,id:`teste-${tamanho}-${i}`} as LutaImpressao)));
 }
-const sozinho=montarChaves(evento,prepararGrupos([atleta(99,{categoria:'Categoria com um atleta'})],'peso',[]));
+const sozinho=montarChaves(evento,prepararGrupos([atleta(99,{categoria_id:'cat'})],'peso',[categoria]));
 assert.equal(sozinho.length,1);
 assert.equal(sozinho[0].vencedor,null);
 assert.equal(sozinho[0].status_luta,'agendada');

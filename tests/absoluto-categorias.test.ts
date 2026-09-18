@@ -3,12 +3,14 @@ import test from "node:test";
 import {
   FAIXA_TODAS_AS_FAIXAS,
   absolutoDaInscricao,
+  chavesDaInscricao,
   grupoInscricao,
   serializarFaixasCategoria,
   type CategoriaCompeticao,
 } from "../app/lib/categorias-competicao";
 import { prepararGrupos } from "../app/lib/gerar-chaves";
 import { calcularResultadosChaves } from "../app/lib/ranking-eventos";
+import { nomeEquipeChecagem } from "../app/lib/equipes-nome";
 
 const femininoBranca: CategoriaCompeticao = {
   id: "abs-fem-branca",
@@ -202,4 +204,33 @@ test("mirim inscrito só no absoluto entra na chave de absoluto e não na de pes
   assert.equal(Object.keys(peso.grupos).length, 0);
   assert.equal(Object.keys(absoluto.grupos).length, 1);
   assert.equal(Object.values(absoluto.grupos)[0].length, 1);
+});
+
+test("absoluto cadastrado pelo organizador junta idades e faixas na mesma chave", () => {
+  const preparados = prepararGrupos([
+    { id: 1, atleta: "Nego Dario", atleta_id: 1, absoluto: true, idade: 46, sexo: "Masculino", faixa: "Azul", modalidade: "Jiu-Jitsu", categoria: "Absoluto", equipe: "LEGADO" },
+    { id: 2, atleta: "Ruberson RBN", atleta_id: 2, absoluto: true, idade: 31, sexo: "Masculino", faixa: "Azul", modalidade: "Jiu-Jitsu", categoria: "Absoluto", equipe: "LEGADO" },
+    { id: 3, atleta: "Jefferson Garcia", atleta_id: 3, absoluto: true, idade: 41, sexo: "Masculino", faixa: "Preta", modalidade: "Jiu-Jitsu", categoria: "AAAAA", equipe: "LEGADO" },
+  ], "absoluto", [masculinoTodas]);
+  assert.equal(Object.keys(preparados.grupos).length, 1);
+  assert.equal(Object.values(preparados.grupos)[0].length, 3);
+  assert.equal(preparados.metadados[Object.keys(preparados.grupos)[0]].categoria_id, "abs-masc-todas");
+});
+
+test("checagem usa só categorias do organizador e não inventa Master no absoluto", () => {
+  const nego = chavesDaInscricao({ absoluto: true, idade: 46, sexo: "Masculino", faixa: "Azul", modalidade: "Jiu-Jitsu", categoria: "Absoluto" }, [masculinoTodas]);
+  const ruberson = chavesDaInscricao({ absoluto: true, idade: 31, sexo: "Masculino", faixa: "Azul", modalidade: "Jiu-Jitsu", categoria: "Absoluto" }, [masculinoTodas]);
+  assert.equal(nego.length, 1);
+  assert.equal(nego[0].tipo, "absoluto");
+  assert.equal(nego[0].chave, ruberson[0].chave);
+  assert.equal(nego[0].rotulo.includes("Master"), false);
+  assert.throws(() => grupoInscricao({ absoluto: true, categoria: "Absoluto", faixa: "Azul", sexo: "Masculino", idade: 46 }, "peso", [masculinoTodas]));
+  assert.equal(chavesDaInscricao({ absoluto: true, idade: 25, sexo: "Masculino", faixa: "Azul", modalidade: "Jiu-Jitsu", categoria: "Absoluto" }, []).length, 0);
+});
+
+test("checagem mostra a equipe da inscrição mesmo sem lista oficial", () => {
+  assert.equal(nomeEquipeChecagem({ equipe: "LEGADO" }, []), "LEGADO");
+  assert.equal(nomeEquipeChecagem({ equipe: "Legado Jiu" }, [{ id: "1", nome: "LEGADO" }]), "LEGADO");
+  assert.equal(nomeEquipeChecagem({ equipe_id: "1", equipe: "" }, [{ id: "1", nome: "LEGADO" }]), "LEGADO");
+  assert.equal(nomeEquipeChecagem({ equipe: "" }, [], "SEM EQUIPE"), "SEM EQUIPE OFICIAL");
 });

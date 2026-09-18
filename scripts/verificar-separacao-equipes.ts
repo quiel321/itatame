@@ -18,8 +18,24 @@ function inscricoes(equipes: Array<{ nome?: string; id?: string }>): InscricaoCo
   }));
 }
 
+const categoriaLeve = {
+  id: 'leve',
+  evento_id: 'evento-teste',
+  nome: 'Leve',
+  modalidade: 'Jiu-Jitsu',
+  sexo: 'Masculino',
+  faixa: 'Branca',
+  idade_min: 18,
+  idade_max: 29,
+  peso_min: 0,
+  peso_max: 200,
+  tempo_minutos: 5,
+  tipo: 'peso' as const,
+  ativa: true,
+};
+
 function ladosPorEquipe(equipes: Array<{ nome?: string; id?: string }>) {
-  const preparados = prepararGrupos(inscricoes(equipes), 'peso', []);
+  const preparados = prepararGrupos(inscricoes(equipes), 'peso', [categoriaLeve]);
   const lutas = montarChaves('evento-teste', preparados);
   const lados = new Map<string, Set<string>>();
   lutas.forEach((luta) => {
@@ -60,7 +76,7 @@ for (let repeticao = 0; repeticao < 500; repeticao += 1) {
 
 const triangular = montarChaves('evento-teste', prepararGrupos(inscricoes([
   { nome: 'Equipe A' }, { nome: 'Equipe A' }, { nome: 'Equipe B' },
-]), 'peso', []));
+]), 'peso', [categoriaLeve]));
 assert.notEqual(triangular[0].equipe_1, triangular[0].equipe_2, 'A primeira luta da chave de três deve priorizar equipes diferentes.');
 
 console.log('Separação de equipes verificada em 1.501 cenários de chaveamento.');

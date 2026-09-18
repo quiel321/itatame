@@ -164,6 +164,38 @@ export function validarCategoria(c: Omit<CategoriaCompeticao, 'id' | 'evento_id'
   if (!Number.isFinite(c.tempo_minutos) || c.tempo_minutos < 1 || c.tempo_minutos > 30) throw new Error('O tempo deve ficar entre 1 e 30 minutos.');
 }
 
+export function inscricaoSoAbsoluto(i: Pick<InscricaoCompeticao, 'absoluto' | 'categoria'>) {
+  return i.absoluto === true && String(i.categoria || '').trim().toLowerCase() === 'absoluto';
+}
+
+export type ChaveChecagem = {
+  tipo: 'peso' | 'absoluto';
+  chave: string;
+  rotulo: string;
+};
+
+export function chaveDoGrupo(grupo: { categoria: string; faixa: string; categoria_id?: string | null }) {
+  return grupo.categoria_id || `${grupo.categoria}__${grupo.faixa}`;
+}
+
+/** Só categorias cadastradas pelo organizador: peso e/ou absoluto. */
+export function chavesDaInscricao(i: InscricaoCompeticao, categorias: CategoriaCompeticao[]): ChaveChecagem[] {
+  const chaves: ChaveChecagem[] = [];
+  if (!inscricaoSoAbsoluto(i)) {
+    try {
+      const grupo = grupoInscricao(i, 'peso', categorias);
+      chaves.push({ tipo: 'peso', chave: `peso:${chaveDoGrupo(grupo)}`, rotulo: grupo.categoria });
+    } catch { /* sem categoria de peso do organizador */ }
+  }
+  if (i.absoluto) {
+    try {
+      const grupo = grupoInscricao(i, 'absoluto', categorias);
+      chaves.push({ tipo: 'absoluto', chave: `abs:${chaveDoGrupo(grupo)}`, rotulo: grupo.categoria });
+    } catch { /* sem absoluto cadastrado que aceite este atleta */ }
+  }
+  return chaves;
+}
+
 /** Uma única composição para checagem, geração e conferência de inscritos legados. */
 export function grupoInscricao(i: InscricaoCompeticao, tipo: 'peso' | 'absoluto', categorias: CategoriaCompeticao[] = []) {
   if (!i.faixa?.trim() || !['MASCULINO', 'FEMININO'].includes(normalizarCompeticao(i.sexo))) throw new Error('Faixa ou sexo competitivo não informado.');
@@ -172,13 +204,22 @@ export function grupoInscricao(i: InscricaoCompeticao, tipo: 'peso' | 'absoluto'
     if (!c) throw new Error('Este atleta não se enquadra em absoluto cadastrado pelo organizador.');
     return { categoria: rotuloCategoria(c), faixa: c.faixa, categoria_id: c.id, tempo_minutos: c.tempo_minutos };
   }
+  if (inscricaoSoAbsoluto(i)) throw new Error('Inscrição só de absoluto não entra na chave de peso.');
   if (i.categoria_id) {
     const c = categorias.find(c => c.id === i.categoria_id);
-    if (!c || !categoriaCompativel(c, i)) throw new Error('Inscrição incompatível com a categoria cadastrada.');
+    if (!c || c.tipo !== 'peso') throw new Error('Inscrição incompatível com a categoria cadastrada.');
     return { categoria: rotuloCategoria(c), faixa: c.faixa, categoria_id: c.id, tempo_minutos: c.tempo_minutos };
   }
   if (!i.categoria?.trim()) throw new Error('Categoria não informada.');
-  const divisao = divisaoEtaria(Number(i.idade));
-  const categoria = `${i.modalidade?.trim() || 'Jiu-Jitsu'} · ${i.categoria.trim()} · ${divisao} · ${i.sexo}`;
-  return { categoria, faixa: i.faixa.trim(), categoria_id: null, tempo_minutos: null };
+  const alvo = normalizarCompeticao(i.categoria);
+  const cadastrada = categorias.find(c => {
+    if (c.tipo !== 'peso' || !c.ativa) return false;
+    const mesmoRotulo = normalizarCompeticao(rotuloCategoria(c)) === alvo;
+    const mesmoNome = normalizarCompeticao(c.nome) === alvo;
+    return mesmoRotulo || (mesmoNome && categoriaCompativel(c, i));
+  });
+  if (cadastrada) {
+    return { categoria: rotuloCategoria(cadastrada), faixa: cadastrada.faixa, categoria_id: cadastrada.id, tempo_minutos: cadastrada.tempo_minutos };
+  }
+  throw new Error('Este atleta não se enquadra em categoria de peso cadastrada pelo organizador.');
 }
