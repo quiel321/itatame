@@ -8,6 +8,129 @@ function chaveEquipe(inscricao: InscricaoCompeticao) {
   // Sem uma equipe informada, atletas diferentes não podem ser presumidos como companheiros.
   return nome && nome !== 'SEM EQUIPE' ? `NOME:${nome}` : `ATLETA:${inscricao.atleta_id ?? inscricao.id}`;
 }
+
+function chaveAcademia(inscricao: InscricaoCompeticao) {
+  const nome = normalizarCompeticao(inscricao.academia);
+  return nome && nome !== 'SEM ACADEMIA' ? `ACAD:${nome}` : '';
+}
+
+function ehByeParticipante(atleta?: Participante | null) {
+  const nome = String(atleta?.atleta || atleta?.nome || '').trim().toUpperCase();
+  return !atleta || nome === 'BYE' || nome === 'TBD';
+}
+
+function conflitoPrimeiraLuta(a: Participante, b: Participante) {
+  if (ehByeParticipante(a) || ehByeParticipante(b)) return 0;
+  let score = 0;
+  if (a.equipe_chave && a.equipe_chave === b.equipe_chave) score += 2;
+  const academiaA = chaveAcademia(a);
+  const academiaB = chaveAcademia(b);
+  if (academiaA && academiaB && academiaA === academiaB) score += 1;
+  return score;
+}
+
+function ordenarTrio(atletas: Participante[]) {
+  const trio = atletas.slice(0, 3);
+  let melhor = trio;
+  let melhorScore = Infinity;
+  for (let i = 0; i < 3; i++) {
+    for (let j = i + 1; j < 3; j++) {
+      const k = [0, 1, 2].find(indice => indice !== i && indice !== j) as number;
+      const score = conflitoPrimeiraLuta(trio[i], trio[j]);
+      if (score < melhorScore) {
+        melhorScore = score;
+        melhor = [trio[i], trio[j], trio[k]];
+      }
+    }
+  }
+  return melhor;
+}
+
+function combinacoes(tamanho: number, escolha: number) {
+  const resultado: number[][] = [];
+  const atual: number[] = [];
+  const recuar = (inicio: number) => {
+    if (atual.length === escolha) {
+      resultado.push([...atual]);
+      return;
+    }
+    for (let i = inicio; i < tamanho; i++) {
+      atual.push(i);
+      recuar(i + 1);
+      atual.pop();
+    }
+  };
+  recuar(0);
+  return resultado;
+}
+
+function dividirDoisTrios(atletas: Participante[]) {
+  const lista = atletas.slice(0, 6);
+  let melhor: { esquerda: Participante[]; direita: Participante[] } | null = null;
+  let melhorScore = Infinity;
+  for (const indices of combinacoes(lista.length, 3)) {
+    const esquerdaBruta = indices.map(indice => lista[indice]);
+    const direitaBruta = lista.filter((_, indice) => !indices.includes(indice));
+    const esquerda = ordenarTrio(esquerdaBruta);
+    const direita = ordenarTrio(direitaBruta);
+    const conflito = conflitoPrimeiraLuta(esquerda[0], esquerda[1]) + conflitoPrimeiraLuta(direita[0], direita[1]);
+    const equipesEsquerda = new Set(esquerda.map(atleta => atleta.equipe_chave));
+    const equipesDireita = new Set(direita.map(atleta => atleta.equipe_chave));
+    const academiasEsquerda = new Set(esquerda.map(chaveAcademia).filter(Boolean));
+    const academiasDireita = new Set(direita.map(chaveAcademia).filter(Boolean));
+    let ladosCompartilhados = 0;
+    equipesEsquerda.forEach(equipe => { if (equipesDireita.has(equipe)) ladosCompartilhados += 1; });
+    academiasEsquerda.forEach(academia => { if (academiasDireita.has(academia)) ladosCompartilhados += 1; });
+    const score = conflito * 10 - ladosCompartilhados;
+    if (score < melhorScore) {
+      melhorScore = score;
+      melhor = { esquerda, direita };
+    }
+  }
+  return melhor || { esquerda: ordenarTrio(lista.slice(0, 3)), direita: ordenarTrio(lista.slice(3, 6)) };
+}
+
+function dadosAtleta(atleta?: Participante) {
+  return {
+    nome: atleta?.atleta || atleta?.nome || 'BYE',
+    equipe: atleta?.equipe_atleta || '',
+    atleta_id: atleta?.atleta_id || null,
+  };
+}
+
+function priorizarConfrontosDiversos(porSeed: Participante[], posicoes: number[], tamanho: number) {
+  const capacidade = tamanho / 2;
+  const otimizarMetade = (seeds: number[]) => {
+    const indices = seeds.map(seed => seed - 1);
+    const pares: Array<[number, number]> = [];
+    for (let i = 0; i < indices.length; i += 2) pares.push([indices[i], indices[i + 1]]);
+    const score = () => pares.reduce((acc, [a, b]) => acc + conflitoPrimeiraLuta(porSeed[a], porSeed[b]), 0);
+    let atual = score();
+    if (atual === 0) return;
+    for (let rodada = 0; rodada < 8 && atual > 0; rodada++) {
+      let melhorou = false;
+      for (let i = 0; i < indices.length; i++) {
+        if (ehByeParticipante(porSeed[indices[i]])) continue;
+        for (let j = i + 1; j < indices.length; j++) {
+          if (ehByeParticipante(porSeed[indices[j]])) continue;
+          [porSeed[indices[i]], porSeed[indices[j]]] = [porSeed[indices[j]], porSeed[indices[i]]];
+          const novo = score();
+          if (novo < atual) {
+            atual = novo;
+            melhorou = true;
+            if (atual === 0) return;
+          } else {
+            [porSeed[indices[i]], porSeed[indices[j]]] = [porSeed[indices[j]], porSeed[indices[i]]];
+          }
+        }
+      }
+      if (!melhorou) break;
+    }
+  };
+  otimizarMetade(posicoes.slice(0, capacidade));
+  otimizarMetade(posicoes.slice(capacidade));
+  return porSeed;
+}
 export function prepararGrupos(inscricoes: InscricaoCompeticao[], tipo: 'peso' | 'absoluto', categorias: CategoriaCompeticao[]) {
   const grupos: Record<string, Participante[]> = {};
   const metadados: Record<string, ReturnType<typeof grupoInscricao>> = {};
@@ -125,55 +248,107 @@ export function montarChaves(eventoId: string, preparados: ReturnType<typeof pre
         const categoria = metadados[grupo].categoria;
         const faixa = metadados[grupo].faixa;
 
-        // Regra oficial para três atletas: o vencedor da primeira semifinal
-        // vai à final; o perdedor enfrenta o terceiro atleta e o vencedor da
-        // segunda semifinal completa a final.
-        if (atletasDoGrupo.length === 3) {
-          if (atletasDoGrupo[0].equipe_atleta === atletasDoGrupo[1].equipe_atleta && atletasDoGrupo[0].equipe_atleta !== atletasDoGrupo[2].equipe_atleta) [atletasDoGrupo[1], atletasDoGrupo[2]] = [atletasDoGrupo[2], atletasDoGrupo[1]];
-          const atletaTriangular = (idx: number) => ({
-            nome: atletasDoGrupo[idx]?.atleta || atletasDoGrupo[idx]?.nome || "BYE",
-            equipe: atletasDoGrupo[idx]?.equipe_atleta || "",
-            atleta_id: atletasDoGrupo[idx]?.atleta_id || null,
-          });
-          const primeiro = atletaTriangular(0);
-          const segundo = atletaTriangular(1);
-          const terceiro = atletaTriangular(2);
-          const baseLuta = {
-            evento_id: eventoId,
-            categoria,
-            categoria_id: metadados[grupo].categoria_id, tempo_minutos: metadados[grupo].tempo_minutos,
-            faixa,
-            vencedor: null,
-            vencedor_id: null,
-            status_luta: 'agendada',
-            pontuacao_atleta_1: { pontos: 0, punicoes: 0, vantagens: 0 },
-            pontuacao_atleta_2: { pontos: 0, punicoes: 0, vantagens: 0 },
-          };
-          const lutasTriangulares = [
+        const baseLutaTriangular = {
+          evento_id: eventoId,
+          categoria,
+          categoria_id: metadados[grupo].categoria_id,
+          tempo_minutos: metadados[grupo].tempo_minutos,
+          faixa,
+          vencedor: null,
+          vencedor_id: null,
+          status_luta: 'agendada',
+          pontuacao_atleta_1: { pontos: 0, punicoes: 0, vantagens: 0 },
+          pontuacao_atleta_2: { pontos: 0, punicoes: 0, vantagens: 0 },
+        };
+        const numeroVisual = (valor: number) => String(valor).padStart(2, '0');
+        const montarTrio = (
+          atletas: Participante[],
+          ids: { luta1: number; luta2: number; decisao: number },
+          proximaDecisao: number | null,
+          lado: 'esquerda' | 'direita',
+          numeros: [number, number, number],
+          fases: { luta1: string; luta2: string; decisao: string },
+        ) => {
+          const primeiro = dadosAtleta(atletas[0]);
+          const segundo = dadosAtleta(atletas[1]);
+          const terceiro = dadosAtleta(atletas[2]);
+          return [
             {
-              ...baseLuta,
-              id_visual: '1',
-              atleta_1: primeiro.nome, equipe_1: primeiro.equipe, numero_1: '01', atleta_1_id: primeiro.atleta_id,
-              atleta_2: segundo.nome, equipe_2: segundo.equipe, numero_2: '02', atleta_2_id: segundo.atleta_id,
-              fase: 'Semifinal 1 · Chave de 3', ordem: 1, lado: 'esquerda', proxima_luta: 999,
+              ...baseLutaTriangular,
+              id_visual: String(ids.luta1),
+              atleta_1: primeiro.nome, equipe_1: primeiro.equipe, numero_1: numeroVisual(numeros[0]), atleta_1_id: primeiro.atleta_id,
+              atleta_2: segundo.nome, equipe_2: segundo.equipe, numero_2: numeroVisual(numeros[1]), atleta_2_id: segundo.atleta_id,
+              fase: fases.luta1, ordem: ids.luta1, lado, proxima_luta: ids.decisao,
             },
             {
-              ...baseLuta,
-              id_visual: '2',
+              ...baseLutaTriangular,
+              id_visual: String(ids.luta2),
               atleta_1: 'TBD', equipe_1: '', numero_1: '', atleta_1_id: null,
-              atleta_2: terceiro.nome, equipe_2: terceiro.equipe, numero_2: '03', atleta_2_id: terceiro.atleta_id,
-              fase: 'Semifinal 2 · Chave de 3', ordem: 2, lado: 'direita', proxima_luta: 999,
+              atleta_2: terceiro.nome, equipe_2: terceiro.equipe, numero_2: numeroVisual(numeros[2]), atleta_2_id: terceiro.atleta_id,
+              fase: fases.luta2, ordem: ids.luta2, lado, proxima_luta: ids.decisao,
             },
             {
-              ...baseLuta,
-              id_visual: '999',
+              ...baseLutaTriangular,
+              id_visual: String(ids.decisao),
               atleta_1: 'TBD', equipe_1: '', numero_1: '', atleta_1_id: null,
               atleta_2: 'TBD', equipe_2: '', numero_2: '', atleta_2_id: null,
-              fase: 'Final · Chave de 3', ordem: 3, lado: 'centro', proxima_luta: null,
+              fase: fases.decisao, ordem: ids.decisao, lado: ids.decisao === 999 ? 'centro' : lado, proxima_luta: proximaDecisao,
             },
           ];
+        };
 
-          resultado.push(...lutasTriangulares);
+        // Três atletas: vencedor da luta 1 vai à final; o perdedor enfrenta a baia.
+        if (atletasDoGrupo.length === 3) {
+          const trio = ordenarTrio(atletasDoGrupo);
+          resultado.push(...montarTrio(
+            trio,
+            { luta1: 1, luta2: 2, decisao: 999 },
+            null,
+            'esquerda',
+            [1, 2, 3],
+            {
+              luta1: 'Semifinal 1 · Chave de 3',
+              luta2: 'Semifinal 2 · Chave de 3',
+              decisao: 'Final · Chave de 3',
+            },
+          ));
+          continue;
+        }
+
+        // Seis atletas: duas chaves de 3, uma em cada lado, e a final entre os vencedores.
+        if (atletasDoGrupo.length === 6) {
+          const { esquerda, direita } = dividirDoisTrios(atletasDoGrupo);
+          resultado.push(...montarTrio(
+            esquerda,
+            { luta1: 1, luta2: 2, decisao: 101 },
+            999,
+            'esquerda',
+            [1, 2, 3],
+            {
+              luta1: 'Luta 1 esquerda · Chave de 3',
+              luta2: 'Baia esquerda · Chave de 3',
+              decisao: 'Decisão esquerda · Chave de 3',
+            },
+          ));
+          resultado.push(...montarTrio(
+            direita,
+            { luta1: 3, luta2: 4, decisao: 102 },
+            999,
+            'direita',
+            [4, 5, 6],
+            {
+              luta1: 'Luta 1 direita · Chave de 3',
+              luta2: 'Baia direita · Chave de 3',
+              decisao: 'Decisão direita · Chave de 3',
+            },
+          ));
+          resultado.push({
+            ...baseLutaTriangular,
+            id_visual: '999',
+            atleta_1: 'TBD', equipe_1: '', numero_1: '', atleta_1_id: null,
+            atleta_2: 'TBD', equipe_2: '', numero_2: '', atleta_2_id: null,
+            fase: 'Final · Chave de 6', ordem: 999, lado: 'centro', proxima_luta: null,
+          });
           continue;
         }
 
@@ -183,6 +358,7 @@ export function montarChaves(eventoId: string, preparados: ReturnType<typeof pre
 
         const posicoes = gerarMapaPosicoes(tamanhoChave);
         atletasDoGrupo = distribuirEquipesEmLadosOpostos(atletasDoGrupo.slice(0, tamanhoChave), tamanhoChave, posicoes);
+        atletasDoGrupo = priorizarConfrontosDiversos(atletasDoGrupo, posicoes, tamanhoChave);
 
         const lutas: any[] = [];
         

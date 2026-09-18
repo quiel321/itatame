@@ -4,6 +4,9 @@ import { useEffect, useState } from "react"
 import { useParams } from "next/navigation"
 import { supabase } from "@/app/lib/supabase"
 import { rotuloLuta } from "@/app/lib/lutas-rotulos"
+import { lutasFormamChaveDeTres } from "@/app/lib/chave-de-tres"
+import { idsPrimeiraFasePorLado } from "@/app/lib/chave-visual"
+import { ChaveTriangularPainel } from "@/app/components/ChaveDeTresPainel"
 
 // 1. Componente Atleta (COM FOTO E INTELIGÊNCIA DE LAYOUT)
 function Atleta({ nome, equipe, numero, luta_id, id_banco, foto, onAvancar, reverso = false, centralizado = false, ocultarLinha = false, larguraClass = "w-[96px] md:w-[180px]", campeao = false }: any) {
@@ -123,10 +126,9 @@ export default function ChavesPage() {
   const maxNumero = atletas.length > 0 ? Math.max(...atletas.map(a => parseInt(a.numero) || 0)) : 0;
   const totalAbas = Math.max(1, Math.ceil(maxNumero / 16));
 
+  const idsPrimeiraFase = idsPrimeiraFasePorLado(lutas, abaAtual);
   const getFase1VisualId = (posicaoColuna: number, lado: "esquerda" | "direita") => {
-    const lutasPorLado = totalAbas * 4;
-    if (lado === "esquerda") return (abaAtual - 1) * 4 + posicaoColuna; 
-    return lutasPorLado + (abaAtual - 1) * 4 + posicaoColuna;
+    return idsPrimeiraFase[lado](posicaoColuna);
   }
 
   const limparNome = (nome: string | null) => {
@@ -235,6 +237,7 @@ export default function ChavesPage() {
 
   const campeaoData = getCampeao();
   const temCampeao = campeaoData.nome && campeaoData.nome !== "";
+  const ehChaveDeTres = lutasFormamChaveDeTres(lutas);
 
   return (
     <main className="min-h-screen bg-black p-0 md:p-6">
@@ -285,6 +288,11 @@ export default function ChavesPage() {
         {/* ======================================================= */}
         {/* MODO DESKTOP: ÁRVORE CLÁSSICA                           */}
         {/* ======================================================= */}
+        {ehChaveDeTres ? (
+          <div className="bg-[#050816] border-y md:border md:border-white/10 md:rounded-3xl py-6 md:p-10 w-full relative shadow-2xl">
+            <ChaveTriangularPainel lutas={lutas} buscarFoto={(id) => buscarFoto(id, "")} />
+          </div>
+        ) : (
         <div className="hidden md:flex bg-[#050816] md:border md:border-white/10 md:rounded-3xl py-6 md:p-10 w-full overflow-x-auto min-w-0 flex-col items-center scrollbar-hide relative shadow-2xl">
           {totalAbas > 1 && <p className="text-red-500 font-bold mb-4 uppercase tracking-widest text-sm absolute top-4 left-4">Chave {abaAtual}/{totalAbas}</p>}
 
@@ -366,10 +374,12 @@ export default function ChavesPage() {
 
           </div>
         </div>
+        )}
 
         {/* ======================================================= */}
         {/* MODO MOBILE: CARDS VERTICAIS E CLEAN                    */}
         {/* ======================================================= */}
+        {!ehChaveDeTres && (
         <div className="flex md:hidden flex-col w-full px-4 mb-20 mt-4">
           
           {temCampeao && (
@@ -449,6 +459,7 @@ export default function ChavesPage() {
             </div>
           )}
         </div>
+        )}
 
       </div>
     </main>

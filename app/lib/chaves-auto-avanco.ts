@@ -1,3 +1,5 @@
+import { ehFaseChaveDeTres, idBaiaDaPrimeiraChaveDeTres } from '@/app/lib/chave-de-tres';
+
 type SupabaseLike = {
   from: (table: string) => any;
 };
@@ -72,21 +74,37 @@ function lutaDestino(todas: ChaveLutaAuto[], luta: ChaveLutaAuto) {
 function lutasQueAlimentam(todas: ChaveLutaAuto[], luta: ChaveLutaAuto) {
   const alimentadoras = todas.filter((item) => mesmaCategoria(item, luta) && String(item.proxima_luta) === String(luta.id_visual));
 
-  // Na chave oficial de três atletas, a semifinal 2 recebe o perdedor da
-  // semifinal 1. Portanto ela também depende dessa luta, embora o vencedor
-  // da primeira semifinal avance diretamente para a final.
-  if (String(luta.id_visual) === '2' && String(luta.fase || '').toUpperCase().includes('CHAVE DE 3')) {
-    const semifinal1 = todas.find((item) =>
+  // Na chave de 3 (e nos dois lados da chave de 6), a baia recebe o perdedor
+  // da primeira luta daquele lado.
+  const idPrimeira = String(luta.id_visual) === '2' ? '1' : String(luta.id_visual) === '4' ? '3' : null;
+  if (idPrimeira) {
+    const primeira = todas.find((item) =>
       mesmaCategoria(item, luta)
-      && String(item.id_visual) === '1'
-      && String(item.fase || '').toUpperCase().includes('CHAVE DE 3')
+      && String(item.id_visual) === idPrimeira
+      && ehFaseChaveDeTres(item.fase)
     );
-    if (semifinal1 && !alimentadoras.some((item) => String(item.id) === String(semifinal1.id))) {
-      alimentadoras.push(semifinal1);
+    if (primeira && !alimentadoras.some((item) => String(item.id) === String(primeira.id))) {
+      alimentadoras.push(primeira);
     }
   }
 
   return alimentadoras;
+}
+
+function contarAtletasReaisNaChave(todas: ChaveLutaAuto[], luta: ChaveLutaAuto) {
+  const vistos = new Set<string>();
+  for (const item of todas) {
+    if (!mesmaCategoria(item, luta)) continue;
+    for (const [nome, id] of [[item.atleta_1, item.atleta_1_id], [item.atleta_2, item.atleta_2_id]] as const) {
+      if (!isChaveAtletaReal(nome)) continue;
+      vistos.add(id ? `ID:${id}` : `NOME:${normalizarChaveNome(nome)}`);
+    }
+  }
+  return vistos.size;
+}
+
+function sozinhoNaChave(todas: ChaveLutaAuto[], luta: ChaveLutaAuto) {
+  return contarAtletasReaisNaChave(todas, luta) <= 1;
 }
 
 function ladoDoDestino(luta: ChaveLutaAuto) {
@@ -118,22 +136,21 @@ export async function propagarResultadoChave(
     if (error) throw error;
   }
 
-  const ehPrimeiraSemifinalDeTres = String(luta.id_visual) === '1'
-    && String(luta.fase || '').toUpperCase().includes('CHAVE DE 3');
+  const idBaia = idBaiaDaPrimeiraChaveDeTres(luta.id_visual, luta.fase);
 
-  if (ehPrimeiraSemifinalDeTres && resultado.propagarPerdedor !== false && isChaveAtletaReal(resultado.perdedorNome)) {
-    const segundaSemifinal = todas.find((item) =>
+  if (idBaia && resultado.propagarPerdedor !== false && isChaveAtletaReal(resultado.perdedorNome)) {
+    const lutaBaia = todas.find((item) =>
       mesmaCategoria(item, luta)
-      && String(item.id_visual) === '2'
-      && String(item.fase || '').toUpperCase().includes('CHAVE DE 3')
+      && String(item.id_visual) === idBaia
+      && ehFaseChaveDeTres(item.fase)
     );
 
-    if (segundaSemifinal) {
+    if (lutaBaia) {
       const { error } = await supabase.from('chaves').update({
         atleta_1: resultado.perdedorNome,
         equipe_1: resultado.perdedorEquipe || '',
         atleta_1_id: resultado.perdedorId || null,
-      }).eq('id', segundaSemifinal.id);
+      }).eq('id', lutaBaia.id);
       if (error) throw error;
     }
   }
@@ -229,6 +246,8 @@ export async function processarAvancosAutomaticosChaves(supabase: SupabaseLike, 
 
       if (atleta1Real && atleta2Fantasma) {
         if (isChaveTbd(luta.atleta_2) && temAlimentadoraPendente) continue;
+        if (isChaveBye(luta.atleta_2) && !sozinhoNaChave(todas, luta) && !luta.proxima_luta) continue;
+        if (ehFaseChaveDeTres(luta.fase) && isChaveBye(luta.atleta_2) && !sozinhoNaChave(todas, luta)) continue;
         if (!luta.atleta_1_id || checkinPorAtleta.get(Number(luta.atleta_1_id)) !== 'aprovado') continue;
         await concluirWo(supabase, todas, luta, 'atleta_1');
         processouNestaRodada = true;
@@ -238,6 +257,8 @@ export async function processarAvancosAutomaticosChaves(supabase: SupabaseLike, 
 
       if (atleta2Real && atleta1Fantasma) {
         if (isChaveTbd(luta.atleta_1) && temAlimentadoraPendente) continue;
+        if (isChaveBye(luta.atleta_1) && !sozinhoNaChave(todas, luta) && !luta.proxima_luta) continue;
+        if (ehFaseChaveDeTres(luta.fase) && isChaveBye(luta.atleta_1) && !sozinhoNaChave(todas, luta)) continue;
         if (!luta.atleta_2_id || checkinPorAtleta.get(Number(luta.atleta_2_id)) !== 'aprovado') continue;
         await concluirWo(supabase, todas, luta, 'atleta_2');
         processouNestaRodada = true;

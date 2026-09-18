@@ -17,6 +17,18 @@ function faseNormalizada(luta: LutaComRotulo) {
 }
 
 export function rotuloLuta(luta: LutaComRotulo) {
+  const id = String(luta.id_visual || "");
+  if (String(luta.fase || "").toUpperCase().includes("CHAVE DE 3") || String(luta.fase || "").toUpperCase().includes("CHAVE DE 6")) {
+    if (id === "1") return String(luta.fase || "").toLowerCase().includes("esquerda") ? "Luta 1 · esquerda" : "Luta 1 · chave de 3";
+    if (id === "2") return String(luta.fase || "").toLowerCase().includes("esquerda") ? "Baia · esquerda" : "Luta 2 · baia";
+    if (id === "3") return "Luta 1 · direita";
+    if (id === "4") return "Baia · direita";
+    if (id === "101") return "Decisão · esquerda";
+    if (id === "102") return "Decisão · direita";
+    if (id === "999" || faseNormalizada(luta) === "Final") {
+      return String(luta.fase || "").toUpperCase().includes("CHAVE DE 6") ? "Final" : "Final · chave de 3";
+    }
+  }
   const fase = faseNormalizada(luta);
   if (fase === "Final") return "Final";
   if (/\d/.test(fase)) return fase;

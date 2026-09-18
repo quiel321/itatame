@@ -41,7 +41,7 @@ assert.throws(()=>grupoInscricao(atleta(1,{categoria:'Absoluto',absoluto:true}),
 assert.throws(()=>prepararGrupos([atleta(1),atleta(1)],'peso',[categoria]));
 assert.throws(()=>prepararGrupos(Array.from({length:65},(_,i)=>atleta(i+1,{categoria_id:'cat'})),'peso',[categoria]));
 const exemplos:LutaImpressao[]=[];
-for(const tamanho of [1,2,3,4,5,8,16,17,32,64]) {
+for(const tamanho of [1,2,3,4,5,6,8,16,17,32,64]) {
   const catTamanho=catPeso(`cat-${tamanho}`,{nome:`Divisão de teste com ${tamanho} atletas`,peso_min:64,peso_max:76});
   const entradas=Array.from({length:tamanho},(_,i)=>atleta(i+1,{categoria_id:catTamanho.id}));
   const lutas=montarChaves(evento,prepararGrupos(entradas,'peso',[catTamanho]));
@@ -154,6 +154,29 @@ async function conferirWoAposChecagem() {
   await processarAvancosAutomaticosChaves(memoriaChaves([lutaSozinho], [{ atleta_id:10, status_checkin:'aprovado' }]), evento);
   assert.equal(lutaSozinho.status_luta,'concluida');
   assert.equal(lutaSozinho.vencedor,'Ezequiel');
+  const sf1={ id:'t1', evento_id:evento, categoria:'ADULTOOO', faixa:'Branca', id_visual:'1', proxima_luta:999, atleta_1:'Ezequiel', atleta_2:'Aylan', atleta_1_id:1, atleta_2_id:2, status_luta:'agendada', vencedor:null, fase:'Semifinal 1 · Chave de 3' };
+  const sf2={ id:'t2', evento_id:evento, categoria:'ADULTOOO', faixa:'Branca', id_visual:'2', proxima_luta:999, atleta_1:'TBD', atleta_2:'Alex', atleta_1_id:null, atleta_2_id:3, status_luta:'agendada', vencedor:null, fase:'Semifinal 2 · Chave de 3' };
+  const fin={ id:'t3', evento_id:evento, categoria:'ADULTOOO', faixa:'Branca', id_visual:'999', proxima_luta:null, atleta_1:'TBD', atleta_2:'TBD', atleta_1_id:null, atleta_2_id:null, status_luta:'agendada', vencedor:null, fase:'Final · Chave de 3' };
+  const inscritosTres=[{ atleta_id:1, status_checkin:'aprovado' },{ atleta_id:2, status_checkin:'aprovado' },{ atleta_id:3, status_checkin:'aprovado' }];
+  await processarAvancosAutomaticosChaves(memoriaChaves([sf1,sf2,fin], inscritosTres), evento);
+  assert.equal(sf1.status_luta,'agendada');
+  assert.equal(sf2.status_luta,'agendada');
+  assert.equal(sf2.vencedor,null);
+  assert.equal(fin.status_luta,'agendada');
+  const l1={ id:'s1', evento_id:evento, categoria:'Absoluto', faixa:'Preta', id_visual:'1', proxima_luta:101, atleta_1:'Aylan', atleta_2:'Alex', atleta_1_id:1, atleta_2_id:2, status_luta:'agendada', vencedor:null, fase:'Luta 1 esquerda · Chave de 3' };
+  const b1={ id:'s2', evento_id:evento, categoria:'Absoluto', faixa:'Preta', id_visual:'2', proxima_luta:101, atleta_1:'TBD', atleta_2:'Ezequiel', atleta_1_id:null, atleta_2_id:3, status_luta:'agendada', vencedor:null, fase:'Baia esquerda · Chave de 3' };
+  const d1={ id:'s101', evento_id:evento, categoria:'Absoluto', faixa:'Preta', id_visual:'101', proxima_luta:999, atleta_1:'TBD', atleta_2:'TBD', atleta_1_id:null, atleta_2_id:null, status_luta:'agendada', vencedor:null, fase:'Decisão esquerda · Chave de 3' };
+  const l2={ id:'s3', evento_id:evento, categoria:'Absoluto', faixa:'Preta', id_visual:'3', proxima_luta:102, atleta_1:'Ruberson', atleta_2:'Jefferson', atleta_1_id:4, atleta_2_id:5, status_luta:'agendada', vencedor:null, fase:'Luta 1 direita · Chave de 3' };
+  const b2={ id:'s4', evento_id:evento, categoria:'Absoluto', faixa:'Preta', id_visual:'4', proxima_luta:102, atleta_1:'TBD', atleta_2:'Nego', atleta_1_id:null, atleta_2_id:6, status_luta:'agendada', vencedor:null, fase:'Baia direita · Chave de 3' };
+  const d2={ id:'s102', evento_id:evento, categoria:'Absoluto', faixa:'Preta', id_visual:'102', proxima_luta:999, atleta_1:'TBD', atleta_2:'TBD', atleta_1_id:null, atleta_2_id:null, status_luta:'agendada', vencedor:null, fase:'Decisão direita · Chave de 3' };
+  const fin6={ id:'s999', evento_id:evento, categoria:'Absoluto', faixa:'Preta', id_visual:'999', proxima_luta:null, atleta_1:'TBD', atleta_2:'TBD', atleta_1_id:null, atleta_2_id:null, status_luta:'agendada', vencedor:null, fase:'Final · Chave de 6' };
+  const inscritosSeis=[{ atleta_id:1, status_checkin:'aprovado' },{ atleta_id:2, status_checkin:'aprovado' },{ atleta_id:3, status_checkin:'aprovado' },{ atleta_id:4, status_checkin:'aprovado' },{ atleta_id:5, status_checkin:'aprovado' },{ atleta_id:6, status_checkin:'aprovado' }];
+  await processarAvancosAutomaticosChaves(memoriaChaves([l1,b1,d1,l2,b2,d2,fin6], inscritosSeis), evento);
+  assert.equal(b1.status_luta,'agendada');
+  assert.equal(b2.status_luta,'agendada');
+  assert.equal(b1.vencedor,null);
+  assert.equal(b2.vencedor,null);
+  assert.equal(fin6.status_luta,'agendada');
   console.log('OK: divisões, elegibilidade, duplicatas, 1-64 atletas, árvore, parcelamento, PDF, ranking e W.O. após checagem.');
 }
 conferirWoAposChecagem().catch((erro) => {

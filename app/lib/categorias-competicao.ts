@@ -10,6 +10,7 @@ export type InscricaoCompeticao = {
   categoria?: string | null; categoria_id?: string | null; faixa?: string | null;
   sexo?: string | null; idade?: string | number | null; peso?: string | number | null;
   modalidade?: string | null; equipe?: string | null; equipe_id?: string | null;
+  academia?: string | null; user_id?: string | null;
   absoluto?: boolean; pagamento_ok?: boolean; status_checkin?: string | null;
 };
 

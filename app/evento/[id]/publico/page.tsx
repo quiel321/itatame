@@ -7,6 +7,9 @@ import Link from "next/link"
 import { Clock } from "lucide-react"
 import { rotuloLuta } from "@/app/lib/lutas-rotulos"
 import { semFaixaDuplicada } from "@/app/lib/categorias-competicao"
+import { lutasFormamChaveDeTres, placeholderSlotChaveDeTres, textoAguardandoChaveDeTres, textoOuroAposChecagem } from "@/app/lib/chave-de-tres"
+import { idsPrimeiraFasePorLado } from "@/app/lib/chave-visual"
+import { ChaveTriangularPainel } from "@/app/components/ChaveDeTresPainel"
 
 const formatarHorarioEstimado = (isoString: string | null) => {
   if (!isoString) return '';
@@ -162,10 +165,9 @@ export default function ChavesPublicoPage() {
   const maxNumero = atletas.length > 0 ? Math.max(...atletas.map(a => parseInt(a.numero) || 0)) : 0;
   const totalAbas = Math.max(1, Math.ceil(maxNumero / 16));
 
+  const idsPrimeiraFase = idsPrimeiraFasePorLado(lutas, abaAtual);
   const getFase1VisualId = (posicaoColuna: number, lado: "esquerda" | "direita") => {
-    const lutasPorLado = totalAbas * 4;
-    if (lado === "esquerda") return (abaAtual - 1) * 4 + posicaoColuna; 
-    return lutasPorLado + (abaAtual - 1) * 4 + posicaoColuna;
+    return idsPrimeiraFase[lado](posicaoColuna);
   }
 
   const limparNome = (nome: string | null) => {
@@ -257,6 +259,13 @@ export default function ChavesPublicoPage() {
 
   const campeaoData = getCampeao();
   const temCampeao = campeaoData.nome && campeaoData.nome !== "";
+  const ehChaveDeTres = lutasFormamChaveDeTres(lutas);
+  const nomeSlot = (luta: any, lado: 1 | 2) => {
+    const bruto = lado === 1 ? luta.atleta_1 : luta.atleta_2;
+    const limpo = limparNome(bruto);
+    if (limpo) return limpo;
+    return placeholderSlotChaveDeTres(luta, lado) || "A DEFINIR";
+  };
 
   // 🔥 LÓGICA DE ORGANIZAÇÃO DOS CARDS
   const lutasAtivas = lutas.filter(l => l.status_luta !== 'concluida' && l.status_luta !== 'em_andamento');
@@ -264,7 +273,7 @@ export default function ChavesPublicoPage() {
   
   // Exibe apenas confrontos reais (duas pessoas)
   const confrontosReais = [...lutasEmAndamento, ...lutasAtivas]
-    .filter(l => isAtletaValido(l.atleta_1) && isAtletaValido(l.atleta_2))
+    .filter(l => ehChaveDeTres || (isAtletaValido(l.atleta_1) && isAtletaValido(l.atleta_2)))
     .sort((a, b) => (parseInt(a.id_visual) || 0) - (parseInt(b.id_visual) || 0));
 
   // Atletas na "Baia" (Tem apenas 1 atleta válido na luta agendada)
@@ -290,6 +299,8 @@ export default function ChavesPublicoPage() {
 
   // Descobre de onde vem o oponente do atleta que está na Baia
   const getTextoBaia = (lutaWait: any) => {
+    const textoTres = textoAguardandoChaveDeTres(lutaWait);
+    if (textoTres) return textoTres;
     const lutasAlimentadoras = lutas.filter(l => String(l.proxima_luta) === String(lutaWait.id_visual));
     if (lutasAlimentadoras.length > 0) {
       const atletaPresente = isAtletaValido(lutaWait.atleta_1) ? lutaWait.atleta_1 : lutaWait.atleta_2;
@@ -299,7 +310,15 @@ export default function ChavesPublicoPage() {
         return `Aguardando vencedor da ${rotuloLuta(feederOponente)}`;
       }
     }
-    return "Aguardando checagem · ouro só após a presença";
+    const reais = new Set<string>();
+    lutas.forEach((luta) => {
+      [luta.atleta_1, luta.atleta_2].forEach((nome, indice) => {
+        if (!isAtletaValido(nome)) return;
+        const id = indice === 0 ? luta.atleta_1_id : luta.atleta_2_id;
+        reais.add(id ? `ID:${id}` : `NOME:${String(nome).trim().toUpperCase()}`);
+      });
+    });
+    return textoOuroAposChecagem(reais.size);
   };
 
   return (
@@ -366,6 +385,11 @@ export default function ChavesPublicoPage() {
         {/* ============================================== */}
         {/* ÁRVORE GRÁFICA (VISUAL DESKTOP) */}
         {/* ============================================== */}
+        {ehChaveDeTres ? (
+          <div className="bg-[#050816] border-y md:border md:border-white/10 md:rounded-3xl py-6 md:p-10 w-full relative shadow-2xl">
+            <ChaveTriangularPainel lutas={lutas} buscarFoto={buscarFotoPorId} />
+          </div>
+        ) : (
         <div className="hidden md:flex bg-[#050816] md:border md:border-white/10 md:rounded-3xl py-6 md:p-10 w-full overflow-x-auto min-w-0 flex-col items-center scrollbar-hide relative shadow-2xl">
           {totalAbas > 1 && <p className="text-zinc-500 font-bold mb-4 uppercase tracking-widest text-sm absolute top-4 left-4">Chave {abaAtual}/{totalAbas}</p>}
 
@@ -439,6 +463,7 @@ export default function ChavesPublicoPage() {
             </div>
           </div>
         </div>
+        )}
 
 
         {/* ============================================== */}
@@ -485,7 +510,7 @@ export default function ChavesPublicoPage() {
             </div>
           )}
 
-          {atletasAguardandoDefinicao.length > 0 && (
+          {!ehChaveDeTres && atletasAguardandoDefinicao.length > 0 && (
             <div className="mb-10 rounded-xl border border-yellow-500/15 bg-yellow-500/5 p-4">
               <h3 className="mb-3 text-[10px] font-black uppercase tracking-widest text-yellow-400">Aguardando definição</h3>
               <div className="flex flex-wrap gap-2">
@@ -507,7 +532,7 @@ export default function ChavesPublicoPage() {
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {confrontosReais.map(luta => {
-                  const a1 = limparNome(luta.atleta_1); const a2 = limparNome(luta.atleta_2);
+                  const a1 = nomeSlot(luta, 1); const a2 = nomeSlot(luta, 2);
                   const foto1 = buscarFotoPorId(luta.atleta_1_id); const foto2 = buscarFotoPorId(luta.atleta_2_id);
                   
                   return (

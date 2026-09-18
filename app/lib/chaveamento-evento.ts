@@ -1,6 +1,7 @@
 import { montarChaves, prepararGrupos } from '@/app/lib/gerar-chaves';
 import { processarAvancosAutomaticosChaves } from '@/app/lib/chaves-auto-avanco';
 import type { CategoriaCompeticao, InscricaoCompeticao } from '@/app/lib/categorias-competicao';
+import { ehFaseChaveDeTres } from '@/app/lib/chave-de-tres';
 
 type ClienteSupabase = {
   from: (tabela: string) => any;
@@ -37,6 +38,63 @@ export function lutaEhAbsoluto(luta: { categoria?: string | null }) {
   return String(luta.categoria || '').toLowerCase().includes('absoluto');
 }
 
+type LutaExistente = {
+  categoria?: string | null;
+  faixa?: string | null;
+  fase?: string | null;
+  id_visual?: string | number | null;
+};
+
+export function precisaAtualizarChaveTriangular(
+  preparados: ReturnType<typeof prepararGrupos>,
+  existentes: LutaExistente[],
+) {
+  for (const [chave, atletas] of Object.entries(preparados.grupos)) {
+    const n = atletas.length;
+    if (n !== 3 && n !== 6) continue;
+    const meta = preparados.metadados[chave];
+    const lutas = existentes.filter(luta => luta.categoria === meta.categoria && luta.faixa === meta.faixa);
+    if (!lutas.length) continue;
+    const ids = new Set(lutas.map(luta => String(luta.id_visual)));
+    const triangular = lutas.some(luta => ehFaseChaveDeTres(luta.fase));
+    if (n === 3 && !triangular) return true;
+    if (n === 6 && !(ids.has('101') && ids.has('102') && triangular)) return true;
+  }
+  return false;
+}
+
+async function enriquecerAcademiaInscricoes(db: ClienteSupabase, inscricoes: InscricaoCompeticao[]) {
+  const atletaIds = [...new Set(inscricoes.map(item => item.atleta_id).filter((id): id is number => Number.isFinite(Number(id))))];
+  const userIds = [...new Set(inscricoes.map(item => item.user_id).filter((id): id is string => Boolean(id)))];
+  const equipeIds = [...new Set(inscricoes.map(item => item.equipe_id).filter((id): id is string => Boolean(id)))];
+  const [atletasPorId, atletasPorUser, equipes] = await Promise.all([
+    atletaIds.length
+      ? db.from('atletas_publico').select('id, user_id, academia, equipe').in('id', atletaIds)
+      : { data: [] as Array<{ id: number; user_id?: string; academia?: string | null; equipe?: string | null }> },
+    userIds.length
+      ? db.from('atletas_publico').select('id, user_id, academia, equipe').in('user_id', userIds)
+      : { data: [] as Array<{ id: number; user_id?: string; academia?: string | null; equipe?: string | null }> },
+    equipeIds.length
+      ? db.from('equipes_evento').select('id, academia').in('id', equipeIds)
+      : { data: [] as Array<{ id: string; academia?: string | null }> },
+  ]);
+  const academiaPorAtletaId = new Map<number, string>();
+  const academiaPorUser = new Map<string, string>();
+  for (const atleta of [...(atletasPorId.data || []), ...(atletasPorUser.data || [])]) {
+    if (atleta.academia && atleta.id) academiaPorAtletaId.set(Number(atleta.id), String(atleta.academia));
+    if (atleta.academia && atleta.user_id) academiaPorUser.set(String(atleta.user_id), String(atleta.academia));
+  }
+  const academiaPorEquipe = new Map((equipes.data || []).map((equipe: { id: string; academia?: string | null }) => [equipe.id, equipe.academia || '']));
+  return inscricoes.map(inscricao => ({
+    ...inscricao,
+    academia: inscricao.academia
+      || (inscricao.atleta_id ? academiaPorAtletaId.get(Number(inscricao.atleta_id)) : '')
+      || (inscricao.user_id ? academiaPorUser.get(String(inscricao.user_id)) : '')
+      || (inscricao.equipe_id ? academiaPorEquipe.get(inscricao.equipe_id) : '')
+      || null,
+  }));
+}
+
 export async function prepararChavesEvento(
   db: ClienteSupabase,
   eventoId: string,
@@ -48,15 +106,16 @@ export async function prepararChavesEvento(
   const [inscritos, categorias, existentes] = await Promise.all([
     query,
     db.from('categorias_evento').select('*').eq('evento_id', eventoId),
-    db.from('chaves').select('id,categoria,status_luta,vencedor,iniciada_em').eq('evento_id', eventoId),
+    db.from('chaves').select('id,categoria,faixa,id_visual,fase,status_luta,vencedor,iniciada_em').eq('evento_id', eventoId),
   ]);
   if (inscritos.error || existentes.error) throw new Error('Não foi possível conferir as inscrições e chaves. Tente novamente.');
   if (categorias.error) throw new Error('A atualização do banco de competição ainda não foi instalada. As chaves foram preservadas.');
   if ((existentes.data || []).some((luta: { vencedor?: string | null; iniciada_em?: string | null; status_luta?: string | null }) => luta.vencedor || luta.iniciada_em || ['concluida', 'em_andamento'].includes(luta.status_luta || ''))) {
     throw new Error('Já existem lutas iniciadas ou resultados neste evento. As chaves foram preservadas.');
   }
-  const preparados = prepararGrupos((inscritos.data || []) as InscricaoCompeticao[], tipo, (categorias.data || []) as CategoriaCompeticao[]);
-  const grupos = Object.entries(preparados.grupos).map(([categoria, atletas]) => {
+  const inscricoesComAcademia = await enriquecerAcademiaInscricoes(db, (inscritos.data || []) as InscricaoCompeticao[]);
+  const gruposPreparados = prepararGrupos(inscricoesComAcademia, tipo, (categorias.data || []) as CategoriaCompeticao[]);
+  const grupos = Object.entries(gruposPreparados.grupos).map(([categoria, atletas]) => {
     const equipes = new Map<string, { nome: string; total: number }>();
     atletas.forEach((atleta) => {
       const atual = equipes.get(atleta.equipe_chave) || { nome: atleta.equipe_atleta, total: 0 };
@@ -72,10 +131,11 @@ export async function prepararChavesEvento(
   if (!grupos.length) throw new Error('Nenhuma inscrição apta para este tipo de chave.');
   return {
     grupos,
-    lutas: montarChaves(eventoId, preparados),
+    lutas: montarChaves(eventoId, gruposPreparados),
     existentes: existentes.data || [],
-    inscritos: inscritos.data || [],
+    inscritos: inscricoesComAcademia,
     categorias: categorias.data || [],
+    precisaAtualizarTriangular: precisaAtualizarChaveTriangular(gruposPreparados, existentes.data || []),
   };
 }
 
@@ -102,7 +162,7 @@ export async function gerarChavesAutomaticasEvento(db: ClienteSupabase, evento: 
     try {
       const preparado = await prepararChavesEvento(db, evento.id, tipo, false);
       const jaExiste = (preparado.existentes as { categoria?: string | null }[]).some(luta => tipo === 'absoluto' ? lutaEhAbsoluto(luta) : !lutaEhAbsoluto(luta));
-      if (jaExiste) continue;
+      if (jaExiste && !preparado.precisaAtualizarTriangular) continue;
       const total = await gravarChavesEvento(db, evento, tipo, preparado.lutas);
       gerados.push({ tipo, total });
     } catch (error) {
