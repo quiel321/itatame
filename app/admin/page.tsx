@@ -487,7 +487,7 @@ export default function AdminPage() {
   );
 
   return (
-    <main className="min-h-screen bg-[#050505] text-white p-4 md:p-8 relative overflow-hidden font-sans selection:bg-red-500/30">
+    <main className="min-h-screen bg-[#050505] text-white p-3 md:p-8 relative overflow-hidden font-sans selection:bg-red-500/30">
       
       {/* EFEITOS DE LUZ SUAVES */}
       <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-red-600/5 blur-[150px] rounded-full pointer-events-none"></div>
@@ -495,84 +495,76 @@ export default function AdminPage() {
 
       <div className="max-w-7xl mx-auto relative z-10">
         
-        <nav aria-label="Organização do campeonato" className="flex flex-wrap gap-2 mb-6 text-xs">
-          <button onClick={() => { guardarEventoOrganizador(''); setEventoSelecionado(''); }} className="rounded-lg border border-white/10 px-3 py-2">Trocar campeonato</button>
-          <Link href="/admin/guia" className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-red-300">Guia rápido</Link>
-          <Link href={`/admin/categorias?evento=${eventoSelecionado}`} className="rounded-lg bg-white/5 px-3 py-2">Categorias</Link>
-          <Link href={`/admin/equipes?evento=${eventoSelecionado}`} className="rounded-lg bg-white/5 px-3 py-2">Equipes e professores</Link>
-          <Link href={`/admin/ranking?evento=${eventoSelecionado}`} className="rounded-lg bg-white/5 px-3 py-2">Resultados e ranking</Link>
-          <Link href={`/admin/resultados?evento=${eventoSelecionado}`} className="rounded-lg bg-white/5 px-3 py-2">Resultados manuais</Link>
-          <Link href="/admin/financeiro" className="rounded-lg bg-white/5 px-3 py-2">Financeiro</Link>
-          <Link href="/admin/mensagens" className="relative rounded-lg bg-white/5 px-3 py-2">Chat com atletas<SeloNaoLidas quantidade={chatNaoLidas} /></Link>
+        <nav aria-label="Organização do campeonato" className="-mx-3 mb-4 flex gap-2 overflow-x-auto px-3 pb-1 text-[11px] whitespace-nowrap md:mx-0 md:mb-6 md:flex-wrap md:overflow-visible md:px-0 md:whitespace-normal">
+          <button onClick={() => { guardarEventoOrganizador(''); setEventoSelecionado(''); }} className="shrink-0 rounded-lg border border-white/10 px-3 py-2">Trocar campeonato</button>
+          <Link href="/admin/guia" className="shrink-0 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-red-300">Guia rápido</Link>
+          <Link href={`/admin/categorias?evento=${eventoSelecionado}`} className="shrink-0 rounded-lg bg-white/5 px-3 py-2">Categorias</Link>
+          <Link href={`/admin/equipes?evento=${eventoSelecionado}`} className="shrink-0 rounded-lg bg-white/5 px-3 py-2">Equipes e professores</Link>
+          <Link href={`/admin/ranking?evento=${eventoSelecionado}`} className="shrink-0 rounded-lg bg-white/5 px-3 py-2">Resultados e ranking</Link>
+          <Link href={`/admin/resultados?evento=${eventoSelecionado}`} className="shrink-0 rounded-lg bg-white/5 px-3 py-2">Resultados manuais</Link>
+          <Link href="/admin/financeiro" className="shrink-0 rounded-lg bg-white/5 px-3 py-2">Financeiro</Link>
+          <Link href="/admin/mensagens" className="relative shrink-0 rounded-lg bg-white/5 px-3 py-2">Chat com atletas<SeloNaoLidas quantidade={chatNaoLidas} /></Link>
         </nav>
-        {/* HEADER VIP C/ FOTO */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 pb-6 border-b border-white/10">
-          <div className="flex items-center gap-4 md:gap-5">
+        <div className="mb-4 flex flex-col gap-3 border-b border-white/10 pb-4 md:mb-6 md:flex-row md:items-start md:justify-between md:gap-4 md:pb-5">
+          <div className="flex min-w-0 items-start gap-3 md:gap-5">
             <div className="shrink-0 relative group">
               {fotoUrl ? (
-                <img src={fotoUrl} alt="Perfil Organizador" className="w-16 h-16 md:w-20 md:h-20 rounded-full object-cover border-2 border-red-500/50 shadow-[0_0_20px_rgba(239,68,68,0.3)]" />
+                <img src={fotoUrl} alt="Perfil Organizador" className="h-12 w-12 rounded-full object-cover border-2 border-red-500/50 shadow-[0_0_20px_rgba(239,68,68,0.3)] md:h-20 md:w-20" />
               ) : (
-                <div className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-zinc-900 border-2 border-white/10 flex items-center justify-center text-zinc-600 shadow-lg">
-                  <Users className="w-8 h-8" />
+                <div className="flex h-12 w-12 items-center justify-center rounded-full border-2 border-white/10 bg-zinc-900 text-zinc-600 shadow-lg md:h-20 md:w-20">
+                  <Users className="h-6 w-6 md:h-8 md:w-8" />
                 </div>
               )}
             </div>
             
-            <div>
-              <span className="text-yellow-500 text-[9px] md:text-[10px] font-black uppercase tracking-widest bg-yellow-500/10 border border-yellow-500/20 px-2.5 py-1 rounded-md mb-2 inline-block shadow-inner">
+            <div className="min-w-0 flex-1">
+              <span className="mb-1 inline-block rounded-md border border-yellow-500/20 bg-yellow-500/10 px-2 py-0.5 text-[8px] font-black uppercase tracking-widest text-yellow-500 shadow-inner md:mb-2 md:text-[10px] md:px-2.5 md:py-1">
                 Área Exclusiva
               </span>
-              <h1 className="text-2xl md:text-4xl font-black text-white tracking-tight">Olá, {organizadorNome}</h1>
-              <p className="text-zinc-500 text-[10px] md:text-sm mt-1 font-medium">Seu centro de comando operacional e visão geral.</p>
+              <h1 className="truncate text-xl font-black tracking-tight text-white md:text-4xl">Olá, {organizadorNome}</h1>
+              {isOrganizadorNativo && (
+                <div className={`mt-2 flex items-center gap-2 rounded-lg border px-2.5 py-1.5 md:max-w-xl ${organizadorFinanceiro?.mp_connected_at ? "border-emerald-500/20 bg-emerald-500/5" : "border-yellow-500/40 bg-yellow-500/10"}`}>
+                  <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${organizadorFinanceiro?.mp_connected_at ? "bg-emerald-400" : "bg-yellow-400"}`} />
+                  <p className={`min-w-0 flex-1 truncate text-[10px] font-bold ${organizadorFinanceiro?.mp_connected_at ? "text-emerald-300" : "text-yellow-200"}`}>
+                    {organizadorFinanceiro?.mp_connected_at ? "Mercado Pago conectado" : "Conecte o Mercado Pago"}
+                  </p>
+                  <MercadoPagoConnectButton compacto conectado={Boolean(organizadorFinanceiro?.mp_connected_at)} returnTo="/admin" className={`shrink-0 rounded-md px-2.5 py-1 text-[8px] font-black uppercase tracking-widest md:text-[9px] ${organizadorFinanceiro?.mp_connected_at ? "border border-emerald-500/30 bg-emerald-500/10 text-emerald-300" : "bg-yellow-500 text-black"}`} />
+                  <Link href="/admin/financeiro" className="hidden shrink-0 text-[8px] font-bold uppercase tracking-widest text-zinc-500 hover:text-white sm:inline">Financeiro</Link>
+                </div>
+              )}
             </div>
           </div>
           
-          <div className="flex items-center gap-3 mt-4 md:mt-0 flex-wrap">
+          <div className="flex items-center gap-2">
             {isOrganizadorNativo && (
-              <button onClick={() => setShowPerfilModal(true)} className="cursor-pointer bg-white/5 hover:bg-white/10 border border-white/10 text-white text-[9px] md:text-[10px] font-bold uppercase tracking-widest px-4 py-2.5 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm">
+              <button onClick={() => setShowPerfilModal(true)} className="cursor-pointer flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-[9px] font-bold uppercase tracking-widest text-white shadow-sm transition-colors hover:bg-white/10 md:flex-none md:px-4 md:py-2.5 md:text-[10px]">
                 Editar perfil
               </button>
             )}
 
-            <button onClick={() => supabase.auth.signOut().then(() => router.push('/'))} className="cursor-pointer bg-red-950/30 hover:bg-red-900/50 border border-red-900/50 text-red-500 text-[9px] md:text-[10px] font-bold uppercase tracking-widest px-4 py-2.5 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm">
-              Sair do Sistema
+            <button onClick={() => supabase.auth.signOut().then(() => router.push('/'))} className="cursor-pointer flex-1 rounded-lg border border-red-900/50 bg-red-950/30 px-3 py-2 text-[9px] font-bold uppercase tracking-widest text-red-500 shadow-sm transition-colors hover:bg-red-900/50 md:flex-none md:px-4 md:py-2.5 md:text-[10px]">
+              Sair
             </button>
           </div>
         </div>
 
-        {isOrganizadorNativo && (
-          <section className={`mb-6 rounded-2xl border p-4 md:p-5 ${organizadorFinanceiro?.mp_connected_at ? "border-emerald-500/20 bg-emerald-500/5" : "border-yellow-500/40 bg-yellow-500/10"}`}>
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div className="max-w-3xl">
-                <p className={`text-[9px] font-black uppercase tracking-widest ${organizadorFinanceiro?.mp_connected_at ? "text-emerald-400" : "text-yellow-400"}`}>Recebimento das inscrições</p>
-                <h2 className="mt-1 text-lg font-black text-white">{organizadorFinanceiro?.mp_connected_at ? "Mercado Pago conectado" : "Ative o Mercado Pago antes de abrir as inscrições"}</h2>
-                <p className="mt-2 text-xs leading-5 text-zinc-300">Plano {planoAtual.nome}: a cada pagamento, {planoAtual.comissaoPercentual}% é destinado automaticamente ao iTatame e o restante ao organizador, antes da tarifa de processamento do Mercado Pago.</p>
-              </div>
-              <div className="shrink-0">
-                <MercadoPagoConnectButton conectado={Boolean(organizadorFinanceiro?.mp_connected_at)} returnTo="/admin" className={`w-full rounded-xl px-5 py-3 text-[10px] font-black uppercase tracking-widest ${organizadorFinanceiro?.mp_connected_at ? "border border-emerald-500/30 bg-emerald-500/10 text-emerald-300" : "bg-yellow-500 text-black hover:bg-yellow-400"}`} />
-                <Link href="/admin/financeiro" className="mt-2 block text-center text-[9px] font-bold uppercase tracking-widest text-zinc-500 hover:text-white">Ver auditoria financeira</Link>
-              </div>
-            </div>
-          </section>
-        )}
-
         {eventoAtual && (
-          <section className="mb-6 rounded-2xl border border-white/10 bg-gradient-to-r from-red-950/30 to-black/40 p-4 shadow-xl md:p-5">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <section className="mb-5 rounded-2xl border border-white/10 bg-gradient-to-r from-red-950/30 to-black/40 p-3 shadow-xl md:mb-6 md:p-5">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between lg:gap-4">
               <div className="min-w-0">
                 <p className="text-[9px] font-black uppercase tracking-widest text-red-400">Campeonato em foco</p>
-                <h2 className="mt-1 truncate text-xl font-black text-white">{eventoAtual.nome}</h2>
-                <p className="mt-1 text-xs text-zinc-400">Evento: {dataCurta(eventoAtual.data_evento)} · Inscrições até: {dataCurta(eventoAtual.data_fim_inscricoes)}</p>
+                <h2 className="mt-0.5 truncate text-lg font-black text-white md:text-xl">{eventoAtual.nome}</h2>
+                <p className="mt-1 text-[11px] leading-relaxed text-zinc-400 md:text-xs">Evento: {dataCurta(eventoAtual.data_evento)} · Inscrições até: {dataCurta(eventoAtual.data_fim_inscricoes)}</p>
               </div>
-              <div className="grid grid-cols-3 gap-2 text-center">
-                <Link href={`/admin/categorias?evento=${eventoSelecionado}`} className="rounded-xl border border-white/10 bg-black/40 px-3 py-2 hover:border-red-500/40"><strong className="block text-lg">{preparacao.categorias}</strong><span className="text-[9px] uppercase text-zinc-500">Categorias</span></Link>
-                <Link href={`/admin/equipes?evento=${eventoSelecionado}`} className="rounded-xl border border-white/10 bg-black/40 px-3 py-2 hover:border-red-500/40"><strong className="block text-lg">{preparacao.equipes}</strong><span className="text-[9px] uppercase text-zinc-500">Equipes</span></Link>
-                <Link href={`/admin/equipes?evento=${eventoSelecionado}`} className={`rounded-xl border px-3 py-2 ${preparacao.solicitacoes ? 'border-yellow-500/40 bg-yellow-500/10 text-yellow-300' : 'border-white/10 bg-black/40'}`}><strong className="block text-lg">{preparacao.solicitacoes}</strong><span className="text-[9px] uppercase text-zinc-500">Pedidos</span></Link>
+              <div className="grid grid-cols-3 gap-1.5 text-center md:gap-2">
+                <Link href={`/admin/categorias?evento=${eventoSelecionado}`} className="rounded-xl border border-white/10 bg-black/40 px-2 py-2 hover:border-red-500/40 md:px-3"><strong className="block text-base md:text-lg">{preparacao.categorias}</strong><span className="text-[8px] uppercase text-zinc-500 md:text-[9px]">Categorias</span></Link>
+                <Link href={`/admin/equipes?evento=${eventoSelecionado}`} className="rounded-xl border border-white/10 bg-black/40 px-2 py-2 hover:border-red-500/40 md:px-3"><strong className="block text-base md:text-lg">{preparacao.equipes}</strong><span className="text-[8px] uppercase text-zinc-500 md:text-[9px]">Equipes</span></Link>
+                <Link href={`/admin/equipes?evento=${eventoSelecionado}`} className={`rounded-xl border px-2 py-2 md:px-3 ${preparacao.solicitacoes ? 'border-yellow-500/40 bg-yellow-500/10 text-yellow-300' : 'border-white/10 bg-black/40'}`}><strong className="block text-base md:text-lg">{preparacao.solicitacoes}</strong><span className="text-[8px] uppercase text-zinc-500 md:text-[9px]">Pedidos</span></Link>
               </div>
-              <div className="flex flex-wrap gap-2">
-                <Link href={`/admin/eventos/${eventoSelecionado}/editar`} className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-red-300 hover:bg-red-500/20"><Edit3 size={13} className="mr-2 inline" />Editar campeonato</Link>
-                <button onClick={copiarLinkInscricao} className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-[10px] font-black uppercase tracking-widest hover:bg-white/10"><Copy size={13} className="mr-2 inline" />Copiar inscrição</button>
-                <Link href={`/evento/${eventoSelecionado}`} className="rounded-xl bg-red-600 px-4 py-3 text-[10px] font-black uppercase tracking-widest hover:bg-red-500">Ver página pública</Link>
+              <div className="grid grid-cols-3 gap-1.5">
+                <Link href={`/admin/eventos/${eventoSelecionado}/editar`} className="rounded-xl border border-red-500/40 bg-red-500/10 px-2 py-2.5 text-center text-[9px] font-black uppercase tracking-widest text-red-300 hover:bg-red-500/20 md:text-[10px]"><Edit3 size={12} className="mr-1 inline" />Editar</Link>
+                <button onClick={copiarLinkInscricao} className="rounded-xl border border-white/10 bg-white/5 px-2 py-2.5 text-[9px] font-black uppercase tracking-widest hover:bg-white/10 md:text-[10px]"><Copy size={12} className="mr-1 inline" />Copiar</button>
+                <Link href={`/evento/${eventoSelecionado}`} className="rounded-xl bg-red-600 px-2 py-2.5 text-center text-[9px] font-black uppercase tracking-widest hover:bg-red-500 md:text-[10px]">Pública</Link>
               </div>
             </div>
           </section>

@@ -8,9 +8,10 @@ type Props = {
   returnTo?: string;
   perfil?: "organizador" | "fotografo";
   className?: string;
+  compacto?: boolean;
 };
 
-export default function MercadoPagoConnectButton({ conectado, returnTo = "/admin", perfil = "organizador", className = "" }: Props) {
+export default function MercadoPagoConnectButton({ conectado, returnTo = "/admin", perfil = "organizador", className = "", compacto = false }: Props) {
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState("");
 
@@ -36,10 +37,10 @@ export default function MercadoPagoConnectButton({ conectado, returnTo = "/admin
     }
   }
 
-  return <div>
+  return <div className={compacto ? "inline-flex min-w-0 flex-col items-end" : ""}>
     <button type="button" onClick={conectar} disabled={carregando} className={`cursor-pointer disabled:opacity-60 ${className}`}>
-      {carregando ? "Abrindo Mercado Pago..." : conectado ? "Revisar conexão" : "Conectar Mercado Pago"}
+      {carregando ? (compacto ? "Abrindo..." : "Abrindo Mercado Pago...") : conectado ? (compacto ? "Revisar" : "Revisar conexão") : (compacto ? "Conectar" : "Conectar Mercado Pago")}
     </button>
-    {erro && <p role="alert" className="mt-2 text-xs font-bold text-red-400">{erro}</p>}
+    {erro && <p role="alert" className={`font-bold text-red-400 ${compacto ? "mt-1 max-w-[220px] text-left text-[10px]" : "mt-2 text-xs"}`}>{erro}</p>}
   </div>;
 }
