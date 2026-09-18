@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
+import { pacoteInscricao } from "@/app/lib/valor-inscricao";
 import QRCode from "react-qr-code";
 import Link from "next/link";
 
@@ -70,6 +71,12 @@ export default function IngressoDigitalPage() {
     return `${dia}/${mes}/${ano}`;
   };
 
+  const pacote = pacoteInscricao(inscricao);
+  const chavesConfirmadas = [
+    ...(pacote !== "absoluto" ? [inscricao.categoria] : []),
+    ...(pacote !== "peso" ? ["Absoluto"] : []),
+  ].filter(Boolean);
+
   return (
     <main className="min-h-screen bg-[#050505] p-4 md:p-8 flex items-center justify-center font-sans relative overflow-hidden">
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-red-600/10 blur-[120px] rounded-full pointer-events-none"></div>
@@ -106,17 +113,12 @@ export default function IngressoDigitalPage() {
 
             <div className="mb-6 space-y-2">
               <span className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest border-b border-white/5 pb-2">Chaves Confirmadas</span>
-              {/* Lógica inteligente: Mostra a Categoria e, se absoluto=true, mostra também o Absoluto */}
-              <div className="flex items-center gap-2 bg-white/5 px-3 py-2 rounded-lg">
-                <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"></path></svg>
-                <span className="text-white text-xs font-bold truncate">{inscricao.categoria}</span>
-              </div>
-              {inscricao.absoluto && (
-                <div className="flex items-center gap-2 bg-white/5 px-3 py-2 rounded-lg">
+              {chavesConfirmadas.map((chave) => (
+                <div key={chave} className="flex items-center gap-2 bg-white/5 px-3 py-2 rounded-lg">
                   <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"></path></svg>
-                  <span className="text-white text-xs font-bold truncate">Absoluto Livre</span>
+                  <span className="text-white text-xs font-bold truncate">{chave}</span>
                 </div>
-              )}
+              ))}
             </div>
 
             <div className="bg-white p-4 rounded-2xl flex flex-col items-center justify-center gap-3">
