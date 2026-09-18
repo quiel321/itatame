@@ -6,6 +6,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { categoriaCompativel, idadeCompetitiva, rotuloCategoria, type CategoriaCompeticao } from '@/app/lib/categorias-competicao';
 import { tarifaInfantilAplicavel, valorAddonAbsoluto, valorLoteVigente, type EventoValoresInscricao } from '@/app/lib/valor-inscricao';
+import { urlLoginComRetorno } from '@/app/lib/destino-interno';
 
 type PerfilCompetidor = {
   id: number;
@@ -78,14 +79,6 @@ function FormularioInscricao() {
   const perfilIncompleto = !nome || !equipe || !faixa || !atletaId;
   const idadePeloCadastro = Number.isInteger(idadeCompetitiva(nascimentoAtleta, dataEvento));
 
-  function calcularCategoria(peso: number) {
-    if (peso <= 64.5) return "Pluma (Até 64.500 kg)";
-    if (peso <= 72.5) return "Leve (Até 72.500 kg)";
-    if (peso <= 80) return "Meio Pesado (Até 80.000 kg)";
-    if (peso <= 85.5) return "Super Pesado (Até 85.500 kg)";
-    return "Pesadíssimo (Acima de 85.5 kg)";
-  }
-
   function aplicarCompetidor(
     pessoa: PerfilCompetidor,
     equipesOficiais: { id: string; nome: string }[] = equipesEvento,
@@ -98,7 +91,7 @@ function FormularioInscricao() {
     setFaixa(pessoa.faixa || "");
     setPesoReal(pessoa.peso ? String(pessoa.peso) : "");
     setSexo(pessoa.sexo || "Masculino");
-    setCategoria(calcularCategoria(Number(pessoa.peso || 0)));
+    setCategoria("");
     setCategoriaId('');
     setModalidade(pessoa.modalidade || "");
     setFotoUrl(pessoa.foto_url || "");
@@ -128,7 +121,7 @@ function FormularioInscricao() {
     async function carregarAmbiente() {
       const { data: authData } = await supabase.auth.getUser();
       if (!authData.user) {
-        router.push(`/login?redirect=/inscricao?evento=${eventoId}`);
+        router.push(urlLoginComRetorno(`/inscricao?evento=${eventoId}`));
         return;
       }
 
@@ -292,11 +285,15 @@ function FormularioInscricao() {
       return;
     }
 
-    if (tabelaCarregando || tabelaErro || (categoriasEvento.length > 0 && !categoriasElegiveis.some(c => c.id === categoriaId))) {
-      setErro(tabelaErro || 'Escolha uma categoria compatível com sua idade, sexo, faixa e peso.');setProcessando(false);return;
+    if (tabelaCarregando || tabelaErro || !categoriasEvento.length || !categoriasElegiveis.some(c => c.id === categoriaId)) {
+      setErro(tabelaErro || (!categoriasEvento.length
+        ? "O organizador ainda não cadastrou as categorias deste evento."
+        : "Escolha uma categoria cadastrada compatível com sua idade, sexo, faixa e peso."));
+      setProcessando(false);
+      return;
     }
-    if (!idade || !Number.isInteger(Number(idade)) || Number(idade) < 4 || Number(idade) > 100 || !categoria) {
-      setErro("Por favor, preencha sua idade e categoria.");
+    if (!idade || !Number.isInteger(Number(idade)) || Number(idade) < 4 || Number(idade) > 100) {
+      setErro("Por favor, preencha sua idade.");
       setProcessando(false);
       return;
     }
@@ -537,15 +534,14 @@ function FormularioInscricao() {
             </div>
             <div>
                 <label className="text-[9px] text-zinc-500 font-bold uppercase block mb-1.5">Categoria de Peso Oficial</label>
-                {categoriasEvento.length > 0 ? <select aria-label="Categoria de peso" value={categoriaId} onChange={e => { const c = categoriasEvento.find(c => c.id === e.target.value);setCategoriaId(e.target.value);setCategoria(c ? rotuloCategoria(c) : ''); }} className="w-full bg-black border border-white/10 rounded-lg px-3 py-2.5 text-white text-xs"><option value="">Selecione sua categoria</option>{categoriasElegiveis.map(c => <option key={c.id} value={c.id}>{rotuloCategoria(c)}</option>)}</select> : (
-                <select value={categoria} onChange={(e) => setCategoria(e.target.value)} className="w-full bg-black border border-white/10 rounded-lg px-3 py-2.5 text-white text-xs appearance-none">
-                  <option value="Pluma (Até 64.500 kg)">Pluma (Até 64.500 kg)</option>
-                  <option value="Leve (Até 72.500 kg)">Leve (Até 72.500 kg)</option>
-                  <option value="Meio Pesado (Até 80.000 kg)">Meio Pesado (Até 80.000 kg)</option>
-                  <option value="Super Pesado (Até 85.500 kg)">Super Pesado (Até 85.500 kg)</option>
-                  <option value="Pesadíssimo (Acima de 85.5 kg)">Pesadíssimo (Acima de 85.5 kg)</option>
-                </select>)}
-                {categoriasEvento.length > 0 && !categoriasElegiveis.length && <p className="text-amber-300 text-xs mt-2">Preencha sua idade. Se nenhuma categoria estiver disponível, confira faixa e peso no perfil ou fale com a organização.</p>}
+                {tabelaCarregando ? (
+                  <p className="text-zinc-500 text-xs">Carregando categorias do evento...</p>
+                ) : categoriasEvento.length > 0 ? (
+                  <select aria-label="Categoria de peso" value={categoriaId} onChange={e => { const c = categoriasEvento.find(c => c.id === e.target.value);setCategoriaId(e.target.value);setCategoria(c ? rotuloCategoria(c) : ''); }} className="w-full bg-black border border-white/10 rounded-lg px-3 py-2.5 text-white text-xs"><option value="">Selecione sua categoria</option>{categoriasElegiveis.map(c => <option key={c.id} value={c.id}>{rotuloCategoria(c)}</option>)}</select>
+                ) : (
+                  <p className="text-amber-300 text-xs">A inscrição usa só as categorias cadastradas pelo organizador. Nenhuma está disponível neste evento ainda.</p>
+                )}
+                {categoriasEvento.length > 0 && !categoriasElegiveis.length && <p className="text-amber-300 text-xs mt-2">Nenhuma categoria cadastrada combina com idade, sexo, faixa e peso deste atleta. Confira o perfil ou fale com a organização.</p>}
                 {tabelaErro && <p role="alert" className="text-red-400 text-xs mt-2">{tabelaErro}</p>}
                 {equipesEvento.length > 0 && <label className="block mt-4 text-xs text-zinc-400">Equipe no campeonato<select value={equipeId} onChange={e => {const eq=equipesEvento.find(q=>q.id===e.target.value);setEquipeId(e.target.value);if(eq){setEquipe(eq.nome);}}} className="w-full bg-black border border-white/10 rounded-lg p-3 text-white mt-1"><option value="">Selecione a equipe deste evento</option>{equipesEvento.map(eq=><option key={eq.id} value={eq.id}>{eq.nome}</option>)}</select></label>}
 
@@ -618,7 +614,7 @@ function FormularioInscricao() {
 
             {erro && <div className="mb-4 bg-red-500/10 border border-red-500/20 text-red-400 text-[10px] rounded-lg p-3 text-center font-bold">❌ {erro}</div>}
 
-            <button disabled={processando || perfilIncompleto || !categoria || !termoAceito || inscricoesEncerradas || tabelaCarregando || !!tabelaErro || (categoriasEvento.length > 0 && !categoriaId) || (equipesEvento.length > 0 && !equipeId)} className="cursor-pointer w-full bg-red-600 hover:bg-red-500 text-white font-black uppercase tracking-widest text-[11px] py-4 rounded-xl shadow-[0_0_15px_rgba(239,68,68,0.3)] transition-all disabled:opacity-50 flex items-center justify-center" onClick={finalizarInscricao}>
+            <button disabled={processando || perfilIncompleto || !categoriaId || !termoAceito || inscricoesEncerradas || tabelaCarregando || !!tabelaErro || !categoriasEvento.length || (equipesEvento.length > 0 && !equipeId)} className="cursor-pointer w-full bg-red-600 hover:bg-red-500 text-white font-black uppercase tracking-widest text-[11px] py-4 rounded-xl shadow-[0_0_15px_rgba(239,68,68,0.3)] transition-all disabled:opacity-50 flex items-center justify-center" onClick={finalizarInscricao}>
               {processando ? "Salvando Inscrição..." : "Confirmar Inscrição Oficial"}
             </button>
           </div>

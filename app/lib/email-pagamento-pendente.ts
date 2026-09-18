@@ -1,6 +1,7 @@
 import { Resend } from "resend";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
 import { formatarDataHoraNoFuso } from "@/app/lib/evento-datas";
+import { urlLoginComRetorno } from "@/app/lib/destino-interno";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -29,6 +30,13 @@ function formatarMoeda(valor: unknown) {
   return Number.isFinite(parsed)
     ? parsed.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
     : "a definir";
+}
+
+function emailEntregavel(valor?: string | null) {
+  const email = String(valor || "").trim();
+  if (!email || !email.includes("@")) return "";
+  if (email.toLowerCase().endsWith("@itatame.invalid")) return "";
+  return email;
 }
 
 export async function enviarEmailPagamentoPendente({
@@ -74,14 +82,28 @@ export async function enviarEmailPagamentoPendente({
   const evento = Array.isArray(inscricao.eventos) ? inscricao.eventos[0] : inscricao.eventos;
   const { data: atleta } = await supabase
     .from("atletas")
-    .select("nome, email")
+    .select("nome, email, responsavel_id")
     .eq("user_id", inscricao.user_id)
     .maybeSingle();
 
-  let emailDestino = atleta?.email || inscricao.email || null;
+  let emailResponsavel = "";
+  if (atleta?.responsavel_id) {
+    const { data: responsavel } = await supabase
+      .from("atletas")
+      .select("email")
+      .eq("user_id", atleta.responsavel_id)
+      .maybeSingle();
+    emailResponsavel = emailEntregavel(responsavel?.email);
+    if (!emailResponsavel) {
+      const { data: userData } = await supabase.auth.admin.getUserById(atleta.responsavel_id);
+      emailResponsavel = emailEntregavel(userData?.user?.email);
+    }
+  }
+
+  let emailDestino = emailResponsavel || emailEntregavel(inscricao.email) || emailEntregavel(atleta?.email);
   if (!emailDestino) {
     const { data: userData } = await supabase.auth.admin.getUserById(inscricao.user_id);
-    emailDestino = userData?.user?.email || emailFallback || null;
+    emailDestino = emailEntregavel(userData?.user?.email) || emailEntregavel(emailFallback);
   }
   if (!emailDestino) return { skipped: true, reason: "email_nao_encontrado" };
 
@@ -89,7 +111,8 @@ export async function enviarEmailPagamentoPendente({
   const nomeAtleta = atleta?.nome || inscricao.atleta || "Atleta";
   const eventoNome = evento?.nome || "Evento iTatame";
   const prazo = formatarDataHoraNoFuso(evento?.data_fim_pagamento, true, evento?.estado);
-  const linkPagamento = `${baseUrl}/pagamento`;
+  const retornoPagamento = `/pagamento?inscricao=${encodeURIComponent(String(inscricao.id))}`;
+  const linkPagamento = `${baseUrl}${urlLoginComRetorno(retornoPagamento)}`;
   const categoria = inscricao.absoluto ? `${inscricao.categoria} + Absoluto` : inscricao.categoria;
   const valor = formatarMoeda(inscricao.valor_total || inscricao.valor_inscricao);
   const titulo = meio === "boleto" ? "Boleto gerado" : meio === "pix" ? "Pix gerado" : "Pagamento pendente";
@@ -121,9 +144,10 @@ export async function enviarEmailPagamentoPendente({
                 <p style="margin:8px 0 0;color:#ffffff;font-size:15px;font-weight:800;">Valor: ${escapeHtml(valor)}</p>
                 <p style="margin:8px 0 0;color:#fbbf24;font-size:13px;font-weight:800;">Pague até ${escapeHtml(prazo)}</p>
               </div>
-              <a href="${linkPagamento}" style="display:block;text-align:center;background:#dc2626;color:#ffffff;text-decoration:none;font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:1.5px;padding:15px 18px;border-radius:12px;margin-top:18px;">Abrir central de pagamentos</a>
+              <a href="${linkPagamento}" style="display:block;text-align:center;background:#dc2626;color:#ffffff;text-decoration:none;font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:1.5px;padding:15px 18px;border-radius:12px;margin-top:18px;">Entrar e pagar inscrição</a>
               ${ticketUrl ? `<a href="${escapeHtml(ticketUrl)}" style="display:block;text-align:center;background:#111113;color:#ffffff;border:1px solid #3f3f46;text-decoration:none;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;padding:14px 18px;border-radius:12px;margin-top:10px;">${meio === "pix" ? "Abrir Pix" : "Abrir boleto"}</a>` : ""}
-              <p style="margin:18px 0 0;color:#71717a;font-size:12px;line-height:1.5;">Se você tiver um cupom de cortesia, pode aplicá-lo na central de pagamentos mesmo depois de confirmar a inscrição.</p>
+              <p style="margin:18px 0 0;color:#71717a;font-size:12px;line-height:1.5;">Se o link abrir em outro navegador ou celular, entre com a mesma conta usada na inscrição. Sem login a fatura não aparece.</p>
+              <p style="margin:12px 0 0;color:#71717a;font-size:12px;line-height:1.5;">Se você tiver um cupom de cortesia, pode aplicá-lo na central de pagamentos mesmo depois de confirmar a inscrição.</p>
             </div>
           </div>
         </div>

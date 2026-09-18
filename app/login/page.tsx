@@ -8,6 +8,7 @@ import { Suspense } from "react";
 import { Eye, EyeOff } from 'lucide-react';
 import { formatarTelefone } from '@/app/lib/formatar-telefone';
 import { cpfValido, formatarCpf } from '@/app/lib/validar-cpf';
+import { destinoInterno } from '@/app/lib/destino-interno';
 
 function FormularioLogin() {
   const router = useRouter();
@@ -39,6 +40,14 @@ function FormularioLogin() {
       else if (searchParams.get('email_confirmado') === '1') setMensagem('E-mail confirmado. Agora entre com a senha cadastrada.');
     });
   }, [searchParams]);
+
+  useEffect(() => {
+    if (!redirecionarPara) return;
+    supabase.auth.getUser().then(({ data }) => {
+      if (!data.user || data.user.is_anonymous) return;
+      router.replace(destinoInterno(redirecionarPara));
+    });
+  }, [redirecionarPara, router]);
 
   async function reenviarConfirmacao() {
     setLoading(true); setErro(''); setMensagem('');
@@ -89,11 +98,7 @@ function FormularioLogin() {
           return;
         }
 
-        if (redirecionarPara) {
-          router.push(redirecionarPara);
-        } else {
-          router.push("/perfil");
-        }
+        router.push(destinoInterno(redirecionarPara));
       }
     } else {
       // ==========================================

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
+import { urlLoginComRetorno } from "@/app/lib/destino-interno";
 
 declare global {
   interface Window {
@@ -77,13 +78,22 @@ export default function PagamentoPage() {
   const [cupomPorInscricao, setCupomPorInscricao] = useState<Record<string, string>>({});
   const [cupomMsg, setCupomMsg] = useState<Record<string, string>>({});
   const [aplicandoCupomId, setAplicandoCupomId] = useState<string | number | null>(null);
+  const [precisaEntrar, setPrecisaEntrar] = useState(false);
+  const [loginHref, setLoginHref] = useState("/login");
 
   const carregarInscricoes = useCallback(async () => {
     const { data: authData } = await supabase.auth.getUser();
-    if (!authData.user) {
-      router.push("/login");
+    const inscricaoLink = typeof window === "undefined" ? "" : new URLSearchParams(window.location.search).get("inscricao") || "";
+    const retorno = inscricaoLink ? `/pagamento?inscricao=${encodeURIComponent(inscricaoLink)}` : "/pagamento";
+    if (!authData.user || authData.user.is_anonymous) {
+      setLoginHref(urlLoginComRetorno(retorno));
+      setPrecisaEntrar(true);
+      setLoading(false);
+      router.replace(urlLoginComRetorno(retorno));
       return;
     }
+
+    setPrecisaEntrar(false);
 
     try {
       const { data: depsData, error: depsError } = await supabase
@@ -112,7 +122,13 @@ export default function PagamentoPage() {
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      setInscricoes(data || []);
+      const lista = data || [];
+      setInscricoes(lista);
+      if (inscricaoLink) {
+        const alvo = lista.find((item) => String(item.id) === String(inscricaoLink));
+        if (alvo?.pagamento_ok) setAbaAtiva("pagas");
+        else setAbaAtiva("pendentes");
+      }
     } catch (error: any) {
       console.error("Erro ao carregar pagamentos:", error.message || error);
     } finally {
@@ -405,6 +421,20 @@ export default function PagamentoPage() {
 
   if (loading) {
     return <div className="min-h-screen bg-[#050505] flex items-center justify-center text-zinc-500 font-bold uppercase tracking-widest text-xs">Carregando faturas...</div>;
+  }
+
+  if (precisaEntrar) {
+    return (
+      <main className="min-h-screen bg-[#050505] flex items-center justify-center p-6">
+        <div className="max-w-md w-full bg-[#0e0e12] border border-white/10 rounded-3xl p-8 text-center">
+          <h1 className="text-white font-black text-xl mb-3">Entre para ver esta fatura</h1>
+          <p className="text-zinc-400 text-sm leading-relaxed">O pagamento fica na conta usada na inscrição. Sem login, a central aparece vazia.</p>
+          <Link href={loginHref} className="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-red-600 px-6 py-3 text-xs font-black uppercase tracking-widest text-white">
+            Entrar e continuar o pagamento
+          </Link>
+        </div>
+      </main>
+    );
   }
 
   return (
