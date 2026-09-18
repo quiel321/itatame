@@ -8,7 +8,7 @@ with (security_invoker = false) as
 select
   id, user_id, nome, foto_url, equipe, academia, professor, professor_id,
   faixa, peso, sexo, nascimento, cidade, modalidade, role,
-  ouro, prata, bronze, vitorias, derrotas, vitorias_wo, participacoes, created_at
+  ouro, prata, bronze, vitorias, derrotas, vitorias_wo, participacoes, created_at, lutas
 from public.atletas;
 
 grant select on public.atletas_publico to anon, authenticated;

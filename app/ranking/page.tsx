@@ -42,7 +42,7 @@ export default function RankingPage() {
       }
     }
 
-    const { data: atls } = await supabase.from("atletas_publico").select("id, user_id, nome, foto_url, faixa, academia, equipe, ouro, prata, bronze, vitorias, lutas, vitorias_wo");
+    const { data: atls } = await supabase.from("atletas_publico").select("id, user_id, nome, foto_url, faixa, academia, equipe, ouro, prata, bronze, vitorias, vitorias_wo, participacoes, lutas");
     if (atls) setTodosAtletas(atls);
     setPronto(true);
     setLoading(false);
@@ -92,7 +92,7 @@ export default function RankingPage() {
           prata: num(atleta.prata), 
           bronze: num(atleta.bronze), 
           vitorias: num(atleta.vitorias), 
-          lutas: num(atleta.lutas),
+          lutas: num(atleta.lutas ?? atleta.participacoes),
           vitorias_wo: 0,
           pts_calculados: 0
         });
@@ -114,6 +114,7 @@ export default function RankingPage() {
             base.prata = Math.max(num(r.prata), base.prata);
             base.bronze = Math.max(num(r.bronze), base.bronze);
             base.vitorias = Math.max(num(r.vitorias), base.vitorias);
+            base.lutas = Math.max(num(r.lutas), base.lutas);
             base.vitorias_wo = num(r.vitorias_wo); // Só confia no Motor para W.O
             base.pts_calculados = num(r.pts);
           } else {
@@ -122,6 +123,7 @@ export default function RankingPage() {
             base.prata = num(r.prata);
             base.bronze = num(r.bronze);
             base.vitorias = num(r.vitorias);
+            base.lutas = num(r.lutas);
             base.vitorias_wo = num(r.vitorias_wo);
             base.pts_calculados = num(r.pts);
           }

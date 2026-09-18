@@ -438,7 +438,7 @@ function FormularioInscricao() {
       : categoria;
     const categoriaPesoId = existente?.categoria_id || categoriaId;
     const soAbsoluto = pacoteFinal === "absoluto";
-    const inscricaoParaSalvar = {
+    const inscricaoParaSalvar: Record<string, unknown> = {
       user_id: userIdInscricao,
       atleta_id: atletaId,
       atleta: nome,
@@ -460,7 +460,6 @@ function FormularioInscricao() {
       pagamento_ok: false,
       valor_inscricao: valorBase,
       valor_total: cupomAplicado ? valorBase : valorTotal,
-      cpf: cpfAtleta || null,
       email: emailAtleta || null
     };
 
@@ -488,25 +487,21 @@ function FormularioInscricao() {
     let inscricaoCriada: { id: string | number } | null = null;
     let error: { message: string } | null = null;
 
-    if (ampliando && existente) {
-      const { data: atualizada, error: erroUpdate } = await supabase
-        .from("inscricoes")
-        .update(inscricaoParaSalvar)
-        .eq("id", existente.id)
-        .select("id")
-        .single();
-      error = erroUpdate;
-      inscricaoCriada = atualizada;
-    } else {
-      const insert = await supabase.from("inscricoes").insert([inscricaoParaSalvar]).select("id").single();
-      error = insert.error;
-      inscricaoCriada = insert.data;
-      if (error && (error.message.toLowerCase().includes("cpf") || error.message.toLowerCase().includes("email"))) {
-        const { cpf, email, ...payloadSemCamposNovos } = inscricaoParaSalvar;
-        const retry = await supabase.from("inscricoes").insert([payloadSemCamposNovos]).select("id").single();
-        error = retry.error;
-        inscricaoCriada = retry.data;
+    async function gravarInscricao(payload: Record<string, unknown>) {
+      if (ampliando && existente) {
+        return supabase.from("inscricoes").update(payload).eq("id", existente.id).select("id").single();
       }
+      return supabase.from("inscricoes").insert([payload]).select("id").single();
+    }
+
+    let resultado = await gravarInscricao(inscricaoParaSalvar);
+    error = resultado.error;
+    inscricaoCriada = resultado.data;
+    if (error && /cpf|email|column/i.test(error.message)) {
+      const { email, ...payloadSemEmail } = inscricaoParaSalvar;
+      resultado = await gravarInscricao(payloadSemEmail);
+      error = resultado.error;
+      inscricaoCriada = resultado.data;
     }
 
     if (error) {
