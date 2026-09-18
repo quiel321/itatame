@@ -12,7 +12,7 @@ import {
   type TomEtapaEvento,
 } from "@/app/lib/evento-etapas";
 import Link from "next/link";
-import { formatarValorInscricao, idadeMaxInfantil, valorAddonAbsoluto, valorComboPesoAbsoluto, valorInfantilLote } from "@/app/lib/valor-inscricao";
+import { formatarValorInscricao, idadeMaxInfantil, valorAbsolutoAvulso, valorAddonAbsoluto, valorComboPesoAbsoluto, valorInfantilLote } from "@/app/lib/valor-inscricao";
 import { ChatEvento } from "@/app/components/ChatEvento";
 
 const estiloEtapa: Record<TomEtapaEvento, { badge: string; aviso: string; ponto: string }> = {
@@ -128,6 +128,8 @@ export default function EventoDetalhesPage() {
   else loteAtivo = 4; // Todos os lotes encerrados
   const addonAbsoluto = valorAddonAbsoluto(evento);
   const addonAbsolutoInfantil = valorAddonAbsoluto(evento, idadeMaxInfantil(evento));
+  const avulsoAbsoluto = valorAbsolutoAvulso(evento);
+  const avulsoAbsolutoInfantil = valorAbsolutoAvulso(evento, idadeMaxInfantil(evento));
 
   return (
     <main className="min-h-screen bg-[#050505] flex flex-col pb-20">
@@ -333,17 +335,25 @@ export default function EventoDetalhesPage() {
                     );})}
                   </div>
 
-                  {addonAbsoluto > 0 && (
-                    <div className="p-4 rounded-xl border border-amber-500/20 bg-amber-500/5 mb-6 flex justify-between items-center text-white">
-                      <div>
-                        <h4 className="font-black uppercase tracking-widest text-xs md:text-sm">Add-on Absoluto</h4>
-                        <p className="text-[10px] md:text-xs mt-1 text-zinc-400">Valor extra do combo Categoria de Peso + Absoluto, somado ao lote vigente.</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-black text-lg">+ R$ {addonAbsoluto.toFixed(2).replace('.', ',')}</p>
-                        {addonAbsolutoInfantil !== addonAbsoluto && (
-                          <p className="mt-1 text-[10px] font-bold text-cyan-300">Infantil: + R$ {addonAbsolutoInfantil.toFixed(2).replace('.', ',')}</p>
-                        )}
+                  {(addonAbsoluto > 0 || avulsoAbsoluto > 0) && (
+                    <div className="p-4 rounded-xl border border-amber-500/20 bg-amber-500/5 mb-6 text-white">
+                      <div className="flex justify-between items-start gap-3">
+                        <div>
+                          <h4 className="font-black uppercase tracking-widest text-xs md:text-sm">Absoluto</h4>
+                          <p className="text-[10px] md:text-xs mt-1 text-zinc-400">Sozinho para quem não tem categoria de peso (ex.: mirim). No combo, soma só o extra ao lote.</p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-400">Sozinho</p>
+                          <p className="font-black text-lg">{formatarValorInscricao(avulsoAbsoluto)}</p>
+                          {avulsoAbsolutoInfantil !== avulsoAbsoluto && (
+                            <p className="mt-1 text-[10px] font-bold text-cyan-300">Infantil: {formatarValorInscricao(avulsoAbsolutoInfantil)}</p>
+                          )}
+                          <p className="mt-2 text-[9px] font-bold uppercase tracking-widest text-zinc-400">Extra no combo</p>
+                          <p className="font-black text-sm">+ {formatarValorInscricao(addonAbsoluto)}</p>
+                          {addonAbsolutoInfantil !== addonAbsoluto && (
+                            <p className="mt-1 text-[10px] font-bold text-cyan-300">Infantil: + {formatarValorInscricao(addonAbsolutoInfantil)}</p>
+                          )}
+                        </div>
                       </div>
                     </div>
                   )}

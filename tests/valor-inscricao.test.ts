@@ -49,6 +49,22 @@ test("infantil 0 é inscrição gratuita e não cai no preço adulto", () => {
   assert.equal(valorLoteVigente(gratis, new Date("2026-09-17"), 10), 0);
 });
 
+test("absoluto sozinho cobra o avulso e o combo continua lote mais extra", () => {
+  const comAvulso = {
+    ...evento,
+    regras_pontuacao_equipes: { ...evento.regras_pontuacao_equipes, valor_absoluto_avulso: 35, valor_absoluto_avulso_infantil: 15 },
+  };
+  assert.equal(calcularValorInscricao({ absoluto: true, categoria: "Absoluto", idade: 10 }, comAvulso), 15);
+  assert.equal(calcularValorInscricao({ absoluto: true, categoria: "Absoluto", idade: 25 }, comAvulso), 35);
+  assert.equal(calcularValorInscricao({ absoluto: true, categoria: "Galo", idade: 12 }, comAvulso), 90);
+  assert.equal(calcularValorInscricao({ absoluto: false, categoria: "Galo", idade: 12 }, comAvulso), 70);
+});
+
+test("sem preço avulso, absoluto sozinho usa o extra do combo", () => {
+  assert.equal(calcularValorInscricao({ absoluto: true, categoria: "Absoluto", idade: 12 }, evento), 20);
+  assert.equal(calcularValorInscricao({ absoluto: true, categoria: "Absoluto", idade: 25 }, evento), 40);
+});
+
 test("sem preço infantil no lote vigente, a criança paga o adulto", () => {
   const semLote1 = {
     ...evento,

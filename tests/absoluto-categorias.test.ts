@@ -104,3 +104,20 @@ test("a chave de absoluto não mistura os dois grupos cadastrados", () => {
   assert.equal(grupoInscricao({ idade: 22, sexo: "Feminino", faixa: "Branca", modalidade: "Jiu-Jitsu", categoria: "Pena" }, "absoluto", categorias).categoria_id, "abs-fem-branca");
   assert.equal(grupoInscricao({ idade: 40, sexo: "Masculino", faixa: "Preta", modalidade: "Jiu-Jitsu", categoria: "Pesado" }, "absoluto", categorias).categoria_id, "abs-masc-todas");
 });
+
+test("mirim inscrito só no absoluto entra na chave de absoluto e não na de peso", () => {
+  const absolutoMirim: CategoriaCompeticao = {
+    ...femininoBranca,
+    id: "abs-mirim",
+    sexo: "Masculino",
+    faixa: FAIXA_TODAS_AS_FAIXAS,
+    idade_min: 4,
+    idade_max: 15,
+  };
+  const inscrito = { id: 9, atleta: "Leo", atleta_id: 9, absoluto: true, idade: 8, sexo: "Masculino", faixa: "Cinza", modalidade: "Jiu-Jitsu", categoria: "Absoluto", equipe: "Spartan" };
+  const peso = prepararGrupos([inscrito], "peso", [absolutoMirim]);
+  const absoluto = prepararGrupos([inscrito], "absoluto", [absolutoMirim]);
+  assert.equal(Object.keys(peso.grupos).length, 0);
+  assert.equal(Object.keys(absoluto.grupos).length, 1);
+  assert.equal(Object.values(absoluto.grupos)[0].length, 1);
+});

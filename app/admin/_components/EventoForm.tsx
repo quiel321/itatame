@@ -37,6 +37,8 @@ type RegrasPontuacao = {
   wo_pontua?: boolean;
   valor_absoluto?: number;
   valor_absoluto_infantil?: number;
+  valor_absoluto_avulso?: number;
+  valor_absoluto_avulso_infantil?: number;
   lote1_valor_infantil?: number;
   lote2_valor_infantil?: number;
   lote3_valor_infantil?: number;
@@ -115,6 +117,8 @@ export default function EventoForm({ modo, eventoId }: EventoFormProps) {
   const [lote2ValorInfantil, setLote2ValorInfantil] = useState("");
   const [lote3ValorInfantil, setLote3ValorInfantil] = useState("");
   const [valorAbsolutoInfantil, setValorAbsolutoInfantil] = useState("");
+  const [valorAbsolutoAvulso, setValorAbsolutoAvulso] = useState("");
+  const [valorAbsolutoAvulsoInfantil, setValorAbsolutoAvulsoInfantil] = useState("");
   const [idadeMaxInfantil, setIdadeMaxInfantil] = useState(IDADE_MAX_INFANTIL_PADRAO);
 
   const [bannerAtualUrl, setBannerAtualUrl] = useState("");
@@ -153,6 +157,8 @@ export default function EventoForm({ modo, eventoId }: EventoFormProps) {
           lote2_valor_infantil: valorOpcional(regras.lote2_valor_infantil) ?? null,
           lote3_valor_infantil: valorOpcional(regras.lote3_valor_infantil) ?? null,
           valor_absoluto_infantil: valorOpcional(regras.valor_absoluto_infantil) ?? null,
+          valor_absoluto_avulso: valorOpcional(regras.valor_absoluto_avulso) ?? null,
+          valor_absoluto_avulso_infantil: valorOpcional(regras.valor_absoluto_avulso_infantil) ?? null,
           idade_max_infantil: Number(regras.idade_max_infantil) || IDADE_MAX_INFANTIL_PADRAO,
         };
         const [{ count: inscricoes }, { data: lutas }] = await Promise.all([
@@ -195,6 +201,8 @@ export default function EventoForm({ modo, eventoId }: EventoFormProps) {
         setLote2ValorInfantil(textoValorOpcional(regras.lote2_valor_infantil));
         setLote3ValorInfantil(textoValorOpcional(regras.lote3_valor_infantil));
         setValorAbsolutoInfantil(textoValorOpcional(regras.valor_absoluto_infantil));
+        setValorAbsolutoAvulso(textoValorOpcional(regras.valor_absoluto_avulso));
+        setValorAbsolutoAvulsoInfantil(textoValorOpcional(regras.valor_absoluto_avulso_infantil));
         setIdadeMaxInfantil(Number(regras.idade_max_infantil) || IDADE_MAX_INFANTIL_PADRAO);
         setPontosEquipeOuro(Number(regras.ouro) || 9);
         setPontosEquipePrata(Number(regras.prata) || 3);
@@ -276,13 +284,15 @@ export default function EventoForm({ modo, eventoId }: EventoFormProps) {
           lote2_valor_infantil: lote2ValorInfantil === "" ? null : Number(lote2ValorInfantil),
           lote3_valor_infantil: lote3ValorInfantil === "" ? null : Number(lote3ValorInfantil),
           valor_absoluto_infantil: valorAbsolutoInfantil === "" ? null : Number(valorAbsolutoInfantil),
+          valor_absoluto_avulso: valorAbsolutoAvulso === "" ? null : Number(valorAbsolutoAvulso),
+          valor_absoluto_avulso_infantil: valorAbsolutoAvulsoInfantil === "" ? null : Number(valorAbsolutoAvulsoInfantil),
         };
         const alterouInfantilJaDefinido = (Object.keys(infantilAtual) as (keyof typeof infantilAtual)[]).some((campo) => {
           const original = originalRef.current[campo];
           if (original === null || original === undefined || original === "") return false;
           return original !== infantilAtual[campo];
         });
-        const tinhaInfantil = ["lote1_valor_infantil", "lote2_valor_infantil", "lote3_valor_infantil", "valor_absoluto_infantil"]
+        const tinhaInfantil = ["lote1_valor_infantil", "lote2_valor_infantil", "lote3_valor_infantil", "valor_absoluto_infantil", "valor_absoluto_avulso", "valor_absoluto_avulso_infantil"]
           .some((campo) => originalRef.current[campo] !== null && originalRef.current[campo] !== undefined && originalRef.current[campo] !== "");
         const alterouPrecos = [
           ['lote1_valor', lote1Valor], ['lote2_valor', lote2Valor], ['lote3_valor', lote3Valor],
@@ -334,6 +344,8 @@ export default function EventoForm({ modo, eventoId }: EventoFormProps) {
       if (lote2ValorInfantil !== "") regrasPontuacaoEquipes.lote2_valor_infantil = Number(lote2ValorInfantil);
       if (lote3ValorInfantil !== "") regrasPontuacaoEquipes.lote3_valor_infantil = Number(lote3ValorInfantil);
       if (valorAbsolutoInfantil !== "") regrasPontuacaoEquipes.valor_absoluto_infantil = Number(valorAbsolutoInfantil);
+      if (valorAbsolutoAvulso !== "") regrasPontuacaoEquipes.valor_absoluto_avulso = Number(valorAbsolutoAvulso);
+      if (valorAbsolutoAvulsoInfantil !== "") regrasPontuacaoEquipes.valor_absoluto_avulso_infantil = Number(valorAbsolutoAvulsoInfantil);
 
       const payload = {
         nome,
@@ -471,15 +483,21 @@ export default function EventoForm({ modo, eventoId }: EventoFormProps) {
               <p className="mt-2 text-xs leading-relaxed text-zinc-500">Deixe o valor infantil em branco para cobrar o mesmo preço do adulto. A tarifa vale até {idadeMaxInfantil} anos na data do evento. O Mercado Pago continua cobrando o valor calculado da inscrição.</p>
               <div className="mt-4 rounded-xl border border-white/10 bg-black p-3">
                 <div className="grid gap-3 md:grid-cols-2">
-                  <Field label="Valor extra do Absoluto (adulto)">
+                  <Field label="Extra do Absoluto no combo (adulto)">
                     <input type="number" min={0} step="0.01" value={valorAbsoluto} onChange={(e) => setValorAbsoluto(Number(e.target.value))} className={inputClass} />
                   </Field>
-                  <Field label="Absoluto infantil">
+                  <Field label="Extra do combo infantil">
                     <input type="number" min={0} step="0.01" value={valorAbsolutoInfantil} onChange={(e) => setValorAbsolutoInfantil(e.target.value)} placeholder="Igual ao adulto" className={inputClass} />
                   </Field>
+                  <Field label="Absoluto sozinho (adulto)">
+                    <input type="number" min={0} step="0.01" value={valorAbsolutoAvulso} onChange={(e) => setValorAbsolutoAvulso(e.target.value)} placeholder="Igual ao extra do combo" className={inputClass} />
+                  </Field>
+                  <Field label="Absoluto sozinho infantil">
+                    <input type="number" min={0} step="0.01" value={valorAbsolutoAvulsoInfantil} onChange={(e) => setValorAbsolutoAvulsoInfantil(e.target.value)} placeholder="Igual ao sozinho adulto" className={inputClass} />
+                  </Field>
                 </div>
-                <p className="mt-3 text-xs leading-relaxed text-zinc-500">Somado ao lote vigente só quando o atleta escolhe Categoria de Peso + Absoluto. Os lotes acima cobram a categoria de peso. Use 0 se o absoluto não tiver custo à parte.</p>
-                <p className="mt-2 text-xs font-bold text-zinc-500">Prévia adulto: <span className="text-white">{dinheiro(valorAbsoluto)}</span>{valorAbsolutoInfantil !== "" ? <> · infantil: <span className="text-white">{dinheiro(Number(valorAbsolutoInfantil))}</span></> : null}</p>
+                <p className="mt-3 text-xs leading-relaxed text-zinc-500">Peso cobra o lote. Absoluto sozinho cobra o valor avulso — use para mirim sem categoria de peso. O combo soma o lote + o extra, mais barato que comprar os dois separados. Em branco, o sozinho usa o mesmo valor do extra.</p>
+                <p className="mt-2 text-xs font-bold text-zinc-500">Prévia extra combo: <span className="text-white">{dinheiro(valorAbsoluto)}</span>{valorAbsolutoInfantil !== "" ? <> · infantil: <span className="text-white">{dinheiro(Number(valorAbsolutoInfantil))}</span></> : null} · sozinho: <span className="text-white">{dinheiro(valorAbsolutoAvulso === "" ? valorAbsoluto : Number(valorAbsolutoAvulso))}</span></p>
               </div>
             </div>
 

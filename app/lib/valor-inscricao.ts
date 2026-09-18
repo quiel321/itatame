@@ -3,6 +3,8 @@ export const IDADE_MAX_INFANTIL_PADRAO = 15;
 export type RegrasValoresInscricao = {
   valor_absoluto?: number | string | null;
   valor_absoluto_infantil?: number | string | null;
+  valor_absoluto_avulso?: number | string | null;
+  valor_absoluto_avulso_infantil?: number | string | null;
   lote1_valor_infantil?: number | string | null;
   lote2_valor_infantil?: number | string | null;
   lote3_valor_infantil?: number | string | null;
@@ -91,6 +93,23 @@ export function valorAddonAbsoluto(evento: EventoValoresInscricao, idade?: unkno
   return kid !== undefined ? kid : adulto;
 }
 
+export function inscricaoSomenteAbsoluto(inscricao: { absoluto?: boolean | null; categoria?: string | null }) {
+  return inscricao.absoluto === true && String(inscricao.categoria || '').trim().toLowerCase() === 'absoluto';
+}
+
+export function valorAbsolutoAvulso(evento: EventoValoresInscricao, idade?: unknown) {
+  const regras = regrasValoresInscricao(evento);
+  const extra = valorAddonAbsoluto(evento, idade);
+  if (!inscricaoInfantil(idade, evento)) {
+    const adulto = valorOpcional(regras.valor_absoluto_avulso);
+    return adulto !== undefined ? adulto : extra;
+  }
+  const kid = valorOpcional(regras.valor_absoluto_avulso_infantil);
+  if (kid !== undefined) return kid;
+  const adulto = valorOpcional(regras.valor_absoluto_avulso);
+  return adulto !== undefined ? adulto : extra;
+}
+
 export function formatarValorInscricao(valor: number) {
   return `R$ ${numeroValor(valor).toFixed(2).replace('.', ',')}`;
 }
@@ -124,7 +143,9 @@ export function tarifaInfantilAplicavel(evento: EventoValoresInscricao, idade?: 
   const adulto = valorLoteVigente(evento, agora);
   const addonKid = valorAddonAbsoluto(evento, idade);
   const addonAdulto = valorAddonAbsoluto(evento);
-  return vigente !== adulto || addonKid !== addonAdulto;
+  const avulsoKid = valorAbsolutoAvulso(evento, idade);
+  const avulsoAdulto = valorAbsolutoAvulso(evento);
+  return vigente !== adulto || addonKid !== addonAdulto || avulsoKid !== avulsoAdulto;
 }
 
 export function calcularValorInscricao(
@@ -132,6 +153,7 @@ export function calcularValorInscricao(
   evento: EventoValoresInscricao,
   agora = new Date(),
 ) {
+  if (inscricaoSomenteAbsoluto(inscricao)) return valorAbsolutoAvulso(evento, inscricao.idade);
   const valor = valorLoteVigente(evento, agora, inscricao.idade);
   const lutaPesoEAbsoluto = inscricao.absoluto === true && inscricao.categoria !== "Absoluto";
   return lutaPesoEAbsoluto ? valor + valorAddonAbsoluto(evento, inscricao.idade) : valor;

@@ -5,7 +5,7 @@ import { supabase } from "../lib/supabase";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { absolutoDaInscricao, categoriaCompativel, idadeCompetitiva, rotuloCategoria, type CategoriaCompeticao } from '@/app/lib/categorias-competicao';
-import { tarifaInfantilAplicavel, valorAddonAbsoluto, valorLoteVigente, type EventoValoresInscricao } from '@/app/lib/valor-inscricao';
+import { tarifaInfantilAplicavel, valorAbsolutoAvulso, valorAddonAbsoluto, valorLoteVigente, type EventoValoresInscricao } from '@/app/lib/valor-inscricao';
 import { urlLoginComRetorno } from '@/app/lib/destino-interno';
 
 type PerfilCompetidor = {
@@ -194,17 +194,27 @@ function FormularioInscricao() {
 
   const categoriasElegiveis = categoriasEvento.filter(c => c.tipo === 'peso' && categoriaCompativel(c, { idade, sexo, faixa, peso: pesoReal }));
   const absolutoElegivel = absolutoDaInscricao({ idade, sexo, faixa, modalidade }, categoriasEvento);
+  const pesoElegivel = categoriasElegiveis.length > 0;
   useEffect(() => {
     if (categoriaId && !categoriasElegiveis.some(c => c.id === categoriaId)) { setCategoriaId(''); setCategoria(''); }
   }, [idade, sexo, faixa, pesoReal, categoriaId, categoriasEvento]);
   useEffect(() => {
-    if (!absolutoElegivel && tipoInscricao === 'ambos') setTipoInscricao('peso');
-  }, [absolutoElegivel, tipoInscricao]);
+    if (!absolutoElegivel && (tipoInscricao === 'ambos' || tipoInscricao === 'absoluto')) {
+      setTipoInscricao('peso');
+    } else if (!pesoElegivel && absolutoElegivel && tipoInscricao !== 'absoluto') {
+      setTipoInscricao('absoluto');
+    }
+  }, [absolutoElegivel, pesoElegivel, tipoInscricao]);
 
   const valorLoteAtual = eventoValores ? valorLoteVigente(eventoValores, new Date(), idade) : 0;
   const valorAbsoluto = eventoValores ? valorAddonAbsoluto(eventoValores, idade) : 0;
+  const valorAbsolutoSozinho = eventoValores ? valorAbsolutoAvulso(eventoValores, idade) : 0;
   const usaTarifaInfantil = Boolean(eventoValores && tarifaInfantilAplicavel(eventoValores, idade));
-  const valorBase = (tipoInscricao === "ambos") ? valorLoteAtual + valorAbsoluto : valorLoteAtual;
+  const valorBase = tipoInscricao === "ambos"
+    ? valorLoteAtual + valorAbsoluto
+    : tipoInscricao === "absoluto"
+      ? valorAbsolutoSozinho
+      : valorLoteAtual;
   const valorTotal = Math.max(0, valorBase - desconto);
   const isGratis = valorBase === 0;
 
@@ -277,8 +287,16 @@ function FormularioInscricao() {
       }
     }
 
-    if (tipoInscricao === "absoluto") {
-      setErro("No Jiu-Jitsu, o absoluto só pode ser contratado junto com a categoria de peso.");
+    if (tipoInscricao === "absoluto" && !absolutoElegivel) {
+      setErro("Este atleta não se enquadra em absoluto cadastrado neste campeonato.");
+      setProcessando(false);
+      return;
+    }
+
+    if ((tipoInscricao === "ambos" || tipoInscricao === "peso") && !pesoElegivel) {
+      setErro(absolutoElegivel
+        ? "Este atleta não tem categoria de peso. Escolha só o absoluto."
+        : "Nenhuma categoria cadastrada combina com idade, sexo, faixa e peso deste atleta.");
       setProcessando(false);
       return;
     }
@@ -295,10 +313,12 @@ function FormularioInscricao() {
       return;
     }
 
-    if (tabelaCarregando || tabelaErro || !categoriasEvento.length || !categoriasElegiveis.some(c => c.id === categoriaId)) {
+    if (tabelaCarregando || tabelaErro || !categoriasEvento.length || (tipoInscricao !== "absoluto" && !categoriasElegiveis.some(c => c.id === categoriaId))) {
       setErro(tabelaErro || (!categoriasEvento.length
         ? "O organizador ainda não cadastrou as categorias deste evento."
-        : "Escolha uma categoria cadastrada compatível com sua idade, sexo, faixa e peso."));
+        : tipoInscricao === "absoluto"
+          ? "Este atleta não se enquadra em absoluto cadastrado neste campeonato."
+          : "Escolha uma categoria cadastrada compatível com sua idade, sexo, faixa e peso."));
       setProcessando(false);
       return;
     }
@@ -364,6 +384,7 @@ function FormularioInscricao() {
 
     const equipeOficial = equipesEvento.find(eq => eq.id === equipeId);
     let isLiberado = !cupomAplicado && valorTotal === 0;
+    const soAbsoluto = tipoInscricao === "absoluto";
     const inscricaoParaSalvar = {
       user_id: userIdInscricao,
       atleta_id: atletaId,
@@ -371,10 +392,14 @@ function FormularioInscricao() {
       equipe: equipeOficial?.nome || equipe,
       faixa,
       sexo,
-      categoria,
-      ...(categoriaId ? { categoria_id: categoriaId, modalidade: categoriasEvento.find(c => c.id === categoriaId)?.modalidade } : { modalidade }),
+      categoria: soAbsoluto ? "Absoluto" : categoria,
+      ...(soAbsoluto
+        ? { modalidade: absolutoElegivel?.modalidade || modalidade }
+        : categoriaId
+          ? { categoria_id: categoriaId, modalidade: categoriasEvento.find(c => c.id === categoriaId)?.modalidade }
+          : { modalidade }),
       ...(equipeId ? { equipe_id: equipeId } : {}),
-      absoluto: tipoInscricao === "ambos",
+      absoluto: tipoInscricao !== "peso",
       idade,
       observacoes,
       peso: pesoReal,
@@ -543,15 +568,17 @@ function FormularioInscricao() {
               </div>
             </div>
             <div>
-                <label className="text-[9px] text-zinc-500 font-bold uppercase block mb-1.5">Categoria de Peso Oficial</label>
-                {tabelaCarregando ? (
+                <label className="text-[9px] text-zinc-500 font-bold uppercase block mb-1.5">{tipoInscricao === 'absoluto' ? 'Absoluto' : 'Categoria de Peso Oficial'}</label>
+                {tipoInscricao === 'absoluto' ? (
+                  <p className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2.5 text-xs text-amber-100">{absolutoElegivel ? rotuloCategoria(absolutoElegivel) : 'Nenhum absoluto compatível.'}</p>
+                ) : tabelaCarregando ? (
                   <p className="text-zinc-500 text-xs">Carregando categorias do evento...</p>
                 ) : categoriasEvento.length > 0 ? (
                   <select aria-label="Categoria de peso" value={categoriaId} onChange={e => { const c = categoriasEvento.find(c => c.id === e.target.value);setCategoriaId(e.target.value);setCategoria(c ? rotuloCategoria(c) : ''); }} className="w-full bg-black border border-white/10 rounded-lg px-3 py-2.5 text-white text-xs"><option value="">Selecione sua categoria</option>{categoriasElegiveis.map(c => <option key={c.id} value={c.id}>{rotuloCategoria(c)}</option>)}</select>
                 ) : (
                   <p className="text-amber-300 text-xs">A inscrição usa só as categorias cadastradas pelo organizador. Nenhuma está disponível neste evento ainda.</p>
                 )}
-                {categoriasEvento.length > 0 && !categoriasElegiveis.length && <p className="text-amber-300 text-xs mt-2">Nenhuma categoria cadastrada combina com idade, sexo, faixa e peso deste atleta. Confira o perfil ou fale com a organização.</p>}
+                {tipoInscricao !== 'absoluto' && categoriasEvento.length > 0 && !categoriasElegiveis.length && <p className="text-amber-300 text-xs mt-2">{absolutoElegivel ? 'Não há categoria de peso para este atleta. Ele pode se inscrever só no absoluto.' : 'Nenhuma categoria cadastrada combina com idade, sexo, faixa e peso deste atleta. Confira o perfil ou fale com a organização.'}</p>}
                 {tabelaErro && <p role="alert" className="text-red-400 text-xs mt-2">{tabelaErro}</p>}
                 {equipesEvento.length > 0 && <label className="block mt-4 text-xs text-zinc-400">Equipe no campeonato<select value={equipeId} onChange={e => {const eq=equipesEvento.find(q=>q.id===e.target.value);setEquipeId(e.target.value);if(eq){setEquipe(eq.nome);}}} className="w-full bg-black border border-white/10 rounded-lg p-3 text-white mt-1"><option value="">Selecione a equipe deste evento</option>{equipesEvento.map(eq=><option key={eq.id} value={eq.id}>{eq.nome}</option>)}</select></label>}
 
@@ -564,30 +591,43 @@ function FormularioInscricao() {
             <p className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest mb-5">Modalidade: <strong className="text-white">{nomeLoteAtual}</strong>{usaTarifaInfantil ? <span className="ml-2 rounded bg-cyan-500/20 px-2 py-0.5 text-cyan-300">Tarifa infantil</span> : null}</p>
 
             <div className="space-y-2.5">
+              {pesoElegivel && (
               <label className={`block relative p-4 rounded-xl border cursor-pointer transition-all ${tipoInscricao === 'peso' ? 'border-red-500 bg-red-500/5' : 'border-white/5 bg-black'}`}>
                 <input type="radio" name="tipoInscricao" value="peso" checked={tipoInscricao === 'peso'} onChange={() => setTipoInscricao('peso')} className="absolute opacity-0 w-0 h-0" />
                 <div className="flex justify-between items-center">
                   <h3 className="font-bold text-xs">Categoria de Peso</h3>
-                  <span className="font-black text-sm">{isGratis ? "GRÁTIS" : `R$ ${valorLoteAtual.toFixed(2)}`}</span>
+                  <span className="font-black text-sm">{valorLoteAtual === 0 ? "GRÁTIS" : `R$ ${valorLoteAtual.toFixed(2)}`}</span>
                 </div>
               </label>
+              )}
 
+              {absolutoElegivel && (
+              <label className={`block relative p-4 rounded-xl border cursor-pointer transition-all ${tipoInscricao === 'absoluto' ? 'border-red-500 bg-red-500/5' : 'border-white/5 bg-black'}`}>
+                <input type="radio" name="tipoInscricao" value="absoluto" checked={tipoInscricao === 'absoluto'} onChange={() => setTipoInscricao('absoluto')} className="absolute opacity-0 w-0 h-0" />
+                <div className="flex justify-between items-center gap-3">
+                  <div>
+                    <h3 className="font-bold text-xs">Somente Absoluto</h3>
+                    <p className="mt-1 text-[10px] font-medium normal-case tracking-normal text-zinc-500">{rotuloCategoria(absolutoElegivel)}</p>
+                  </div>
+                  <span className="font-black text-sm shrink-0">{valorAbsolutoSozinho === 0 ? "GRÁTIS" : `R$ ${valorAbsolutoSozinho.toFixed(2)}`}</span>
+                </div>
+              </label>
+              )}
 
-
-              {absolutoElegivel ? (
+              {pesoElegivel && absolutoElegivel ? (
               <label className={`block relative p-4 rounded-xl border cursor-pointer transition-all ${tipoInscricao === 'ambos' ? 'border-red-500 bg-red-500/5' : 'border-white/5 bg-black'}`}>
                 <input type="radio" name="tipoInscricao" value="ambos" checked={tipoInscricao === 'ambos'} onChange={() => setTipoInscricao('ambos')} className="absolute opacity-0 w-0 h-0" />
                 <div className="flex justify-between items-center gap-3">
                   <div>
-                    <h3 className="font-bold text-xs">Categoria de Peso + Absoluto <span className="bg-amber-500/20 text-amber-500 text-[8px] font-black uppercase px-2 py-0.5 rounded ml-2">Dupla Oportunidade</span></h3>
-                    <p className="mt-1 text-[10px] font-medium normal-case tracking-normal text-zinc-500">{rotuloCategoria(absolutoElegivel)}</p>
+                    <h3 className="font-bold text-xs">Categoria de Peso + Absoluto <span className="bg-amber-500/20 text-amber-500 text-[8px] font-black uppercase px-2 py-0.5 rounded ml-2">Combo</span></h3>
+                    <p className="mt-1 text-[10px] font-medium normal-case tracking-normal text-zinc-500">{rotuloCategoria(absolutoElegivel)}{valorAbsolutoSozinho > valorAbsoluto ? ` · extra R$ ${valorAbsoluto.toFixed(2)} em vez de R$ ${valorAbsolutoSozinho.toFixed(2)} sozinho` : ""}</p>
                   </div>
-                  <span className="font-black text-sm shrink-0">{isGratis ? "GRÁTIS" : `R$ ${(valorLoteAtual + valorAbsoluto).toFixed(2)}`}</span>
+                  <span className="font-black text-sm shrink-0">{(valorLoteAtual + valorAbsoluto) === 0 ? "GRÁTIS" : `R$ ${(valorLoteAtual + valorAbsoluto).toFixed(2)}`}</span>
                 </div>
               </label>
-              ) : (
+              ) : !absolutoElegivel ? (
                 <p className="text-[10px] text-zinc-500 leading-relaxed">Este atleta não entra em absoluto deste campeonato. O extra só aparece para quem combina com sexo, faixa e idade cadastrados pelo organizador.</p>
-              )}
+              ) : null}
             </div>
           </section>
 
@@ -607,7 +647,7 @@ function FormularioInscricao() {
             <h3 className="text-xs font-black text-white uppercase tracking-widest mb-5 border-b border-white/5 pb-3">Resumo da Inscrição</h3>
 
             <div className="space-y-3 mb-5 text-xs">
-              <div className="flex justify-between"><span className="text-zinc-400">Inscrição Campeonato{usaTarifaInfantil ? " (infantil)" : ""}</span><span className="text-white font-bold">{isGratis ? "R$ 0,00" : `R$ ${valorLoteAtual.toFixed(2)}`}</span></div>
+              <div className="flex justify-between"><span className="text-zinc-400">{tipoInscricao === "absoluto" ? "Absoluto" : `Inscrição Campeonato${usaTarifaInfantil ? " (infantil)" : ""}`}</span><span className="text-white font-bold">{(tipoInscricao === "absoluto" ? valorAbsolutoSozinho : valorLoteAtual) === 0 ? "R$ 0,00" : `R$ ${(tipoInscricao === "absoluto" ? valorAbsolutoSozinho : valorLoteAtual).toFixed(2)}`}</span></div>
               {tipoInscricao === 'ambos' && valorAbsoluto > 0 && <div className="flex justify-between"><span className="text-zinc-400">Add-on: Absoluto</span><span className="text-white font-bold">R$ {valorAbsoluto.toFixed(2)}</span></div>}
               {desconto > 0 && <div className="flex justify-between text-green-400"><span className="font-bold">Desconto Validado</span><span className="font-bold">- R$ {desconto.toFixed(2)}</span></div>}
             </div>
