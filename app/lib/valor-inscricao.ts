@@ -97,6 +97,61 @@ export function inscricaoSomenteAbsoluto(inscricao: { absoluto?: boolean | null;
   return inscricao.absoluto === true && String(inscricao.categoria || '').trim().toLowerCase() === 'absoluto';
 }
 
+export type PacoteInscricao = 'peso' | 'absoluto' | 'combo';
+
+export function pacoteInscricao(inscricao: { absoluto?: boolean | null; categoria?: string | null }): PacoteInscricao {
+  if (inscricaoSomenteAbsoluto(inscricao)) return 'absoluto';
+  if (inscricao.absoluto) return 'combo';
+  return 'peso';
+}
+
+export function rotuloPacoteInscricao(pacote: PacoteInscricao) {
+  if (pacote === 'absoluto') return 'Só absoluto';
+  if (pacote === 'combo') return 'Peso + Absoluto';
+  return 'Só peso';
+}
+
+export function pacoteDoTipoInscricao(tipo: string): PacoteInscricao {
+  if (tipo === 'absoluto') return 'absoluto';
+  if (tipo === 'ambos') return 'combo';
+  return 'peso';
+}
+
+export function podeAmpliarPacote(atual: PacoteInscricao, desejado: PacoteInscricao) {
+  if (atual === 'combo' || atual === desejado) return false;
+  return true;
+}
+
+export function pacoteAposAmpliar(atual: PacoteInscricao, desejado: PacoteInscricao): PacoteInscricao {
+  if (atual === 'combo' || desejado === 'combo' || atual !== desejado) return 'combo';
+  return atual;
+}
+
+export function aplicarDescontoCupom(base: number, cupom?: { desconto_porcentagem?: number | null; desconto_valor?: number | null } | null) {
+  if (!cupom) return Number(base.toFixed(2));
+  const desconto = Number(cupom.desconto_porcentagem || 0) > 0
+    ? base * Math.min(100, Number(cupom.desconto_porcentagem)) / 100
+    : Number(cupom.desconto_valor || 0);
+  return Number(Math.max(0, base - desconto).toFixed(2));
+}
+
+export function valorAindaDevido(
+  inscricao: {
+    absoluto?: boolean | null;
+    categoria?: string | null;
+    idade?: string | number | null;
+    pagamento_ok?: boolean | null;
+    valor_inscricao?: number | string | null;
+  },
+  evento: EventoValoresInscricao,
+  cupom?: { desconto_porcentagem?: number | null; desconto_valor?: number | null } | null,
+  agora = new Date(),
+) {
+  const devido = aplicarDescontoCupom(calcularValorInscricao(inscricao, evento, agora), cupom);
+  if (!inscricao.pagamento_ok) return devido;
+  return Number(Math.max(0, devido - Number(inscricao.valor_inscricao || 0)).toFixed(2));
+}
+
 export function valorAbsolutoAvulso(evento: EventoValoresInscricao, idade?: unknown) {
   const regras = regrasValoresInscricao(evento);
   const extra = valorAddonAbsoluto(evento, idade);

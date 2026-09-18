@@ -7,7 +7,7 @@ import { enviarEmailIngressoConfirmado } from "@/app/lib/email-ingresso";
 import { enviarEmailPagamentoPendente } from "@/app/lib/email-pagamento-pendente";
 import { obterAccessTokenOrganizador } from "@/app/lib/mercado-pago-integracao";
 import { autenticarRequest } from "@/app/lib/api-auth";
-import { calcularValorInscricao } from "@/app/lib/valor-inscricao";
+import { aplicarDescontoCupom, calcularValorInscricao, valorAindaDevido } from "@/app/lib/valor-inscricao";
 import { usuarioGerenciaInscricao } from "@/app/lib/inscricao-autorizacao";
 
 type EventoPagamento = {
@@ -28,15 +28,16 @@ function getBaseUrl(request: Request) {
   return process.env.NEXT_PUBLIC_BASE_URL || origin;
 }
 
-async function calcularValorCobrado(supabase: ReturnType<typeof createSupabaseServerClient>, inscricao: any, evento: EventoPagamento) {
-  const base = calcularValorInscricao(inscricao, evento);
-  if (!inscricao.cupom_id) return base;
-  const { data: cupom } = await supabase.from("cupons").select("desconto_porcentagem, desconto_valor").eq("id", inscricao.cupom_id).eq("evento_id", evento.id).maybeSingle();
-  if (!cupom) return base;
-  const desconto = Number(cupom.desconto_porcentagem || 0) > 0
-    ? base * Math.min(100, Number(cupom.desconto_porcentagem)) / 100
-    : Number(cupom.desconto_valor || 0);
-  return Number(Math.max(0, base - desconto).toFixed(2));
+async function calcularValoresCobranca(supabase: ReturnType<typeof createSupabaseServerClient>, inscricao: any, evento: EventoPagamento) {
+  let cupom = null;
+  if (inscricao.cupom_id) {
+    const { data } = await supabase.from("cupons").select("desconto_porcentagem, desconto_valor").eq("id", inscricao.cupom_id).eq("evento_id", evento.id).maybeSingle();
+    cupom = data;
+  }
+  return {
+    devidoCheio: aplicarDescontoCupom(calcularValorInscricao(inscricao, evento), cupom),
+    aCobrar: valorAindaDevido(inscricao, evento, cupom),
+  };
 }
 
 function limparPayloadPagamento(formData: any, valorTotal: number, comissao: number, descricao: string, request: Request, inscricao: any, evento: any) {
@@ -85,6 +86,8 @@ export async function POST(request: Request) {
         idade,
         pagamento_ok,
         cupom_id,
+        valor_inscricao,
+        valor_total,
         evento_id,
         eventos (
           id,
@@ -95,6 +98,7 @@ export async function POST(request: Request) {
           lote2_valor,
           lote2_data_fim,
           lote3_valor,
+          valor_absoluto,
           regras_pontuacao_equipes
         )
       `)
@@ -106,10 +110,6 @@ export async function POST(request: Request) {
     }
     if (!(await usuarioGerenciaInscricao(supabase, usuario.id, inscricao.user_id))) {
       return NextResponse.json({ error: "Inscrição não autorizada para este usuário." }, { status: 403 });
-    }
-
-    if (inscricao.pagamento_ok) {
-      return NextResponse.json({ status: "approved", message: "Inscricao ja estava paga." });
     }
 
     const evento = Array.isArray(inscricao.eventos) ? inscricao.eventos[0] : inscricao.eventos;
@@ -132,7 +132,12 @@ export async function POST(request: Request) {
 
     try { formData.installments = validarParcelas(formData.installments, limiteParcelas(organizador.mp_parcelamento_comprador_confirmado)); }
     catch (error) { return NextResponse.json({ error: (error as Error).message }, { status: 400 }); }
-    const valorTotal = await calcularValorCobrado(supabase, inscricao, evento);
+    const { devidoCheio, aCobrar } = await calcularValoresCobranca(supabase, inscricao, evento);
+    if (aCobrar <= 0) {
+      await supabase.from("inscricoes").update({ pagamento_ok: true, valor_inscricao: devidoCheio }).eq("id", inscricao.id);
+      return NextResponse.json({ status: "approved", message: "Inscricao ja estava paga." });
+    }
+    const valorTotal = aCobrar;
     const comissao = calcularComissaoMarketplace(valorTotal, organizador.plano_comercial);
     const descricao = `Inscricao - ${evento.nome || "Evento iTatame"}`;
     const paymentPayload = limparPayloadPagamento(formData, comissao.valorTotal, comissao.comissao, descricao, request, inscricao, evento);
@@ -160,10 +165,10 @@ export async function POST(request: Request) {
       );
     }
 
-    await supabase.from("inscricoes").update({ mp_payment_id: String(paymentData.id), valor_inscricao: valorTotal, valor_total: comissao.valorTotal }).eq("id", inscricao.id);
+    await supabase.from("inscricoes").update({ mp_payment_id: String(paymentData.id), valor_inscricao: devidoCheio, valor_total: inscricao.pagamento_ok ? Number(inscricao.valor_total || 0) + comissao.valorTotal : comissao.valorTotal }).eq("id", inscricao.id);
 
     if (paymentData.status === "approved") {
-      await supabase.from("inscricoes").update({ pagamento_ok: true, mp_payment_id: String(paymentData.id), valor_inscricao: valorTotal, valor_total: comissao.valorTotal }).eq("id", inscricao.id);
+      await supabase.from("inscricoes").update({ pagamento_ok: true, mp_payment_id: String(paymentData.id), valor_inscricao: devidoCheio, valor_total: inscricao.pagamento_ok ? Number(inscricao.valor_total || 0) + comissao.valorTotal : comissao.valorTotal }).eq("id", inscricao.id);
       await enviarEmailIngressoConfirmado({
         inscricaoId: inscricao.id,
         emailFallback: formData?.payer?.email,

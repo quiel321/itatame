@@ -1,6 +1,10 @@
 import { chaveRankingEquipe, nomeExibicaoEquipe } from './equipes-nome';
 
-export function calcularResultadosChaves(lutas: any[], regrasPorEvento?: Record<string, any>) {
+export function lutaEhAbsoluto(luta: { categoria?: string | null }) {
+  return String(luta.categoria || '').toLowerCase().includes('absoluto');
+}
+
+export function calcularResultadosChaves(lutas: any[], regrasPorEvento?: Record<string, any>, tipo: 'todos' | 'peso' | 'absoluto' = 'todos') {
     const rankingEquipes: Record<string, { nome: string, ouro: number, prata: number, bronze: number, pts: number }> = {};
     const rankingAtletas: Record<string, { ouro: number, prata: number, bronze: number, vitorias: number, lutas: number, vitorias_wo: number, pts: number, nome: string, equipe: string }> = {};
 
@@ -56,7 +60,9 @@ export function calcularResultadosChaves(lutas: any[], regrasPorEvento?: Record<
 
       const woPontua = regras?.wo_pontua !== undefined ? regras.wo_pontua : true; 
       const devePontuar = !(isWO && !woPontua);
-      const lutaAbsoluto = String(luta.categoria || '').toLowerCase().includes('absoluto');
+      const lutaAbsoluto = lutaEhAbsoluto(luta);
+      if (tipo === 'peso' && lutaAbsoluto) return;
+      if (tipo === 'absoluto' && !lutaAbsoluto) return;
       if (lutaAbsoluto && regras?.absoluto_pontua === false) return;
 
       if (!rankingAtletas[vId]) rankingAtletas[vId] = { ouro: 0, prata: 0, bronze: 0, vitorias: 0, lutas: 0, vitorias_wo: 0, pts: 0, nome: nomeVencedor, equipe: equipeVencedor || "Sem Equipe" };

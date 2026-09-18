@@ -14,6 +14,7 @@ export default function RankingPage() {
   
   const [eventos, setEventos] = useState<any[]>([]);
   const [filtroEvento, setFiltroEvento] = useState("Geral");
+  const [filtroChave, setFiltroChave] = useState<"todos" | "peso" | "absoluto">("todos");
   const [todosAtletas, setTodosAtletas] = useState<any[]>([]);
 
   const [rankingAtletas, setRankingAtletas] = useState<any[]>([]);
@@ -49,7 +50,7 @@ export default function RankingPage() {
 
   useEffect(() => {
     if (pronto) void calcularRanking();
-  }, [filtroEvento, todosAtletas, eventos, pronto]);
+  }, [filtroEvento, filtroChave, todosAtletas, eventos, pronto]);
 
   async function calcularRanking() {
     try {
@@ -69,7 +70,11 @@ export default function RankingPage() {
         return acc;
       }, {});
 
-      const resultado = calcularResultadosChaves(lutasValidas, regrasPorEvento);
+      const resultado = calcularResultadosChaves(
+        lutasValidas,
+        regrasPorEvento,
+        filtroEvento === "Geral" ? "todos" : filtroChave,
+      );
       const num = (valor: any) => Number(valor || 0);
       const normalizeName = (name: any) => name ? String(name).trim().toUpperCase() : "";
       
@@ -311,7 +316,10 @@ export default function RankingPage() {
           <div className="flex flex-col gap-2.5 w-full md:w-auto shrink-0 mt-2 md:mt-0">
             <select
               value={filtroEvento}
-              onChange={(e) => setFiltroEvento(e.target.value)}
+              onChange={(e) => {
+                setFiltroEvento(e.target.value);
+                if (e.target.value === "Geral") setFiltroChave("todos");
+              }}
               className="w-full md:w-[280px] bg-[#0a0a0e] border border-white/10 text-white rounded-xl px-4 py-2.5 outline-none focus:border-red-500 transition-colors shadow-inner text-[10px] font-extrabold uppercase tracking-widest cursor-pointer appearance-none"
             >
               <option value="Geral">Ranking Global (Todos)</option>
@@ -319,6 +327,14 @@ export default function RankingPage() {
                 <option key={ev.id} value={ev.id}>{ev.nome}</option>
               ))}
             </select>
+
+            {filtroEvento !== "Geral" && (
+              <div className="flex bg-black/60 p-1 rounded-xl border border-white/10 w-full shadow-inner">
+                <button onClick={() => setFiltroChave("todos")} className={`flex-1 px-3 py-2 text-[9px] font-extrabold uppercase tracking-[0.15em] rounded-lg transition-all ${filtroChave === "todos" ? "bg-white text-black" : "text-zinc-500 hover:text-white hover:bg-white/5"}`}>Geral</button>
+                <button onClick={() => setFiltroChave("peso")} className={`flex-1 px-3 py-2 text-[9px] font-extrabold uppercase tracking-[0.15em] rounded-lg transition-all ${filtroChave === "peso" ? "bg-white text-black" : "text-zinc-500 hover:text-white hover:bg-white/5"}`}>Peso</button>
+                <button onClick={() => setFiltroChave("absoluto")} className={`flex-1 px-3 py-2 text-[9px] font-extrabold uppercase tracking-[0.15em] rounded-lg transition-all ${filtroChave === "absoluto" ? "bg-white text-black" : "text-zinc-500 hover:text-white hover:bg-white/5"}`}>Absoluto</button>
+              </div>
+            )}
 
             <div className="flex bg-black/60 p-1 rounded-xl border border-white/10 w-full shadow-inner">
               <button onClick={() => setAbaAtiva("atletas")} className={`flex-1 md:flex-none px-4 py-2 text-[9px] font-extrabold uppercase tracking-[0.15em] rounded-lg transition-all ${abaAtiva === "atletas" ? "bg-red-600 text-white shadow-[0_0_15px_rgba(239,68,68,0.3)]" : "text-zinc-500 hover:text-white hover:bg-white/5"}`}>Atletas</button>

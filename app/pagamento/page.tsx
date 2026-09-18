@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
 import { urlLoginComRetorno } from "@/app/lib/destino-interno";
+import { valorAindaDevido } from "@/app/lib/valor-inscricao";
 
 declare global {
   interface Window {
@@ -115,7 +116,14 @@ export default function PagamentoPage() {
             data_evento,
             banner_url,
             cidade,
-            estado
+            estado,
+            lote1_valor,
+            lote1_data_fim,
+            lote2_valor,
+            lote2_data_fim,
+            lote3_valor,
+            valor_absoluto,
+            regras_pontuacao_equipes
           )
         `)
         .in("user_id", idsFamilia)
@@ -387,8 +395,8 @@ export default function PagamentoPage() {
   const formatarMoeda = (valor: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(valor || 0);
 
-  const pendentes = inscricoes.filter((i) => !i.pagamento_ok);
-  const pagas = inscricoes.filter((i) => i.pagamento_ok);
+  const pendentes = inscricoes.filter((i) => !i.pagamento_ok || valorAindaDevido(i, i.eventos || {}) > 0);
+  const pagas = inscricoes.filter((i) => i.pagamento_ok && valorAindaDevido(i, i.eventos || {}) <= 0);
 
   const resumoPagamento = useMemo(() => {
     if (!resultadoPagamento) return null;

@@ -15,6 +15,19 @@ import MercadoPagoConnectButton from "@/app/admin/_components/MercadoPagoConnect
 import { useMensagensNaoLidas, SeloNaoLidas } from "@/app/components/ChatEvento";
 import { formatarDocumento } from '@/app/lib/formatar-documento';
 import { formatarTelefone } from '@/app/lib/formatar-telefone';
+import { formatarValorInscricao, pacoteInscricao, rotuloPacoteInscricao, type PacoteInscricao } from '@/app/lib/valor-inscricao';
+
+function classePacote(pacote: PacoteInscricao) {
+  if (pacote === 'combo') return 'border-yellow-500/30 bg-yellow-500/10 text-yellow-300';
+  if (pacote === 'absoluto') return 'border-purple-500/30 bg-purple-500/10 text-purple-300';
+  return 'border-cyan-500/30 bg-cyan-500/10 text-cyan-300';
+}
+
+function chavesDoPacote(pacote: PacoteInscricao) {
+  if (pacote === 'combo') return ['Categoria de peso', 'Absoluto'];
+  if (pacote === 'absoluto') return ['Absoluto'];
+  return ['Categoria de peso'];
+}
 
 export default function AdminPage() {
   const router = useRouter();
@@ -43,7 +56,7 @@ export default function AdminPage() {
   const [inscricoes, setInscricoes] = useState<any[]>([]);
   const [busca, setBusca] = useState("");
   const [filtroPagamento, setFiltroPagamento] = useState("todos");
-  const [visualizacaoAtletas, setVisualizacaoAtletas] = useState<'lista' | 'detalhado'>('lista');
+  const [visualizacaoAtletas, setVisualizacaoAtletas] = useState<'lista' | 'detalhado'>('detalhado');
   const [preparacao, setPreparacao] = useState({ categorias: 0, equipes: 0, solicitacoes: 0 });
   const [loading, setLoading] = useState(true);
   const [loadingId, setLoadingId] = useState<string | null>(null);
@@ -179,7 +192,7 @@ export default function AdminPage() {
   }, [router]);
 
   useEffect(() => {
-    setVisualizacaoAtletas(window.localStorage.getItem('itatame:visualizacao-atletas') === 'detalhado' ? 'detalhado' : 'lista');
+    setVisualizacaoAtletas(window.localStorage.getItem('itatame:visualizacao-atletas') === 'lista' ? 'lista' : 'detalhado');
   }, []);
 
   useEffect(() => {
@@ -743,44 +756,50 @@ export default function AdminPage() {
               inscricoesFiltradas.length > 0 ? (
                 visualizacaoAtletas === 'lista' ? (
                   <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/30">
-                    <div className="hidden grid-cols-[1.4fr_1fr_1fr_0.75fr_220px] gap-3 border-b border-white/10 px-4 py-3 text-[9px] font-black uppercase tracking-widest text-zinc-600 lg:grid">
-                      <span>Atleta</span><span>Equipe</span><span>Categoria</span><span>Status</span><span>Ações</span>
+                    <div className="hidden grid-cols-[1.4fr_1fr_1.3fr_0.9fr_220px] gap-3 border-b border-white/10 px-4 py-3 text-[9px] font-black uppercase tracking-widest text-zinc-600 lg:grid">
+                      <span>Atleta</span><span>Equipe</span><span>Inscrição</span><span>Status</span><span>Ações</span>
                     </div>
-                    <div className="divide-y divide-white/5">{inscricoesFiltradas.map(insc => <article key={insc.id} className="grid gap-3 px-4 py-3 hover:bg-white/[0.025] lg:grid-cols-[1.4fr_1fr_1fr_0.75fr_220px] lg:items-center">
-                      <div className="min-w-0"><h3 className="truncate text-sm font-black text-white">{insc.atleta || 'Não informado'}</h3><p className="mt-1 truncate text-[10px] text-zinc-600">{insc.eventos?.nome || 'Evento'} · {insc.faixa || 'Sem faixa'} · {insc.peso ? `${insc.peso} kg` : 'Sem peso'}</p></div>
+                    <div className="divide-y divide-white/5">{inscricoesFiltradas.map(insc => {
+                      const pacote = pacoteInscricao(insc);
+                      return <article key={insc.id} className="grid gap-3 px-4 py-3 hover:bg-white/[0.025] lg:grid-cols-[1.4fr_1fr_1.3fr_0.9fr_220px] lg:items-center">
+                      <div className="min-w-0"><h3 className="truncate text-sm font-black text-white">{insc.atleta || 'Não informado'}</h3><p className="mt-1 truncate text-[10px] text-zinc-600">{insc.eventos?.nome || 'Evento'} · {insc.faixa || 'Sem faixa'} · {insc.idade ? `${insc.idade} anos` : 'Sem idade'} · {insc.peso ? `${insc.peso} kg` : 'Sem peso'}</p></div>
                       <p className="truncate text-xs text-zinc-400">{insc.equipe || 'Sem equipe'}</p>
-                      <p className="truncate text-xs text-yellow-400/80">{insc.categoria || 'Sem categoria'}</p>
-                      <div className="flex gap-1.5"><span className={`rounded-full border px-2 py-1 text-[8px] font-black uppercase ${insc.pagamento_ok ? 'border-green-500/20 bg-green-500/10 text-green-400' : 'border-red-500/20 bg-red-500/10 text-red-400'}`}>{insc.pagamento_ok ? 'Pago' : 'Pendente'}</span><span className={`rounded-full border px-2 py-1 text-[8px] font-black uppercase ${insc.pesagem_ok ? 'border-blue-500/20 bg-blue-500/10 text-blue-300' : 'border-white/5 bg-white/5 text-zinc-500'}`}>{insc.pesagem_ok ? 'Peso OK' : 'Sem peso'}</span></div>
+                      <div className="min-w-0 space-y-1.5">
+                        <span className={`inline-flex rounded-full border px-2 py-0.5 text-[8px] font-black uppercase ${classePacote(pacote)}`}>{rotuloPacoteInscricao(pacote)}</span>
+                        <p className="truncate text-xs text-yellow-400/80">{insc.categoria || 'Sem categoria'}</p>
+                        {pacote === 'combo' && <p className="truncate text-[10px] text-purple-300">+ Absoluto</p>}
+                      </div>
+                      <div className="flex flex-wrap gap-1.5"><span className={`rounded-full border px-2 py-1 text-[8px] font-black uppercase ${insc.pagamento_ok ? 'border-green-500/20 bg-green-500/10 text-green-400' : 'border-red-500/20 bg-red-500/10 text-red-400'}`}>{insc.pagamento_ok ? 'Pago' : 'Pendente'}</span><span className={`rounded-full border px-2 py-1 text-[8px] font-black uppercase ${insc.pesagem_ok ? 'border-blue-500/20 bg-blue-500/10 text-blue-300' : 'border-white/5 bg-white/5 text-zinc-500'}`}>{insc.pesagem_ok ? 'Peso OK' : 'Sem peso'}</span></div>
                       <div className="flex flex-wrap gap-1.5">
                         <button onClick={() => toggleStatus(insc.id, 'pagamento_ok', insc.pagamento_ok)} disabled={loadingId === insc.id} className={`rounded-lg border px-2.5 py-2 text-[8px] font-black uppercase ${insc.pagamento_ok ? 'border-white/10 text-zinc-400' : 'border-green-500/30 bg-green-500/10 text-green-400'}`}>{insc.pagamento_ok ? 'Desfazer pagamento' : 'Aprovar pagamento'}</button>
-                        <button onClick={() => setEditando(insc)} className="rounded-lg border border-white/10 px-2.5 py-2 text-[8px] font-black uppercase text-zinc-300">Editar</button>
+                        <button onClick={() => setEditando(insc)} className="rounded-lg border border-white/10 px-2.5 py-2 text-[8px] font-black uppercase text-zinc-300">Ver / Editar</button>
                         <button onClick={() => excluirInscricao(insc.id, insc.atleta || 'Atleta')} disabled={loadingId === insc.id} className="rounded-lg px-2 py-2 text-[8px] font-black uppercase text-red-400">Excluir</button>
                       </div>
-                    </article>)}</div>
+                    </article>;
+                    })}</div>
                   </div>
                 ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-5">
-                  {inscricoesFiltradas.map((insc) => (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4 md:gap-5">
+                  {inscricoesFiltradas.map((insc) => {
+                    const pacote = pacoteInscricao(insc);
+                    return (
                     <div key={insc.id} className="bg-[#0a0a0e] border border-white/5 rounded-[20px] p-5 flex flex-col justify-between hover:border-white/10 transition-all shadow-xl h-full relative overflow-hidden group">
                       
-                      {/* BARRA SUPERIOR SUAVE */}
                       <div className={`absolute top-0 left-0 w-full h-1 ${insc.pagamento_ok ? 'bg-green-500/80 shadow-[0_0_10px_rgba(34,197,94,0.5)]' : 'bg-red-500/80 shadow-[0_0_10px_rgba(239,68,68,0.5)]'}`}></div>
 
                       <div className="relative z-10 flex-1">
                         
                         <div className="flex items-start justify-between gap-2 mb-4 mt-1">
-                          <span className="text-zinc-500 text-[9px] font-bold uppercase tracking-widest truncate max-w-[120px]" title={insc.eventos?.nome}>
+                          <span className="text-zinc-500 text-[9px] font-bold uppercase tracking-widest truncate max-w-[140px]" title={insc.eventos?.nome}>
                             {insc.eventos?.nome || "Evento"}
                           </span>
                           
                           <div className="flex gap-1.5 items-center shrink-0">
                             <span className={`text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border ${insc.pagamento_ok ? "bg-green-500/10 text-green-500 border-green-500/20" : "bg-red-500/10 text-red-500 border-red-500/20"}`}>
-                              {insc.pagamento_ok ? '$$ Pago' : 'Pendente'}
+                              {insc.pagamento_ok ? 'Pago' : 'Pendente'}
                             </span>
-                            
-                            {/* PESO AGORA É APENAS VISUAL (NÃO CLICÁVEL) */}
-                            <span className={`text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border ${insc.pesagem_ok ? "bg-blue-500/10 text-blue-400 border-blue-500/20" : "bg-zinc-800 text-zinc-400 border-white/5"}`}>
-                              {insc.pesagem_ok ? 'Peso OK' : 'S/ Peso'}
+                            <span className={`text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border ${classePacote(pacote)}`}>
+                              {rotuloPacoteInscricao(pacote)}
                             </span>
                           </div>
                         </div>
@@ -788,21 +807,24 @@ export default function AdminPage() {
                         <h4 className="text-lg md:text-xl font-black text-white uppercase tracking-tight line-clamp-1" title={insc.atleta}>{insc.atleta || "NÃO INFORMADO"}</h4>
                         <p className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest mt-0.5 line-clamp-1" title={insc.equipe}>{insc.equipe || "SEM EQUIPE"}</p>
                         
-                        <div className="flex flex-col gap-2 mt-4 mb-6">
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-bold text-zinc-300 bg-black px-2.5 py-1.5 rounded-md border border-white/5 flex items-center gap-1"><span className="text-zinc-500">Faixa:</span> {insc.faixa || "?"}</span>
-                            <span className="text-[10px] font-bold text-zinc-300 bg-black px-2.5 py-1.5 rounded-md border border-white/5 flex items-center gap-1"><span className="text-zinc-500">Peso:</span> {insc.peso ? `${insc.peso} KG` : "Abs."}</span>
+                        <div className="flex flex-col gap-2 mt-4 mb-4">
+                          <div className="flex flex-wrap gap-2">
+                            <span className="text-[10px] font-bold text-zinc-300 bg-black px-2.5 py-1.5 rounded-md border border-white/5"><span className="text-zinc-500">Faixa:</span> {insc.faixa || "?"}</span>
+                            <span className="text-[10px] font-bold text-zinc-300 bg-black px-2.5 py-1.5 rounded-md border border-white/5"><span className="text-zinc-500">Peso:</span> {insc.peso ? `${insc.peso} kg` : "—"}</span>
+                            <span className="text-[10px] font-bold text-zinc-300 bg-black px-2.5 py-1.5 rounded-md border border-white/5"><span className="text-zinc-500">Idade:</span> {insc.idade || "—"}</span>
+                            <span className="text-[10px] font-bold text-zinc-300 bg-black px-2.5 py-1.5 rounded-md border border-white/5"><span className="text-zinc-500">Sexo:</span> {insc.sexo || "—"}</span>
                           </div>
-                          <span className="text-[10px] font-bold text-yellow-500/90 bg-yellow-500/5 border border-yellow-500/10 px-2.5 py-1.5 rounded-md truncate w-full flex items-center gap-1.5" title={insc.categoria}>
-                            <Trophy size={12} /> {insc.categoria}
+                          <span className="text-[10px] font-bold text-yellow-500/90 bg-yellow-500/5 border border-yellow-500/10 px-2.5 py-1.5 rounded-md w-full" title={insc.categoria}>
+                            Peso: {pacote === 'absoluto' ? 'Sem categoria de peso' : (insc.categoria || '—')}
                           </span>
+                          <span className={`text-[10px] font-bold px-2.5 py-1.5 rounded-md border ${pacote === 'peso' ? 'text-zinc-500 bg-white/5 border-white/5' : 'text-purple-200 bg-purple-500/10 border-purple-500/20'}`}>
+                            Absoluto: {pacote === 'peso' ? 'Não inscrito' : 'Inscrito na chave'}
+                          </span>
+                          <p className="text-[10px] text-zinc-500">{chavesDoPacote(pacote).join(' + ')} · {formatarValorInscricao(Number(insc.valor_total || insc.valor_inscricao || 0))}</p>
                         </div>
                       </div>
 
-                      {/* RODAPÉ DE AÇÕES DISCRETO */}
                       <div className="relative z-10 flex flex-col gap-2 mt-auto border-t border-white/5 pt-4">
-                        
-                        {/* PAGAMENTO (VERDE SE PENDENTE, DISCRETO SE OK) */}
                         <button 
                           onClick={() => toggleStatus(insc.id, 'pagamento_ok', insc.pagamento_ok)}
                           disabled={loadingId === insc.id}
@@ -816,7 +838,7 @@ export default function AdminPage() {
                             onClick={() => setEditando(insc)} 
                             className="cursor-pointer flex-1 py-2 rounded-lg text-[9px] font-bold text-zinc-400 hover:text-white hover:bg-white/5 transition-colors uppercase tracking-widest active:scale-95 flex items-center justify-center gap-1.5 bg-transparent border border-transparent hover:border-white/10"
                           >
-                            <Edit3 size={12} /> Editar
+                            <Edit3 size={12} /> Ver / Editar
                           </button>
                           <button 
                             onClick={() => excluirInscricao(insc.id, insc.atleta || 'Atleta')} 
@@ -829,7 +851,8 @@ export default function AdminPage() {
                       </div>
 
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
                 )
               ) : (
@@ -937,9 +960,31 @@ export default function AdminPage() {
       {/* MODAL DE EDIÇÃO RÁPIDA */}
       {editando && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-[#0e0e12] border border-white/10 rounded-3xl w-full max-w-md p-6 shadow-2xl relative overflow-hidden">
-            <h3 className="text-xl font-black text-white mb-2 uppercase tracking-tighter relative z-10">Editar Inscrição</h3>
-            <p className="text-zinc-400 text-xs mb-6 relative z-10">Alterando dados do atleta <strong className="text-white">{editando.atleta}</strong></p>
+          <div className="bg-[#0e0e12] border border-white/10 rounded-3xl w-full max-w-lg p-6 shadow-2xl relative overflow-hidden max-h-[90vh] overflow-y-auto">
+            {(() => {
+              const pacote = pacoteInscricao(editando);
+              return (
+                <>
+            <h3 className="text-xl font-black text-white mb-1 uppercase tracking-tighter relative z-10">Inscrição do atleta</h3>
+            <p className="text-zinc-400 text-xs mb-5 relative z-10">{editando.eventos?.nome || 'Campeonato'} · <strong className="text-white">{editando.atleta}</strong></p>
+            <div className="mb-5 grid grid-cols-2 gap-2 relative z-10">
+              <div className="rounded-xl border border-white/10 bg-black/40 p-3">
+                <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Pacote</p>
+                <p className={`mt-1 inline-flex rounded-full border px-2 py-0.5 text-[10px] font-black uppercase ${classePacote(pacote)}`}>{rotuloPacoteInscricao(pacote)}</p>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-black/40 p-3">
+                <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Chaves</p>
+                <p className="mt-1 text-xs font-bold text-white">{chavesDoPacote(pacote).join(' + ')}</p>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-black/40 p-3">
+                <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Pagamento</p>
+                <p className={`mt-1 text-xs font-black ${editando.pagamento_ok ? 'text-green-400' : 'text-red-400'}`}>{editando.pagamento_ok ? 'Pago' : 'Pendente'} · {formatarValorInscricao(Number(editando.valor_total || editando.valor_inscricao || 0))}</p>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-black/40 p-3">
+                <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Dados</p>
+                <p className="mt-1 text-xs font-bold text-zinc-200">{editando.sexo || '—'} · {editando.idade || '—'} anos · {editando.email || 'sem e-mail'}</p>
+              </div>
+            </div>
             
             <div className="space-y-4 relative z-10">
               <div>
@@ -947,7 +992,7 @@ export default function AdminPage() {
                 <input type="text" value={editando.equipe || ''} onChange={e => setEditando({...editando, equipe: e.target.value})} className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-red-500 outline-none transition-colors" />
               </div>
               <div>
-                <label className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1 block pl-1">Categoria na Chave</label>
+                <label className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1 block pl-1">Categoria de peso</label>
                 <input type="text" value={editando.categoria || ''} onChange={e => setEditando({...editando, categoria: e.target.value})} className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-red-500 outline-none transition-colors" />
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -956,18 +1001,21 @@ export default function AdminPage() {
                   <input type="text" value={editando.faixa || ''} onChange={e => setEditando({...editando, faixa: e.target.value})} className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-red-500 outline-none transition-colors" />
                 </div>
                 <div>
-                  <label className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1 block pl-1">Peso Declarado</label>
+                  <label className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1 block pl-1">Peso declarado</label>
                   <input type="text" value={editando.peso || ''} onChange={e => setEditando({...editando, peso: e.target.value})} className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-red-500 outline-none transition-colors" />
                 </div>
               </div>
             </div>
             
             <div className="flex gap-3 mt-8 relative z-10">
-              <button onClick={() => setEditando(null)} className="cursor-pointer flex-1 py-3.5 rounded-xl bg-white/5 hover:bg-white/10 text-white font-bold text-xs uppercase tracking-widest transition-colors active:scale-95">Cancelar</button>
+              <button onClick={() => setEditando(null)} className="cursor-pointer flex-1 py-3.5 rounded-xl bg-white/5 hover:bg-white/10 text-white font-bold text-xs uppercase tracking-widest transition-colors active:scale-95">Fechar</button>
               <button onClick={salvarEdicaoAtleta} className="cursor-pointer flex-1 py-3.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-black text-xs uppercase tracking-widest transition-colors active:scale-95">
                 {loadingId === editando.id ? 'Salvando...' : 'Salvar Alterações'}
               </button>
             </div>
+                </>
+              );
+            })()}
           </div>
         </div>
       )}

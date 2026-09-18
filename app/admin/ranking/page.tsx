@@ -6,6 +6,43 @@ import { supabase } from '@/app/lib/supabase';
 import { CompeticaoShell, useEventoCompeticao } from '../_components/CompeticaoShell';
 import { calcularResultadosChaves, lerRegrasPontuacao } from '@/app/lib/ranking-eventos';
 
+type AtletaRanking = { atleta_id: string; nome: string; equipe: string; ouro: number; prata: number; bronze: number; pts: number };
+
+function TabelaRanking({ titulo, descricao, atletas }: { titulo: string; descricao: string; atletas: AtletaRanking[] }) {
+  return (
+    <section className="overflow-hidden rounded-2xl border border-white/10">
+      <div className="border-b border-white/10 bg-black/40 px-4 py-3">
+        <h3 className="text-sm font-black uppercase tracking-widest text-white">{titulo}</h3>
+        <p className="mt-1 text-xs text-zinc-500">{descricao}</p>
+      </div>
+      {atletas.length === 0 ? (
+        <p className="px-4 py-4 text-sm text-zinc-400">Ninguém pontuou nesta chave ainda.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-12 gap-2 bg-black/20 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-zinc-500">
+            <span className="col-span-5">Atleta</span>
+            <span className="col-span-3">Equipe</span>
+            <span className="col-span-1 text-center">Ouro</span>
+            <span className="col-span-1 text-center">Prata</span>
+            <span className="col-span-1 text-center">Bronze</span>
+            <span className="col-span-1 text-right">Pts</span>
+          </div>
+          {atletas.map((atleta) => (
+            <div key={`${titulo}-${atleta.atleta_id}`} className="grid grid-cols-12 gap-2 border-t border-white/5 px-4 py-3 text-sm">
+              <span className="col-span-5 font-bold text-white">{atleta.nome}</span>
+              <span className="col-span-3 truncate text-zinc-400">{atleta.equipe}</span>
+              <span className="col-span-1 text-center text-yellow-400">{atleta.ouro}</span>
+              <span className="col-span-1 text-center text-zinc-300">{atleta.prata}</span>
+              <span className="col-span-1 text-center text-orange-400">{atleta.bronze}</span>
+              <span className="col-span-1 text-right font-bold">{atleta.pts}</span>
+            </div>
+          ))}
+        </>
+      )}
+    </section>
+  );
+}
+
 export default function RankingOrganizadorPage() {
   const contexto = useEventoCompeticao();
   return (
@@ -26,7 +63,8 @@ function Editor({ eventoId }: { eventoId: string }) {
   const [erro, setErro] = useState('');
   const [lutasConcluidas, setLutasConcluidas] = useState(0);
   const [publicado, setPublicado] = useState(false);
-  const [atletas, setAtletas] = useState<Array<{ atleta_id: string; nome: string; equipe: string; ouro: number; prata: number; bronze: number; pts: number }>>([]);
+  const [atletasPeso, setAtletasPeso] = useState<AtletaRanking[]>([]);
+  const [atletasAbsoluto, setAtletasAbsoluto] = useState<AtletaRanking[]>([]);
 
   useEffect(() => {
     let ativo = true;
@@ -39,10 +77,12 @@ function Editor({ eventoId }: { eventoId: string }) {
       ]);
       if (!ativo) return;
       const regras = lerRegrasPontuacao(evento?.regras_pontuacao_equipes);
-      const resultado = calcularResultadosChaves(lutas || [], { [eventoId]: regras });
+      const peso = calcularResultadosChaves(lutas || [], { [eventoId]: regras }, 'peso');
+      const absoluto = calcularResultadosChaves(lutas || [], { [eventoId]: regras }, 'absoluto');
       setLutasConcluidas((lutas || []).length);
       setPublicado(regras.ranking_publicado === true);
-      setAtletas(resultado.atletas.sort((a, b) => b.pts - a.pts || b.ouro - a.ouro));
+      setAtletasPeso(peso.atletas.sort((a, b) => b.pts - a.pts || b.ouro - a.ouro));
+      setAtletasAbsoluto(absoluto.atletas.sort((a, b) => b.pts - a.pts || b.ouro - a.ouro));
       setCarregando(false);
     }
     void carregar();
@@ -91,7 +131,7 @@ function Editor({ eventoId }: { eventoId: string }) {
         <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">{lutasConcluidas} luta(s) concluída(s)</p>
         <h2 className="mt-1 text-xl font-black">{publicado ? 'Ranking publicado' : 'Publicar no ranking oficial'}</h2>
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-zinc-400">
-          Quem vê a página do evento abre as chaves para o pódio. O ranking junta medalhas e pontos deste campeonato. W.O. contra adversário real não pontua; bye após o check-in pontua.
+          Quem vê a página do evento abre as chaves para o pódio. O ranking separa categoria de peso e absoluto. O combo pontua nas duas listas, cada uma com o seu pódio. W.O. contra adversário real não pontua; bye após o check-in pontua.
         </p>
         <button
           onClick={() => void publicar()}
@@ -102,30 +142,14 @@ function Editor({ eventoId }: { eventoId: string }) {
         </button>
       </section>
 
-      {atletas.length === 0 ? (
+      {atletasPeso.length === 0 && atletasAbsoluto.length === 0 ? (
         <p className="rounded-xl border border-white/10 p-4 text-sm text-zinc-400">
           Ninguém pontuou ainda neste cálculo. Confira o pódio nas chaves. Se as lutas foram W.O. contra quem estava na chave, elas não entram no ranking.
         </p>
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-white/10">
-          <div className="grid grid-cols-12 gap-2 bg-black/40 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-zinc-500">
-            <span className="col-span-5">Atleta</span>
-            <span className="col-span-3">Equipe</span>
-            <span className="col-span-1 text-center">Ouro</span>
-            <span className="col-span-1 text-center">Prata</span>
-            <span className="col-span-1 text-center">Bronze</span>
-            <span className="col-span-1 text-right">Pts</span>
-          </div>
-          {atletas.map((atleta) => (
-            <div key={atleta.atleta_id} className="grid grid-cols-12 gap-2 border-t border-white/5 px-4 py-3 text-sm">
-              <span className="col-span-5 font-bold text-white">{atleta.nome}</span>
-              <span className="col-span-3 truncate text-zinc-400">{atleta.equipe}</span>
-              <span className="col-span-1 text-center text-yellow-400">{atleta.ouro}</span>
-              <span className="col-span-1 text-center text-zinc-300">{atleta.prata}</span>
-              <span className="col-span-1 text-center text-orange-400">{atleta.bronze}</span>
-              <span className="col-span-1 text-right font-bold">{atleta.pts}</span>
-            </div>
-          ))}
+        <div className="space-y-4">
+          <TabelaRanking titulo="Categoria de peso" descricao="Medalhas e pontos só das chaves de peso." atletas={atletasPeso} />
+          <TabelaRanking titulo="Absoluto" descricao="Medalhas e pontos só das chaves de absoluto. Quem fez o combo aparece aqui e na lista de peso." atletas={atletasAbsoluto} />
         </div>
       )}
 

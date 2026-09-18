@@ -5,7 +5,7 @@ import { supabase } from "../lib/supabase";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { absolutoDaInscricao, categoriaCompativel, idadeCompetitiva, rotuloCategoria, type CategoriaCompeticao } from '@/app/lib/categorias-competicao';
-import { tarifaInfantilAplicavel, valorAbsolutoAvulso, valorAddonAbsoluto, valorLoteVigente, type EventoValoresInscricao } from '@/app/lib/valor-inscricao';
+import { tarifaInfantilAplicavel, valorAbsolutoAvulso, valorAddonAbsoluto, valorLoteVigente, pacoteInscricao, pacoteDoTipoInscricao, podeAmpliarPacote, pacoteAposAmpliar, rotuloPacoteInscricao, calcularValorInscricao, valorAindaDevido, type EventoValoresInscricao } from '@/app/lib/valor-inscricao';
 import { urlLoginComRetorno } from '@/app/lib/destino-interno';
 
 type PerfilCompetidor = {
@@ -65,6 +65,16 @@ function FormularioInscricao() {
   const [observacoes, setObservacoes] = useState("");
   const [tipoInscricao, setTipoInscricao] = useState("peso");
   const [termoAceito, setTermoAceito] = useState(false);
+  const [inscricaoAtual, setInscricaoAtual] = useState<{
+    id: string | number;
+    absoluto?: boolean | null;
+    categoria?: string | null;
+    categoria_id?: string | null;
+    pagamento_ok?: boolean | null;
+    valor_inscricao?: number | string | null;
+    valor_total?: number | string | null;
+    cupom_id?: string | null;
+  } | null>(null);
 
   // Estados do Cupom
   const [cupom, setCupom] = useState("");
@@ -192,8 +202,27 @@ function FormularioInscricao() {
     carregarAmbiente();
   }, [eventoId, router]);
 
+  useEffect(() => {
+    let ativo = true;
+    async function carregarInscricaoAtual() {
+      if (!eventoId || !competidorUserId) {
+        if (ativo) setInscricaoAtual(null);
+        return;
+      }
+      const { data } = await supabase
+        .from("inscricoes")
+        .select("id,absoluto,categoria,categoria_id,pagamento_ok,valor_inscricao,valor_total,cupom_id")
+        .eq("evento_id", eventoId)
+        .or(`user_id.eq.${competidorUserId},atleta_id.eq.${atletaId || 0}`)
+        .limit(1);
+      if (ativo) setInscricaoAtual(data?.[0] || null);
+    }
+    void carregarInscricaoAtual();
+    return () => { ativo = false; };
+  }, [eventoId, competidorUserId, atletaId]);
+
   const categoriasElegiveis = categoriasEvento.filter(c => c.tipo === 'peso' && categoriaCompativel(c, { idade, sexo, faixa, peso: pesoReal }));
-  const absolutoElegivel = absolutoDaInscricao({ idade, sexo, faixa, modalidade }, categoriasEvento);
+  const absolutoElegivel = absolutoDaInscricao({ idade, sexo, faixa, modalidade, peso: pesoReal }, categoriasEvento);
   const pesoElegivel = categoriasElegiveis.length > 0;
   useEffect(() => {
     if (categoriaId && !categoriasElegiveis.some(c => c.id === categoriaId)) { setCategoriaId(''); setCategoria(''); }
@@ -217,6 +246,11 @@ function FormularioInscricao() {
       : valorLoteAtual;
   const valorTotal = Math.max(0, valorBase - desconto);
   const isGratis = valorBase === 0;
+  const pacoteJaInscrito = inscricaoAtual ? pacoteInscricao(inscricaoAtual) : null;
+  const jaNoCombo = pacoteJaInscrito === "combo";
+  const ampliandoPacote = Boolean(pacoteJaInscrito && podeAmpliarPacote(pacoteJaInscrito, pacoteDoTipoInscricao(tipoInscricao)));
+  const precisaCategoriaPeso = tipoInscricao !== "absoluto" && !(pacoteJaInscrito === "peso" && tipoInscricao === "absoluto");
+  const inscricaoBloqueadaPorPeriodo = inscricoesEncerradas && !(inscricaoAtual && motivoInscricaoIndisponivel.includes("vagas deste campeonato esgotaram"));
 
   async function aplicarCupom() {
     if (!cupom || !eventoId) return;
@@ -264,7 +298,13 @@ function FormularioInscricao() {
       return;
     }
 
-    if (inscricoesEncerradas) {
+    if (inscricoesEncerradas && !inscricaoAtual) {
+      setErro(motivoInscricaoIndisponivel || "As inscrições deste evento não estão disponíveis.");
+      setProcessando(false);
+      return;
+    }
+
+    if (inscricoesEncerradas && inscricaoAtual && !motivoInscricaoIndisponivel.includes("vagas deste campeonato esgotaram")) {
       setErro(motivoInscricaoIndisponivel || "As inscrições deste evento não estão disponíveis.");
       setProcessando(false);
       return;
@@ -276,7 +316,7 @@ function FormularioInscricao() {
       return;
     }
 
-    if (limiteVagas > 0 && eventoId) {
+    if (limiteVagas > 0 && eventoId && !inscricaoAtual) {
       const { count: ocupadas } = await supabase.from("inscricoes").select("id", { count: "exact", head: true }).eq("evento_id", eventoId);
       if ((ocupadas || 0) >= limiteVagas) {
         setInscricoesEncerradas(true);
@@ -339,17 +379,27 @@ function FormularioInscricao() {
 
     const { data: inscricaoExistente } = await supabase
       .from("inscricoes")
-      .select("id")
+      .select("id,absoluto,categoria,categoria_id,pagamento_ok,valor_inscricao,valor_total,cupom_id,modalidade")
       .eq("evento_id", eventoId)
       .or(`user_id.eq.${userIdInscricao},atleta_id.eq.${atletaId || 0}`);
 
-    if (inscricaoExistente && inscricaoExistente.length > 0) {
-      setErro("Este atleta já está inscrito neste campeonato.");
+    const existente = inscricaoExistente?.[0] || null;
+    const pacoteAtual = existente ? pacoteInscricao(existente) : null;
+    const pacoteDesejado = pacoteDoTipoInscricao(tipoInscricao);
+    const ampliando = Boolean(existente && pacoteAtual && podeAmpliarPacote(pacoteAtual, pacoteDesejado));
+    const pacoteFinal = existente && pacoteAtual
+      ? (ampliando ? pacoteAposAmpliar(pacoteAtual, pacoteDesejado) : pacoteAtual)
+      : pacoteDesejado;
+
+    if (existente && !ampliando) {
+      setErro(pacoteAtual === "combo"
+        ? "Este atleta já está nas chaves de peso e absoluto deste campeonato."
+        : `Este atleta já está inscrito neste campeonato (${rotuloPacoteInscricao(pacoteAtual || "peso").toLowerCase()}).`);
       setProcessando(false);
       return;
     }
 
-    if (cpfAtleta) {
+    if (!ampliando && cpfAtleta) {
       const { data: cpfJaInscrito, error: erroCpf } = await supabase.rpc('cpf_inscrito_no_evento', {
         p_evento_id: eventoId,
         p_cpf: cpfAtleta,
@@ -368,7 +418,7 @@ function FormularioInscricao() {
       }
     }
 
-    if (emailAtleta && userIdInscricao === usuarioAtualId) {
+    if (!ampliando && emailAtleta && userIdInscricao === usuarioAtualId) {
       const { data: inscricaoMesmoEmail, error: erroEmail } = await supabase
         .from("inscricoes")
         .select("id")
@@ -383,8 +433,11 @@ function FormularioInscricao() {
     }
 
     const equipeOficial = equipesEvento.find(eq => eq.id === equipeId);
-    let isLiberado = !cupomAplicado && valorTotal === 0;
-    const soAbsoluto = tipoInscricao === "absoluto";
+    const categoriaPesoNome = existente?.categoria && String(existente.categoria).trim().toLowerCase() !== "absoluto"
+      ? existente.categoria
+      : categoria;
+    const categoriaPesoId = existente?.categoria_id || categoriaId;
+    const soAbsoluto = pacoteFinal === "absoluto";
     const inscricaoParaSalvar = {
       user_id: userIdInscricao,
       atleta_id: atletaId,
@@ -392,32 +445,68 @@ function FormularioInscricao() {
       equipe: equipeOficial?.nome || equipe,
       faixa,
       sexo,
-      categoria: soAbsoluto ? "Absoluto" : categoria,
+      categoria: soAbsoluto ? "Absoluto" : categoriaPesoNome,
       ...(soAbsoluto
         ? { modalidade: absolutoElegivel?.modalidade || modalidade }
-        : categoriaId
-          ? { categoria_id: categoriaId, modalidade: categoriasEvento.find(c => c.id === categoriaId)?.modalidade }
+        : categoriaPesoId
+          ? { categoria_id: categoriaPesoId, modalidade: categoriasEvento.find(c => c.id === categoriaPesoId)?.modalidade || existente?.modalidade || modalidade }
           : { modalidade }),
       ...(equipeId ? { equipe_id: equipeId } : {}),
-      absoluto: tipoInscricao !== "peso",
+      absoluto: pacoteFinal !== "peso",
       idade,
       observacoes,
       peso: pesoReal,
       evento_id: eventoId,
-      pagamento_ok: isLiberado,
+      pagamento_ok: false,
       valor_inscricao: valorBase,
       valor_total: cupomAplicado ? valorBase : valorTotal,
       cpf: cpfAtleta || null,
       email: emailAtleta || null
     };
 
-    let { data: inscricaoCriada, error } = await supabase.from("inscricoes").insert([inscricaoParaSalvar]).select("id").single();
+    if (ampliando && existente) {
+      const novaInscricao = { ...existente, ...inscricaoParaSalvar, absoluto: pacoteFinal !== "peso" };
+      const devidoNovo = eventoValores ? calcularValorInscricao(novaInscricao, eventoValores) : valorBase;
+      if (existente.pagamento_ok) {
+        inscricaoParaSalvar.pagamento_ok = true;
+        inscricaoParaSalvar.valor_inscricao = Number(existente.valor_inscricao || 0);
+        inscricaoParaSalvar.valor_total = Number(existente.valor_total || existente.valor_inscricao || 0);
+      } else {
+        inscricaoParaSalvar.valor_inscricao = devidoNovo;
+        inscricaoParaSalvar.valor_total = cupomAplicado ? devidoNovo : Math.max(0, devidoNovo - desconto);
+      }
+    }
 
-    if (error && (error.message.toLowerCase().includes("cpf") || error.message.toLowerCase().includes("email"))) {
-      const { cpf, email, ...payloadSemCamposNovos } = inscricaoParaSalvar;
-      const retry = await supabase.from("inscricoes").insert([payloadSemCamposNovos]).select("id").single();
-      error = retry.error;
-      inscricaoCriada = retry.data;
+    let isLiberado = !cupomAplicado && Number(inscricaoParaSalvar.valor_total || 0) === 0;
+    if (ampliando && existente?.pagamento_ok && eventoValores) {
+      isLiberado = valorAindaDevido({ ...existente, ...inscricaoParaSalvar, pagamento_ok: true }, eventoValores) === 0;
+      inscricaoParaSalvar.pagamento_ok = isLiberado || Boolean(existente.pagamento_ok);
+    } else {
+      inscricaoParaSalvar.pagamento_ok = isLiberado;
+    }
+
+    let inscricaoCriada: { id: string | number } | null = null;
+    let error: { message: string } | null = null;
+
+    if (ampliando && existente) {
+      const { data: atualizada, error: erroUpdate } = await supabase
+        .from("inscricoes")
+        .update(inscricaoParaSalvar)
+        .eq("id", existente.id)
+        .select("id")
+        .single();
+      error = erroUpdate;
+      inscricaoCriada = atualizada;
+    } else {
+      const insert = await supabase.from("inscricoes").insert([inscricaoParaSalvar]).select("id").single();
+      error = insert.error;
+      inscricaoCriada = insert.data;
+      if (error && (error.message.toLowerCase().includes("cpf") || error.message.toLowerCase().includes("email"))) {
+        const { cpf, email, ...payloadSemCamposNovos } = inscricaoParaSalvar;
+        const retry = await supabase.from("inscricoes").insert([payloadSemCamposNovos]).select("id").single();
+        error = retry.error;
+        inscricaoCriada = retry.data;
+      }
     }
 
     if (error) {
@@ -428,8 +517,9 @@ function FormularioInscricao() {
 
     const { data: sessao } = await supabase.auth.getSession();
     const authorization = `Bearer ${sessao.session?.access_token || ""}`;
+    const jaTinhaCupom = Boolean(existente?.cupom_id);
 
-    if (cupomAplicado && inscricaoCriada?.id) {
+    if (cupomAplicado && inscricaoCriada?.id && !jaTinhaCupom) {
       const response = await fetch("/api/vouchers/aplicar", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: authorization },
@@ -437,23 +527,34 @@ function FormularioInscricao() {
       });
       const resultado = await response.json();
       if (!response.ok) {
-        await supabase.from("inscricoes").delete().eq("id", inscricaoCriada.id);
+        if (!ampliando) await supabase.from("inscricoes").delete().eq("id", inscricaoCriada.id);
         setErro(resultado.error || "Não foi possível reservar esta cortesia.");
         setProcessando(false);
         return;
       }
       isLiberado = resultado.gratuito === true;
-    } else if (isLiberado && inscricaoCriada?.id) {
+      if (isLiberado) {
+        await supabase.from("inscricoes").update({ pagamento_ok: true }).eq("id", inscricaoCriada.id);
+      }
+    } else if (isLiberado && inscricaoCriada?.id && !ampliando) {
       await fetch("/api/enviar-ingresso-confirmado", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: authorization },
         body: JSON.stringify({ inscricaoId: inscricaoCriada.id }),
       });
-    } else if (inscricaoCriada?.id) {
+    } else if (inscricaoCriada?.id && !(ampliando && existente?.pagamento_ok && isLiberado)) {
       await fetch("/api/enviar-pagamento-pendente", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: authorization },
         body: JSON.stringify({ inscricaoId: inscricaoCriada.id, meio: "inscricao" }),
+      });
+    }
+
+    if (isLiberado && inscricaoCriada?.id && ampliando) {
+      await fetch("/api/enviar-ingresso-confirmado", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: authorization },
+        body: JSON.stringify({ inscricaoId: inscricaoCriada.id }),
       });
     }
 
@@ -500,7 +601,7 @@ function FormularioInscricao() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-5">
-          {inscricoesEncerradas && (
+          {inscricaoBloqueadaPorPeriodo && (
             <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4">
               <p className="text-red-400 font-bold text-xs uppercase tracking-widest mb-1">Inscrições encerradas</p>
               <p className="text-red-100/70 text-xs">{motivoInscricaoIndisponivel || "As inscrições deste evento não estão disponíveis."}</p>
@@ -589,6 +690,15 @@ function FormularioInscricao() {
           <section className="bg-[#0a0a0e] border border-white/5 rounded-2xl p-5 md:p-6 shadow-xl">
             <h2 className="text-xs font-black text-white uppercase tracking-widest mb-2">Escolha seu Pacote</h2>
             <p className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest mb-5">Modalidade: <strong className="text-white">{nomeLoteAtual}</strong>{usaTarifaInfantil ? <span className="ml-2 rounded bg-cyan-500/20 px-2 py-0.5 text-cyan-300">Tarifa infantil</span> : null}</p>
+            {pacoteJaInscrito && (
+              <p className={`mb-4 rounded-xl border p-3 text-[11px] leading-relaxed ${jaNoCombo ? "border-green-500/20 bg-green-500/10 text-green-200" : "border-amber-500/20 bg-amber-500/10 text-amber-100"}`}>
+                {jaNoCombo
+                  ? "Este atleta já está nas duas chaves: categoria de peso e absoluto."
+                  : pacoteJaInscrito === "peso"
+                    ? "Este atleta já está na categoria de peso. Escolha Absoluto ou o combo para entrar também na chave de absoluto — sem criar uma segunda inscrição."
+                    : "Este atleta já está só no absoluto. Escolha a categoria de peso ou o combo para entrar também na chave de peso."}
+              </p>
+            )}
 
             <div className="space-y-2.5">
               {pesoElegivel && (
@@ -671,8 +781,8 @@ function FormularioInscricao() {
 
             {erro && <div className="mb-4 bg-red-500/10 border border-red-500/20 text-red-400 text-[10px] rounded-lg p-3 text-center font-bold">❌ {erro}</div>}
 
-            <button disabled={processando || perfilIncompleto || !categoriaId || !termoAceito || inscricoesEncerradas || tabelaCarregando || !!tabelaErro || !categoriasEvento.length || (equipesEvento.length > 0 && !equipeId)} className="cursor-pointer w-full bg-red-600 hover:bg-red-500 text-white font-black uppercase tracking-widest text-[11px] py-4 rounded-xl shadow-[0_0_15px_rgba(239,68,68,0.3)] transition-all disabled:opacity-50 flex items-center justify-center" onClick={finalizarInscricao}>
-              {processando ? "Salvando Inscrição..." : "Confirmar Inscrição Oficial"}
+            <button disabled={processando || perfilIncompleto || (precisaCategoriaPeso && !categoriaId) || !termoAceito || inscricaoBloqueadaPorPeriodo || jaNoCombo || tabelaCarregando || !!tabelaErro || !categoriasEvento.length || (equipesEvento.length > 0 && !equipeId)} className="cursor-pointer w-full bg-red-600 hover:bg-red-500 text-white font-black uppercase tracking-widest text-[11px] py-4 rounded-xl shadow-[0_0_15px_rgba(239,68,68,0.3)] transition-all disabled:opacity-50 flex items-center justify-center" onClick={finalizarInscricao}>
+              {processando ? "Salvando Inscrição..." : jaNoCombo ? "Já inscrito nas duas chaves" : ampliandoPacote ? (pacoteJaInscrito === "peso" ? "Adicionar absoluto à inscrição" : "Adicionar categoria de peso") : "Confirmar Inscrição Oficial"}
             </button>
           </div>
         </div>

@@ -2,8 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   calcularValorInscricao,
+  pacoteAposAmpliar,
+  pacoteInscricao,
+  podeAmpliarPacote,
   tarifaInfantilAplicavel,
   valorAddonAbsoluto,
+  valorAindaDevido,
   valorLoteVigente,
 } from "../app/lib/valor-inscricao";
 
@@ -71,4 +75,22 @@ test("sem preço infantil no lote vigente, a criança paga o adulto", () => {
     regras_pontuacao_equipes: { valor_absoluto: 40, lote2_valor_infantil: 90 },
   };
   assert.equal(valorLoteVigente(semLote1, new Date("2026-09-17"), 10), 120);
+});
+
+test("quem já está no peso pode acrescentar absoluto e vira combo", () => {
+  assert.equal(pacoteInscricao({ absoluto: false, categoria: "Galo" }), "peso");
+  assert.equal(pacoteInscricao({ absoluto: true, categoria: "Absoluto" }), "absoluto");
+  assert.equal(pacoteInscricao({ absoluto: true, categoria: "Galo" }), "combo");
+  assert.equal(podeAmpliarPacote("peso", "absoluto"), true);
+  assert.equal(podeAmpliarPacote("peso", "combo"), true);
+  assert.equal(podeAmpliarPacote("peso", "peso"), false);
+  assert.equal(podeAmpliarPacote("combo", "absoluto"), false);
+  assert.equal(pacoteAposAmpliar("peso", "absoluto"), "combo");
+  assert.equal(pacoteAposAmpliar("absoluto", "peso"), "combo");
+});
+
+test("upgrade de inscrição paga só cobra a diferença do combo", () => {
+  const pagaPeso = { absoluto: true, categoria: "Galo", idade: 25, pagamento_ok: true, valor_inscricao: 120 };
+  assert.equal(valorAindaDevido(pagaPeso, evento), 40);
+  assert.equal(valorAindaDevido({ ...pagaPeso, absoluto: false }, evento), 0);
 });

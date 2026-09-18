@@ -50,10 +50,25 @@ export function divisaoEtaria(idade: number) {
   return `Master ${Math.min(7, Math.floor((idade - 30) / 5) + 1)}`;
 }
 
+export function categoriaPesoLivre(c: Pick<CategoriaCompeticao, 'peso_min' | 'peso_max' | 'tipo'>) {
+  return c.tipo === 'absoluto' && !(Number(c.peso_min) > 0) && c.peso_max == null;
+}
+
+export function pesoNaFaixaCategoria(c: Pick<CategoriaCompeticao, 'peso_min' | 'peso_max'>, i: Pick<InscricaoCompeticao, 'peso'>) {
+  const peso = Number(String(i.peso ?? '').replace(',', '.'));
+  return i.peso !== '' && i.peso != null && Number.isFinite(peso) && peso > c.peso_min && (c.peso_max == null || peso <= c.peso_max);
+}
+
+export function rotuloPesoCategoria(c: CategoriaCompeticao) {
+  const faixaPeso = c.peso_max == null ? `Acima de ${c.peso_min} kg` : `${c.peso_min} a ${c.peso_max} kg`;
+  if (c.tipo === 'absoluto' && categoriaPesoLivre(c)) return 'Absoluto';
+  if (c.tipo === 'absoluto') return `Absoluto · ${faixaPeso}`;
+  return faixaPeso;
+}
+
 export function rotuloCategoria(c: CategoriaCompeticao) {
-  const peso = c.tipo === 'absoluto' ? 'Absoluto' : c.peso_max == null ? `Acima de ${c.peso_min} kg` : `${c.peso_min} a ${c.peso_max} kg`;
   const faixa = faixaEhLivre(c.faixa) ? FAIXA_TODAS_AS_FAIXAS : (faixasDaCategoria(c.faixa).join(' · ') || c.faixa);
-  return [c.modalidade, semFaixaDuplicada(c.nome, faixa), faixa, `${c.idade_min}-${c.idade_max} anos`, c.sexo, peso]
+  return [c.modalidade, semFaixaDuplicada(c.nome, faixa), faixa, `${c.idade_min}-${c.idade_max} anos`, c.sexo, rotuloPesoCategoria(c)]
     .filter(Boolean).join(' · ');
 }
 
@@ -67,9 +82,8 @@ export function categoriaCompativelSemPeso(c: CategoriaCompeticao, i: InscricaoC
 }
 
 export function categoriaCompativel(c: CategoriaCompeticao, i: InscricaoCompeticao) {
-  const peso = Number(String(i.peso ?? '').replace(',', '.'));
   return categoriaCompativelSemPeso(c, i)
-    && (c.tipo === 'absoluto' || (i.peso !== '' && i.peso != null && Number.isFinite(peso) && peso > c.peso_min && (c.peso_max == null || peso <= c.peso_max)));
+    && (c.tipo === 'absoluto' || pesoNaFaixaCategoria(c, i));
 }
 
 /** Sem categoria de origem estruturada, exige nova medição para qualquer migração. */
@@ -125,7 +139,8 @@ export function categoriaAbsolutoCompativel(c: CategoriaCompeticao, i: Inscricao
   if (idade < c.idade_min || idade > c.idade_max) return false;
   if (normalizarCompeticao(i.sexo) !== normalizarCompeticao(c.sexo)) return false;
   if (i.modalidade && normalizarCompeticao(i.modalidade) !== normalizarCompeticao(c.modalidade)) return false;
-  return faixaAtletaCompativel(c.faixa, i.faixa);
+  if (!faixaAtletaCompativel(c.faixa, i.faixa)) return false;
+  return categoriaPesoLivre(c) || pesoNaFaixaCategoria(c, i);
 }
 
 export function absolutoDaInscricao(i: InscricaoCompeticao, categorias: CategoriaCompeticao[]) {

@@ -4,7 +4,7 @@ import { calcularComissaoMarketplace } from "@/app/lib/planos-comerciais";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
 import { obterAccessTokenOrganizador } from "@/app/lib/mercado-pago-integracao";
 import { autenticarRequest } from "@/app/lib/api-auth";
-import { calcularValorInscricao } from "@/app/lib/valor-inscricao";
+import { aplicarDescontoCupom, calcularValorInscricao, valorAindaDevido } from "@/app/lib/valor-inscricao";
 import { usuarioGerenciaInscricao } from "@/app/lib/inscricao-autorizacao";
 
 type EventoPagamento = {
@@ -25,15 +25,16 @@ function getBaseUrl(request: Request) {
   return process.env.NEXT_PUBLIC_BASE_URL || origin;
 }
 
-async function calcularValorCobrado(supabase: ReturnType<typeof createSupabaseServerClient>, inscricao: any, evento: EventoPagamento) {
-  const base = calcularValorInscricao(inscricao, evento);
-  if (!inscricao.cupom_id) return base;
-  const { data: cupom } = await supabase.from("cupons").select("desconto_porcentagem, desconto_valor").eq("id", inscricao.cupom_id).eq("evento_id", evento.id).maybeSingle();
-  if (!cupom) return base;
-  const desconto = Number(cupom.desconto_porcentagem || 0) > 0
-    ? base * Math.min(100, Number(cupom.desconto_porcentagem)) / 100
-    : Number(cupom.desconto_valor || 0);
-  return Number(Math.max(0, base - desconto).toFixed(2));
+async function calcularValoresCobranca(supabase: ReturnType<typeof createSupabaseServerClient>, inscricao: any, evento: EventoPagamento) {
+  let cupom = null;
+  if (inscricao.cupom_id) {
+    const { data } = await supabase.from("cupons").select("desconto_porcentagem, desconto_valor").eq("id", inscricao.cupom_id).eq("evento_id", evento.id).maybeSingle();
+    cupom = data;
+  }
+  return {
+    devidoCheio: aplicarDescontoCupom(calcularValorInscricao(inscricao, evento), cupom),
+    aCobrar: valorAindaDevido(inscricao, evento, cupom),
+  };
 }
 
 export async function POST(request: Request) {
@@ -62,6 +63,8 @@ export async function POST(request: Request) {
         idade,
         pagamento_ok,
         cupom_id,
+        valor_inscricao,
+        valor_total,
         evento_id,
         eventos (
           id,
@@ -72,6 +75,7 @@ export async function POST(request: Request) {
           lote2_valor,
           lote2_data_fim,
           lote3_valor,
+          valor_absoluto,
           regras_pontuacao_equipes
         )
       `)
@@ -83,10 +87,6 @@ export async function POST(request: Request) {
     }
     if (!(await usuarioGerenciaInscricao(supabase, usuario.id, inscricao.user_id))) {
       return NextResponse.json({ error: "Inscrição não autorizada para este usuário." }, { status: 403 });
-    }
-
-    if (inscricao.pagamento_ok) {
-      return NextResponse.json({ pago: true });
     }
 
     const evento = Array.isArray(inscricao.eventos) ? inscricao.eventos[0] : inscricao.eventos;
@@ -110,11 +110,12 @@ export async function POST(request: Request) {
     const accessToken = await obterAccessTokenOrganizador(request, organizador, supabase);
     if (!accessToken) return NextResponse.json({ error: "A conexão Mercado Pago do organizador expirou. Solicite uma nova conexão." }, { status: 409 });
 
-    const valorTotal = await calcularValorCobrado(supabase, inscricao, evento);
-    if (valorTotal <= 0) {
-      await supabase.from("inscricoes").update({ pagamento_ok: true }).eq("id", inscricao.id);
+    const { devidoCheio, aCobrar } = await calcularValoresCobranca(supabase, inscricao, evento);
+    if (aCobrar <= 0) {
+      await supabase.from("inscricoes").update({ pagamento_ok: true, valor_inscricao: devidoCheio }).eq("id", inscricao.id);
       return NextResponse.json({ pago: true });
     }
+    const valorTotal = aCobrar;
 
     const comissao = calcularComissaoMarketplace(valorTotal, organizador.plano_comercial);
     const baseUrl = getBaseUrl(request);
@@ -158,14 +159,12 @@ export async function POST(request: Request) {
     const preferenceData = await preferenceResponse.json();
 
     if (preferenceData?.id) {
-      await supabase
-        .from("inscricoes")
-        .update({
-          valor_inscricao: valorTotal,
-          valor_total: comissao.valorTotal,
-          mp_preference_id: String(preferenceData.id),
-        })
-        .eq("id", inscricao.id);
+      const update: Record<string, string | number> = { mp_preference_id: String(preferenceData.id) };
+      if (!inscricao.pagamento_ok) {
+        update.valor_inscricao = valorTotal;
+        update.valor_total = comissao.valorTotal;
+      }
+      await supabase.from("inscricoes").update(update).eq("id", inscricao.id);
     }
 
     if (!preferenceResponse.ok || !preferenceData.id) {

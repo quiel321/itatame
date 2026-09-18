@@ -105,6 +105,88 @@ test("a chave de absoluto não mistura os dois grupos cadastrados", () => {
   assert.equal(grupoInscricao({ idade: 40, sexo: "Masculino", faixa: "Preta", modalidade: "Jiu-Jitsu", categoria: "Pesado" }, "absoluto", categorias).categoria_id, "abs-masc-todas");
 });
 
+test("combo entra na chave de peso e na de absoluto", () => {
+  const galo: CategoriaCompeticao = {
+    id: "galo",
+    evento_id: "evt",
+    nome: "Galo",
+    modalidade: "Jiu-Jitsu",
+    sexo: "Masculino",
+    faixa: "Azul",
+    idade_min: 16,
+    idade_max: 100,
+    peso_min: 0,
+    peso_max: 57.5,
+    tempo_minutos: 5,
+    tipo: "peso",
+    ativa: true,
+  };
+  const inscrito = {
+    id: 1,
+    atleta: "Alex",
+    atleta_id: 1,
+    absoluto: true,
+    idade: 25,
+    sexo: "Masculino",
+    faixa: "Azul",
+    modalidade: "Jiu-Jitsu",
+    categoria: "Galo",
+    categoria_id: "galo",
+    equipe: "L",
+    peso: 56,
+  };
+  const peso = prepararGrupos([inscrito], "peso", [galo, masculinoTodas]);
+  const absoluto = prepararGrupos([inscrito], "absoluto", [galo, masculinoTodas]);
+  assert.equal(Object.keys(peso.grupos).length, 1);
+  assert.equal(Object.keys(absoluto.grupos).length, 1);
+});
+
+test("absoluto com faixa de peso só aceita atleta dentro do intervalo", () => {
+  const absolutoLeve: CategoriaCompeticao = {
+    ...masculinoTodas,
+    id: "abs-leve",
+    peso_min: 0,
+    peso_max: 76,
+  };
+  assert.equal(absolutoDaInscricao({ idade: 28, sexo: "Masculino", faixa: "Azul", modalidade: "Jiu-Jitsu", peso: 70 }, [absolutoLeve])?.id, "abs-leve");
+  assert.equal(absolutoDaInscricao({ idade: 28, sexo: "Masculino", faixa: "Azul", modalidade: "Jiu-Jitsu", peso: 90 }, [absolutoLeve]), null);
+});
+
+test("ranking trata ouro de peso e ouro de absoluto como categorias distintas", () => {
+  const peso = {
+    status_luta: "concluida",
+    fase: "Final",
+    id_visual: "999",
+    metodo_vitoria: "finalizacao",
+    categoria: "Jiu-Jitsu · Galo · Azul · 16-100 anos · Masculino · 0 a 57.5 kg",
+    evento_id: "evt",
+    vencedor: "Alex",
+    vencedor_id: 1,
+    atleta_1: "Alex",
+    atleta_1_id: 1,
+    equipe_1: "L",
+    atleta_2: "Bruno",
+    atleta_2_id: 2,
+    equipe_2: "M",
+  };
+  const absoluto = {
+    ...peso,
+    categoria: "Jiu-Jitsu · Absoluto · Todas as faixas · 16-100 anos · Masculino · Absoluto",
+    vencedor: "Alex",
+    atleta_2: "Caio",
+    atleta_2_id: 3,
+    equipe_2: "N",
+  };
+  const juntos = calcularResultadosChaves([peso, absoluto], { evt: { absoluto_pontua: true } });
+  assert.equal(juntos.atletas.find(atleta => atleta.atleta_id === "1")?.ouro, 2);
+  const soPeso = calcularResultadosChaves([peso, absoluto], { evt: { absoluto_pontua: true } }, "peso");
+  const soAbsoluto = calcularResultadosChaves([peso, absoluto], { evt: { absoluto_pontua: true } }, "absoluto");
+  assert.equal(soPeso.atletas.find(atleta => atleta.atleta_id === "1")?.ouro, 1);
+  assert.equal(soAbsoluto.atletas.find(atleta => atleta.atleta_id === "1")?.ouro, 1);
+  assert.equal(soPeso.atletas.find(atleta => atleta.atleta_id === "3"), undefined);
+  assert.equal(soAbsoluto.atletas.find(atleta => atleta.atleta_id === "2"), undefined);
+});
+
 test("mirim inscrito só no absoluto entra na chave de absoluto e não na de peso", () => {
   const absolutoMirim: CategoriaCompeticao = {
     ...femininoBranca,
