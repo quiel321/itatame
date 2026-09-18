@@ -84,6 +84,7 @@ function FormularioInscricao() {
 
   const [inscricaoFeita, setInscricaoFeita] = useState(false);
   const [erro, setErro] = useState("");
+  const [camposInvalidos, setCamposInvalidos] = useState<string[]>([]);
   const [processando, setProcessando] = useState(false);
 
   const perfilIncompleto = !nome || !equipe || !faixa || !atletaId;
@@ -249,8 +250,34 @@ function FormularioInscricao() {
   const pacoteJaInscrito = inscricaoAtual ? pacoteInscricao(inscricaoAtual) : null;
   const jaNoCombo = pacoteJaInscrito === "combo";
   const ampliandoPacote = Boolean(pacoteJaInscrito && podeAmpliarPacote(pacoteJaInscrito, pacoteDoTipoInscricao(tipoInscricao)));
-  const precisaCategoriaPeso = tipoInscricao !== "absoluto" && !(pacoteJaInscrito === "peso" && tipoInscricao === "absoluto");
+  const jaTemCategoriaPeso = Boolean(inscricaoAtual?.categoria_id || (inscricaoAtual?.categoria && String(inscricaoAtual.categoria).trim().toLowerCase() !== "absoluto"));
+  const precisaCategoriaPeso = tipoInscricao !== "absoluto" && !jaTemCategoriaPeso;
   const inscricaoBloqueadaPorPeriodo = inscricoesEncerradas && !(inscricaoAtual && motivoInscricaoIndisponivel.includes("vagas deste campeonato esgotaram"));
+
+  function classeCampo(campo: string) {
+    return camposInvalidos.includes(campo)
+      ? "border-red-500 ring-1 ring-red-500/60"
+      : "border-white/10";
+  }
+
+  function limparCampoInvalido(campo: string) {
+    setCamposInvalidos((atuais) => atuais.filter((item) => item !== campo));
+  }
+
+  function apontarCampos(faltando: { campo: string; mensagem: string }[]) {
+    setCamposInvalidos(faltando.map((item) => item.campo));
+    setErro(faltando.length === 1
+      ? faltando[0].mensagem
+      : `Não dá para confirmar ainda. ${faltando.map((item) => item.mensagem).join(" ")}`);
+    setProcessando(false);
+    const primeiro = faltando[0]?.campo;
+    window.setTimeout(() => {
+      const alvo = document.getElementById(`inscricao-${primeiro}`);
+      alvo?.scrollIntoView({ behavior: "smooth", block: "center" });
+      const focavel = alvo?.querySelector("select, input:not([disabled]):not([type=hidden]), textarea, a") as HTMLElement | null;
+      focavel?.focus({ preventScroll: true });
+    }, 50);
+  }
 
   async function aplicarCupom() {
     if (!cupom || !eventoId) return;
@@ -291,10 +318,31 @@ function FormularioInscricao() {
   async function finalizarInscricao() {
     setProcessando(true);
     setErro("");
+    setCamposInvalidos([]);
 
+    const faltando: { campo: string; mensagem: string }[] = [];
     if (perfilIncompleto) {
-      setErro("Complete nome, equipe e faixa deste atleta no perfil antes de inscrever.");
-      setProcessando(false);
+      faltando.push({ campo: "perfil", mensagem: "Complete nome, equipe e faixa deste atleta no perfil." });
+    }
+    if (!idade || !Number.isInteger(Number(idade)) || Number(idade) < 4 || Number(idade) > 100) {
+      faltando.push({ campo: "idade", mensagem: "Informe a idade na data do evento." });
+    }
+    if (precisaCategoriaPeso && !categoriaId) {
+      faltando.push({
+        campo: "categoria",
+        mensagem: categoriasElegiveis.length
+          ? "Selecione a categoria de peso."
+          : "Não há categoria de peso compatível. Confira idade, faixa e peso no perfil.",
+      });
+    }
+    if (equipesEvento.length > 0 && !equipeId) {
+      faltando.push({ campo: "equipe", mensagem: "Selecione a equipe deste campeonato." });
+    }
+    if (!termoAceito) {
+      faltando.push({ campo: "termos", mensagem: "Marque os termos de aceite." });
+    }
+    if (faltando.length) {
+      apontarCampos(faltando);
       return;
     }
 
@@ -306,12 +354,6 @@ function FormularioInscricao() {
 
     if (inscricoesEncerradas && inscricaoAtual && !motivoInscricaoIndisponivel.includes("vagas deste campeonato esgotaram")) {
       setErro(motivoInscricaoIndisponivel || "As inscrições deste evento não estão disponíveis.");
-      setProcessando(false);
-      return;
-    }
-
-    if (equipesEvento.length > 0 && !equipeId) {
-      setErro("Selecione a equipe oficial deste campeonato.");
       setProcessando(false);
       return;
     }
@@ -328,43 +370,34 @@ function FormularioInscricao() {
     }
 
     if (tipoInscricao === "absoluto" && !absolutoElegivel) {
-      setErro("Este atleta não se enquadra em absoluto cadastrado neste campeonato.");
-      setProcessando(false);
+      apontarCampos([{ campo: "pacote", mensagem: "Este atleta não se enquadra em absoluto cadastrado neste campeonato." }]);
       return;
     }
 
     if ((tipoInscricao === "ambos" || tipoInscricao === "peso") && !pesoElegivel) {
-      setErro(absolutoElegivel
-        ? "Este atleta não tem categoria de peso. Escolha só o absoluto."
-        : "Nenhuma categoria cadastrada combina com idade, sexo, faixa e peso deste atleta.");
-      setProcessando(false);
+      apontarCampos([{
+        campo: "categoria",
+        mensagem: absolutoElegivel
+          ? "Este atleta não tem categoria de peso. Escolha só o absoluto."
+          : "Nenhuma categoria cadastrada combina com idade, sexo, faixa e peso deste atleta.",
+      }]);
       return;
     }
 
     if (tipoInscricao === "ambos" && !absolutoElegivel) {
-      setErro("Este atleta não se enquadra em absoluto cadastrado neste campeonato.");
-      setProcessando(false);
+      apontarCampos([{ campo: "pacote", mensagem: "Este atleta não se enquadra em absoluto cadastrado neste campeonato." }]);
       return;
     }
 
-    if (!termoAceito) {
-      setErro("Você precisa aceitar os termos do evento.");
-      setProcessando(false);
-      return;
-    }
-
-    if (tabelaCarregando || tabelaErro || !categoriasEvento.length || (tipoInscricao !== "absoluto" && !categoriasElegiveis.some(c => c.id === categoriaId))) {
-      setErro(tabelaErro || (!categoriasEvento.length
-        ? "O organizador ainda não cadastrou as categorias deste evento."
-        : tipoInscricao === "absoluto"
-          ? "Este atleta não se enquadra em absoluto cadastrado neste campeonato."
-          : "Escolha uma categoria cadastrada compatível com sua idade, sexo, faixa e peso."));
-      setProcessando(false);
-      return;
-    }
-    if (!idade || !Number.isInteger(Number(idade)) || Number(idade) < 4 || Number(idade) > 100) {
-      setErro("Por favor, preencha sua idade.");
-      setProcessando(false);
+    if (tabelaCarregando || tabelaErro || !categoriasEvento.length || (precisaCategoriaPeso && !categoriasElegiveis.some(c => c.id === categoriaId))) {
+      apontarCampos([{
+        campo: precisaCategoriaPeso ? "categoria" : "pacote",
+        mensagem: tabelaErro || (!categoriasEvento.length
+          ? "O organizador ainda não cadastrou as categorias deste evento."
+          : tipoInscricao === "absoluto"
+            ? "Este atleta não se enquadra em absoluto cadastrado neste campeonato."
+            : "Escolha uma categoria cadastrada compatível com sua idade, sexo, faixa e peso."),
+      }]);
       return;
     }
 
@@ -596,6 +629,12 @@ function FormularioInscricao() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-5">
+          {erro && camposInvalidos.length > 0 && (
+            <div role="alert" className="sticky top-16 z-20 bg-red-600 text-white rounded-xl p-3 text-xs font-bold leading-relaxed shadow-lg">
+              {erro}
+            </div>
+          )}
+
           {inscricaoBloqueadaPorPeriodo && (
             <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4">
               <p className="text-red-400 font-bold text-xs uppercase tracking-widest mb-1">Inscrições encerradas</p>
@@ -604,7 +643,7 @@ function FormularioInscricao() {
           )}
 
           {perfilIncompleto && (
-            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4">
+            <div id="inscricao-perfil" className={`bg-yellow-500/10 border rounded-xl p-4 ${camposInvalidos.includes("perfil") ? "border-red-500 ring-1 ring-red-500/60" : "border-yellow-500/30"}`}>
               <p className="text-yellow-500 font-bold text-xs uppercase tracking-widest mb-1">Perfil Incompleto</p>
               <p className="text-yellow-200/70 text-xs">Faltam dados obrigatórios no cadastro deste atleta (nome, equipe e faixa). <Link href="/perfil" className="underline font-bold text-yellow-400">Complete em Família / Dependentes</Link></p>
             </div>
@@ -653,10 +692,10 @@ function FormularioInscricao() {
           <section className="bg-[#0a0a0e] border border-white/5 rounded-2xl p-5 md:p-6 shadow-xl">
             <h2 className="text-xs font-black text-white uppercase tracking-widest mb-5">Encaixe na Chave</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-              <div>
+            <div id="inscricao-idade" className="scroll-mt-24">
                 <label className="text-[9px] text-zinc-500 font-bold uppercase block mb-1.5">Idade na data do evento</label>
-                <input type="number" placeholder="Ex: 8" value={idade} onChange={(e) => setIdade(e.target.value)} disabled={idadePeloCadastro} className={`w-full bg-black border border-white/10 rounded-lg px-3 py-2.5 text-white text-xs ${idadePeloCadastro ? 'opacity-70 cursor-not-allowed' : ''}`} />
-                {idadePeloCadastro ? <p className="text-[10px] text-zinc-500 mt-1">Calculada pela data de nascimento do cadastro.</p> : <p className="text-[10px] text-zinc-500 mt-1">Informe a idade ou complete a data de nascimento no perfil.</p>}
+                <input type="number" placeholder="Ex: 8" value={idade} onChange={(e) => { setIdade(e.target.value); limparCampoInvalido("idade"); }} disabled={idadePeloCadastro} aria-invalid={camposInvalidos.includes("idade")} className={`w-full bg-black border rounded-lg px-3 py-2.5 text-white text-xs ${classeCampo("idade")} ${idadePeloCadastro ? 'opacity-70 cursor-not-allowed' : ''}`} />
+                {camposInvalidos.includes("idade") ? <p className="text-[11px] text-red-400 mt-1 font-bold">Informe a idade na data do evento.</p> : idadePeloCadastro ? <p className="text-[10px] text-zinc-500 mt-1">Calculada pela data de nascimento do cadastro.</p> : <p className="text-[10px] text-zinc-500 mt-1">Informe a idade ou complete a data de nascimento no perfil.</p>}
               </div>
               <div>
                 <label className="text-[9px] text-zinc-500 font-bold uppercase block mb-1.5">Sexo Competitivo</label>
@@ -665,26 +704,30 @@ function FormularioInscricao() {
             </div>
             <div>
                 <label className="text-[9px] text-zinc-500 font-bold uppercase block mb-1.5">{tipoInscricao === 'absoluto' ? 'Absoluto' : 'Categoria de Peso Oficial'}</label>
+                <div id="inscricao-categoria" className="scroll-mt-24">
                 {tipoInscricao === 'absoluto' ? (
                   <p className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2.5 text-xs text-amber-100">{absolutoElegivel ? rotuloCategoria(absolutoElegivel) : 'Nenhum absoluto compatível.'}</p>
                 ) : tabelaCarregando ? (
                   <p className="text-zinc-500 text-xs">Carregando categorias do evento...</p>
                 ) : categoriasEvento.length > 0 ? (
-                  <select aria-label="Categoria de peso" value={categoriaId} onChange={e => { const c = categoriasEvento.find(c => c.id === e.target.value);setCategoriaId(e.target.value);setCategoria(c ? rotuloCategoria(c) : ''); }} className="w-full bg-black border border-white/10 rounded-lg px-3 py-2.5 text-white text-xs"><option value="">Selecione sua categoria</option>{categoriasElegiveis.map(c => <option key={c.id} value={c.id}>{rotuloCategoria(c)}</option>)}</select>
+                  <select aria-label="Categoria de peso" aria-invalid={camposInvalidos.includes("categoria")} value={categoriaId} onChange={e => { const c = categoriasEvento.find(c => c.id === e.target.value);setCategoriaId(e.target.value);setCategoria(c ? rotuloCategoria(c) : ''); limparCampoInvalido("categoria"); }} className={`w-full bg-black border rounded-lg px-3 py-2.5 text-white text-xs ${classeCampo("categoria")}`}><option value="">Selecione sua categoria</option>{categoriasElegiveis.map(c => <option key={c.id} value={c.id}>{rotuloCategoria(c)}</option>)}</select>
                 ) : (
                   <p className="text-amber-300 text-xs">A inscrição usa só as categorias cadastradas pelo organizador. Nenhuma está disponível neste evento ainda.</p>
                 )}
+                {camposInvalidos.includes("categoria") && <p className="text-[11px] text-red-400 mt-2 font-bold">Selecione a categoria de peso para entrar na chave.</p>}
                 {tipoInscricao !== 'absoluto' && categoriasEvento.length > 0 && !categoriasElegiveis.length && <p className="text-amber-300 text-xs mt-2">{absolutoElegivel ? 'Não há categoria de peso para este atleta. Ele pode se inscrever só no absoluto.' : 'Nenhuma categoria cadastrada combina com idade, sexo, faixa e peso deste atleta. Confira o perfil ou fale com a organização.'}</p>}
                 {tabelaErro && <p role="alert" className="text-red-400 text-xs mt-2">{tabelaErro}</p>}
-                {equipesEvento.length > 0 && <label className="block mt-4 text-xs text-zinc-400">Equipe no campeonato<select value={equipeId} onChange={e => {const eq=equipesEvento.find(q=>q.id===e.target.value);setEquipeId(e.target.value);if(eq){setEquipe(eq.nome);}}} className="w-full bg-black border border-white/10 rounded-lg p-3 text-white mt-1"><option value="">Selecione a equipe deste evento</option>{equipesEvento.map(eq=><option key={eq.id} value={eq.id}>{eq.nome}</option>)}</select></label>}
+                </div>
+                {equipesEvento.length > 0 && <label id="inscricao-equipe" className="block mt-4 scroll-mt-24 text-xs text-zinc-400">Equipe no campeonato<select aria-invalid={camposInvalidos.includes("equipe")} value={equipeId} onChange={e => {const eq=equipesEvento.find(q=>q.id===e.target.value);setEquipeId(e.target.value);if(eq){setEquipe(eq.nome);} limparCampoInvalido("equipe");}} className={`w-full bg-black border rounded-lg p-3 text-white mt-1 ${classeCampo("equipe")}`}><option value="">Selecione a equipe deste evento</option>{equipesEvento.map(eq=><option key={eq.id} value={eq.id}>{eq.nome}</option>)}</select>{camposInvalidos.includes("equipe") && <p className="text-[11px] text-red-400 mt-1.5 font-bold">Selecione a equipe deste campeonato.</p>}</label>}
 
               </div>
           </section>
 
           {/* PACOTE */}
-          <section className="bg-[#0a0a0e] border border-white/5 rounded-2xl p-5 md:p-6 shadow-xl">
+          <section id="inscricao-pacote" className={`bg-[#0a0a0e] border rounded-2xl p-5 md:p-6 shadow-xl ${camposInvalidos.includes("pacote") ? "border-red-500 ring-1 ring-red-500/60" : "border-white/5"}`}>
             <h2 className="text-xs font-black text-white uppercase tracking-widest mb-2">Escolha seu Pacote</h2>
             <p className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest mb-5">Modalidade: <strong className="text-white">{nomeLoteAtual}</strong>{usaTarifaInfantil ? <span className="ml-2 rounded bg-cyan-500/20 px-2 py-0.5 text-cyan-300">Tarifa infantil</span> : null}</p>
+            {camposInvalidos.includes("pacote") && <p className="mb-4 text-[11px] text-red-400 font-bold">Escolha um pacote compatível com este atleta.</p>}
             {pacoteJaInscrito && (
               <p className={`mb-4 rounded-xl border p-3 text-[11px] leading-relaxed ${jaNoCombo ? "border-green-500/20 bg-green-500/10 text-green-200" : "border-amber-500/20 bg-amber-500/10 text-amber-100"}`}>
                 {jaNoCombo
@@ -698,7 +741,7 @@ function FormularioInscricao() {
             <div className="space-y-2.5">
               {pesoElegivel && (
               <label className={`block relative p-4 rounded-xl border cursor-pointer transition-all ${tipoInscricao === 'peso' ? 'border-red-500 bg-red-500/5' : 'border-white/5 bg-black'}`}>
-                <input type="radio" name="tipoInscricao" value="peso" checked={tipoInscricao === 'peso'} onChange={() => setTipoInscricao('peso')} className="absolute opacity-0 w-0 h-0" />
+                <input type="radio" name="tipoInscricao" value="peso" checked={tipoInscricao === 'peso'} onChange={() => { setTipoInscricao('peso'); limparCampoInvalido("pacote"); }} className="absolute opacity-0 w-0 h-0" />
                 <div className="flex justify-between items-center">
                   <h3 className="font-bold text-xs">Categoria de Peso</h3>
                   <span className="font-black text-sm">{valorLoteAtual === 0 ? "GRÁTIS" : `R$ ${valorLoteAtual.toFixed(2)}`}</span>
@@ -708,7 +751,7 @@ function FormularioInscricao() {
 
               {absolutoElegivel && (
               <label className={`block relative p-4 rounded-xl border cursor-pointer transition-all ${tipoInscricao === 'absoluto' ? 'border-red-500 bg-red-500/5' : 'border-white/5 bg-black'}`}>
-                <input type="radio" name="tipoInscricao" value="absoluto" checked={tipoInscricao === 'absoluto'} onChange={() => setTipoInscricao('absoluto')} className="absolute opacity-0 w-0 h-0" />
+                <input type="radio" name="tipoInscricao" value="absoluto" checked={tipoInscricao === 'absoluto'} onChange={() => { setTipoInscricao('absoluto'); limparCampoInvalido("pacote"); limparCampoInvalido("categoria"); }} className="absolute opacity-0 w-0 h-0" />
                 <div className="flex justify-between items-center gap-3">
                   <div>
                     <h3 className="font-bold text-xs">Somente Absoluto</h3>
@@ -721,7 +764,7 @@ function FormularioInscricao() {
 
               {pesoElegivel && absolutoElegivel ? (
               <label className={`block relative p-4 rounded-xl border cursor-pointer transition-all ${tipoInscricao === 'ambos' ? 'border-red-500 bg-red-500/5' : 'border-white/5 bg-black'}`}>
-                <input type="radio" name="tipoInscricao" value="ambos" checked={tipoInscricao === 'ambos'} onChange={() => setTipoInscricao('ambos')} className="absolute opacity-0 w-0 h-0" />
+                <input type="radio" name="tipoInscricao" value="ambos" checked={tipoInscricao === 'ambos'} onChange={() => { setTipoInscricao('ambos'); limparCampoInvalido("pacote"); }} className="absolute opacity-0 w-0 h-0" />
                 <div className="flex justify-between items-center gap-3">
                   <div>
                     <h3 className="font-bold text-xs">Categoria de Peso + Absoluto <span className="bg-amber-500/20 text-amber-500 text-[8px] font-black uppercase px-2 py-0.5 rounded ml-2">Combo</span></h3>
@@ -737,12 +780,13 @@ function FormularioInscricao() {
           </section>
 
           {/* TERMOS */}
-          <section className="bg-[#0a0a0e] border border-white/5 rounded-2xl p-5 md:p-6 shadow-xl">
+          <section id="inscricao-termos" className={`scroll-mt-24 bg-[#0a0a0e] border rounded-2xl p-5 md:p-6 shadow-xl ${camposInvalidos.includes("termos") ? "border-red-500 ring-1 ring-red-500/60" : "border-white/5"}`}>
             <h2 className="text-xs font-black text-white uppercase tracking-widest mb-4">Termos de Aceite</h2>
-            <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border border-white/5 bg-black">
-              <input type="checkbox" checked={termoAceito} onChange={(e) => setTermoAceito(e.target.checked)} className="mt-0.5 w-4 h-4 accent-red-600 rounded" />
+            <label className={`flex items-start gap-3 cursor-pointer p-3 rounded-lg border bg-black ${camposInvalidos.includes("termos") ? "border-red-500" : "border-white/5"}`}>
+              <input type="checkbox" checked={termoAceito} onChange={(e) => { setTermoAceito(e.target.checked); if (e.target.checked) limparCampoInvalido("termos"); }} className="mt-0.5 w-4 h-4 accent-red-600 rounded" />
               <span className="text-xs text-white font-bold">Declaro que li e concordo com os termos de responsabilidade e o edital oficial.</span>
             </label>
+            {camposInvalidos.includes("termos") && <p className="mt-2 text-[11px] text-red-400 font-bold">Marque os termos de aceite para confirmar a inscrição.</p>}
           </section>
         </div>
 
@@ -774,9 +818,9 @@ function FormularioInscricao() {
               <span className="text-2xl font-black text-red-500">{valorTotal === 0 ? "GRÁTIS" : `R$ ${valorTotal.toFixed(2).replace('.', ',')}`}</span>
             </div>
 
-            {erro && <div className="mb-4 bg-red-500/10 border border-red-500/20 text-red-400 text-[10px] rounded-lg p-3 text-center font-bold">❌ {erro}</div>}
+            {erro && <div role="alert" className="mb-4 bg-red-500/10 border border-red-500/20 text-red-400 text-[11px] rounded-lg p-3 text-center font-bold leading-relaxed">❌ {erro}</div>}
 
-            <button disabled={processando || perfilIncompleto || (precisaCategoriaPeso && !categoriaId) || !termoAceito || inscricaoBloqueadaPorPeriodo || jaNoCombo || tabelaCarregando || !!tabelaErro || !categoriasEvento.length || (equipesEvento.length > 0 && !equipeId)} className="cursor-pointer w-full bg-red-600 hover:bg-red-500 text-white font-black uppercase tracking-widest text-[11px] py-4 rounded-xl shadow-[0_0_15px_rgba(239,68,68,0.3)] transition-all disabled:opacity-50 flex items-center justify-center" onClick={finalizarInscricao}>
+            <button type="button" disabled={processando || inscricaoBloqueadaPorPeriodo || jaNoCombo || tabelaCarregando} className="cursor-pointer w-full bg-red-600 hover:bg-red-500 text-white font-black uppercase tracking-widest text-[11px] py-4 rounded-xl shadow-[0_0_15px_rgba(239,68,68,0.3)] transition-all disabled:opacity-50 flex items-center justify-center" onClick={finalizarInscricao}>
               {processando ? "Salvando Inscrição..." : jaNoCombo ? "Já inscrito nas duas chaves" : ampliandoPacote ? (pacoteJaInscrito === "peso" ? "Adicionar absoluto à inscrição" : "Adicionar categoria de peso") : "Confirmar Inscrição Oficial"}
             </button>
           </div>
