@@ -77,8 +77,37 @@ export function categoriaMaisLeve(atual: CategoriaCompeticao | null, destino: Ca
   return true;
 }
 
+export const FAIXA_TODAS_AS_FAIXAS = 'Todas as faixas';
+
+export function faixaEhLivre(faixa?: string | null) {
+  const n = normalizarCompeticao(faixa);
+  return n === 'TODAS' || n === 'TODAS AS FAIXAS' || n === 'TODAS FAIXAS' || n === 'LIVRE';
+}
+
+export function categoriaAbsolutoCompativel(c: CategoriaCompeticao, i: InscricaoCompeticao) {
+  if (!c.ativa || c.tipo !== 'absoluto') return false;
+  const idade = Number(i.idade);
+  if (i.idade === '' || i.idade == null || !Number.isInteger(idade)) return false;
+  if (idade < c.idade_min || idade > c.idade_max) return false;
+  if (normalizarCompeticao(i.sexo) !== normalizarCompeticao(c.sexo)) return false;
+  if (i.modalidade && normalizarCompeticao(i.modalidade) !== normalizarCompeticao(c.modalidade)) return false;
+  return faixaEhLivre(c.faixa) || normalizarCompeticao(i.faixa) === normalizarCompeticao(c.faixa);
+}
+
+export function absolutoDaInscricao(i: InscricaoCompeticao, categorias: CategoriaCompeticao[]) {
+  const candidatas = categorias.filter(c => categoriaAbsolutoCompativel(c, i));
+  candidatas.sort((a, b) => {
+    const livre = Number(faixaEhLivre(a.faixa)) - Number(faixaEhLivre(b.faixa));
+    if (livre) return livre;
+    return (a.idade_max - a.idade_min) - (b.idade_max - b.idade_min);
+  });
+  return candidatas[0] || null;
+}
+
 export function validarCategoria(c: Omit<CategoriaCompeticao, 'id' | 'evento_id'>) {
+  if (!['peso', 'absoluto'].includes(c.tipo)) throw new Error('Informe se a categoria é de peso ou absoluto.');
   if (!c.nome.trim() || !c.modalidade.trim() || !c.faixa.trim() || !['Masculino', 'Feminino'].includes(c.sexo)) throw new Error('Informe nome, modalidade, sexo e faixa.');
+  if (c.tipo === 'peso' && faixaEhLivre(c.faixa)) throw new Error('Categoria de peso precisa de uma faixa específica.');
   if (![c.idade_min, c.idade_max].every(Number.isInteger) || c.idade_min < 4 || c.idade_max > 100 || c.idade_min > c.idade_max) throw new Error('Confira o intervalo de idades.');
   if (!Number.isFinite(c.peso_min) || c.peso_min < 0 || (c.peso_max != null && (!Number.isFinite(c.peso_max) || c.peso_max <= c.peso_min))) throw new Error('Confira o intervalo de peso.');
   if (!Number.isFinite(c.tempo_minutos) || c.tempo_minutos < 1 || c.tempo_minutos > 30) throw new Error('O tempo deve ficar entre 1 e 30 minutos.');
@@ -87,13 +116,18 @@ export function validarCategoria(c: Omit<CategoriaCompeticao, 'id' | 'evento_id'
 /** Uma única composição para checagem, geração e conferência de inscritos legados. */
 export function grupoInscricao(i: InscricaoCompeticao, tipo: 'peso' | 'absoluto', categorias: CategoriaCompeticao[] = []) {
   if (!i.faixa?.trim() || !['MASCULINO', 'FEMININO'].includes(normalizarCompeticao(i.sexo))) throw new Error('Faixa ou sexo competitivo não informado.');
-  const divisao = divisaoEtaria(Number(i.idade));
-  if (i.categoria_id && tipo === 'peso') {
+  if (tipo === 'absoluto') {
+    const c = absolutoDaInscricao(i, categorias);
+    if (!c) throw new Error('Este atleta não se enquadra em absoluto cadastrado pelo organizador.');
+    return { categoria: rotuloCategoria(c), faixa: c.faixa, categoria_id: c.id, tempo_minutos: c.tempo_minutos };
+  }
+  if (i.categoria_id) {
     const c = categorias.find(c => c.id === i.categoria_id);
     if (!c || !categoriaCompativel(c, i)) throw new Error('Inscrição incompatível com a categoria cadastrada.');
     return { categoria: rotuloCategoria(c), faixa: c.faixa, categoria_id: c.id, tempo_minutos: c.tempo_minutos };
   }
   if (!i.categoria?.trim()) throw new Error('Categoria não informada.');
-  const categoria = `${i.modalidade?.trim() || 'Jiu-Jitsu'} · ${tipo === 'absoluto' ? 'Absoluto' : i.categoria.trim()} · ${divisao} · ${i.sexo}`;
+  const divisao = divisaoEtaria(Number(i.idade));
+  const categoria = `${i.modalidade?.trim() || 'Jiu-Jitsu'} · ${i.categoria.trim()} · ${divisao} · ${i.sexo}`;
   return { categoria, faixa: i.faixa.trim(), categoria_id: null, tempo_minutos: null };
 }

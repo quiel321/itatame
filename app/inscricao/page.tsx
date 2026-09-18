@@ -4,7 +4,7 @@ import { useEffect, useState, Suspense } from "react";
 import { supabase } from "../lib/supabase";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { categoriaCompativel, idadeCompetitiva, rotuloCategoria, type CategoriaCompeticao } from '@/app/lib/categorias-competicao';
+import { absolutoDaInscricao, categoriaCompativel, idadeCompetitiva, rotuloCategoria, type CategoriaCompeticao } from '@/app/lib/categorias-competicao';
 import { tarifaInfantilAplicavel, valorAddonAbsoluto, valorLoteVigente, type EventoValoresInscricao } from '@/app/lib/valor-inscricao';
 import { urlLoginComRetorno } from '@/app/lib/destino-interno';
 
@@ -193,9 +193,13 @@ function FormularioInscricao() {
   }, [eventoId, router]);
 
   const categoriasElegiveis = categoriasEvento.filter(c => c.tipo === 'peso' && categoriaCompativel(c, { idade, sexo, faixa, peso: pesoReal }));
+  const absolutoElegivel = absolutoDaInscricao({ idade, sexo, faixa, modalidade }, categoriasEvento);
   useEffect(() => {
     if (categoriaId && !categoriasElegiveis.some(c => c.id === categoriaId)) { setCategoriaId(''); setCategoria(''); }
   }, [idade, sexo, faixa, pesoReal, categoriaId, categoriasEvento]);
+  useEffect(() => {
+    if (!absolutoElegivel && tipoInscricao === 'ambos') setTipoInscricao('peso');
+  }, [absolutoElegivel, tipoInscricao]);
 
   const valorLoteAtual = eventoValores ? valorLoteVigente(eventoValores, new Date(), idade) : 0;
   const valorAbsoluto = eventoValores ? valorAddonAbsoluto(eventoValores, idade) : 0;
@@ -275,6 +279,12 @@ function FormularioInscricao() {
 
     if (tipoInscricao === "absoluto") {
       setErro("No Jiu-Jitsu, o absoluto só pode ser contratado junto com a categoria de peso.");
+      setProcessando(false);
+      return;
+    }
+
+    if (tipoInscricao === "ambos" && !absolutoElegivel) {
+      setErro("Este atleta não se enquadra em absoluto cadastrado neste campeonato.");
       setProcessando(false);
       return;
     }
@@ -564,13 +574,20 @@ function FormularioInscricao() {
 
 
 
+              {absolutoElegivel ? (
               <label className={`block relative p-4 rounded-xl border cursor-pointer transition-all ${tipoInscricao === 'ambos' ? 'border-red-500 bg-red-500/5' : 'border-white/5 bg-black'}`}>
                 <input type="radio" name="tipoInscricao" value="ambos" checked={tipoInscricao === 'ambos'} onChange={() => setTipoInscricao('ambos')} className="absolute opacity-0 w-0 h-0" />
-                <div className="flex justify-between items-center">
-                  <h3 className="font-bold text-xs">Categoria de Peso + Absoluto <span className="bg-amber-500/20 text-amber-500 text-[8px] font-black uppercase px-2 py-0.5 rounded ml-2">Dupla Oportunidade</span></h3>
-                  <span className="font-black text-sm">{isGratis ? "GRÁTIS" : `R$ ${(valorLoteAtual + valorAbsoluto).toFixed(2)}`}</span>
+                <div className="flex justify-between items-center gap-3">
+                  <div>
+                    <h3 className="font-bold text-xs">Categoria de Peso + Absoluto <span className="bg-amber-500/20 text-amber-500 text-[8px] font-black uppercase px-2 py-0.5 rounded ml-2">Dupla Oportunidade</span></h3>
+                    <p className="mt-1 text-[10px] font-medium normal-case tracking-normal text-zinc-500">{rotuloCategoria(absolutoElegivel)}</p>
+                  </div>
+                  <span className="font-black text-sm shrink-0">{isGratis ? "GRÁTIS" : `R$ ${(valorLoteAtual + valorAbsoluto).toFixed(2)}`}</span>
                 </div>
               </label>
+              ) : (
+                <p className="text-[10px] text-zinc-500 leading-relaxed">Este atleta não entra em absoluto deste campeonato. O extra só aparece para quem combina com sexo, faixa e idade cadastrados pelo organizador.</p>
+              )}
             </div>
           </section>
 

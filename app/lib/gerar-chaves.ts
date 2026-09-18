@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { grupoInscricao, normalizarCompeticao, type InscricaoCompeticao, type CategoriaCompeticao } from './categorias-competicao';
+import { grupoInscricao, absolutoDaInscricao, normalizarCompeticao, type InscricaoCompeticao, type CategoriaCompeticao } from './categorias-competicao';
 type Participante = InscricaoCompeticao & { equipe_atleta: string; equipe_chave: string };
 
 function chaveEquipe(inscricao: InscricaoCompeticao) {
@@ -15,6 +15,7 @@ export function prepararGrupos(inscricoes: InscricaoCompeticao[], tipo: 'peso' |
     if (inscricao.status_checkin?.startsWith('desclassificado')) continue;
     if (tipo === 'peso' && String(inscricao.categoria).toLowerCase().includes('absoluto')) continue;
     if (tipo === 'absoluto' && !inscricao.absoluto) continue;
+    if (tipo === 'absoluto' && !absolutoDaInscricao(inscricao, categorias)) continue;
     if (!inscricao.atleta_id) throw new Error(`Inscrição ${inscricao.id}: atleta não vinculado.`);
     let grupo;
     try { grupo = grupoInscricao(inscricao, tipo, categorias); }
