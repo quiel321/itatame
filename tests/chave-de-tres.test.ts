@@ -7,6 +7,7 @@ import {
   placeholderSlotChaveDeTres,
   textoAguardandoChaveDeTres,
   textoOuroAposChecagem,
+  resumoHumanoChave,
 } from "../app/lib/chave-de-tres";
 import { rotuloLuta } from "../app/lib/lutas-rotulos";
 import { idsPrimeiraFasePorLado } from "../app/lib/chave-visual";
@@ -90,6 +91,14 @@ test("chave de 6 distribui dois lados e deixa a baia esperando o perdedor", () =
   assert.equal(rotuloLuta(chaveDeSeis[3]), "Luta 1 · direita");
   assert.equal(textoOuroAposChecagem(1), "Aguardando checagem · ouro só após a presença");
   assert.match(textoOuroAposChecagem(6), /baia/i);
+});
+
+test("resumo humano da chave de 3 conta a baia e a final", () => {
+  assert.match(resumoHumanoChave([
+    { id_visual: "1", fase: "Semifinal 1 · Chave de 3", atleta_1: "Alex Nunes", atleta_2: "Aylan Rocha", vencedor: "Alex Nunes", status_luta: "concluida", proxima_luta: 999 },
+    { id_visual: "2", fase: "Semifinal 2 · Chave de 3", atleta_1: "Aylan Rocha", atleta_2: "Ezequiel Castro", status_luta: "agendada", proxima_luta: 999 },
+    { id_visual: "999", fase: "Final · Chave de 3", atleta_1: "Alex Nunes", atleta_2: "TBD", status_luta: "agendada", proxima_luta: null },
+  ]), /Alex Nunes já está na final/i);
 });
 
 test("árvore de 8 coloca a primeira fase nos dois lados", () => {

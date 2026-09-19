@@ -91,3 +91,74 @@ export function textoOuroAposChecagem(atletasReaisNaChave: number) {
     ? 'Aguardando checagem · ouro só após a presença'
     : 'Na baia · aguardando oponente da primeira luta';
 }
+
+function nomeVisivel(nome?: string | null) {
+  const limpo = String(nome || '').trim();
+  const upper = limpo.toUpperCase();
+  if (!limpo || upper === 'BYE' || upper === 'TBD' || upper.includes('SEM OPONENTE')) return '';
+  return limpo;
+}
+
+function acharPorId<T extends { id_visual?: string | number | null }>(lutas: T[], id: string) {
+  return lutas.find(luta => String(luta.id_visual) === id);
+}
+
+export function resumoHumanoChave(lutas: Array<{
+  id_visual?: string | number | null;
+  fase?: string | null;
+  atleta_1?: string | null;
+  atleta_2?: string | null;
+  vencedor?: string | null;
+  status_luta?: string | null;
+  proxima_luta?: string | number | null;
+}>) {
+  if (!lutas.length) return 'Esta categoria ainda não tem chave montada.';
+
+  const andamento = lutas.find(luta => luta.status_luta === 'em_andamento');
+  if (andamento) {
+    const a = nomeVisivel(andamento.atleta_1) || 'Um atleta';
+    const b = nomeVisivel(andamento.atleta_2) || 'o adversário';
+    return `${a} e ${b} estão lutando agora.`;
+  }
+
+  const final = acharPorId(lutas, '999') || lutas.find(luta => !luta.proxima_luta);
+  const campeao = nomeVisivel(final?.vencedor);
+  if (campeao) return `${campeao} levou o ouro nesta chave.`;
+
+  if (lutasFormamChaveDeSeis(lutas)) {
+    const esquerda = acharPorId(lutas, '101');
+    const direita = acharPorId(lutas, '102');
+    const vEsq = nomeVisivel(esquerda?.vencedor);
+    const vDir = nomeVisivel(direita?.vencedor);
+    if (vEsq && vDir) return `${vEsq} e ${vDir} fazem a final.`;
+    if (vEsq && !vDir) return `${vEsq} já está na final. O lado direito ainda define o outro finalista.`;
+    if (!vEsq && vDir) return `${vDir} já está na final. O lado esquerdo ainda define o outro finalista.`;
+    return 'Seis atletas: uma chave de 3 em cada lado. A baia espera o perdedor da primeira luta daquele lado.';
+  }
+
+  if (lutasFormamChaveDeTres(lutas)) {
+    const luta1 = acharPorId(lutas, '1');
+    const baia = acharPorId(lutas, '2');
+    const a = nomeVisivel(luta1?.atleta_1);
+    const b = nomeVisivel(luta1?.atleta_2);
+    const terceiro = nomeVisivel(baia?.atleta_2) || nomeVisivel(baia?.atleta_1);
+    if (!nomeVisivel(luta1?.vencedor)) {
+      if (a && b && terceiro) return `${a} enfrenta ${b} primeiro. Quem perder vai à baia contra ${terceiro}. Quem ganhar a baia completa a final.`;
+      return 'Nesta chave de 3, a primeira luta define quem vai à final e quem enfrenta a baia.';
+    }
+    const vencedor = nomeVisivel(luta1?.vencedor);
+    const perdedor = [a, b].find(nome => nome && nome.toUpperCase() !== vencedor.toUpperCase()) || '';
+    const oponenteBaia = [nomeVisivel(baia?.atleta_1), nomeVisivel(baia?.atleta_2)].find(nome => nome && nome.toUpperCase() !== perdedor.toUpperCase()) || terceiro;
+    if (nomeVisivel(baia?.vencedor) && vencedor) {
+      return `${vencedor} e ${nomeVisivel(baia?.vencedor)} fazem a final.`;
+    }
+    if (vencedor && perdedor && oponenteBaia) {
+      return `${vencedor} já está na final. ${perdedor} enfrenta ${oponenteBaia} na baia. Quem vencer luta com ${vencedor} pelo ouro.`;
+    }
+    if (vencedor) return `${vencedor} já está na final, esperando o vencedor da baia.`;
+  }
+
+  const proxima = lutas.find(luta => nomeVisivel(luta.atleta_1) && nomeVisivel(luta.atleta_2) && luta.status_luta !== 'concluida');
+  if (proxima) return `Próximo confronto: ${nomeVisivel(proxima.atleta_1)} vs ${nomeVisivel(proxima.atleta_2)}.`;
+  return 'Acompanhe quem avança em cada lado da chave.';
+}
