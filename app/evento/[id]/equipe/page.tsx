@@ -5,11 +5,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { supabase } from '@/app/lib/supabase';
 
-type Solicitacao = { id: string; status: 'pendente' | 'aprovada' | 'recusada'; equipe_nome: string; academia: string; professor: string; cidade: string };
-type EquipeEvento = { id: string; nome: string; academia: string; professor: string; cidade: string };
+type Solicitacao = { id: string; status: 'pendente' | 'aprovada' | 'recusada'; equipe_nome: string; academia: string; professor: string; cidade: string; equipe_id?: string | null; logo_url?: string | null };
+type EquipeEvento = { id: string; nome: string; academia: string; professor: string; cidade: string; logo_url?: string | null; academia_logo_url?: string | null };
 const campo = 'mt-1 w-full rounded-xl border border-white/10 bg-black px-3 py-3 text-sm text-white outline-none focus:border-yellow-500';
 
 import { encontrarEquipeSemelhante } from '@/app/lib/equipes-nome';
+import { UploadLogoEquipe } from '@/app/components/UploadLogoEquipe';
 
 export default function SolicitarEquipeEventoPage() {
   const params = useParams<{ id: string }>();
@@ -33,7 +34,7 @@ export default function SolicitarEquipeEventoPage() {
       const { data: { user } } = await supabase.auth.getUser();
       const [{ data: evento }, { data: equipesEvento }] = await Promise.all([
         supabase.from('eventos').select('nome').eq('id', eventoId).maybeSingle(),
-        supabase.from('equipes_evento').select('id,nome,academia,professor,cidade').eq('evento_id', eventoId).eq('ativa', true).order('nome'),
+        supabase.from('equipes_evento').select('id,nome,academia,professor,cidade,logo_url,academia_logo_url').eq('evento_id', eventoId).eq('ativa', true).order('nome'),
       ]);
       if (!ativo) return;
       setEventoNome(evento?.nome || 'Campeonato');
@@ -42,7 +43,7 @@ export default function SolicitarEquipeEventoPage() {
       setUserId(user.id);
       const [{ data: perfil }, { data: pedido }] = await Promise.all([
         supabase.from('atletas').select('nome,equipe,academia,cidade,role').eq('user_id', user.id).maybeSingle(),
-        supabase.from('solicitacoes_equipe_evento').select('id,status,equipe_nome,academia,professor,cidade').eq('evento_id', eventoId).eq('professor_user_id', user.id).maybeSingle(),
+        supabase.from('solicitacoes_equipe_evento').select('id,status,equipe_nome,academia,professor,cidade,equipe_id,logo_url').eq('evento_id', eventoId).eq('professor_user_id', user.id).maybeSingle(),
       ]);
       if (!ativo) return;
       setEhProfessor(perfil?.role === 'professor');
@@ -93,7 +94,12 @@ export default function SolicitarEquipeEventoPage() {
     if (!resposta.ok) setMensagem(resultado.error || 'Não foi possível cadastrar a equipe.');
     else {
       const nomeEquipe = equipeDestino?.nome || form.equipe_nome;
-      setSolicitacao({ id: resultado.equipeId, status: 'aprovada', equipe_nome: nomeEquipe, academia: form.academia, professor: form.professor, cidade: form.cidade });
+      const { data: pedido } = await supabase.from('solicitacoes_equipe_evento').select('id,status,equipe_nome,academia,professor,cidade,equipe_id,logo_url').eq('evento_id', eventoId).eq('professor_user_id', userId).maybeSingle();
+      setSolicitacao(pedido
+        ? { ...pedido, status: 'aprovada' }
+        : { id: resultado.equipeId, status: 'aprovada', equipe_nome: nomeEquipe, academia: form.academia, professor: form.professor, cidade: form.cidade, equipe_id: resultado.equipeId });
+      const { data: equipesEvento } = await supabase.from('equipes_evento').select('id,nome,academia,professor,cidade,logo_url,academia_logo_url').eq('evento_id', eventoId).eq('ativa', true).order('nome');
+      if (equipesEvento) setEquipes(equipesEvento as EquipeEvento[]);
       setMensagem(resultado.entrou
         ? `${nomeEquipe} já existia. Sua academia entrou nesta equipe. Os atletas devem selecioná-la na inscrição.`
         : 'Equipe cadastrada. Os atletas já podem selecioná-la na inscrição.');
@@ -110,7 +116,23 @@ export default function SolicitarEquipeEventoPage() {
 
     {!userId ? <section className="mt-8 rounded-2xl border border-white/10 bg-white/5 p-6"><h2 className="font-bold">Entre com sua conta de professor</h2><p className="mt-2 text-sm text-zinc-400">O cadastro precisa ficar vinculado ao responsável técnico.</p><Link href={`/login?redirect=/evento/${eventoId}/equipe`} className="mt-5 inline-block rounded-xl bg-yellow-500 px-5 py-3 text-sm font-black text-black">Entrar ou criar conta</Link></section>
     : !ehProfessor ? <section className="mt-8 rounded-2xl border border-yellow-500/20 bg-yellow-500/10 p-6"><h2 className="font-bold text-yellow-200">Esta conta não é de professor</h2><p className="mt-2 text-sm text-zinc-300">Use uma conta cadastrada como professor para representar uma equipe no campeonato.</p></section>
-    : solicitacao?.status === 'aprovada' ? <section className="mt-8 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-6"><h2 className="font-bold text-emerald-300">Equipe confirmada</h2><p className="mt-2 text-sm text-zinc-300">Sua academia{solicitacao.academia ? ` ${solicitacao.academia}` : ''} entrou na equipe <strong className="text-white">{solicitacao.equipe_nome}</strong>. Os atletas escolhem essa equipe na inscrição. A academia continua no ranking por academias.</p></section>
+    : solicitacao?.status === 'aprovada' ? <section className="mt-8 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-6">
+      <h2 className="font-bold text-emerald-300">Equipe confirmada</h2>
+      <p className="mt-2 text-sm text-zinc-300">Sua academia{solicitacao.academia ? ` ${solicitacao.academia}` : ''} entrou na equipe <strong className="text-white">{solicitacao.equipe_nome}</strong>. Os atletas escolhem essa equipe na inscrição. A academia continua no ranking por academias.</p>
+      {solicitacao.equipe_id && <div className="mt-5 grid gap-3">
+        <div>
+          <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-zinc-400">Logo da equipe · aparece na aba Equipe</p>
+          <UploadLogoEquipe eventoId={eventoId} equipeId={solicitacao.equipe_id} tipo="equipe" logoUrl={equipes.find(item => item.id === solicitacao.equipe_id)?.logo_url} nome={solicitacao.equipe_nome} onAtualizou={(url) => setEquipes(atual => atual.map(item => item.id === solicitacao.equipe_id ? { ...item, logo_url: url } : item))} />
+        </div>
+        <div>
+          <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-zinc-400">Logo da academia · aparece em Equipe e professor</p>
+          <UploadLogoEquipe eventoId={eventoId} equipeId={solicitacao.equipe_id} academiaId={solicitacao.id} tipo="academia" logoUrl={solicitacao.logo_url || equipes.find(item => item.id === solicitacao.equipe_id)?.academia_logo_url} nome={solicitacao.academia || solicitacao.equipe_nome} onAtualizou={(url) => {
+            setSolicitacao(atual => atual ? { ...atual, logo_url: url } : atual);
+            setEquipes(atual => atual.map(item => item.id === solicitacao.equipe_id ? { ...item, academia_logo_url: url } : item));
+          }} />
+        </div>
+      </div>}
+    </section>
     : <form onSubmit={enviar} className="mt-8 space-y-4 rounded-2xl border border-white/10 bg-zinc-900/60 p-6">
       <p className="text-xs leading-relaxed text-zinc-500">Pesquise a equipe antes de cadastrar. Se ela já estiver no campeonato, entre nela para não duplicar o nome no ranking.</p>
       <label className="block text-xs text-zinc-400">Pesquisar equipe no campeonato

@@ -4,10 +4,11 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/app/lib/supabase';
 import { CompeticaoShell, campoCompeticao as campo, useEventoCompeticao } from '../_components/CompeticaoShell';
 import { encontrarEquipeSemelhante } from '@/app/lib/equipes-nome';
+import { UploadLogoEquipe } from '@/app/components/UploadLogoEquipe';
 
-type Equipe = { id: string; nome: string; academia: string; professor: string; cidade: string };
-type Solicitacao = { id: string; equipe_nome: string; academia: string; professor: string; cidade: string; status: 'pendente' | 'aprovada' | 'recusada'; equipe_id: string | null };
-type AcademiaEquipe = { id: string; equipeId: string; academia: string; professor: string; cidade: string };
+type Equipe = { id: string; nome: string; academia: string; professor: string; cidade: string; logo_url?: string | null; academia_logo_url?: string | null };
+type Solicitacao = { id: string; equipe_nome: string; academia: string; professor: string; cidade: string; status: 'pendente' | 'aprovada' | 'recusada'; equipe_id: string | null; logo_url?: string | null };
+type AcademiaEquipe = { id: string; equipeId: string; academia: string; professor: string; cidade: string; logo_url?: string | null };
 type Confirmacao = { tipo: 'equipe' | 'academia'; id: string; equipeId: string; titulo: string; detalhe: string };
 
 function textoIgual(a: string, b: string) {
@@ -17,13 +18,13 @@ function textoIgual(a: string, b: string) {
 function academiasDaEquipe(equipe: Equipe, solicitacoes: Solicitacao[]): AcademiaEquipe[] {
   const vinculadas = solicitacoes
     .filter(item => item.status === 'aprovada' && item.equipe_id === equipe.id)
-    .map(item => ({ id: item.id, equipeId: equipe.id, academia: item.academia, professor: item.professor, cidade: item.cidade }));
+    .map(item => ({ id: item.id, equipeId: equipe.id, academia: item.academia, professor: item.professor, cidade: item.cidade, logo_url: item.logo_url }));
   if (!vinculadas.length) {
-    return [{ id: `equipe-${equipe.id}`, equipeId: equipe.id, academia: equipe.academia, professor: equipe.professor, cidade: equipe.cidade }];
+    return [{ id: `equipe-${equipe.id}`, equipeId: equipe.id, academia: equipe.academia, professor: equipe.professor, cidade: equipe.cidade, logo_url: equipe.academia_logo_url }];
   }
   const jaTemUnidadeInicial = vinculadas.some(item => textoIgual(item.academia, equipe.academia) && textoIgual(item.professor, equipe.professor));
   if (equipe.academia && !jaTemUnidadeInicial) {
-    return [{ id: `equipe-${equipe.id}`, equipeId: equipe.id, academia: equipe.academia, professor: equipe.professor, cidade: equipe.cidade }, ...vinculadas];
+    return [{ id: `equipe-${equipe.id}`, equipeId: equipe.id, academia: equipe.academia, professor: equipe.professor, cidade: equipe.cidade, logo_url: equipe.academia_logo_url }, ...vinculadas];
   }
   return vinculadas;
 }
@@ -54,8 +55,8 @@ function Editor({ eventoId }: { eventoId: string }) {
     async function carregar() {
       const [inscricoesResposta,equipesResposta,solicitacoesResposta] = await Promise.all([
         supabase.from('inscricoes').select('equipe,equipe_id').eq('evento_id',eventoId),
-        supabase.from('equipes_evento').select('id,nome,academia,professor,cidade').eq('evento_id',eventoId).order('nome'),
-        supabase.from('solicitacoes_equipe_evento').select('id,equipe_nome,academia,professor,cidade,status,equipe_id').eq('evento_id',eventoId).order('criado_em'),
+        supabase.from('equipes_evento').select('id,nome,academia,professor,cidade,logo_url,academia_logo_url').eq('evento_id',eventoId).order('nome'),
+        supabase.from('solicitacoes_equipe_evento').select('id,equipe_nome,academia,professor,cidade,status,equipe_id,logo_url').eq('evento_id',eventoId).order('criado_em'),
       ]);
       if (!ativo) return;
       setOrigens(inscricoesResposta.data || []);
@@ -86,8 +87,8 @@ function Editor({ eventoId }: { eventoId: string }) {
 
   async function recarregar() {
     const [equipesResposta,solicitacoesResposta,inscricoesResposta] = await Promise.all([
-      supabase.from('equipes_evento').select('id,nome,academia,professor,cidade').eq('evento_id',eventoId).order('nome'),
-      supabase.from('solicitacoes_equipe_evento').select('id,equipe_nome,academia,professor,cidade,status,equipe_id').eq('evento_id',eventoId).order('criado_em'),
+      supabase.from('equipes_evento').select('id,nome,academia,professor,cidade,logo_url,academia_logo_url').eq('evento_id',eventoId).order('nome'),
+      supabase.from('solicitacoes_equipe_evento').select('id,equipe_nome,academia,professor,cidade,status,equipe_id,logo_url').eq('evento_id',eventoId).order('criado_em'),
       supabase.from('inscricoes').select('equipe,equipe_id').eq('evento_id',eventoId),
     ]);
     setEquipes(equipesResposta.data || []);
@@ -157,7 +158,7 @@ function Editor({ eventoId }: { eventoId: string }) {
       if (error) setMensagem(error.message);
       else {
         setSolicitacoes(atual => atual.map(item => item.id === solicitacao.id ? { ...item, status: 'aprovada' } : item));
-        const { data } = await supabase.from('equipes_evento').select('id,nome,academia,professor,cidade').eq('evento_id',eventoId).order('nome');
+        const { data } = await supabase.from('equipes_evento').select('id,nome,academia,professor,cidade,logo_url,academia_logo_url').eq('evento_id',eventoId).order('nome');
         setEquipes(data || []); setMensagem(`${solicitacao.equipe_nome} aprovada e liberada para as inscrições.`);
       }
     } else {
@@ -209,7 +210,7 @@ function Editor({ eventoId }: { eventoId: string }) {
       <div className="mt-3 grid gap-3 text-sm text-zinc-400 md:grid-cols-3">
         <p><strong className="block text-white mb-1">Opção 1 · Organizador</strong>Cadastre a equipe diretamente usando o formulário desta página.</p>
         <p><strong className="block text-white mb-1">Opção 2 · Professor</strong>Na página pública do evento, o professor pesquisa a equipe. Se ela já existe, entra com a academia dele; se não, cadastra um nome novo.</p>
-        <p><strong className="block text-white mb-1">Resultado</strong>O ranking por equipes usa o nome único. Academias da mesma bandeira pontuam juntas na equipe e separadas no ranking por academias.</p>
+        <p><strong className="block text-white mb-1">Resultado</strong>O ranking por equipes usa o nome único. Academias da mesma bandeira pontuam juntas na equipe e separadas no ranking por academias. A logo da equipe e da academia sobe no card abaixo — o sistema converte para WebP leve.</p>
       </div>
     </section>
 
@@ -238,9 +239,14 @@ function Editor({ eventoId }: { eventoId: string }) {
           const academias = academiasDaEquipe(equipe, solicitacoes);
           return <article key={equipe.id} className="rounded-2xl border border-white/10 p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
+              <div className="flex min-w-0 items-start gap-3">
+                <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-yellow-500">Equipe no ranking</p>
                 <h2 className="mt-1 text-xl font-black">{equipe.nome}</h2>
+                <div className="mt-3 max-w-sm">
+                  <UploadLogoEquipe eventoId={eventoId} equipeId={equipe.id} tipo="equipe" logoUrl={equipe.logo_url} nome={equipe.nome} onAtualizou={(url) => setEquipes(atual => atual.map(item => item.id === equipe.id ? { ...item, logo_url: url } : item))} />
+                </div>
+                </div>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="rounded-full border border-white/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-zinc-300">{academias.length} {academias.length === 1 ? 'academia' : 'academias'}</span>
@@ -253,6 +259,12 @@ function Editor({ eventoId }: { eventoId: string }) {
               <p className="font-bold text-white">{academia.academia || 'Academia não informada'}</p>
               <p className="mt-1 text-sm text-zinc-400">{academia.professor || 'Professor não informado'}</p>
               {academia.cidade ? <p className="mt-1 text-xs text-zinc-500">{academia.cidade}</p> : null}
+              <div className="mt-3">
+                <UploadLogoEquipe eventoId={eventoId} equipeId={equipe.id} academiaId={academia.id} tipo="academia" logoUrl={academia.logo_url} nome={academia.academia || equipe.nome} onAtualizou={(url) => {
+                  if (academia.id.startsWith('equipe-')) setEquipes(atual => atual.map(item => item.id === equipe.id ? { ...item, academia_logo_url: url } : item));
+                  else setSolicitacoes(atual => atual.map(item => item.id === academia.id ? { ...item, logo_url: url } : item));
+                }} />
+              </div>
               <div className="mt-3 flex gap-2">
                 <button type="button" onClick={() => editarAcademia(academia)} className="rounded-lg border border-white/10 px-3 py-1.5 text-[10px] font-bold">Editar</button>
                 <button type="button" onClick={() => setConfirmacao({ tipo: 'academia', id: academia.id, equipeId: academia.equipeId, titulo: `Excluir ${academia.academia || 'esta academia'}?`, detalhe: `Ela sai da equipe ${equipe.nome}. Os atletas que já se inscreveram nessa equipe continuam nela.` })} className="rounded-lg border border-red-500/20 px-3 py-1.5 text-[10px] font-bold text-red-300">Excluir</button>

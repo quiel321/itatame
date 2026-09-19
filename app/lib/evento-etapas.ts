@@ -39,6 +39,7 @@ export type EtapaEvento = {
   rotuloProgresso?: string;
   inscricoesAbertas: boolean;
   checagemAberta: boolean;
+  listaChecagemVisivel: boolean;
 };
 
 export type ResumoLutasEvento = {
@@ -105,7 +106,15 @@ function criarEtapa(
     progresso: Math.round((indice / TOTAL_ETAPAS) * 100),
     inscricoesAbertas,
     checagemAberta,
+    listaChecagemVisivel: codigo !== "EM_BREVE",
   };
+}
+
+export function periodoCorrecaoChecagem(evento: EventoComEtapas, agora = new Date()) {
+  const inicio = dataOperacional(evento.data_inicio_checagem, false, evento.estado);
+  const fim = dataOperacional(evento.data_fim_checagem, true, evento.estado);
+  if (!inicio) return false;
+  return agora >= inicio && (!fim || agora <= fim);
 }
 
 export function obterEtapaEvento(
@@ -311,7 +320,7 @@ export function obterLinhaDoTempoEvento(evento: EventoComEtapas, agora = new Dat
       id: "checagem",
       titulo: "Checagem dos atletas",
       periodo: evento.data_inicio_checagem ? `${inicioChecagem} — ${fimChecagem}` : "Período a definir",
-      observacao: "Prazo para revisar peso, faixa, equipe e categoria.",
+      observacao: "A lista fica pública desde as inscrições. Este prazo é só para corrigir categoria e peso.",
       estado: estadoPorIndice(2, indiceAtual),
     },
     {

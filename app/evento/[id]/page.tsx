@@ -224,6 +224,9 @@ export default function EventoDetalhesPage() {
                   <Link href={`/evento/${evento.id}/publico`} className="bg-yellow-500 hover:bg-yellow-400 text-black font-black uppercase tracking-widest text-[10px] md:text-xs px-3 py-2.5 md:px-6 md:py-3.5 rounded-lg text-center flex-1 md:flex-none">
                     Ver pódio e chaves oficiais
                   </Link>
+                  <Link href={`/evento/${evento.id}/checagem`} className="bg-green-600 hover:bg-green-500 text-white font-black uppercase tracking-widest text-[10px] md:text-xs px-3 py-2.5 md:px-6 md:py-3.5 rounded-lg text-center flex-1 md:flex-none">
+                    Ver checagem
+                  </Link>
                   <Link href={`/ranking?evento=${evento.id}`} className="bg-white/5 hover:bg-white/10 border border-white/10 text-white font-black uppercase tracking-widest text-[10px] md:text-xs px-3 py-2.5 md:px-6 md:py-3.5 rounded-lg text-center flex-1 md:flex-none">
                     Ver ranking do campeonato
                   </Link>
@@ -247,14 +250,14 @@ export default function EventoDetalhesPage() {
                 )
               )}
 
-              {etapaAtual.checagemAberta ? (
+              {etapaAtual.listaChecagemVisivel ? (
                 <Link href={`/evento/${evento.id}/checagem`} className="bg-green-600 hover:bg-green-500 text-white font-black uppercase tracking-widest text-[10px] md:text-xs px-3 py-2.5 md:px-6 md:py-3.5 rounded-lg shadow-[0_0_15px_rgba(22,163,74,0.3)] transition-all text-center flex-1 md:flex-none flex items-center justify-center gap-1.5">
                   <svg className="w-3.5 h-3.5 md:w-4 md:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-                  Checagem Aberta
+                  {etapaAtual.checagemAberta ? "Checagem aberta" : "Ver checagem"}
                 </Link>
               ) : (
                 <div className="bg-white/5 border border-white/10 text-zinc-400 font-black uppercase tracking-widest text-[10px] md:text-xs px-3 py-2.5 md:px-6 md:py-3.5 rounded-lg text-center flex-1 md:flex-none">
-                  {etapaAtual.codigo === "EM_CHAVEAMENTO" || etapaAtual.indice > 3 ? "Checagem encerrada" : etapaAtual.proximoPasso}
+                  {etapaAtual.proximoPasso}
                 </div>
               )}
 

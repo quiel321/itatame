@@ -232,7 +232,7 @@ export default function EventoForm({ modo, eventoId }: EventoFormProps) {
   const fases = [
     { nome: "Inscrições", data: fimInscricoesFinal, texto: "Encerra inscrições e trava a geração de chaves." },
     { nome: "Pagamento", data: dataFimPagamento, texto: "Limite para quitar inscrições pendentes." },
-    { nome: "Checagem", data: dataInicioChecagem, texto: "Lista pública para conferência dos atletas." },
+    { nome: "Checagem", data: dataInicioChecagem, texto: "Prazo para o atleta corrigir categoria e peso. A lista já fica pública durante as inscrições." },
     { nome: "Chaves", data: dataDivulgacaoChaves, texto: "Previsão de divulgação das chaves." },
     { nome: "Cronograma", data: dataDivulgacaoCronograma, texto: "Horários e tatames estimados." },
     { nome: "Evento", data: dataEvento, texto: "Dia oficial do campeonato." },
@@ -502,7 +502,7 @@ export default function EventoForm({ modo, eventoId }: EventoFormProps) {
             </div>
 
             <div className={cardClass}>
-              <SectionTitle icon={<CalendarDays size={16} />} title="Fases e checagem" subtitle="Define quando o público poderá conferir inscrições, chaves e cronograma." />
+              <SectionTitle icon={<CalendarDays size={16} />} title="Fases e checagem" subtitle="A lista de inscritos fica pública desde as inscrições. As datas de checagem liberam só a troca de categoria." />
               <div className="mt-4 grid gap-3 md:grid-cols-2">
                 <Field label="Fim do pagamento"><input type="datetime-local" value={dataFimPagamento} onChange={(e) => setDataFimPagamento(e.target.value)} className={inputClass + " [color-scheme:dark]"} /></Field>
                 <Field label="Início da checagem"><input type="datetime-local" value={dataInicioChecagem} onChange={(e) => setDataInicioChecagem(e.target.value)} className={inputClass + " [color-scheme:dark]"} /></Field>
@@ -510,7 +510,7 @@ export default function EventoForm({ modo, eventoId }: EventoFormProps) {
                 <Field label="Divulgação das chaves"><input type="datetime-local" value={dataDivulgacaoChaves} onChange={(e) => setDataDivulgacaoChaves(e.target.value)} className={inputClass + " [color-scheme:dark]"} /></Field>
                 <Field label="Divulgação do cronograma"><input type="datetime-local" value={dataDivulgacaoCronograma} onChange={(e) => setDataDivulgacaoCronograma(e.target.value)} className={inputClass + " [color-scheme:dark]"} /></Field>
               </div>
-              <p className="mt-3 text-xs leading-relaxed text-zinc-500">Deixe um intervalo depois do fim da checagem até a divulgação das chaves. Nesse espaço o atleta ainda corrige peso e categoria. Na hora da divulgação, o sistema gera as chaves sozinho se as inscrições e a checagem já tiverem encerrado. O botão manual continua disponível.</p>
+              <p className="mt-3 text-xs leading-relaxed text-zinc-500">A checagem (lista de atletas, equipes e professores) já aparece no evento enquanto as inscrições estão abertas. Início e fim da checagem controlam apenas o período em que o atleta pode corrigir peso e categoria no perfil. Deixe um intervalo depois desse fim até a divulgação das chaves; na hora da divulgação o sistema gera as chaves se inscrições e correções já tiverem encerrado.</p>
             </div>
 
             <div className={cardClass}>

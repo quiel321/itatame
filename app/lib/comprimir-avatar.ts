@@ -19,3 +19,14 @@ export async function comprimirAvatar(file: File) {
   });
   return new File([comprimida], 'avatar.webp', { type: 'image/webp', lastModified: Date.now() });
 }
+
+export async function comprimirLogo(file: File) {
+  const base = await comprimirAvatar(file);
+  const comprimida = await imageCompression(base, {
+    maxSizeMB: 0.05,
+    maxWidthOrHeight: 256,
+    useWebWorker: true,
+    fileType: 'image/webp',
+  });
+  return new File([comprimida], 'logo.webp', { type: 'image/webp', lastModified: Date.now() });
+}

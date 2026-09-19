@@ -1,30 +1,95 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import { supabase } from '@/app/lib/supabase';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { chavesDaInscricao, type CategoriaCompeticao, type ChaveChecagem } from '@/app/lib/categorias-competicao';
-import { nomeEquipeChecagem } from '@/app/lib/equipes-nome';
-import { Search, Users, Layers, Shield, ArrowLeft, Trophy, Building2 } from 'lucide-react';
+import Link from 'next/link';
+import { ArrowLeft, CheckCircle2, Layers, Search, Shield, TriangleAlert, Users } from 'lucide-react';
+import { formatarDataHoraEvento, obterEtapaEvento, periodoCorrecaoChecagem } from '@/app/lib/evento-etapas';
+import { type CategoriaCompeticao } from '@/app/lib/categorias-competicao';
+import {
+  chaveProfessor,
+  letraAtleta,
+  montarInscritosChecagem,
+  type AbaChecagem,
+  type EquipeChecagem,
+  type InscritoChecagem,
+} from '@/app/lib/checagem-publico';
 
-type EquipeEvento = { id: string; nome: string; academia: string | null; professor: string | null };
+type FiltrosCategoria = { categoria: string; faixa: string; peso: string; sexo: string; busca: string };
 
-type InscricaoCompleta = {
-  id: string;
-  categoria: string;
-  atleta_nome: string;
-  equipe: string;
-  academia: string;
-  professor: string;
-  faixa: string;
-  peso: string;
-  sexo: string;
-  absoluto: boolean;
-  sozinho: boolean;
-  chaves: ChaveChecagem[];
-  chave_categoria: string;
-  categoria_rotulo: string;
-};
+const ABAS: Array<{ id: AbaChecagem; rotulo: string }> = [
+  { id: 'geral', rotulo: 'Geral' },
+  { id: 'absoluto', rotulo: 'Absoluto' },
+  { id: 'peso', rotulo: 'Categoria de peso' },
+  { id: 'equipe', rotulo: 'Equipe' },
+  { id: 'professor', rotulo: 'Equipe e professor' },
+];
+
+function LogoEquipe({ src, nome, tamanho = 'h-11 w-11' }: { src?: string | null; nome: string; tamanho?: string }) {
+  const iniciais = nome.split(/\s+/).slice(0, 2).map((parte) => parte[0]).join('').toUpperCase();
+  if (src) return <img src={src} alt="" className={`${tamanho} shrink-0 rounded-full border border-white/10 object-cover bg-black`} />;
+  return <span className={`${tamanho} inline-flex shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5 text-[10px] font-black text-zinc-400`}>{iniciais || <Shield size={14} />}</span>;
+}
+
+function SeloPagamento({ ok }: { ok: boolean }) {
+  return ok ? (
+    <span className="inline-flex items-center gap-1 text-[9px] font-medium text-emerald-400">
+      <CheckCircle2 size={11} /> Confirmado
+    </span>
+  ) : (
+    <span className="inline-flex items-center gap-1 text-[9px] font-medium text-amber-300">
+      <TriangleAlert size={11} /> Pendente
+    </span>
+  );
+}
+
+function CardAtleta({
+  insc,
+  onEquipe,
+  onProfessor,
+  onCategoria,
+}: {
+  insc: InscritoChecagem;
+  onEquipe: (equipe: string) => void;
+  onProfessor: (professor: string) => void;
+  onCategoria: (chave: string, aba: AbaChecagem) => void;
+}) {
+  const peso = insc.chaves.find((chave) => chave.tipo === 'peso');
+  const absoluto = insc.chaves.find((chave) => chave.tipo === 'absoluto');
+  return (
+    <article className="border-b border-white/5 px-3 py-2 last:border-b-0">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[13px] font-semibold tracking-tight text-white">{insc.atleta_nome}</p>
+          {peso && (
+            <button type="button" onClick={() => onCategoria(peso.chave, 'peso')} className="mt-0.5 block text-left text-[10px] font-medium text-cyan-300 hover:underline">
+              Peso · {peso.rotulo}
+            </button>
+          )}
+          {absoluto && (
+            <button type="button" onClick={() => onCategoria(absoluto.chave, 'absoluto')} className="mt-0.5 block text-left text-[10px] font-medium text-amber-300 hover:underline">
+              Absoluto · {absoluto.rotulo}
+            </button>
+          )}
+          {!peso && !absoluto && <p className="mt-0.5 text-[10px] text-zinc-500">{insc.categoria_rotulo}</p>}
+          <div className="mt-1.5 flex flex-wrap items-center gap-2">
+            <button type="button" onClick={() => onEquipe(insc.equipe)} className="inline-flex items-center gap-1.5 text-[10px] font-medium text-red-300 hover:underline">
+              <LogoEquipe src={insc.logo_url} nome={insc.equipe} tamanho="h-4 w-4" />
+              {insc.equipe}
+            </button>
+            <button type="button" onClick={() => onProfessor(chaveProfessor(insc.professor, insc.academia, insc.equipe))} className="text-[10px] font-medium text-zinc-400 hover:text-white hover:underline">
+              {insc.professor}
+            </button>
+          </div>
+        </div>
+        <div className="shrink-0 text-right">
+          <p className="font-mono text-[10px] text-zinc-500">{insc.numero}</p>
+          <div className="mt-1"><SeloPagamento ok={insc.pagamento_ok} /></div>
+        </div>
+      </div>
+    </article>
+  );
+}
 
 export default function ChecagemGeralPage() {
   const params = useParams();
@@ -32,498 +97,312 @@ export default function ChecagemGeralPage() {
   const eventoId = params.id as string;
 
   const [evento, setEvento] = useState<any>(null);
-  const [inscricoes, setInscricoes] = useState<InscricaoCompleta[]>([]);
+  const [inscricoes, setInscricoes] = useState<InscritoChecagem[]>([]);
+  const [equipes, setEquipes] = useState<EquipeChecagem[]>([]);
   const [loading, setLoading] = useState(true);
-  
-  // Controle de Abas e Filtros
-  const [abaAtiva, setAbaAtiva] = useState<'atleta' | 'categoria' | 'equipe'>('atleta');
-  
-  const [buscaAtleta, setBuscaAtleta] = useState('');
-  const [filtroAcademia, setFiltroAcademia] = useState('');
-  
-  // Filtros da aba "Por Categoria"
-  const [catSelecionada, setCatSelecionada] = useState('');
-  const [nomeFiltroCat, setNomeFiltroCat] = useState('');
-  
-  // Filtros da aba "Por Equipe"
-  const [eqSelecionada, setEqSelecionada] = useState('');
-  const [nomeFiltroEq, setNomeFiltroEq] = useState('');
+  const [abaAtiva, setAbaAtiva] = useState<AbaChecagem>('geral');
+  const [buscaGeral, setBuscaGeral] = useState('');
+  const [filtroPagamento, setFiltroPagamento] = useState<'todos' | 'ok' | 'pendente'>('todos');
+  const [equipeAberta, setEquipeAberta] = useState('');
+  const [professorAberto, setProfessorAberto] = useState('');
+  const [filtrosPeso, setFiltrosPeso] = useState<FiltrosCategoria>({ categoria: '', faixa: '', peso: '', sexo: '', busca: '' });
+  const [filtrosAbs, setFiltrosAbs] = useState<FiltrosCategoria>({ categoria: '', faixa: '', peso: '', sexo: '', busca: '' });
 
   useEffect(() => {
-    async function carregarDados() {
-      const { data: ev } = await supabase.from('eventos').select('*').eq('id', eventoId).single();
-      if (ev) setEvento(ev);
-
-      const [{ data: inscData }, checagemOficial] = await Promise.all([
-        supabase.from('inscricoes').select('*').eq('evento_id', eventoId).eq('pagamento_ok', true),
-        fetch(`/api/eventos/${eventoId}/checagem`).then(async resposta => resposta.ok ? resposta.json() : { categorias: [], equipes: [] }).catch(() => ({ categorias: [], equipes: [] })),
-      ]);
-      const categorias = (checagemOficial.categorias || []) as CategoriaCompeticao[];
-      const equipesOficiais = (checagemOficial.equipes || []) as EquipeEvento[];
-      if (inscData && inscData.length > 0) {
-        const userIds = [...new Set(inscData.map(i => i.user_id))];
-        const { data: atletasData } = await supabase
-          .from('atletas_publico')
-          .select('user_id, nome, equipe, academia, professor, faixa, peso, sexo')
-          .in('user_id', userIds);
-
-        const dadosCompletos: InscricaoCompleta[] = inscData.map(insc => {
-          const atl = atletasData?.find(a => a.user_id === insc.user_id);
-          const faixa = insc.faixa || atl?.faixa || 'FAIXA NÃO INFORMADA';
-          const chaves = chavesDaInscricao({
-            ...insc,
-            faixa,
-            sexo: insc.sexo || atl?.sexo,
-            peso: insc.peso || atl?.peso,
-          }, categorias);
-          const principal = chaves[0];
-          const equipe = nomeEquipeChecagem(insc, equipesOficiais, atl?.equipe);
-          const academiaOficial = equipesOficiais.find(eq => eq.nome === equipe);
-          return {
-            id: insc.id,
-            categoria: principal?.rotulo || insc.categoria || 'Sem categoria do organizador',
-            atleta_nome: insc.atleta || atl?.nome || 'Atleta Desconhecido',
-            equipe,
-            academia: atl?.academia || academiaOficial?.academia || '',
-            professor: atl?.professor || academiaOficial?.professor || 'Sem Professor',
-            faixa,
-            peso: insc.peso || '',
-            sexo: insc.sexo || '',
-            absoluto: Boolean(insc.absoluto) || chaves.some(chave => chave.tipo === 'absoluto'),
-            sozinho: false,
-            chaves,
-            chave_categoria: principal?.chave || '',
-            categoria_rotulo: principal?.rotulo || 'Sem categoria do organizador',
-          };
-        });
-
-        const totaisCategoria = dadosCompletos.reduce((acc, insc) => {
-          for (const chave of insc.chaves) acc[chave.chave] = (acc[chave.chave] || 0) + 1;
-          return acc;
-        }, {} as Record<string, number>);
-        dadosCompletos.forEach(insc => { insc.sozinho = insc.chaves.some(chave => totaisCategoria[chave.chave] === 1); });
-        dadosCompletos.sort((a, b) => a.atleta_nome.localeCompare(b.atleta_nome));
-        setInscricoes(dadosCompletos);
+    async function carregar() {
+      const resposta = await fetch(`/api/eventos/${eventoId}/checagem`).catch(() => null);
+      if (!resposta?.ok) {
+        setLoading(false);
+        return;
       }
+      const dados = await resposta.json();
+      setEvento(dados.evento);
+      setEquipes(dados.equipes || []);
+      setInscricoes(montarInscritosChecagem(dados.inscricoes || [], dados.atletas || [], (dados.categorias || []) as CategoriaCompeticao[], dados.equipes || [], dados.academias || [], dados.evento?.data_evento));
       setLoading(false);
     }
-
-    if (eventoId) carregarDados();
+    if (eventoId) void carregar();
   }, [eventoId]);
 
-  // Extrair listas únicas para os dropdowns
-  const gruposCategoriaFaixa = useMemo(() => {
-    const mapa = new Map<string, string>();
-    for (const insc of inscricoes) {
-      for (const chave of insc.chaves) {
-        mapa.set(chave.chave, chave.tipo === 'absoluto' ? `ABS · ${chave.rotulo}` : chave.rotulo);
+  const etapa = evento ? obterEtapaEvento(evento) : null;
+  const correcaoAberta = evento ? periodoCorrecaoChecagem(evento) : false;
+
+  const filtrarPagamento = (lista: InscritoChecagem[]) => {
+    if (filtroPagamento === 'ok') return lista.filter((item) => item.pagamento_ok);
+    if (filtroPagamento === 'pendente') return lista.filter((item) => !item.pagamento_ok);
+    return lista;
+  };
+
+  const geral = useMemo(() => {
+    const termo = buscaGeral.trim().toLowerCase();
+    return filtrarPagamento(inscricoes).filter((item) => !termo || [item.atleta_nome, item.equipe, item.academia, item.professor, item.categoria_rotulo, item.numero, ...item.chaves.map((chave) => chave.rotulo)].join(' ').toLowerCase().includes(termo));
+  }, [inscricoes, buscaGeral, filtroPagamento]);
+
+  const letras = useMemo(() => {
+    const mapa = new Map<string, InscritoChecagem[]>();
+    for (const insc of geral) {
+      const letra = letraAtleta(insc.atleta_nome);
+      mapa.set(letra, [...(mapa.get(letra) || []), insc]);
+    }
+    return [...mapa.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  }, [geral]);
+
+  const gruposPorTipo = (tipo: 'peso' | 'absoluto', filtros: FiltrosCategoria) => {
+    const lista = filtrarPagamento(inscricoes).filter((insc) => insc.chaves.some((chave) => chave.tipo === tipo));
+    const mapa = new Map<string, { rotulo: string; faixa: string; sexo: string; atletas: InscritoChecagem[] }>();
+    for (const insc of lista) {
+      for (const chave of insc.chaves.filter((item) => item.tipo === tipo)) {
+        const atual = mapa.get(chave.chave) || { rotulo: chave.rotulo, faixa: insc.faixa, sexo: insc.sexo, atletas: [] };
+        atual.atletas.push(insc);
+        mapa.set(chave.chave, atual);
       }
     }
-    return [...mapa.entries()].sort((a, b) => a[1].localeCompare(b[1]));
-  }, [inscricoes]);
-  const equipesUnicas = useMemo(() => [...new Set(inscricoes.map(i => i.equipe))].sort(), [inscricoes]);
-  const academiasUnicas = useMemo(() => [...new Set(inscricoes.map(i => i.academia).filter(Boolean))].sort(), [inscricoes]);
-  const totalAbsoluto = useMemo(() => inscricoes.filter(i => i.absoluto).length, [inscricoes]);
-  const totalSozinhos = useMemo(() => inscricoes.filter(i => i.sozinho).length, [inscricoes]);
-
-  // Ações de clique nos links da tabela (Navegação Cruzada)
-  const irParaCategoria = (categoria: string) => {
-    setCatSelecionada(categoria);
-    setNomeFiltroCat('');
-    setAbaAtiva('categoria');
+    return [...mapa.entries()].map(([chave, grupo]) => ({ chave, ...grupo })).filter((grupo) => {
+      const termo = filtros.busca.trim().toLowerCase();
+      const atletas = grupo.atletas.filter((insc) => !termo || [insc.atleta_nome, insc.equipe, insc.professor].join(' ').toLowerCase().includes(termo));
+      if (filtros.categoria && !grupo.rotulo.toLowerCase().includes(filtros.categoria.toLowerCase())) return false;
+      if (filtros.faixa && !grupo.faixa.toLowerCase().includes(filtros.faixa.toLowerCase())) return false;
+      if (filtros.sexo && grupo.sexo.toLowerCase() !== filtros.sexo.toLowerCase()) return false;
+      if (filtros.peso && !grupo.rotulo.toLowerCase().includes(filtros.peso.toLowerCase())) return false;
+      grupo.atletas = atletas;
+      return atletas.length > 0;
+    }).sort((a, b) => a.rotulo.localeCompare(b.rotulo, 'pt-BR'));
   };
 
-  const irParaEquipe = (equipe: string) => {
-    setEqSelecionada(equipe);
-    setNomeFiltroEq('');
-    setAbaAtiva('equipe');
-  };
+  const gruposPeso = useMemo(() => gruposPorTipo('peso', filtrosPeso), [inscricoes, filtrosPeso, filtroPagamento]);
+  const gruposAbs = useMemo(() => gruposPorTipo('absoluto', filtrosAbs), [inscricoes, filtrosAbs, filtroPagamento]);
 
-  // Filtros calculados para as tabelas
-  const atletasFiltradosGeral = useMemo(() => {
-    const termo = buscaAtleta.toLowerCase().trim();
-    const academia = filtroAcademia.toLowerCase().trim();
-    return inscricoes.filter(i => {
-      const bateBusca = !termo || [i.atleta_nome, i.equipe, i.academia, i.professor, i.categoria, i.faixa, i.categoria_rotulo, i.peso, ...i.chaves.map(chave => chave.rotulo)].join(' ').toLowerCase().includes(termo);
-      const bateAcademia = !academia || i.academia.toLowerCase() === academia;
-      return bateBusca && bateAcademia;
-    });
-  }, [inscricoes, buscaAtleta, filtroAcademia]);
-
-  const atletasNaCategoria = useMemo(() => {
-    if (!catSelecionada) return [];
-    let filtrado = inscricoes.filter(i => i.chaves.some(chave => chave.chave === catSelecionada));
-    if (nomeFiltroCat) {
-      const termo = nomeFiltroCat.toLowerCase();
-      filtrado = filtrado.filter(i => [i.atleta_nome, i.equipe, i.academia, i.professor].join(' ').toLowerCase().includes(termo));
+  const gruposEquipe = useMemo(() => {
+    const mapa = new Map<string, { nome: string; logo_url?: string | null; atletas: InscritoChecagem[] }>();
+    for (const insc of filtrarPagamento(inscricoes)) {
+      const atual = mapa.get(insc.equipe) || { nome: insc.equipe, logo_url: insc.logo_url, atletas: [] };
+      atual.atletas.push(insc);
+      if (!atual.logo_url) atual.logo_url = insc.logo_url;
+      mapa.set(insc.equipe, atual);
     }
-    return filtrado;
-  }, [inscricoes, catSelecionada, nomeFiltroCat]);
+    return [...mapa.values()].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  }, [inscricoes, filtroPagamento]);
 
-  const gruposResumo = useMemo(() => gruposCategoriaFaixa.map(([chave, rotulo]) => {
-    const total = inscricoes.filter(i => i.chaves.some(item => item.chave === chave)).length;
-    return { chave, rotulo, total };
-  }), [gruposCategoriaFaixa, inscricoes]);
+  const gruposProfessor = useMemo(() => {
+    const mapa = new Map<string, { titulo: string; logo_url?: string | null; atletas: InscritoChecagem[] }>();
+    for (const insc of filtrarPagamento(inscricoes)) {
+      const chave = chaveProfessor(insc.professor, insc.academia, insc.equipe);
+      const atual = mapa.get(chave) || { titulo: chave, logo_url: insc.academia_logo_url, atletas: [] };
+      atual.atletas.push(insc);
+      if (!atual.logo_url) atual.logo_url = insc.academia_logo_url;
+      mapa.set(chave, atual);
+    }
+    return [...mapa.values()].sort((a, b) => a.titulo.localeCompare(b.titulo, 'pt-BR'));
+  }, [inscricoes, filtroPagamento]);
 
-  const grupoSelecionado = gruposResumo.find(grupo => grupo.chave === catSelecionada);
+  const opcoes = useMemo(() => {
+    const faixas = [...new Set(inscricoes.map((item) => item.faixa).filter(Boolean))].sort();
+    const sexos = [...new Set(inscricoes.map((item) => item.sexo).filter(Boolean))].sort();
+    const categorias = [...new Set(inscricoes.flatMap((item) => item.chaves.map((chave) => chave.rotulo)))].sort();
+    return { faixas, sexos, categorias };
+  }, [inscricoes]);
 
-  const atletasNaEquipe = useMemo(() => {
-    if (!eqSelecionada) return [];
-    let filtrado = inscricoes.filter(i => i.equipe === eqSelecionada);
-    if (nomeFiltroEq) filtrado = filtrado.filter(i => i.atleta_nome.toLowerCase().includes(nomeFiltroEq.toLowerCase()));
-    return filtrado;
-  }, [inscricoes, eqSelecionada, nomeFiltroEq]);
+  const irParaEquipe = (equipe: string) => { setEquipeAberta(equipe); setAbaAtiva('equipe'); };
+  const irParaProfessor = (professor: string) => { setProfessorAberto(professor); setAbaAtiva('professor'); };
+  const irParaCategoria = (chave: string, aba: AbaChecagem) => {
+    setAbaAtiva(aba);
+    window.setTimeout(() => document.getElementById(`cat-${chave}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+  };
+
   if (loading) {
-    return <div className="min-h-screen bg-[#050505] flex items-center justify-center text-red-500 font-black uppercase tracking-widest text-xs animate-pulse">Carregando checagem...</div>;
+    return <div className="flex min-h-screen items-center justify-center bg-[#050505] text-xs font-black uppercase tracking-widest text-red-500">Carregando checagem...</div>;
   }
 
-  const agora = new Date();
-  const inicioChecagem = evento?.data_inicio_checagem ? new Date(evento.data_inicio_checagem) : null;
-  const fimChecagem = evento?.data_fim_checagem ? new Date(evento.data_fim_checagem) : null;
-  const checagemAberta = Boolean(inicioChecagem && agora >= inicioChecagem && (!fimChecagem || agora <= fimChecagem));
-  const formatarPrazo = (valor?: string | null) => valor ? new Date(valor).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : "A definir";
-
-  if (!checagemAberta) {
+  if (etapa && !etapa.listaChecagemVisivel) {
     return (
-      <main className="min-h-screen bg-[#050505] text-white flex items-center justify-center px-4">
-        <section className="w-full max-w-lg bg-[#0a0a0e] border border-white/10 rounded-2xl p-6 text-center shadow-2xl">
-          <p className="text-red-500 text-[10px] font-black uppercase tracking-widest mb-3">Checagem indisponível</p>
-          <h1 className="text-xl font-black uppercase mb-2">{evento?.nome || "Evento"}</h1>
-          <p className="text-zinc-400 text-sm leading-relaxed mb-5">A checagem fica visível apenas no período definido pelo organizador.</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6 text-left">
-            <div className="bg-black/40 border border-white/10 rounded-xl p-3">
-              <span className="text-zinc-500 text-[9px] font-black uppercase tracking-widest">Abre</span>
-              <p className="text-white text-xs font-bold mt-1">{formatarPrazo(evento?.data_inicio_checagem)}</p>
-            </div>
-            <div className="bg-black/40 border border-white/10 rounded-xl p-3">
-              <span className="text-zinc-500 text-[9px] font-black uppercase tracking-widest">Fecha</span>
-              <p className="text-white text-xs font-bold mt-1">{formatarPrazo(evento?.data_fim_checagem)}</p>
-            </div>
-          </div>
-          <button onClick={() => router.back()} className="w-full bg-white text-black rounded-xl py-3 text-xs font-black uppercase tracking-widest">Voltar ao evento</button>
+      <main className="flex min-h-screen items-center justify-center bg-[#050505] px-4 text-white">
+        <section className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#0a0a0e] p-6 text-center">
+          <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-red-500">Checagem em breve</p>
+          <h1 className="mb-2 text-xl font-black uppercase">{evento?.nome || 'Evento'}</h1>
+          <p className="mb-6 text-sm leading-relaxed text-zinc-400">A lista de inscritos abre junto com as inscrições.</p>
+          <button onClick={() => router.back()} className="w-full rounded-xl bg-white py-3 text-xs font-black uppercase tracking-widest text-black">Voltar ao evento</button>
         </section>
       </main>
     );
   }
 
+  const confirmados = inscricoes.filter((item) => item.pagamento_ok).length;
+  const pendentes = inscricoes.length - confirmados;
+
   return (
-    <main className="min-h-screen bg-[#050505] text-white font-sans pb-20 selection:bg-red-500/30">
-      
-      {/* CABEÇALHO (Estilo Sou Competidor) */}
-      <header className="bg-zinc-900 border-b border-white/10 pt-8 pb-6 px-4">
-        <div className="max-w-6xl mx-auto text-center">
-          <button onClick={() => router.back()} className="text-zinc-400 hover:text-white flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest transition-colors mb-4 mx-auto md:mx-0">
-            <ArrowLeft size={14} /> Voltar para o Evento
-          </button>
-          <h1 className="text-xl md:text-2xl font-black uppercase tracking-tighter text-red-500 mb-1">
-            Checagem do evento "{evento?.nome || "Carregando..."}"
-          </h1>
-          <p className="text-zinc-400 text-xs uppercase tracking-widest font-medium">
-            Confira nome, equipe do evento, academia, faixa, peso e quem está na sua categoria.
+    <main className="min-h-screen bg-[#050505] pb-32 text-white">
+      <header className="border-b border-white/10 bg-zinc-950 px-4 pb-4 pt-6">
+        <div className="mx-auto max-w-5xl">
+          <Link href={`/evento/${eventoId}`} className="mb-3 inline-flex items-center gap-2 text-[10px] font-medium text-zinc-400 hover:text-white">
+            <ArrowLeft size={14} /> Página do evento
+          </Link>
+          <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-red-500">Lista de atletas</p>
+          <h1 className="mt-1 text-lg font-semibold tracking-tight md:text-xl">{evento?.nome || 'Checagem'}</h1>
+          <p className="mt-2 max-w-2xl text-xs leading-relaxed text-zinc-400">
+            {correcaoAberta
+              ? `Correção de categoria liberada até ${formatarDataHoraEvento(evento?.data_fim_checagem, true, evento?.estado)}. O atleta ajusta no perfil.`
+              : evento?.data_inicio_checagem
+                ? `A lista já está aberta. Mudança de categoria só de ${formatarDataHoraEvento(evento.data_inicio_checagem, false, evento.estado)} até ${formatarDataHoraEvento(evento.data_fim_checagem, true, evento.estado)}.`
+                : 'A lista acompanha as inscrições. A troca de categoria abre no período definido pelo organizador.'}
           </p>
+          <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4">
+            <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2"><p className="text-[9px] font-medium uppercase tracking-wider text-zinc-500">Inscritos</p><p className="mt-0.5 text-base font-semibold">{inscricoes.length}</p></div>
+            <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2"><p className="text-[9px] font-medium uppercase tracking-wider text-emerald-300">Confirmados</p><p className="mt-0.5 text-base font-semibold text-emerald-200">{confirmados}</p></div>
+            <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2"><p className="text-[9px] font-medium uppercase tracking-wider text-amber-300">Pendentes</p><p className="mt-0.5 text-base font-semibold text-amber-200">{pendentes}</p></div>
+            <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2"><p className="text-[9px] font-medium uppercase tracking-wider text-zinc-500">Equipes</p><p className="mt-0.5 text-base font-semibold">{gruposEquipe.length}</p></div>
+          </div>
         </div>
       </header>
 
-      <div className="max-w-6xl mx-auto px-4 mt-6">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-          <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-            <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Inscritos</p>
-            <p className="mt-1 text-lg font-black text-white">{inscricoes.length}</p>
-          </div>
-          <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-            <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Categorias</p>
-            <p className="mt-1 text-lg font-black text-white">{gruposCategoriaFaixa.length}</p>
-          </div>
-          <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-            <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Absoluto</p>
-            <p className="mt-1 text-lg font-black text-amber-300">{totalAbsoluto}</p>
-          </div>
-          <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-            <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Sozinhos na chave</p>
-            <p className="mt-1 text-lg font-black text-yellow-300">{totalSozinhos}</p>
-          </div>
-        </div>
-        
-        {/* NAVEGAÇÃO DE ABAS */}
-        <div className="flex border-b border-white/10 mb-6 overflow-x-auto scrollbar-hide">
-          <button onClick={() => setAbaAtiva('atleta')} className={`cursor-pointer flex items-center gap-2 px-5 py-3 text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap border-b-2 ${abaAtiva === 'atleta' ? 'border-red-600 text-white' : 'border-transparent text-zinc-500 hover:text-zinc-300'}`}>
-            <Users size={16} className={abaAtiva === 'atleta' ? 'text-red-600' : ''} /> Por Atleta
-          </button>
-          <button onClick={() => setAbaAtiva('categoria')} className={`cursor-pointer flex items-center gap-2 px-5 py-3 text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap border-b-2 ${abaAtiva === 'categoria' ? 'border-red-600 text-white' : 'border-transparent text-zinc-500 hover:text-zinc-300'}`}>
-            <Layers size={16} className={abaAtiva === 'categoria' ? 'text-red-600' : ''} /> Por Categoria
-          </button>
-          <button onClick={() => setAbaAtiva('equipe')} className={`cursor-pointer flex items-center gap-2 px-5 py-3 text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap border-b-2 ${abaAtiva === 'equipe' ? 'border-red-600 text-white' : 'border-transparent text-zinc-500 hover:text-zinc-300'}`}>
-            <Shield size={16} className={abaAtiva === 'equipe' ? 'text-red-600' : ''} /> Por Equipe
-          </button>
+      <div className="mx-auto max-w-5xl px-4 pt-5">
+        <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
+          {ABAS.map((aba) => (
+            <button key={aba.id} type="button" onClick={() => setAbaAtiva(aba.id)} className={`whitespace-nowrap rounded-full px-3 py-1.5 text-[10px] font-semibold ${abaAtiva === aba.id ? 'bg-red-600 text-white' : 'border border-white/10 bg-white/5 text-zinc-400 hover:text-white'}`}>
+              {aba.rotulo}
+            </button>
+          ))}
         </div>
 
-        {/* ================================================= */}
-        {/* CONTEÚDO DA ABA: POR ATLETA */}
-        {/* ================================================= */}
-        {abaAtiva === 'atleta' && (
-          <div className="animate-in fade-in duration-300">
-            <div className="mb-4 grid gap-3 md:grid-cols-[1fr_220px]">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-                <input 
-                  type="text" 
-                  placeholder="Pesquisar atleta, equipe, academia ou professor..." 
-                  value={buscaAtleta}
-                  onChange={(e) => setBuscaAtleta(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 focus:border-red-500 outline-none rounded-md pl-9 pr-4 py-2 text-xs text-white transition-colors placeholder:text-zinc-600"
-                />
-              </div>
-              <div className="relative">
-                <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-                <select
-                  value={filtroAcademia}
-                  onChange={(e) => setFiltroAcademia(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 focus:border-red-500 outline-none rounded-md pl-9 pr-4 py-2 text-xs text-white uppercase cursor-pointer"
-                >
-                  <option value="">Todas as academias</option>
-                  {academiasUnicas.map(academia => <option key={academia} value={academia}>{academia}</option>)}
-                </select>
-              </div>
+        <div className="mb-5 flex flex-wrap gap-2">
+          {[{ id: 'todos', rotulo: 'Todos' }, { id: 'ok', rotulo: 'Pagamento confirmado' }, { id: 'pendente', rotulo: 'Pagamento pendente' }].map((item) => (
+            <button key={item.id} type="button" onClick={() => setFiltroPagamento(item.id as typeof filtroPagamento)} className={`rounded-md px-2.5 py-1 text-[10px] font-medium ${filtroPagamento === item.id ? 'bg-white text-black' : 'border border-white/10 text-zinc-400'}`}>
+              {item.rotulo}
+            </button>
+          ))}
+        </div>
+
+        {abaAtiva === 'geral' && (
+          <section>
+            <div className="relative mb-4">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+              <input value={buscaGeral} onChange={(e) => setBuscaGeral(e.target.value)} placeholder="Buscar atleta, equipe, professor ou categoria" className="w-full rounded-xl border border-white/10 bg-white/5 py-3 pl-10 pr-4 text-sm outline-none placeholder:text-zinc-600 focus:border-red-500" />
             </div>
-
-            <div className="bg-white/5 border border-white/10 rounded-md overflow-x-auto shadow-xl">
-              <table className="w-full text-left whitespace-nowrap">
-                <thead className="bg-[#cc0000] text-white">
-                  <tr>
-                    <th className="px-3 py-2 text-[10px] font-black uppercase tracking-widest">Nome do Atleta</th>
-                    <th className="px-3 py-2 text-[10px] font-black uppercase tracking-widest">Equipe</th>
-                    <th className="px-3 py-2 text-[10px] font-black uppercase tracking-widest">Academia</th>
-                    <th className="px-3 py-2 text-[10px] font-black uppercase tracking-widest">Professor</th>
-                    <th className="px-3 py-2 text-[10px] font-black uppercase tracking-widest">Categoria</th>
-                    <th className="px-3 py-2 text-[10px] font-black uppercase tracking-widest">Peso</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/10 text-[10px] md:text-xs">
-                  {atletasFiltradosGeral.map((insc, index) => (
-                    <tr key={insc.id} className={index % 2 === 0 ? 'bg-transparent' : 'bg-black/20'}>
-                      <td className="px-3 py-2.5 font-black text-white uppercase flex items-center gap-2">
-                        <span className="text-[10px]">🇧🇷</span> {insc.atleta_nome}
-                        {insc.chaves.some(chave => chave.tipo === 'absoluto') && (
-                          <button
-                            onClick={() => {
-                              const absoluto = insc.chaves.find(chave => chave.tipo === 'absoluto');
-                              if (absoluto) irParaCategoria(absoluto.chave);
-                            }}
-                            className="text-[8px] font-black tracking-widest px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30 cursor-pointer"
-                          >
-                            ABS
-                          </button>
-                        )}
-                        {insc.sozinho && <span className="text-[8px] font-black tracking-widest px-1.5 py-0.5 rounded bg-yellow-500/15 text-yellow-200 border border-yellow-500/30">SOZINHO</span>}
-                      </td>
-                      <td className="px-3 py-2.5 font-bold">
-                        <button onClick={() => irParaEquipe(insc.equipe)} className="text-blue-400 hover:text-blue-300 hover:underline uppercase transition-colors text-left cursor-pointer">
-                          {insc.equipe}
-                        </button>
-                      </td>
-                      <td className="px-3 py-2.5 text-zinc-300 uppercase">{insc.academia || "-"}</td>
-                      <td className="px-3 py-2.5 text-zinc-400 uppercase">{insc.professor}</td>
-                      <td className="px-3 py-2.5 font-bold whitespace-normal">
-                        <div className="flex flex-col items-start gap-1">
-                          {insc.chaves.length > 0 ? insc.chaves.map(chave => (
-                            <button key={chave.chave} onClick={() => irParaCategoria(chave.chave)} className="text-blue-400 hover:text-blue-300 hover:underline uppercase transition-colors text-left cursor-pointer">
-                              {chave.tipo === 'absoluto' ? 'ABS · ' : ''}{chave.rotulo}
-                            </button>
-                          )) : (
-                            <span className="text-zinc-500 uppercase">{insc.categoria_rotulo}</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-3 py-2.5 font-bold text-zinc-300">{insc.peso ? `${insc.peso} kg` : "-"}</td>
-                    </tr>
+            <p className="mb-3 text-[11px] font-medium text-zinc-500">{geral.length} {geral.length === 1 ? 'atleta' : 'atletas'}</p>
+            <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#0b0b10]">
+              {letras.length === 0 ? <p className="p-8 text-center text-sm text-zinc-500">Nenhum atleta encontrado.</p> : letras.map(([letra, atletas]) => (
+                <div key={letra}>
+                  <p className="sticky top-0 bg-red-950/80 px-3 py-1 text-[11px] font-semibold text-red-200 backdrop-blur">{letra}</p>
+                  {atletas.map((insc) => (
+                    <CardAtleta key={insc.id} insc={insc} onEquipe={irParaEquipe} onProfessor={irParaProfessor} onCategoria={irParaCategoria} />
                   ))}
-                  {atletasFiltradosGeral.length === 0 && (
-                    <tr><td colSpan={6} className="p-4 text-center text-zinc-500 text-xs">Nenhum atleta encontrado.</td></tr>
-                  )}
-                </tbody>
-              </table>
+                </div>
+              ))}
             </div>
-          </div>
+          </section>
         )}
 
-        {/* ================================================= */}
-        {/* CONTEÚDO DA ABA: POR CATEGORIA */}
-        {/* ================================================= */}
-        {abaAtiva === 'categoria' && (
-          <div className="animate-in fade-in duration-300">
-            <div className="bg-white/5 border border-white/10 p-4 md:p-6 rounded-md mb-6 max-w-2xl mx-auto shadow-lg">
-              <div className="space-y-3">
-                <select 
-                  value={catSelecionada} 
-                  onChange={(e) => setCatSelecionada(e.target.value)}
-                  className="w-full bg-[#0a0a0e] border border-white/10 text-white text-xs p-3 rounded outline-none focus:border-red-500 uppercase cursor-pointer"
-                >
-                  <option value="">------------------------------</option>
-                  {gruposCategoriaFaixa.map(([chave, rotulo]) => <option key={chave} value={chave}>{rotulo}</option>)}
-                </select>
-                <input 
-                  type="text" 
-                  placeholder="Nome, equipe, academia ou professor (opcional)" 
-                  value={nomeFiltroCat}
-                  onChange={(e) => setNomeFiltroCat(e.target.value)}
-                  className="w-full bg-[#0a0a0e] border border-white/10 text-white text-xs p-3 rounded outline-none focus:border-red-500 uppercase placeholder:text-zinc-600"
-                />
-                <button className="bg-[#e31837] hover:bg-red-600 text-white font-bold text-xs uppercase px-6 py-3 rounded transition-colors w-max cursor-pointer">
-                  Filtrar
-                </button>
-              </div>
-              <p className="text-center text-zinc-500 text-[10px] mt-4">
-                Escolha qualquer um dos campos acima e clique no botão filtrar para descobrir quem provavelmente estará em sua chave de luta.<br/>
-                <span className="text-red-500">* Todos os campos são opcionais.</span>
-              </p>
-            </div>
-
-            {!catSelecionada && gruposResumo.length > 0 && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-6">
-                {gruposResumo.map((grupo) => (
-                  <button key={grupo.chave} onClick={() => setCatSelecionada(grupo.chave)} className={'text-left rounded-xl border p-3 transition-colors ' + (grupo.total === 1 ? 'border-yellow-500/30 bg-yellow-500/10' : 'border-white/10 bg-white/5 hover:bg-white/10')}>
-                    <span className="block text-white text-xs font-black uppercase leading-tight">{grupo.rotulo}</span>
-                    <span className={'mt-2 inline-flex text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded ' + (grupo.total === 1 ? 'bg-yellow-500/20 text-yellow-200' : 'bg-red-500/10 text-red-400')}>{grupo.total === 1 ? 'Sozinho' : grupo.total + ' atletas'}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {catSelecionada && (
-              <div className="mt-8 animate-in fade-in slide-in-from-bottom-4">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-red-500 font-black text-sm uppercase tracking-widest flex items-center gap-2">
-                    <Layers size={16} /> {grupoSelecionado?.rotulo || catSelecionada}
-                  </h3>
-                  <span className="text-red-500 font-bold text-xs flex items-center gap-1.5 bg-red-500/10 px-2.5 py-1 rounded">
-                    <Users size={14} /> {atletasNaCategoria.length} Inscritos
-                  </span>
-                </div>
-                
-                {grupoSelecionado?.total === 1 && (
-                  <div className="mb-3 rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-3 text-yellow-100 text-xs font-bold leading-relaxed">
-                    Este atleta está sozinho nesta categoria cadastrada pelo organizador. Durante a checagem, ele pode ajustar a inscrição para outra categoria já criada, se o regulamento permitir.
-                  </div>
-                )}
-
-                <div className="bg-white/5 border border-white/10 rounded-md overflow-x-auto shadow-xl">
-                  <table className="w-full text-left whitespace-nowrap">
-                    <thead className="bg-[#cc0000] text-white">
-                      <tr>
-                        <th className="px-3 py-2 text-[10px] font-black uppercase tracking-widest w-10 text-center">Status</th>
-                        <th className="px-3 py-2 text-[10px] font-black uppercase tracking-widest">Nome do Atleta</th>
-                        <th className="px-3 py-2 text-[10px] font-black uppercase tracking-widest">Equipe</th>
-                        <th className="px-3 py-2 text-[10px] font-black uppercase tracking-widest">Academia</th>
-                        <th className="px-3 py-2 text-[10px] font-black uppercase tracking-widest">Professor</th>
-                        {/* 🔥 NOVAS COLUNAS AQUI */}
-                        <th className="px-3 py-2 text-[10px] font-black uppercase tracking-widest">Graduação</th>
-                        <th className="px-3 py-2 text-[10px] font-black uppercase tracking-widest">Peso</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/10 text-[10px] md:text-xs">
-                      {atletasNaCategoria.map((insc, index) => (
-                        <tr key={insc.id} className={index % 2 === 0 ? 'bg-transparent' : 'bg-black/20'}>
-                          <td className="px-3 py-2.5 text-center">
-                            <span className="inline-flex items-center justify-center w-6 h-6 bg-zinc-800 rounded border border-zinc-700 text-zinc-400">
-                              <Trophy size={10} />
-                            </span>
-                          </td>
-                          <td className="px-3 py-2.5 font-black text-white uppercase flex items-center gap-2">
-                            <span className="text-[8px] font-black text-zinc-500 uppercase tracking-widest">BR</span> {insc.atleta_nome}
-                          </td>
-                          <td className="px-3 py-2.5 font-bold text-blue-400 uppercase cursor-pointer hover:underline" onClick={() => irParaEquipe(insc.equipe)}>{insc.equipe}</td>
-                          <td className="px-3 py-2.5 text-zinc-300 uppercase">{insc.academia || "-"}</td>
-                          <td className="px-3 py-2.5 text-zinc-400 uppercase">{insc.professor}</td>
-                          {/* 🔥 DADOS DAS NOVAS COLUNAS AQUI */}
-                          <td className="px-3 py-2.5 font-bold text-zinc-300 uppercase">{insc.faixa || "-"}</td>
-                          <td className="px-3 py-2.5 font-bold text-zinc-300 uppercase">{insc.peso ? `${insc.peso}` : "-"}</td>
-                        </tr>
-                      ))}
-                      {atletasNaCategoria.length === 0 && (
-                        <tr><td colSpan={7} className="p-4 text-center text-zinc-500 text-xs">Nenhum atleta nesta categoria.</td></tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </div>
+        {(abaAtiva === 'peso' || abaAtiva === 'absoluto') && (
+          <ListaPorCategoria
+            titulo={abaAtiva === 'peso' ? 'Categoria de peso' : 'Absoluto'}
+            grupos={abaAtiva === 'peso' ? gruposPeso : gruposAbs}
+            filtros={abaAtiva === 'peso' ? filtrosPeso : filtrosAbs}
+            setFiltros={abaAtiva === 'peso' ? setFiltrosPeso : setFiltrosAbs}
+            opcoes={opcoes}
+            onEquipe={irParaEquipe}
+            onProfessor={irParaProfessor}
+            onCategoria={irParaCategoria}
+          />
         )}
 
-        {/* ================================================= */}
-        {/* CONTEÚDO DA ABA: POR EQUIPE */}
-        {/* ================================================= */}
         {abaAtiva === 'equipe' && (
-          <div className="animate-in fade-in duration-300">
-            <div className="bg-white/5 border border-white/10 p-4 md:p-6 rounded-md mb-6 max-w-2xl mx-auto shadow-lg">
-              <div className="flex flex-col md:flex-row gap-3">
-                <select 
-                  value={eqSelecionada} 
-                  onChange={(e) => setEqSelecionada(e.target.value)}
-                  className="flex-1 bg-[#0a0a0e] border border-white/10 text-white text-xs p-3 rounded outline-none focus:border-red-500 uppercase cursor-pointer"
-                >
-                  <option value="">------------------------------</option>
-                  {equipesUnicas.map(eq => <option key={eq} value={eq}>{eq}</option>)}
-                </select>
-                <button className="bg-[#e31837] hover:bg-red-600 text-white font-bold text-xs uppercase px-8 py-3 rounded transition-colors w-full md:w-auto cursor-pointer">
-                  Filtrar
-                </button>
-              </div>
-            </div>
-
-            {eqSelecionada && (
-              <div className="mt-8 animate-in fade-in slide-in-from-bottom-4">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-red-500 font-black text-sm uppercase tracking-widest flex items-center gap-2">
-                    <Shield size={16} /> {eqSelecionada}
-                  </h3>
-                  <span className="text-red-500 font-bold text-xs flex items-center gap-1.5">
-                    <Users size={14} /> {atletasNaEquipe.length} Inscritos
-                  </span>
-                </div>
-                
-                <div className="bg-white/5 border border-white/10 rounded-md overflow-x-auto shadow-xl">
-                  <table className="w-full text-left whitespace-nowrap">
-                    <thead className="bg-[#cc0000] text-white">
-                      <tr>
-                        <th className="px-3 py-2 text-[10px] font-black uppercase tracking-widest">Nome do Atleta</th>
-                        <th className="px-3 py-2 text-[10px] font-black uppercase tracking-widest">Academia</th>
-                        <th className="px-3 py-2 text-[10px] font-black uppercase tracking-widest">Professor</th>
-                        <th className="px-3 py-2 text-[10px] font-black uppercase tracking-widest">Categoria</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/10 text-[10px] md:text-xs">
-                      {atletasNaEquipe.map((insc, index) => (
-                        <tr key={insc.id} className={index % 2 === 0 ? 'bg-transparent' : 'bg-black/20'}>
-                          <td className="px-3 py-2.5 font-black text-white uppercase flex items-center gap-2">
-                            <span className="text-[10px]">🇧🇷</span> {insc.atleta_nome}
-                            {insc.absoluto && <span className="text-[8px] font-black tracking-widest px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30">ABS</span>}
-                          </td>
-                          <td className="px-3 py-2.5 text-zinc-300 uppercase">{insc.academia || "-"}</td>
-                          <td className="px-3 py-2.5 text-zinc-400 uppercase">{insc.professor}</td>
-                          <td className="px-3 py-2.5 font-bold text-blue-400 uppercase whitespace-normal">
-                            <div className="flex flex-col items-start gap-1">
-                              {insc.chaves.map(chave => (
-                                <button key={chave.chave} onClick={() => irParaCategoria(chave.chave)} className="hover:underline text-left cursor-pointer">
-                                  {chave.tipo === 'absoluto' ? 'ABS · ' : ''}{chave.rotulo}
-                                </button>
-                              ))}
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                      {atletasNaEquipe.length === 0 && (
-                        <tr><td colSpan={4} className="p-4 text-center text-zinc-500 text-xs">Nenhum atleta nesta equipe.</td></tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </div>
+          <section className="space-y-3">
+            {gruposEquipe.map((grupo) => {
+              const aberta = equipeAberta === grupo.nome;
+              return (
+                <article key={grupo.nome} className="overflow-hidden rounded-2xl border border-white/10 bg-[#0b0b10]">
+                  <button type="button" onClick={() => setEquipeAberta(aberta ? '' : grupo.nome)} className="flex w-full items-center gap-3 px-4 py-3 text-left">
+                    <LogoEquipe src={grupo.logo_url} nome={grupo.nome} />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-red-300">{grupo.nome}</p>
+                      <p className="text-[10px] font-medium text-zinc-500">{grupo.atletas.length} {grupo.atletas.length === 1 ? 'atleta inscrito' : 'atletas inscritos'}</p>
+                    </div>
+                    <Search size={16} className="text-zinc-600" />
+                  </button>
+                  {aberta && grupo.atletas.map((insc) => (
+                    <CardAtleta key={insc.id} insc={insc} onEquipe={irParaEquipe} onProfessor={irParaProfessor} onCategoria={irParaCategoria} />
+                  ))}
+                </article>
+              );
+            })}
+          </section>
         )}
 
+        {abaAtiva === 'professor' && (
+          <section className="space-y-3">
+            {gruposProfessor.map((grupo) => {
+              const aberta = professorAberto === grupo.titulo;
+              return (
+                <article key={grupo.titulo} className="overflow-hidden rounded-2xl border border-white/10 bg-[#0b0b10]">
+                  <button type="button" onClick={() => setProfessorAberto(aberta ? '' : grupo.titulo)} className="flex w-full items-center gap-3 px-4 py-3 text-left">
+                    <LogoEquipe src={grupo.logo_url} nome={grupo.titulo} />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-red-300">{grupo.titulo}</p>
+                      <p className="mt-0.5 text-[10px] font-medium text-zinc-500">{grupo.atletas.length} {grupo.atletas.length === 1 ? 'aluno' : 'alunos'}</p>
+                    </div>
+                    <Users size={16} className="text-zinc-600" />
+                  </button>
+                  {aberta && grupo.atletas.map((insc) => (
+                    <CardAtleta key={insc.id} insc={insc} onEquipe={irParaEquipe} onProfessor={irParaProfessor} onCategoria={irParaCategoria} />
+                  ))}
+                </article>
+              );
+            })}
+          </section>
+        )}
       </div>
     </main>
+  );
+}
+
+function ListaPorCategoria({
+  titulo,
+  grupos,
+  filtros,
+  setFiltros,
+  opcoes,
+  onEquipe,
+  onProfessor,
+  onCategoria,
+}: {
+  titulo: string;
+  grupos: Array<{ chave: string; rotulo: string; atletas: InscritoChecagem[] }>;
+  filtros: FiltrosCategoria;
+  setFiltros: (valor: FiltrosCategoria) => void;
+  opcoes: { faixas: string[]; sexos: string[]; categorias: string[] };
+  onEquipe: (equipe: string) => void;
+  onProfessor: (professor: string) => void;
+  onCategoria: (chave: string, aba: AbaChecagem) => void;
+}) {
+  const campo = 'w-full rounded-xl border border-white/10 bg-black px-3 py-2.5 text-xs text-white outline-none focus:border-red-500';
+  return (
+    <section>
+      <div className="mb-5 grid gap-3 rounded-2xl border border-white/10 bg-[#0b0b10] p-4 md:grid-cols-5">
+        <select value={filtros.categoria} onChange={(e) => setFiltros({ ...filtros, categoria: e.target.value })} className={campo}>
+          <option value="">Categoria</option>
+          {opcoes.categorias.map((item) => <option key={item} value={item}>{item}</option>)}
+        </select>
+        <select value={filtros.faixa} onChange={(e) => setFiltros({ ...filtros, faixa: e.target.value })} className={campo}>
+          <option value="">Faixa</option>
+          {opcoes.faixas.map((item) => <option key={item} value={item}>{item}</option>)}
+        </select>
+        <input value={filtros.peso} onChange={(e) => setFiltros({ ...filtros, peso: e.target.value })} placeholder="Peso" className={campo} />
+        <select value={filtros.sexo} onChange={(e) => setFiltros({ ...filtros, sexo: e.target.value })} className={campo}>
+          <option value="">Sexo</option>
+          {opcoes.sexos.map((item) => <option key={item} value={item}>{item}</option>)}
+        </select>
+        <input value={filtros.busca} onChange={(e) => setFiltros({ ...filtros, busca: e.target.value })} placeholder="Buscar atleta" className={campo} />
+      </div>
+      {grupos.length === 0 ? <p className="rounded-2xl border border-dashed border-white/10 p-8 text-center text-sm text-zinc-500">Nenhuma {titulo.toLowerCase()} com esses filtros.</p> : grupos.map((grupo) => (
+        <div key={grupo.chave} id={`cat-${grupo.chave}`} className="mb-5 overflow-hidden rounded-2xl border border-white/10 bg-[#0b0b10]">
+          <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
+            <h2 className="flex items-center gap-2 text-[12px] font-semibold text-cyan-300"><Layers size={13} /> {grupo.rotulo}</h2>
+            <span className="text-[10px] font-medium text-zinc-500">{grupo.atletas.length} {grupo.atletas.length === 1 ? 'atleta' : 'atletas'}</span>
+          </div>
+          {grupo.atletas.map((insc) => (
+            <CardAtleta key={insc.id} insc={insc} onEquipe={onEquipe} onProfessor={onProfessor} onCategoria={onCategoria} />
+          ))}
+        </div>
+      ))}
+    </section>
   );
 }
