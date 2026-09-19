@@ -334,6 +334,11 @@ export default function GestaoTatames() {
     ...categoriasVisiveis.map((cat) => cat.tatameAtual),
   ], tatamesDisponiveis), [categoriasVisiveis, tatamesDisponiveis]);
 
+  const nomesColunasTatame = useMemo(() => unicosTatame(
+    categoriasVisiveis.map((cat) => cat.tatameAtual),
+    tatamesDisponiveis,
+  ), [categoriasVisiveis, tatamesDisponiveis]);
+
   const resumo = useMemo(() => {
     const total = categorias.reduce((acc, cat) => acc + cat.totalLutas, 0);
     const concluidas = categorias.reduce((acc, cat) => acc + cat.lutasConcluidas, 0);
@@ -369,12 +374,12 @@ export default function GestaoTatames() {
   const tatamesPendentesCrono = tatamesUsados.filter((tatame) => !chavesComHorario.has(chaveTatame(tatame)));
 
   const categoriasSemTatame = categoriasFiltradas.filter((cat) => cat.tatameAtual === 'Não definido');
-  const colunasTatame = nomesTatame.map((tatame) => ({
+  const colunasTatame = nomesColunasTatame.map((tatame) => ({
     tatame,
     categorias: categoriasFiltradas.filter((cat) => chaveTatame(cat.tatameAtual) === chaveTatame(tatame)),
     operacao: operacaoPorTatame.find((grupo) => chaveTatame(grupo.tatame) === chaveTatame(tatame)) || null,
     temHorario: chavesComHorario.has(chaveTatame(tatame)),
-  }));
+  })).filter((coluna) => coluna.categorias.length > 0);
   const passoAtual = resumo.semTatame > 0 || temAlteracoesPendentes ? 1 : tatamesPendentesCrono.length > 0 || tatamesUsados.length === 0 ? 2 : 3;
 
   const abrirHorarios = () => {

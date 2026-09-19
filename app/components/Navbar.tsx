@@ -127,7 +127,7 @@ export default function Navbar() {
       </header>
 
       {/* BOTTOM BAR MOBILE MANTIDA COM 6 BOTÕES BEM DISTRIBUÍDOS */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#07070a]/95 backdrop-blur-xl border-t border-white/5 pb-safe">
+      <div className="nav-global-mobile md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#07070a]/95 backdrop-blur-xl border-t border-white/5 pb-safe">
         <div className="flex justify-around items-center h-16 px-1">
           
           <Link href="/" className="flex flex-col items-center justify-center flex-1 gap-1 text-zinc-500 hover:text-white transition-colors">
