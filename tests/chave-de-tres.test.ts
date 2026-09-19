@@ -10,7 +10,7 @@ import {
   resumoHumanoChave,
 } from "../app/lib/chave-de-tres";
 import { rotuloLuta } from "../app/lib/lutas-rotulos";
-import { idsPrimeiraFasePorLado } from "../app/lib/chave-visual";
+import { estruturaVisualChave, idsPrimeiraFasePorLado } from "../app/lib/chave-visual";
 import { montarChaves, prepararGrupos } from "../app/lib/gerar-chaves";
 import type { InscricaoCompeticao } from "../app/lib/categorias-competicao";
 
@@ -109,6 +109,42 @@ test("árvore de 8 coloca a primeira fase nos dois lados", () => {
   assert.equal(ids.esquerda(2), 2);
   assert.equal(ids.direita(1), 3);
   assert.equal(ids.direita(2), 4);
+});
+
+test("chave de 3 volta para a árvore de 4 e deixa a baia só à direita", () => {
+  const arvore = estruturaVisualChave(chaveDeTres);
+  assert.equal(arvore.tamanho, 4);
+  assert.deepEqual(arvore.esquerda[0], ["1"]);
+  assert.deepEqual(arvore.direita[0], ["2"]);
+  assert.equal(arvore.esquerda.length, 1);
+  assert.equal(arvore.direita.length, 1);
+  assert.equal(arvore.final, "999");
+});
+
+test("chave de 8 não repete Jefferson e Nego Dario no canto esquerdo", () => {
+  const lutas = [
+    { id_visual: "1", atleta_1: "Aylan Rocha", atleta_2: "Alex Nunes" },
+    { id_visual: "2", atleta_1: "Ezequiel Castro", atleta_2: "BYE" },
+    { id_visual: "3", atleta_1: "Ruberson", atleta_2: "Jefferson" },
+    { id_visual: "4", atleta_1: "Nego Dario", atleta_2: "BYE" },
+    { id_visual: "101" },
+    { id_visual: "102", atleta_1: "Jefferson", atleta_2: "Nego Dario" },
+    { id_visual: "999", atleta_1: "TBD", atleta_2: "Nego Dario" },
+  ];
+  const arvore = estruturaVisualChave(lutas);
+  assert.equal(arvore.tamanho, 8);
+  assert.deepEqual(arvore.esquerda[1], ["101"]);
+  assert.deepEqual(arvore.direita[1], ["102"]);
+  assert.equal(arvore.esquerda.flat().includes("102"), false);
+});
+
+test("chave de 6 coloca a decisão 102 só à direita", () => {
+  const arvore = estruturaVisualChave(chaveDeSeis);
+  assert.equal(arvore.tamanho, 8);
+  assert.deepEqual(arvore.esquerda[0], ["1", "2"]);
+  assert.deepEqual(arvore.direita[0], ["3", "4"]);
+  assert.deepEqual(arvore.esquerda[1], ["101"]);
+  assert.deepEqual(arvore.direita[1], ["102"]);
 });
 
 test("seis atletas geram duas chaves de 3 e a final", () => {

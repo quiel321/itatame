@@ -8,7 +8,6 @@ import { Clock, Search } from "lucide-react"
 import { rotuloLuta } from "@/app/lib/lutas-rotulos"
 import { semFaixaDuplicada } from "@/app/lib/categorias-competicao"
 import { lutasFormamChaveDeTres, placeholderSlotChaveDeTres, resumoHumanoChave, textoAguardandoChaveDeTres, textoOuroAposChecagem } from "@/app/lib/chave-de-tres"
-import { ChaveTriangularPainel } from "@/app/components/ChaveDeTresPainel"
 import ArvoreChaveDesktop from "@/app/components/ArvoreChaveDesktop"
 
 const formatarHorarioEstimado = (isoString: string | null) => {
@@ -193,8 +192,8 @@ export default function ChavesPublicoPage() {
   const lutasAtivas = lutas.filter(l => l.status_luta !== 'concluida' && l.status_luta !== 'em_andamento');
   const lutasEmAndamento = lutas.filter(l => l.status_luta === 'em_andamento');
 
-  const confrontosReais = [...lutasEmAndamento, ...lutasAtivas]
-    .filter(l => ehChaveDeTres || (isAtletaValido(l.atleta_1) && isAtletaValido(l.atleta_2)))
+  const lutasCards = [...lutas]
+    .filter((luta) => ehChaveDeTres || isAtletaValido(luta.atleta_1) || isAtletaValido(luta.atleta_2) || isAtletaValido(luta.vencedor))
     .sort((a, b) => (parseInt(a.id_visual) || 0) - (parseInt(b.id_visual) || 0));
 
   const atletasNaBaia = lutasAtivas.flatMap((luta) => ([
@@ -253,8 +252,8 @@ export default function ChavesPublicoPage() {
   };
 
   return (
-    <main className="min-h-screen bg-black p-0 md:p-6">
-      <div className="mx-auto w-full max-w-[1400px] pt-6 md:pt-0">
+    <main className="min-h-screen max-w-full overflow-x-hidden bg-black p-0 md:p-6">
+      <div className="mx-auto w-full min-w-0 max-w-[1400px] pt-6 md:pt-0">
 
         {temPendencia && (
           <div className="mx-4 mb-6 flex flex-col items-start justify-between gap-4 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 shadow-[0_0_20px_rgba(239,68,68,0.15)] md:mx-0 md:flex-row md:items-center md:p-5">
@@ -275,22 +274,22 @@ export default function ChavesPublicoPage() {
           </div>
         )}
 
-        <div className="mt-6 flex flex-col gap-4 px-4 md:mt-4 md:flex-row md:items-end md:justify-between md:px-0">
-          <div>
+        <div className="mt-2 flex items-end justify-between gap-3 px-4 md:mt-4 md:px-0">
+          <div className="min-w-0">
             <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-cyan-400">{eventoNome || "Campeonato"}</p>
-            <h1 className="mt-1 text-3xl font-black tracking-tight text-white md:text-5xl">Quem enfrenta quem</h1>
-            <p className="mt-2 max-w-xl text-sm leading-relaxed text-zinc-400">Veja a árvore, a baia e o caminho até a final. A chave atualiza sozinha quando uma luta termina.</p>
+            <h1 className="mt-0.5 text-2xl font-black tracking-tight text-white md:text-5xl">Chaveamento oficial</h1>
+            <p className="mt-1 hidden max-w-xl text-sm leading-relaxed text-zinc-400 md:block">A árvore mostra o caminho até a final. Busque um atleta, troque a categoria e acompanhe quem avança.</p>
           </div>
-          <Link href={`/ranking?evento=${idEvento}`} className="rounded-xl border border-yellow-500/40 bg-yellow-500/10 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-yellow-400 hover:bg-yellow-500/20">
-            Ranking deste campeonato
+          <Link href={`/ranking?evento=${idEvento}`} className="shrink-0 rounded-xl border border-yellow-500/40 bg-yellow-500/10 px-3 py-2 text-[9px] font-black uppercase tracking-widest text-yellow-400 hover:bg-yellow-500/20 md:px-4 md:py-2.5 md:text-[10px]">
+            Ranking
           </Link>
         </div>
 
-        <div className="mx-0 mt-6 border-y border-white/10 bg-[#050816] p-4 shadow-lg md:rounded-3xl md:border md:p-6">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
-            <div className="flex rounded-2xl border border-white/10 bg-black/40 p-1">
-              <button type="button" onClick={() => setTipoCategoria("peso")} className={`flex-1 rounded-xl px-4 py-2.5 text-[11px] font-black uppercase tracking-widest ${tipoCategoria === "peso" ? "bg-white text-black" : "text-zinc-400 hover:text-white"}`}>Por peso</button>
-              <button type="button" onClick={() => setTipoCategoria("absoluto")} className={`flex-1 rounded-xl px-4 py-2.5 text-[11px] font-black uppercase tracking-widest ${tipoCategoria === "absoluto" ? "bg-white text-black" : "text-zinc-400 hover:text-white"}`}>Absoluto</button>
+        <div className="sticky top-16 z-30 mx-0 mt-3 border-y border-white/10 bg-[#050816]/95 p-3 shadow-lg backdrop-blur md:top-20 md:mt-6 md:rounded-3xl md:border md:p-5">
+          <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+            <div className="flex rounded-xl border border-white/10 bg-black/40 p-0.5 md:rounded-2xl md:p-1">
+              <button type="button" onClick={() => setTipoCategoria("peso")} className={`flex-1 rounded-lg px-3 py-2 text-[10px] font-black uppercase tracking-widest md:rounded-xl md:px-4 md:py-2.5 md:text-[11px] ${tipoCategoria === "peso" ? "bg-white text-black" : "text-zinc-400 hover:text-white"}`}>Por peso</button>
+              <button type="button" onClick={() => setTipoCategoria("absoluto")} className={`flex-1 rounded-lg px-3 py-2 text-[10px] font-black uppercase tracking-widest md:rounded-xl md:px-4 md:py-2.5 md:text-[11px] ${tipoCategoria === "absoluto" ? "bg-white text-black" : "text-zinc-400 hover:text-white"}`}>Absoluto</button>
             </div>
             <label className="relative min-w-0 flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
@@ -298,12 +297,12 @@ export default function ChavesPublicoPage() {
                 value={busca}
                 onChange={(event) => setBusca(event.target.value)}
                 placeholder="Procurar atleta, equipe ou categoria"
-                className="w-full rounded-2xl border border-white/10 bg-black/50 py-3 pl-10 pr-4 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-cyan-400/50"
+                className="w-full rounded-xl border border-white/10 bg-black/50 py-2.5 pl-10 pr-4 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-cyan-400/50 md:rounded-2xl md:py-3"
               />
             </label>
           </div>
 
-          <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
+          <div className="mt-2 flex gap-2 overflow-x-auto pb-0.5 md:mt-3 md:flex-wrap">
             {categoriasVisiveis.length === 0 && (
               <span className="rounded-full border border-dashed border-white/10 px-4 py-2 text-[11px] text-zinc-500">Nenhuma chave neste filtro.</span>
             )}
@@ -312,7 +311,7 @@ export default function ChavesPublicoPage() {
                 key={chave}
                 type="button"
                 onClick={() => setCategoriaSelecionada(chave)}
-                className={`max-w-[280px] shrink-0 truncate rounded-full border px-4 py-2 text-left text-[11px] font-bold ${categoriaSelecionada === chave ? "border-cyan-400 bg-cyan-500/15 text-cyan-100" : "border-white/10 bg-black/30 text-zinc-400 hover:border-white/20 hover:text-white"}`}
+                className={`max-w-[220px] shrink-0 truncate rounded-full border px-3 py-1.5 text-left text-[10px] font-bold transition md:max-w-[280px] md:px-4 md:py-2 md:text-[11px] ${categoriaSelecionada === chave ? "border-cyan-400 bg-cyan-500/15 text-cyan-100" : "border-white/10 bg-black/30 text-zinc-400 hover:border-white/20 hover:text-white"}`}
               >
                 {rotuloChip(chave)}
               </button>
@@ -321,13 +320,13 @@ export default function ChavesPublicoPage() {
         </div>
 
         {categoriaSelecionada && (
-          <section className="mx-4 mt-5 rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-4 md:mx-0 md:p-5">
-            <p className="text-[10px] font-black uppercase tracking-widest text-cyan-300">{tituloCategoria}</p>
-            <p className="mt-2 text-sm font-medium leading-relaxed text-cyan-50 md:text-base">{resumo}</p>
+          <section className="mx-4 mt-3 rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-3 py-2.5 md:mx-0 md:mt-5 md:rounded-2xl md:p-5">
+            <p className="truncate text-[9px] font-black uppercase tracking-widest text-cyan-300 md:text-[10px]">{tituloCategoria}</p>
+            <p className="mt-1 text-xs font-medium leading-snug text-cyan-50 md:mt-2 md:text-base md:leading-relaxed">{resumo}</p>
             {lutaAgora && (
-              <p className="mt-3 inline-flex items-center gap-2 rounded-full border border-red-500/30 bg-red-500/15 px-3 py-1 text-[11px] font-black uppercase tracking-widest text-red-300">
+              <p className="mt-2 inline-flex items-center gap-2 rounded-full border border-red-500/30 bg-red-500/15 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-red-300 md:mt-3 md:text-[11px]">
                 <span className="h-2 w-2 animate-ping rounded-full bg-red-500" />
-                Agora no tatame: {limparNome(lutaAgora.atleta_1)} vs {limparNome(lutaAgora.atleta_2)}
+                Agora: {limparNome(lutaAgora.atleta_1)} vs {limparNome(lutaAgora.atleta_2)}
               </p>
             )}
           </section>
@@ -343,7 +342,7 @@ export default function ChavesPublicoPage() {
           </div>
         )}
 
-        <div className="mt-5">
+        <div className="mt-5 hidden px-4 md:mt-5 md:block md:px-0">
           <ArvoreChaveDesktop
             lutas={lutas}
             abaAtual={abaAtual}
@@ -353,28 +352,22 @@ export default function ChavesPublicoPage() {
           />
         </div>
 
-        {ehChaveDeTres && (
-          <div className="mt-5 bg-[#050816] py-6 md:hidden">
-            <div className="px-4">
-              <ChaveTriangularPainel lutas={lutas} buscarFoto={buscarFotoPorId} />
-            </div>
-          </div>
-        )}
-
-        <div className="mb-20 mt-8 flex w-full flex-col px-4 md:mt-12 md:px-0">
+        <div className="mb-16 mt-3 flex w-full flex-col px-4 md:mt-12 md:px-0">
 
           {temCampeao && (
-            <div className="mb-8 flex flex-col items-center justify-center rounded-2xl border border-yellow-500/30 bg-gradient-to-t from-yellow-600/20 to-[#0c1220] p-6 shadow-[0_0_20px_rgba(234,179,8,0.15)] md:hidden">
-              <span className="mb-3 text-sm font-black tracking-widest text-yellow-500 drop-shadow-[0_0_10px_rgba(234,179,8,0.5)]">Campeão desta chave</span>
-              <div className="mb-3 flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full border-[3px] border-yellow-500 bg-black shadow-[0_0_15px_rgba(234,179,8,0.3)]">
-                {campeaoData.foto ? <img src={campeaoData.foto} className="h-full w-full object-cover" alt="" /> : <span className="text-2xl font-black text-yellow-500">{campeaoData.nome.charAt(0)}</span>}
+            <div className="mb-3 flex items-center gap-3 rounded-xl border border-yellow-500/30 bg-gradient-to-r from-yellow-600/20 to-[#0c1220] px-3 py-2.5 md:hidden">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-yellow-500 bg-black">
+                {campeaoData.foto ? <img src={campeaoData.foto} className="h-full w-full object-cover" alt="" /> : <span className="text-sm font-black text-yellow-500">{campeaoData.nome.charAt(0)}</span>}
               </div>
-              <h2 className="text-center text-lg font-black uppercase tracking-tight text-white">{campeaoData.nome}</h2>
+              <div className="min-w-0">
+                <p className="text-[9px] font-black uppercase tracking-widest text-yellow-500">Campeão</p>
+                <h2 className="truncate text-sm font-black uppercase text-white">{campeaoData.nome}</h2>
+              </div>
             </div>
           )}
 
           {atletasNaBaia.length > 0 && (
-            <div className="mb-10">
+            <div className="mb-10 hidden md:block">
               <h3 className="mb-4 flex items-center gap-2 border-b border-cyan-500/20 pb-3 text-xs font-black uppercase tracking-widest text-cyan-400 md:text-sm">
                 <Clock size={16} /> Na baia, prontos para a próxima
               </h3>
@@ -401,7 +394,7 @@ export default function ChavesPublicoPage() {
           )}
 
           {!ehChaveDeTres && atletasAguardandoDefinicao.length > 0 && (
-            <div className="mb-10 rounded-xl border border-yellow-500/15 bg-yellow-500/5 p-4">
+            <div className="mb-10 hidden rounded-xl border border-yellow-500/15 bg-yellow-500/5 p-4 md:block">
               <h3 className="mb-3 text-[10px] font-black uppercase tracking-widest text-yellow-400">Esperando o adversário sair da luta anterior</h3>
               <div className="flex flex-wrap gap-2">
                 {atletasAguardandoDefinicao.map((luta) => {
@@ -413,34 +406,41 @@ export default function ChavesPublicoPage() {
             </div>
           )}
 
-          {confrontosReais.length > 0 && (
-            <div className="mb-10">
-              <h3 className="mb-4 flex items-center gap-2 border-b border-white/10 pb-3 text-xs font-black uppercase tracking-widest text-white md:text-sm">
+          {lutasCards.length > 0 && (
+            <div className="mb-8 min-w-0">
+              <h3 className="mb-2 text-[10px] font-black uppercase tracking-widest text-white md:mb-4 md:flex md:items-center md:gap-2 md:border-b md:border-white/10 md:pb-3 md:text-sm">
                 Lutas desta chave
               </h3>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {confrontosReais.map(luta => {
+              <div className="grid min-w-0 grid-cols-1 gap-2 md:grid-cols-2 md:gap-4 lg:grid-cols-3">
+                {lutasCards.map(luta => {
                   const a1 = nomeSlot(luta, 1); const a2 = nomeSlot(luta, 2);
                   const foto1 = buscarFotoPorId(luta.atleta_1_id); const foto2 = buscarFotoPorId(luta.atleta_2_id);
+                  const vencedor = limparNome(luta.vencedor);
+                  const venceu1 = Boolean(vencedor && isAtletaValido(luta.atleta_1) && vencedor.toUpperCase() === limparNome(luta.atleta_1).toUpperCase());
+                  const venceu2 = Boolean(vencedor && isAtletaValido(luta.atleta_2) && vencedor.toUpperCase() === limparNome(luta.atleta_2).toUpperCase());
+                  const sub1 = isAtletaValido(luta.atleta_1) ? (luta.equipe_1 || "Sem equipe") : (textoAguardandoChaveDeTres(luta) || "Aguardando resultado");
+                  const sub2 = isAtletaValido(luta.atleta_2) ? (luta.equipe_2 || "Sem equipe") : (textoAguardandoChaveDeTres(luta) || "Aguardando resultado");
 
                   return (
-                    <div key={luta.id} className={`relative flex flex-col overflow-hidden rounded-xl border bg-[#0c1220] transition-all hover:border-[#57d8ff]/50 ${luta.status_luta === "em_andamento" ? "border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.2)]" : "border-[#57d8ff]/20"}`}>
-                      <div className={`flex items-center justify-between border-b px-3 py-2 ${luta.status_luta === "em_andamento" ? "border-red-500/20 bg-red-500/10" : "border-[#57d8ff]/20 bg-[#57d8ff]/10"}`}>
-                        <span className={`text-[9px] font-black uppercase tracking-widest ${luta.status_luta === "em_andamento" ? "text-red-400" : "text-[#57d8ff]"}`}>{rotuloLuta(luta)}</span>
-                        {luta.status_luta === "em_andamento" && <span className="rounded bg-red-500 px-1.5 py-0.5 text-[8px] font-black uppercase text-white shadow-sm animate-pulse">Lutando</span>}
+                    <div key={luta.id} className={`relative flex min-w-0 max-w-full flex-col overflow-hidden rounded-xl border bg-[#0c1220] transition-all hover:border-[#57d8ff]/50 ${luta.status_luta === "em_andamento" ? "border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.2)]" : vencedor ? "border-emerald-500/25" : "border-[#57d8ff]/20"}`}>
+                      <div className={`flex min-w-0 items-center justify-between gap-2 border-b px-2.5 py-1.5 md:px-3 ${luta.status_luta === "em_andamento" ? "border-red-500/20 bg-red-500/10" : vencedor ? "border-emerald-500/20 bg-emerald-500/10" : "border-[#57d8ff]/20 bg-[#57d8ff]/10"}`}>
+                        <span className={`min-w-0 truncate text-[9px] font-black uppercase tracking-widest ${luta.status_luta === "em_andamento" ? "text-red-400" : vencedor ? "text-emerald-300" : "text-[#57d8ff]"}`}>{rotuloLuta(luta)}</span>
+                        {luta.status_luta === "em_andamento" && <span className="shrink-0 rounded bg-red-500 px-1.5 py-0.5 text-[8px] font-black uppercase text-white shadow-sm animate-pulse">Lutando</span>}
+                        {vencedor && luta.status_luta !== "em_andamento" && <span className="shrink-0 rounded border border-emerald-500/30 bg-emerald-500/20 px-1.5 py-0.5 text-[8px] font-black uppercase text-emerald-300">Finalizada</span>}
                       </div>
 
-                      <div className="flex flex-col gap-1.5 p-3">
-                        <div className="flex items-center justify-between rounded-lg border border-white/5 bg-black/40 p-2">
+                      <div className="flex min-w-0 flex-col gap-1 p-2 md:gap-1.5 md:p-3">
+                        <div className={`flex min-w-0 items-center justify-between gap-2 rounded-lg border p-2 ${venceu1 ? "border-emerald-500/40 bg-emerald-500/10" : "border-white/5 bg-black/40"}`}>
                           <div className="flex min-w-0 flex-1 items-center gap-2.5">
                             <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-zinc-600 bg-zinc-800 text-xs font-black text-zinc-400">
                               {foto1 ? <img src={foto1} className="h-full w-full object-cover" alt="" /> : a1 ? a1.charAt(0) : "?"}
                             </div>
                             <div className="flex min-w-0 flex-1 flex-col">
-                              <span className="truncate text-xs font-black uppercase tracking-tight text-white">{a1 || "A definir"}</span>
-                              <span className="truncate text-[9px] uppercase text-zinc-500">{luta.equipe_1 || "Sem equipe"}</span>
+                              <span className={`truncate text-xs font-black uppercase tracking-tight ${venceu1 ? "text-emerald-300" : "text-white"}`}>{a1 || "A definir"}</span>
+                              <span className="truncate text-[9px] uppercase text-zinc-500">{sub1}</span>
                             </div>
                           </div>
+                          {venceu1 && <svg className="h-5 w-5 shrink-0 text-emerald-400" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/></svg>}
                         </div>
 
                         <div className="relative my-0.5 flex h-1 w-full items-center justify-center">
@@ -448,22 +448,23 @@ export default function ChavesPublicoPage() {
                           <div className="w-full border-t border-white/5"></div>
                         </div>
 
-                        <div className="flex items-center justify-between rounded-lg border border-white/5 bg-black/40 p-2">
+                        <div className={`flex min-w-0 items-center justify-between gap-2 rounded-lg border p-2 ${venceu2 ? "border-emerald-500/40 bg-emerald-500/10" : "border-white/5 bg-black/40"}`}>
                           <div className="flex min-w-0 flex-1 items-center gap-2.5">
                             <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-zinc-600 bg-zinc-800 text-xs font-black text-zinc-400">
                               {foto2 ? <img src={foto2} className="h-full w-full object-cover" alt="" /> : a2 ? a2.charAt(0) : "?"}
                             </div>
                             <div className="flex min-w-0 flex-1 flex-col">
-                              <span className="truncate text-xs font-black uppercase tracking-tight text-white">{a2 || "A definir"}</span>
-                              <span className="truncate text-[9px] uppercase text-zinc-500">{luta.equipe_2 || "Sem equipe"}</span>
+                              <span className={`truncate text-xs font-black uppercase tracking-tight ${venceu2 ? "text-emerald-300" : "text-white"}`}>{a2 || "A definir"}</span>
+                              <span className="truncate text-[9px] uppercase text-zinc-500">{sub2}</span>
                             </div>
                           </div>
+                          {venceu2 && <svg className="h-5 w-5 shrink-0 text-emerald-400" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/></svg>}
                         </div>
 
                         {luta.horario_estimado && (
-                          <div className="mt-1 flex items-center justify-between rounded border border-white/5 bg-black/30 p-1.5 px-1">
-                            <span className="text-[9px] font-bold uppercase tracking-widest text-zinc-500">{luta.tatame || "Sem tatame"}</span>
-                            <span className="text-[9px] font-black uppercase tracking-widest text-yellow-500">Previsto: {formatarHorarioEstimado(luta.horario_estimado)}</span>
+                          <div className="mt-1 flex min-w-0 items-center justify-between gap-2 rounded border border-white/5 bg-black/30 p-1.5">
+                            <span className="min-w-0 truncate text-[9px] font-bold uppercase tracking-widest text-zinc-500">{luta.tatame || "Sem tatame"}</span>
+                            <span className="shrink-0 text-[9px] font-black uppercase tracking-widest text-yellow-500">Previsto: {formatarHorarioEstimado(luta.horario_estimado)}</span>
                           </div>
                         )}
                       </div>
@@ -474,7 +475,7 @@ export default function ChavesPublicoPage() {
             </div>
           )}
 
-          {lutasAtivas.length === 0 && lutasEmAndamento.length === 0 && (
+          {lutasCards.length === 0 && (
             <div className="rounded-2xl border border-dashed border-white/10 bg-[#0a0a0e] py-10 text-center text-sm font-bold text-zinc-500">
               {temCampeao ? `${campeaoData.nome} já fechou esta chave.` : "Nenhum confronto pendente nesta categoria."}
             </div>

@@ -7,6 +7,7 @@ import { supabase } from '../../lib/supabase';
 import { processarAvancosAutomaticosChaves, propagarResultadoChave } from '../../lib/chaves-auto-avanco';
 import { obterTempoRegulamentar } from '../../lib/cronograma';
 import { rotuloLuta } from '../../lib/lutas-rotulos';
+import { semFaixaDuplicada } from '@/app/lib/categorias-competicao';
 import { ordemOperacionalChaveTriangular, placeholderSlotChaveDeTres, textoAguardandoChaveDeTres } from '@/app/lib/chave-de-tres';
 
 type StaffSession = {
@@ -66,6 +67,10 @@ function ordenar(a: Luta, b: Luta) {
 function hora(valor?: string | null) {
   if (!valor) return 'Sem horário';
   return new Date(valor).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
+
+function tituloCategoria(luta: Luta) {
+  return semFaixaDuplicada(luta.categoria || '', luta.faixa || '') || luta.categoria || 'Categoria';
 }
 
 function checkinAprovado(luta: Luta) {
@@ -429,41 +434,46 @@ export default function PainelChamador() {
   };
 
   const card = (luta: Luta, tipo: 'pronta' | 'chamada' | 'aguardando' | 'baia') => (
-    <article key={luta.id} className={`rounded-2xl border p-4 ${tipo === 'chamada' ? 'border-yellow-500/40 bg-yellow-500/10' : tipo === 'pronta' ? 'border-emerald-500/25 bg-emerald-500/5' : tipo === 'baia' ? 'border-cyan-500/30 bg-cyan-500/5' : 'border-white/10 bg-[#0b0b10]'}`}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">{luta.tatame || 'Sem tatame'} · {rotuloLuta(luta)} · {hora(luta.horario_estimado)}</p>
-          <h3 className="mt-1 truncate text-sm font-black uppercase text-white">{luta.categoria}</h3>
-          <p className="mt-1 text-[9px] font-bold uppercase tracking-wider text-zinc-500">{luta.faixa || 'Faixa não informada'} · {luta.fase || 'Fase'}</p>
-        </div>
-        {tipo === 'chamada' && <span className="rounded-full bg-yellow-400 px-2 py-1 text-[8px] font-black uppercase text-black">Já chamada</span>}
-        {tipo === 'baia' && <button onClick={() => anunciarCategoria(luta)} className="rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-2 py-1 text-[8px] font-black uppercase text-cyan-200"><Megaphone size={10} className="mr-1 inline" /> Anunciar categoria</button>}
+    <article key={luta.id} className={`min-w-0 max-w-full overflow-hidden rounded-xl border p-2.5 md:rounded-2xl md:p-4 ${tipo === 'chamada' ? 'border-yellow-500/40 bg-yellow-500/10' : tipo === 'pronta' ? 'border-emerald-500/25 bg-emerald-500/5' : tipo === 'baia' ? 'border-cyan-500/30 bg-cyan-500/5' : 'border-white/10 bg-[#0b0b10]'}`}>
+      <div className="min-w-0">
+        <p className="truncate text-[8px] font-black uppercase tracking-widest text-zinc-500 md:text-[9px]">{luta.tatame || 'Sem tatame'} · {rotuloLuta(luta)}{luta.horario_estimado ? ` · ${hora(luta.horario_estimado)}` : ''}</p>
+        <h3 className="mt-0.5 break-all text-[12px] font-black uppercase leading-tight text-white md:break-words md:text-sm">{tituloCategoria(luta)}</h3>
+        <p className="mt-0.5 truncate text-[8px] font-bold uppercase text-zinc-500">{luta.faixa || 'Faixa'}</p>
       </div>
+      {tipo === 'chamada' && <span className="mt-1.5 inline-flex rounded-full bg-yellow-400 px-2 py-0.5 text-[8px] font-black uppercase text-black">Chamada</span>}
+      {tipo === 'baia' && <button onClick={() => anunciarCategoria(luta)} className="mt-1.5 h-8 w-full rounded-lg border border-cyan-500/30 bg-cyan-500/10 text-[8px] font-black uppercase text-cyan-200"><Megaphone size={10} className="mr-1 inline" /> Anunciar</button>}
 
-      <div className="mt-4 grid gap-2 sm:grid-cols-2">
+      <div className="mt-2 grid min-w-0 grid-cols-1 gap-1.5 md:mt-4 md:grid-cols-2 md:gap-2">
         {[
           { lado: 1 as const, nome: luta.atleta_1, status: luta.checkin_1 },
           { lado: 2 as const, nome: luta.atleta_2, status: luta.checkin_2 },
         ].map((atleta, index) => (
-          <div key={`${luta.id}-${index}`} className="rounded-xl border border-white/5 bg-black/50 p-3">
+          <div key={`${luta.id}-${index}`} className="min-w-0 overflow-hidden rounded-lg border border-white/5 bg-black/50 px-2 py-1.5 md:rounded-xl md:p-3">
             {atletaReal(atleta.nome) ? <>
-              <p className="truncate text-xs font-black uppercase text-white">{atleta.nome}</p>
-              <span className={`mt-2 inline-flex items-center gap-1 rounded-full px-2 py-1 text-[8px] font-black uppercase ${atleta.status === 'aprovado' ? 'bg-emerald-500/10 text-emerald-300' : 'bg-yellow-500/10 text-yellow-300'}`}>
-                {atleta.status === 'aprovado' ? <CheckCircle2 size={11} /> : <Clock3 size={11} />}
-                {atleta.status === 'aprovado' ? 'Check-in aprovado' : 'Aguardando check-in'}
-              </span>
-              {tipo !== 'chamada' && <div className="mt-3 grid grid-cols-2 gap-2">
-                <button onClick={() => atualizarControle(luta, atleta.lado, 'presenca')} disabled={acaoId === `${luta.id}-${atleta.lado}`} className={`rounded-lg border px-2 py-2 text-[8px] font-black uppercase ${controleChamador(luta, atleta.lado).presente ? 'border-emerald-400 bg-emerald-500 text-black' : 'border-white/10 bg-white/5 text-zinc-300'}`}>{controleChamador(luta, atleta.lado).presente ? 'Na baia ✓' : 'Marcar presença'}</button>
-                <button onClick={() => atualizarControle(luta, atleta.lado, 'chamada')} disabled={controleChamador(luta, atleta.lado).chamadas >= 2 || acaoId === `${luta.id}-${atleta.lado}`} className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-2 py-2 text-[8px] font-black uppercase text-yellow-200 disabled:opacity-40">{controleChamador(luta, atleta.lado).chamadas >= 2 ? '2 chamadas' : `${controleChamador(luta, atleta.lado).chamadas + 1}ª chamada`}</button>
+              <div className="flex min-w-0 items-center justify-between gap-2">
+                <p className="min-w-0 truncate text-[11px] font-black uppercase text-white md:text-xs">{atleta.nome}</p>
+                <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[7px] font-black uppercase md:text-[8px] ${atleta.status === 'aprovado' ? 'bg-emerald-500/10 text-emerald-300' : 'bg-yellow-500/10 text-yellow-300'}`}>
+                  {atleta.status === 'aprovado' ? <CheckCircle2 size={10} /> : <Clock3 size={10} />}
+                  {atleta.status === 'aprovado' ? 'OK' : 'Check-in'}
+                </span>
+              </div>
+              {tipo !== 'chamada' && <div className="mt-1.5 grid min-w-0 grid-cols-2 gap-1 md:mt-3 md:gap-2">
+                <button onClick={() => atualizarControle(luta, atleta.lado, 'presenca')} disabled={acaoId === `${luta.id}-${atleta.lado}`} className={`h-9 min-w-0 w-full truncate rounded-lg border px-1 text-[8px] font-black uppercase tracking-normal md:px-2 ${controleChamador(luta, atleta.lado).presente ? 'border-emerald-400 bg-emerald-500 text-black' : 'border-white/10 bg-white/5 text-zinc-300'}`}>{controleChamador(luta, atleta.lado).presente ? 'Na baia' : 'Presença'}</button>
+                <button onClick={() => atualizarControle(luta, atleta.lado, 'chamada')} disabled={controleChamador(luta, atleta.lado).chamadas >= 2 || acaoId === `${luta.id}-${atleta.lado}`} className="h-9 min-w-0 w-full truncate rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-1 text-[8px] font-black uppercase tracking-normal text-yellow-200 disabled:opacity-40 md:px-2">{controleChamador(luta, atleta.lado).chamadas >= 2 ? '2ª ok' : <><span className="md:hidden">{controleChamador(luta, atleta.lado).chamadas + 1}ª</span><span className="hidden md:inline">{controleChamador(luta, atleta.lado).chamadas + 1}ª chamada</span></>}</button>
               </div>}
-              {tipo !== 'chamada' && controleChamador(luta, atleta.lado).chamadas >= 2 && !controleChamador(luta, atleta.lado).presente && controleChamador(luta, atleta.lado === 1 ? 2 : 1).presente && <button onClick={() => confirmarWo(luta, atleta.lado)} className="mt-2 w-full rounded-lg border border-red-500/30 bg-red-500/10 px-2 py-2 text-[8px] font-black uppercase text-red-300">Confirmar ausência</button>}
-            </> : <div className="flex min-h-24 flex-col items-center justify-center text-center"><Clock3 size={18} className="text-cyan-400" /><p className="mt-2 text-[9px] font-black uppercase text-cyan-200">{placeholderSlotChaveDeTres(luta, atleta.lado) || 'Vaga do adversário'}</p><p className="mt-1 text-[8px] text-zinc-600">{textoAguardandoChaveDeTres(luta) || 'Aguardando oponente da luta anterior'}</p></div>}
+              {tipo !== 'chamada' && controleChamador(luta, atleta.lado).chamadas >= 2 && !controleChamador(luta, atleta.lado).presente && controleChamador(luta, atleta.lado === 1 ? 2 : 1).presente && <button onClick={() => confirmarWo(luta, atleta.lado)} className="mt-1.5 h-9 w-full rounded-lg border border-red-500/30 bg-red-500/10 px-2 text-[8px] font-black uppercase text-red-300">Ausência</button>}
+            </> : (
+              <p className="break-words text-[10px] font-black uppercase leading-tight text-cyan-200">
+                {placeholderSlotChaveDeTres(luta, atleta.lado) || 'Aguardando oponente'}
+                <span className="mt-0.5 block text-[8px] font-bold normal-case tracking-normal text-zinc-500">{textoAguardandoChaveDeTres(luta) || 'Vaga da luta anterior'}</span>
+              </p>
+            )}
           </div>
         ))}
       </div>
 
       {tipo === 'pronta' && (
-        <button onClick={() => chamar(luta)} disabled={acaoId === luta.id} className="mt-4 flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-yellow-400 py-3 text-[10px] font-black uppercase tracking-widest text-black transition hover:bg-yellow-300 disabled:opacity-50">
+        <button onClick={() => chamar(luta)} disabled={acaoId === luta.id} className="mt-2 flex h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-yellow-400 text-[10px] font-black uppercase tracking-widest text-black transition hover:bg-yellow-300 disabled:opacity-50 md:mt-4">
           {acaoId === luta.id ? <RefreshCw size={15} className="animate-spin" /> : <Megaphone size={15} />}
           Chamar atletas
         </button>
@@ -474,52 +484,52 @@ export default function PainelChamador() {
   if (!sessao) return <main className="min-h-screen bg-black" />;
 
   return (
-    <main className="min-h-screen bg-[#050505] pb-12 font-sans text-white">
+    <main className="min-h-screen max-w-full overflow-x-hidden bg-[#050505] pb-24 font-sans text-white md:pb-12">
       <style dangerouslySetInnerHTML={{ __html: `.hide-global-nav > header:first-of-type, .hide-global-nav nav:first-of-type { display: none !important; } body.hide-global-nav > main, body.hide-global-nav > div > main { padding-top: 0 !important; margin-top: 0 !important; }` }} />
 
       {toast && (
-        <div className="fixed left-1/2 top-[max(1rem,env(safe-area-inset-top))] z-[200] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 animate-in slide-in-from-top-4">
-          <div className={`flex items-start gap-3 rounded-2xl border p-4 shadow-2xl backdrop-blur-xl ${toast.tipo === 'erro' ? 'border-red-500/50 bg-red-950/95 text-red-50' : toast.tipo === 'sucesso' ? 'border-emerald-500/50 bg-emerald-950/95 text-emerald-50' : 'border-yellow-500/50 bg-yellow-950/95 text-yellow-50'}`}>
+        <div className="fixed left-1/2 top-[max(1rem,env(safe-area-inset-top))] z-[200] w-[min(calc(100%-1.5rem),32rem)] -translate-x-1/2 animate-in slide-in-from-top-4">
+          <div className={`flex items-start gap-3 rounded-2xl border p-3 shadow-2xl backdrop-blur-xl md:p-4 ${toast.tipo === 'erro' ? 'border-red-500/50 bg-red-950/95 text-red-50' : toast.tipo === 'sucesso' ? 'border-emerald-500/50 bg-emerald-950/95 text-emerald-50' : 'border-yellow-500/50 bg-yellow-950/95 text-yellow-50'}`}>
             {toast.tipo === 'sucesso' ? <CheckCircle2 className="mt-0.5 shrink-0 text-emerald-300" size={19} /> : toast.tipo === 'erro' ? <AlertCircle className="mt-0.5 shrink-0 text-red-300" size={19} /> : <RefreshCw className="mt-0.5 shrink-0 animate-spin text-yellow-300" size={19} />}
-            <p className="min-w-0 flex-1 text-xs font-black leading-5">{toast.mensagem}</p>
+            <p className="min-w-0 flex-1 break-words text-xs font-black leading-5">{toast.mensagem}</p>
             <button onClick={() => setToast(null)} className="shrink-0 rounded-lg p-1 text-current opacity-70 hover:bg-white/10 hover:opacity-100" aria-label="Fechar aviso"><X size={16} /></button>
           </div>
         </div>
       )}
 
       <header className="sticky top-0 z-50 border-b border-white/10 bg-black/95 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 md:px-6">
-          <div>
-            <p className="text-lg font-black italic"><span className="text-red-600">i</span>TATAME</p>
-            <p className="mt-1 flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-yellow-300"><Megaphone size={13} /> Chamador · {sessao.identificacao}</p>
+        <div className="mx-auto flex w-full max-w-7xl min-w-0 items-center justify-between gap-3 px-3 py-2.5 md:px-6 md:py-3">
+          <div className="min-w-0">
+            <p className="text-base font-black italic md:text-lg"><span className="text-red-600">i</span>TATAME</p>
+            <p className="mt-0.5 truncate text-[8px] font-black uppercase tracking-widest text-yellow-300 md:text-[9px]"><Megaphone size={12} className="mr-1 inline" /> Chamador · {sessao.identificacao}</p>
           </div>
-          <div className="flex gap-2">
-            <button onClick={() => carregar()} className="rounded-xl border border-white/10 bg-white/5 p-3" title="Atualizar"><RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} /></button>
-            <button onClick={sair} className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-red-300" title="Sair"><LogOut size={16} /></button>
+          <div className="flex shrink-0 gap-2">
+            <button onClick={() => carregar()} className="rounded-xl border border-white/10 bg-white/5 p-2.5 md:p-3" title="Atualizar"><RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} /></button>
+            <button onClick={sair} className="rounded-xl border border-red-500/20 bg-red-500/10 p-2.5 text-red-300 md:p-3" title="Sair"><LogOut size={16} /></button>
           </div>
         </div>
       </header>
 
-      <div className="mx-auto max-w-7xl space-y-6 p-4 md:p-6">
-        {categoriasChamada.length > 0 && <section><div className="mb-3 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-yellow-300"><ShieldCheck size={15} /> Chave digital por categoria</div><div className="flex gap-2 overflow-x-auto pb-2"><button onClick={() => setCategoriaAtiva('')} className={`min-w-max rounded-xl border px-4 py-3 text-[9px] font-black uppercase ${!categoriaAtiva ? 'border-yellow-400 bg-yellow-400 text-black' : 'border-white/10 bg-white/5 text-zinc-400'}`}>Todas</button>{categoriasChamada.map((luta) => { const chave = `${luta.categoria}__${luta.faixa || ''}`; return <div key={chave} className={`flex min-w-max overflow-hidden rounded-xl border ${categoriaAtiva === chave ? 'border-yellow-400 bg-yellow-500/10' : 'border-yellow-500/20 bg-yellow-500/5'}`}><button onClick={() => setCategoriaAtiva(chave)} className="px-4 py-3 text-left"><strong className="block text-[10px] uppercase text-white">{luta.categoria}</strong><span className="mt-1 block text-[8px] font-bold uppercase tracking-widest text-zinc-500">{luta.faixa || 'Faixa não informada'} · ver chave</span></button><button onClick={() => anunciarCategoria(luta)} title="Texto para o locutor" className="border-l border-yellow-500/20 px-3 text-yellow-300"><Megaphone size={14} /></button></div>})}</div></section>}
+      <div className="mx-auto w-full max-w-7xl min-w-0 space-y-4 p-3 md:space-y-6 md:p-6">
+        {categoriasChamada.length > 0 && <section className="min-w-0"><div className="mb-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-yellow-300 md:mb-3 md:text-xs"><ShieldCheck size={14} /> Categorias</div><div className="flex max-w-full gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"><button onClick={() => setCategoriaAtiva('')} className={`shrink-0 rounded-lg border px-3 py-2 text-[8px] font-black uppercase md:rounded-xl md:px-4 md:py-3 md:text-[9px] ${!categoriaAtiva ? 'border-yellow-400 bg-yellow-400 text-black' : 'border-white/10 bg-white/5 text-zinc-400'}`}>Todas</button>{categoriasChamada.map((luta) => { const chave = `${luta.categoria}__${luta.faixa || ''}`; return <div key={chave} className={`flex max-w-[220px] shrink-0 overflow-hidden rounded-lg border md:max-w-none md:rounded-xl ${categoriaAtiva === chave ? 'border-yellow-400 bg-yellow-500/10' : 'border-yellow-500/20 bg-yellow-500/5'}`}><button onClick={() => setCategoriaAtiva(chave)} className="min-w-0 px-3 py-2 text-left md:px-4 md:py-3"><strong className="block truncate text-[9px] uppercase text-white md:text-[10px]">{tituloCategoria(luta)}</strong><span className="mt-0.5 block truncate text-[7px] font-bold uppercase tracking-widest text-zinc-500 md:text-[8px]">{luta.faixa || 'Faixa'}</span></button><button onClick={() => anunciarCategoria(luta)} title="Texto para o locutor" className="shrink-0 border-l border-yellow-500/20 px-2.5 text-yellow-300 md:px-3"><Megaphone size={14} /></button></div>})}</div></section>}
 
-        <section className="grid grid-cols-2 gap-3 md:grid-cols-5">
-          <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4"><p className="text-[8px] font-black uppercase tracking-widest text-emerald-300">Prontas</p><strong className="mt-2 block text-2xl">{prontas.length}</strong></div>
-          <div className="rounded-2xl border border-yellow-500/20 bg-yellow-500/5 p-4"><p className="text-[8px] font-black uppercase tracking-widest text-yellow-300">Chamadas</p><strong className="mt-2 block text-2xl">{chamadas.length}</strong></div>
-          <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-4"><p className="text-[8px] font-black uppercase tracking-widest text-red-300">Em luta</p><strong className="mt-2 block text-2xl">{emAndamento.length}</strong></div>
-          <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4"><p className="text-[8px] font-black uppercase tracking-widest text-zinc-400">Check-in pendente</p><strong className="mt-2 block text-2xl">{aguardandoCheckin.length}</strong></div>
-          <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-4"><p className="text-[8px] font-black uppercase tracking-widest text-cyan-300">Atletas na baia</p><strong className="mt-2 block text-2xl">{baias.length}</strong></div>
+        <section className="grid min-w-0 grid-cols-5 gap-1 md:gap-3">
+          <div className="min-w-0 overflow-hidden rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-1 py-2 md:rounded-2xl md:p-4"><p className="truncate text-[7px] font-black uppercase text-emerald-300 md:text-[8px]">Prontas</p><strong className="mt-0.5 block text-lg md:mt-2 md:text-2xl">{prontas.length}</strong></div>
+          <div className="min-w-0 overflow-hidden rounded-xl border border-yellow-500/20 bg-yellow-500/5 px-1 py-2 md:rounded-2xl md:p-4"><p className="truncate text-[7px] font-black uppercase text-yellow-300 md:text-[8px]">Chamadas</p><strong className="mt-0.5 block text-lg md:mt-2 md:text-2xl">{chamadas.length}</strong></div>
+          <div className="min-w-0 overflow-hidden rounded-xl border border-red-500/20 bg-red-500/5 px-1 py-2 md:rounded-2xl md:p-4"><p className="truncate text-[7px] font-black uppercase text-red-300 md:text-[8px]">Em luta</p><strong className="mt-0.5 block text-lg md:mt-2 md:text-2xl">{emAndamento.length}</strong></div>
+          <div className="min-w-0 overflow-hidden rounded-xl border border-white/10 bg-white/[0.02] px-1 py-2 md:rounded-2xl md:p-4"><p className="truncate text-[7px] font-black uppercase text-zinc-400 md:text-[8px]">Check-in</p><strong className="mt-0.5 block text-lg md:mt-2 md:text-2xl">{aguardandoCheckin.length}</strong></div>
+          <div className="min-w-0 overflow-hidden rounded-xl border border-cyan-500/20 bg-cyan-500/5 px-1 py-2 md:rounded-2xl md:p-4"><p className="truncate text-[7px] font-black uppercase text-cyan-300 md:text-[8px]">Baia</p><strong className="mt-0.5 block text-lg md:mt-2 md:text-2xl">{baias.length}</strong></div>
         </section>
 
         {loading ? (
-          <div className="rounded-2xl border border-white/10 p-12 text-center text-xs font-black uppercase tracking-widest text-zinc-500">Carregando cronograma...</div>
+          <div className="rounded-2xl border border-white/10 p-8 text-center text-[10px] font-black uppercase tracking-widest text-zinc-500 md:p-12 md:text-xs">Carregando cronograma...</div>
         ) : (
           <>
-            {chamadas.length > 0 && <section><h2 className="mb-3 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-yellow-300"><Megaphone size={15} /> Aguardando o mesário</h2><div className="grid gap-3 lg:grid-cols-2">{chamadas.map((luta) => card(luta, 'chamada'))}</div></section>}
-            {baias.length > 0 && <section><h2 className="mb-3 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-cyan-300"><Users size={15} /> Atletas na baia · adversário pendente</h2><div className="grid gap-3 lg:grid-cols-2">{baias.map((luta) => card(luta, 'baia'))}</div></section>}
-            {prontas.length > 0 && <section><h2 className="mb-3 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-emerald-300"><Users size={15} /> Prontas para chamar</h2><div className="grid gap-3 lg:grid-cols-2">{prontas.map((luta) => card(luta, 'pronta'))}</div></section>}
-            {aguardandoCheckin.length > 0 && <section><h2 className="mb-3 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-zinc-500"><AlertCircle size={15} /> Aguardando liberação do check-in</h2><div className="grid gap-3 opacity-75 lg:grid-cols-2">{aguardandoCheckin.map((luta) => card(luta, 'aguardando'))}</div></section>}
-            {chamadas.length === 0 && prontas.length === 0 && aguardandoCheckin.length === 0 && baias.length === 0 && <div className="rounded-2xl border border-dashed border-white/10 p-12 text-center text-xs font-black uppercase tracking-widest text-zinc-600">Nenhuma luta pendente no cronograma.</div>}
+            {chamadas.length > 0 && <section className="min-w-0 overflow-hidden"><h2 className="mb-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-yellow-300 md:mb-3 md:text-xs"><Megaphone size={14} /> Aguardando mesário</h2><div className="grid min-w-0 grid-cols-1 gap-2 md:gap-3 lg:grid-cols-2">{chamadas.map((luta) => card(luta, 'chamada'))}</div></section>}
+            {baias.length > 0 && <section className="min-w-0 overflow-hidden"><h2 className="mb-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-cyan-300 md:mb-3 md:text-xs"><Users size={14} /> Baia · adversário pendente</h2><div className="grid min-w-0 grid-cols-1 gap-2 md:gap-3 lg:grid-cols-2">{baias.map((luta) => card(luta, 'baia'))}</div></section>}
+            {prontas.length > 0 && <section className="min-w-0 overflow-hidden"><h2 className="mb-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-emerald-300 md:mb-3 md:text-xs"><Users size={14} /> Prontas para chamar</h2><div className="grid min-w-0 grid-cols-1 gap-2 md:gap-3 lg:grid-cols-2">{prontas.map((luta) => card(luta, 'pronta'))}</div></section>}
+            {aguardandoCheckin.length > 0 && <section className="min-w-0 overflow-hidden"><h2 className="mb-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-zinc-500 md:mb-3 md:text-xs"><AlertCircle size={14} /> Aguardando check-in</h2><div className="grid min-w-0 grid-cols-1 gap-2 opacity-75 md:gap-3 lg:grid-cols-2">{aguardandoCheckin.map((luta) => card(luta, 'aguardando'))}</div></section>}
+            {chamadas.length === 0 && prontas.length === 0 && aguardandoCheckin.length === 0 && baias.length === 0 && <div className="rounded-2xl border border-dashed border-white/10 p-8 text-center text-[10px] font-black uppercase tracking-widest text-zinc-600 md:p-12 md:text-xs">Nenhuma luta pendente no cronograma.</div>}
           </>
         )}
       </div>

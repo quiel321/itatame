@@ -1,7 +1,8 @@
 'use client';
 
-import { lutasFormamChaveDeSeis, lutasFormamChaveDeTres, placeholderSlotChaveDeTres } from '@/app/lib/chave-de-tres';
-import { idsPrimeiraFasePorLado } from '@/app/lib/chave-visual';
+import { useMemo, useState } from 'react';
+import { placeholderSlotChaveDeTres } from '@/app/lib/chave-de-tres';
+import { estruturaVisualChave, rotulosColunasArvore } from '@/app/lib/chave-visual';
 
 export type LutaArvore = {
   id?: string | number;
@@ -38,6 +39,8 @@ type AtletaSlot = {
   id_banco?: string | number;
 };
 
+const ROW_PX = 70;
+
 function formatarHorario(isoString?: string | null) {
   if (!isoString) return '';
   return new Date(isoString).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
@@ -48,125 +51,8 @@ function fantasma(nome?: string | null) {
   return !limpo || limpo === 'BYE' || limpo === 'TBD' || limpo.includes('SEM OPONENTE');
 }
 
-function Atleta({
-  nome,
-  equipe,
-  numero,
-  foto,
-  reverso = false,
-  centralizado = false,
-  ocultarLinha = false,
-  larguraClass = 'w-[100px] md:w-[140px]',
-  campeao = false,
-  horario,
-  status,
-  tatame,
-  venceu = false,
-  placeholder = false,
-  destaque = false,
-  onAvancar,
-  luta_id,
-  id_banco,
-}: AtletaSlot & {
-  reverso?: boolean;
-  centralizado?: boolean;
-  ocultarLinha?: boolean;
-  larguraClass?: string;
-  campeao?: boolean;
-  destaque?: boolean;
-}) {
-  const podeClicar = Boolean(onAvancar && nome && !placeholder);
-  const anel = destaque ? 'ring-2 ring-yellow-400/80' : '';
-
-  if (campeao) {
-    return (
-      <div
-        onClick={() => podeClicar && onAvancar?.(id_banco, luta_id, nome, equipe)}
-        className={`relative flex w-full flex-col items-center justify-center gap-1.5 py-2 ${podeClicar ? 'cursor-pointer hover:scale-105' : ''}`}
-      >
-        <div className={`flex h-[50px] w-[50px] shrink-0 items-center justify-center overflow-hidden rounded-full border-[3px] border-yellow-500 bg-black shadow-[0_0_20px_rgba(234,179,8,0.5)] md:h-[70px] md:w-[70px] ${anel}`}>
-          {foto && !placeholder ? <img src={foto} alt={nome} className="h-full w-full object-cover" /> : (
-            <svg className="h-6 w-6 text-yellow-600 md:h-10 md:w-10" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" /></svg>
-          )}
-        </div>
-        <span className="w-full truncate px-1 text-center text-[10px] font-black uppercase text-yellow-500 drop-shadow-[0_0_10px_rgba(234,179,8,0.6)] md:text-[12px]">
-          {nome || 'A definir'}
-        </span>
-        <span className="w-full truncate px-1 text-center text-[9px] font-bold uppercase text-yellow-600/80 md:text-[11px]">{equipe}</span>
-      </div>
-    );
-  }
-
-  return (
-    <div
-      onClick={() => podeClicar && onAvancar?.(id_banco, luta_id, nome, equipe)}
-      className={`group relative h-[60px] flex-shrink-0 ${larguraClass} ${podeClicar ? 'z-20 cursor-pointer hover:scale-105' : ''}`}
-    >
-      {!centralizado && (
-        <div className={`absolute top-[12px] z-10 hidden h-[36px] w-[36px] items-center justify-center overflow-hidden rounded-full border bg-[#0a0a0e] transition-transform group-hover:scale-110 md:flex ${venceu ? 'border-green-400' : placeholder ? 'border-cyan-500/40' : 'border-zinc-700 group-hover:border-cyan-500/50'} ${reverso ? 'right-0' : 'left-0'} ${anel}`}>
-          {foto && !placeholder ? <img src={foto} className="h-full w-full object-cover" alt="" /> : (
-            <svg className="h-5 w-5 text-zinc-600" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" /></svg>
-          )}
-        </div>
-      )}
-      <div className={`absolute top-[4px] flex items-center md:top-[2px] ${centralizado ? 'left-0 right-0 justify-center' : reverso ? 'left-0 right-0 flex-row-reverse md:left-0 md:right-[48px]' : 'left-0 right-0 flex-row md:left-[48px] md:right-0'}`}>
-        {numero && !placeholder && <span className={`text-[9px] font-black text-zinc-600 md:text-[10px] ${reverso ? 'ml-1.5' : 'mr-1.5'}`}>{numero}</span>}
-        <span className={`flex-1 truncate text-[10px] font-bold tracking-tight md:text-[13px] ${venceu ? 'text-green-400' : placeholder ? 'text-cyan-300/80 italic' : 'text-[#57d8ff] group-hover:text-white'} ${centralizado ? 'text-center' : reverso ? 'text-right' : 'text-left'}`}>
-          {nome}
-        </span>
-      </div>
-      {!ocultarLinha && <div className={`absolute top-[30px] border-t transition-colors ${venceu ? 'border-green-500/50' : placeholder ? 'border-dashed border-cyan-500/30' : 'border-zinc-600/70 group-hover:border-[#57d8ff]/50'} ${centralizado ? 'left-0 right-0' : reverso ? 'left-0 right-0 md:left-auto md:right-[48px]' : 'left-0 right-0 md:right-auto md:left-[48px]'}`} />}
-      <div className={`absolute top-[34px] flex items-center ${centralizado ? 'left-0 right-0 justify-center' : reverso ? 'left-0 right-0 flex-row-reverse md:left-0 md:right-[48px]' : 'left-0 right-0 flex-row md:left-[48px] md:right-0'}`}>
-        <span className={`flex-1 truncate text-[8px] font-medium uppercase md:text-[9.5px] ${placeholder ? 'text-cyan-700' : 'text-zinc-500'} ${centralizado ? 'text-center' : reverso ? 'text-right' : 'text-left'}`}>
-          {equipe}
-        </span>
-      </div>
-      {!placeholder && horario && status !== 'concluida' && status !== 'em_andamento' && (
-        <div className={`absolute top-[48px] flex items-center ${centralizado ? 'left-0 right-0 justify-center' : reverso ? 'left-0 right-0 flex-row-reverse md:left-0 md:right-[48px]' : 'left-0 right-0 flex-row md:left-[48px] md:right-0'}`}>
-          <span className="z-20 flex items-center gap-1 whitespace-nowrap rounded border border-yellow-500/20 bg-yellow-500/10 px-1.5 py-px text-[7px] font-black uppercase tracking-widest text-yellow-500 shadow-[0_0_10px_rgba(234,179,8,0.1)] md:text-[8px]">
-            {formatarHorario(horario)} {tatame && `| ${tatame}`}
-          </span>
-        </div>
-      )}
-      {!placeholder && status === 'em_andamento' && (
-        <div className={`absolute top-[48px] flex items-center ${centralizado ? 'left-0 right-0 justify-center' : reverso ? 'left-0 right-0 flex-row-reverse md:left-0 md:right-[48px]' : 'left-0 right-0 flex-row md:left-[48px] md:right-0'}`}>
-          <span className="z-20 flex animate-pulse cursor-default items-center gap-1 whitespace-nowrap rounded border border-red-500/20 bg-red-500/10 px-1.5 py-px text-[7px] font-black uppercase tracking-widest text-red-500 shadow-[0_0_10px_rgba(239,68,68,0.2)] md:text-[8px]">
-            <span className="h-1.5 w-1.5 animate-ping rounded-full bg-red-500" /> Lutando agora
-          </span>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ConectorPequeno({ reverso = false }: { reverso?: boolean }) {
-  return (
-    <div className="relative h-[80px] w-[12px] flex-shrink-0 md:w-[30px]">
-      <div className={`absolute top-0 h-[81px] w-[6px] border-y border-zinc-500 md:w-[15px] ${reverso ? 'right-0 border-l' : 'left-0 border-r'}`} />
-      <div className={`absolute top-[40px] w-[6px] border-t border-zinc-500 md:w-[15px] ${reverso ? 'left-0' : 'right-0'}`} />
-    </div>
-  );
-}
-
-function ConectorMedio({ reverso = false }: { reverso?: boolean }) {
-  return (
-    <div className="relative h-[160px] w-[12px] flex-shrink-0 md:w-[30px]">
-      <div className={`absolute top-0 h-[161px] w-[6px] border-y border-zinc-500 md:w-[15px] ${reverso ? 'right-0 border-l' : 'left-0 border-r'}`} />
-      <div className={`absolute top-[80px] w-[6px] border-t border-zinc-500 md:w-[15px] ${reverso ? 'left-0' : 'right-0'}`} />
-    </div>
-  );
-}
-
-function ConectorGrande({ reverso = false }: { reverso?: boolean }) {
-  return (
-    <div className="relative h-[320px] w-[12px] flex-shrink-0 md:w-[30px]">
-      <div className={`absolute top-0 h-[321px] w-[6px] border-y border-zinc-500 md:w-[15px] ${reverso ? 'right-0 border-l' : 'left-0 border-r'}`} />
-      <div className={`absolute top-[160px] w-[6px] border-t border-zinc-500 md:w-[15px] ${reverso ? 'left-0' : 'right-0'}`} />
-    </div>
-  );
-}
-
 function achar(lutas: LutaArvore[], id: string) {
+  if (!id) return undefined;
   return lutas.find(luta => String(luta.id_visual) === id);
 }
 
@@ -174,7 +60,6 @@ function slot(
   luta: LutaArvore | undefined,
   lado: 1 | 2,
   buscarFoto: (id?: number | null) => string | null,
-  destaque: string,
   onAvancar?: (...args: unknown[]) => void,
 ): AtletaSlot {
   if (!luta) return { nome: '', equipe: '', foto: null };
@@ -204,78 +89,197 @@ function marcaDestaque(slotAtleta: AtletaSlot, destaque: string) {
   return slotAtleta.nome.toUpperCase().includes(destaque.trim().toUpperCase());
 }
 
-function CentroFinal({
-  final,
-  campeao,
-  buscarFoto,
-  destaque,
+function Atleta({
+  nome,
+  equipe,
+  numero,
+  foto,
+  reverso = false,
+  centralizado = false,
+  campeao = false,
+  horario,
+  status,
+  tatame,
+  venceu = false,
+  placeholder = false,
+  destaque = false,
   onAvancar,
-}: {
-  final?: LutaArvore;
-  campeao: AtletaSlot;
-  buscarFoto: (id?: number | null) => string | null;
-  destaque: string;
-  onAvancar?: (...args: unknown[]) => void;
-}) {
-  const a = slot(final, 1, buscarFoto, destaque, onAvancar);
-  const b = slot(final, 2, buscarFoto, destaque, onAvancar);
-  return (
-    <div className="relative mx-0 flex min-h-[480px] w-[160px] shrink-0 flex-col items-center md:w-[170px]">
-      <div className="absolute left-[-10px] right-[-10px] top-[310px] z-0 border-t border-zinc-500" />
-      <div className="absolute top-[260px] z-10 flex w-full flex-col gap-[10px] rounded-xl border border-zinc-800 bg-[#050816] px-2 py-4 shadow-2xl">
-        <span className="mb-1 text-center text-[10px] font-black uppercase tracking-widest text-red-600 md:text-[11px]">Luta final</span>
-        <Atleta {...a} larguraClass="w-full" centralizado destaque={marcaDestaque(a, destaque)} />
-        <Atleta {...b} larguraClass="w-full" centralizado destaque={marcaDestaque(b, destaque)} />
+  luta_id,
+  id_banco,
+}: AtletaSlot & { reverso?: boolean; centralizado?: boolean; campeao?: boolean; destaque?: boolean }) {
+  const podeClicar = Boolean(onAvancar && nome && !placeholder);
+  const vazio = !nome && !placeholder;
+
+  if (campeao) {
+    return (
+      <div
+        onClick={() => podeClicar && onAvancar?.(id_banco, luta_id, nome, equipe)}
+        className={`flex w-full flex-col items-center justify-center gap-1.5 py-1 ${podeClicar ? 'cursor-pointer hover:scale-105' : ''}`}
+      >
+        <div className={`flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border-[3px] border-yellow-500 bg-black shadow-[0_0_20px_rgba(234,179,8,0.45)] ${destaque ? 'ring-2 ring-yellow-300' : ''}`}>
+          {foto && !placeholder ? <img src={foto} alt={nome} className="h-full w-full object-cover" /> : (
+            <svg className="h-8 w-8 text-yellow-600" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" /></svg>
+          )}
+        </div>
+        <span className="w-full truncate px-1 text-center text-sm font-black uppercase text-yellow-400">{nome || 'A definir'}</span>
+        {equipe ? <span className="w-full truncate px-1 text-center text-[10px] font-bold uppercase text-yellow-600/80">{equipe}</span> : null}
       </div>
-      <div className="absolute top-[75px] z-10 flex w-full flex-col items-center md:top-[80px]">
-        <span className="mb-2 text-[12px] font-black tracking-widest text-yellow-500 drop-shadow-[0_0_15px_rgba(234,179,8,0.4)] md:text-lg">Campeão</span>
-        <div className="flex w-full flex-col items-center rounded-xl border border-yellow-500/50 bg-gradient-to-t from-yellow-500/10 to-black/80 px-2 py-2 shadow-[0_0_20px_rgba(234,179,8,0.2)]">
-          <Atleta {...campeao} larguraClass="w-full" centralizado ocultarLinha campeao destaque={marcaDestaque(campeao, destaque)} />
+    );
+  }
+
+  return (
+    <div
+      onClick={() => podeClicar && onAvancar?.(id_banco, luta_id, nome, equipe)}
+      className={`flex h-full min-h-[70px] items-center px-0.5 ${podeClicar ? 'z-20 cursor-pointer' : ''}`}
+    >
+      <div className={`flex w-full min-w-[148px] items-center gap-2 rounded-xl border px-2 py-1.5 shadow-sm ${
+        venceu ? 'border-green-400/60 bg-green-500/15' :
+        destaque ? 'border-yellow-400/70 bg-yellow-500/10' :
+        placeholder ? 'border-dashed border-cyan-400/35 bg-cyan-500/5' :
+        vazio ? 'border-white/5 bg-white/[0.02]' :
+        'border-white/15 bg-[#0b1220]'
+      } ${reverso ? 'flex-row-reverse' : ''} ${centralizado ? 'flex-col text-center' : ''} ${podeClicar ? 'hover:border-cyan-400/50' : ''}`}>
+        <div className={`flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border ${
+          venceu ? 'border-green-400' : placeholder ? 'border-cyan-500/40' : vazio ? 'border-white/10' : 'border-zinc-600'
+        } bg-black`}>
+          {foto && !placeholder ? <img src={foto} alt="" className="h-full w-full object-cover" /> : (
+            <svg className={`h-4 w-4 ${placeholder ? 'text-cyan-500' : 'text-zinc-600'}`} fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" /></svg>
+          )}
+        </div>
+        <div className={`min-w-0 flex-1 ${centralizado ? 'text-center' : reverso ? 'text-right' : 'text-left'}`}>
+          <p className={`truncate text-[13px] font-black uppercase leading-tight ${
+            venceu ? 'text-green-300' : placeholder ? 'text-cyan-200 italic' : vazio ? 'text-zinc-700' : 'text-white'
+          }`}>
+            {numero && !placeholder ? <span className="mr-1 text-[10px] text-zinc-500">{numero}</span> : null}
+            {nome || (vazio ? '—' : '')}
+          </p>
+          <p className={`truncate text-[10px] font-bold uppercase ${placeholder ? 'text-cyan-700' : 'text-zinc-500'}`}>
+            {equipe || (vazio ? '' : ' ')}
+          </p>
+          {!placeholder && horario && status !== 'concluida' && status !== 'em_andamento' && (
+            <p className="mt-0.5 truncate text-[9px] font-black uppercase tracking-widest text-yellow-500">
+              {formatarHorario(horario)}{tatame ? ` · ${tatame}` : ''}
+            </p>
+          )}
+          {!placeholder && status === 'em_andamento' && (
+            <p className="mt-0.5 flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-red-400">
+              <span className="h-1.5 w-1.5 animate-ping rounded-full bg-red-500" /> Lutando
+            </p>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-function LadoCompacto({
-  luta1,
-  baia,
+function Conector({ reverso = false }: { reverso?: boolean }) {
+  return (
+    <div className="relative h-full w-[18px] min-w-[18px]">
+      <div className={`absolute top-[25%] bottom-[25%] w-1/2 border-y border-zinc-500 ${reverso ? 'right-0 border-l' : 'left-0 border-r'}`} />
+      <div className={`absolute top-1/2 w-1/2 border-t border-zinc-500 ${reverso ? 'left-0' : 'right-0'}`} />
+    </div>
+  );
+}
+
+function LadoArvore({
+  colunas,
   reverso,
+  lutas,
   buscarFoto,
   destaque,
   onAvancar,
+  rotulos,
 }: {
-  luta1?: LutaArvore;
-  baia?: LutaArvore;
+  colunas: string[][];
   reverso?: boolean;
+  lutas: LutaArvore[];
   buscarFoto: (id?: number | null) => string | null;
   destaque: string;
   onAvancar?: (...args: unknown[]) => void;
+  rotulos: string[];
 }) {
-  const slots = [
-    slot(luta1, 1, buscarFoto, destaque, onAvancar),
-    slot(luta1, 2, buscarFoto, destaque, onAvancar),
-    slot(baia, 1, buscarFoto, destaque, onAvancar),
-    slot(baia, 2, buscarFoto, destaque, onAvancar),
-  ];
+  const nRows = Math.max(2, (colunas[0]?.length || 1) * 2);
+  const templateCols = reverso
+    ? `repeat(${colunas.length}, 18px minmax(168px, 200px))`
+    : `repeat(${colunas.length}, minmax(168px, 200px) 18px)`;
+
   return (
-    <div className="flex">
-      {!reverso && (
-        <>
-          <div className="flex flex-col gap-[20px]">
-            {slots.map((item, index) => <Atleta key={`e-${index}`} {...item} destaque={marcaDestaque(item, destaque)} />)}
-          </div>
-          <div className="flex flex-col gap-[80px] pt-[30px]"><ConectorPequeno /><ConectorPequeno /></div>
-        </>
-      )}
-      {reverso && (
-        <>
-          <div className="flex flex-col gap-[80px] pt-[30px]"><ConectorPequeno reverso /><ConectorPequeno reverso /></div>
-          <div className="flex flex-col gap-[20px]">
-            {slots.map((item, index) => <Atleta key={`d-${index}`} {...item} reverso destaque={marcaDestaque(item, destaque)} />)}
-          </div>
-        </>
-      )}
+    <div className="flex min-w-0 flex-col">
+      <div
+        className={`mb-2 grid text-[10px] font-black uppercase tracking-widest text-zinc-500 ${reverso ? 'text-left' : 'text-right'}`}
+        style={{ gridTemplateColumns: templateCols }}
+      >
+        {colunas.flatMap((_, indice) => {
+          const rotulo = rotulos[indice] || '';
+          return reverso
+            ? [
+                <span key={`c-${indice}`} />,
+                <span key={`l-${indice}`} className="px-1">{rotulo}</span>,
+              ]
+            : [
+                <span key={`l-${indice}`} className="px-1">{rotulo}</span>,
+                <span key={`c-${indice}`} />,
+              ];
+        })}
+      </div>
+      <div
+        className="grid items-stretch"
+        style={{
+          gridTemplateRows: `repeat(${nRows}, ${ROW_PX}px)`,
+          gridTemplateColumns: templateCols,
+        }}
+      >
+        {colunas.map((ids, rodada) => {
+          const span = 2 ** rodada;
+          const athleteCol = reverso ? (colunas.length - rodada) * 2 : rodada * 2 + 1;
+          const connectorCol = reverso ? athleteCol - 1 : athleteCol + 1;
+          return ids.flatMap((id, matchIndex) => {
+            const luta = achar(lutas, id);
+            const a = slot(luta, 1, buscarFoto, onAvancar);
+            const b = slot(luta, 2, buscarFoto, onAvancar);
+            const rowStart = matchIndex * span * 2 + 1;
+            return [
+              <div key={`${reverso ? 'd' : 'e'}-${rodada}-${matchIndex}-a`} style={{ gridColumn: athleteCol, gridRow: `${rowStart} / span ${span}` }}>
+                <Atleta {...a} reverso={reverso} destaque={marcaDestaque(a, destaque)} />
+              </div>,
+              <div key={`${reverso ? 'd' : 'e'}-${rodada}-${matchIndex}-b`} style={{ gridColumn: athleteCol, gridRow: `${rowStart + span} / span ${span}` }}>
+                <Atleta {...b} reverso={reverso} destaque={marcaDestaque(b, destaque)} />
+              </div>,
+              <div key={`${reverso ? 'd' : 'e'}-${rodada}-${matchIndex}-c`} style={{ gridColumn: connectorCol, gridRow: `${rowStart} / span ${span * 2}` }}>
+                <Conector reverso={reverso} />
+              </div>,
+            ];
+          });
+        })}
+      </div>
+    </div>
+  );
+}
+
+function CentroFinal({
+  final,
+  buscarFoto,
+  destaque,
+  onAvancar,
+  rotulo,
+}: {
+  final?: LutaArvore;
+  buscarFoto: (id?: number | null) => string | null;
+  destaque: string;
+  onAvancar?: (...args: unknown[]) => void;
+  rotulo: string;
+}) {
+  const a = slot(final, 1, buscarFoto, onAvancar);
+  const b = slot(final, 2, buscarFoto, onAvancar);
+  return (
+    <div className="relative mx-1 flex w-[180px] shrink-0 flex-col items-center justify-center md:w-[200px]">
+      <p className="mb-2 text-[10px] font-black uppercase tracking-[0.2em] text-yellow-500">{rotulo}</p>
+      <div className="w-full rounded-2xl border border-red-500/30 bg-[#070b16] px-3 py-3 shadow-[0_0_18px_rgba(239,68,68,0.12)]">
+        <p className="mb-2 text-center text-[10px] font-black uppercase tracking-widest text-red-500">Luta final</p>
+        <Atleta {...a} centralizado destaque={marcaDestaque(a, destaque)} />
+        <p className="py-1 text-center text-[9px] font-black uppercase tracking-widest text-zinc-600">vs</p>
+        <Atleta {...b} centralizado destaque={marcaDestaque(b, destaque)} />
+      </div>
     </div>
   );
 }
@@ -295,9 +299,10 @@ export default function ArvoreChaveDesktop({
   destaque?: string;
   onAvancar?: (...args: unknown[]) => void;
 }) {
-  const triangular = lutasFormamChaveDeTres(lutas);
-  const seis = lutasFormamChaveDeSeis(lutas);
-  const final = achar(lutas, '999') || lutas.find(luta => !luta.proxima_luta);
+  const [zoom, setZoom] = useState(1);
+  const estrutura = useMemo(() => estruturaVisualChave(lutas, abaAtual), [lutas, abaAtual]);
+  const rotulos = rotulosColunasArvore(estrutura.tamanho);
+  const final = achar(lutas, estrutura.final) || lutas.find(luta => !luta.proxima_luta);
   const campeaoNome = final?.vencedor && !fantasma(final.vencedor) ? String(final.vencedor) : '';
   const campeao: AtletaSlot = {
     nome: campeaoNome,
@@ -308,103 +313,55 @@ export default function ArvoreChaveDesktop({
     id_banco: final?.id,
   };
 
-  if (triangular) {
-    return (
-      <div className="relative hidden w-full min-w-0 flex-col items-center overflow-x-auto bg-[#050816] py-6 shadow-2xl scrollbar-hide md:flex md:rounded-3xl md:border md:border-white/10 md:p-10">
-        <div className="flex w-max justify-center px-2 pt-6 opacity-90 md:w-full md:px-0 md:pt-0 md:pb-8">
-          <LadoCompacto luta1={achar(lutas, '1')} baia={achar(lutas, '2')} buscarFoto={buscarFoto} destaque={destaque} onAvancar={onAvancar} />
-          {seis ? (
-            <div className="flex flex-col gap-[100px] pt-[40px]">
-              {([1, 2] as const).map(lado => {
-                const item = slot(achar(lutas, '101'), lado, buscarFoto, destaque, onAvancar);
-                return <Atleta key={`101-${lado}`} larguraClass="w-[16px] md:w-[140px]" {...item} destaque={marcaDestaque(item, destaque)} />;
-              })}
-            </div>
-          ) : (
-            <div className="flex flex-col pt-[70px]"><ConectorMedio /></div>
-          )}
-          {seis && <div className="flex flex-col pt-[70px]"><ConectorMedio /></div>}
-          <CentroFinal final={final} campeao={campeao} buscarFoto={buscarFoto} destaque={destaque} onAvancar={onAvancar} />
-          {seis && <div className="flex flex-col pt-[70px]"><ConectorMedio reverso /></div>}
-          {seis && (
-            <div className="flex flex-col gap-[100px] pt-[40px]">
-              {([1, 2] as const).map(lado => {
-                const item = slot(achar(lutas, '102'), lado, buscarFoto, destaque, onAvancar);
-                return <Atleta key={`102-${lado}`} larguraClass="w-[16px] md:w-[140px]" {...item} reverso destaque={marcaDestaque(item, destaque)} />;
-              })}
-            </div>
-          )}
-          {seis
-            ? <LadoCompacto luta1={achar(lutas, '3')} baia={achar(lutas, '4')} reverso buscarFoto={buscarFoto} destaque={destaque} onAvancar={onAvancar} />
-            : <div className="w-[12px] md:w-[30px]" />}
+  return (
+    <div className="relative hidden w-full min-w-0 rounded-3xl border border-white/10 bg-[#050816] shadow-2xl md:block">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/5 px-4 py-3">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.22em] text-cyan-400">Árvore da chave</p>
+          {totalAbas > 1 && <p className="text-xs font-bold text-zinc-500">Painel {abaAtual}/{totalAbas}</p>}
+        </div>
+        <div className="flex items-center gap-1 rounded-full border border-white/10 bg-black/40 p-1">
+          <button type="button" onClick={() => setZoom(z => Math.max(0.7, Number((z - 0.1).toFixed(1))))} className="h-8 w-8 rounded-full text-lg font-black text-zinc-300 hover:bg-white/10" aria-label="Diminuir zoom">−</button>
+          <button type="button" onClick={() => setZoom(1)} className="min-w-[52px] rounded-full px-2 text-[11px] font-black text-white">{Math.round(zoom * 100)}%</button>
+          <button type="button" onClick={() => setZoom(z => Math.min(1.4, Number((z + 0.1).toFixed(1))))} className="h-8 w-8 rounded-full text-lg font-black text-zinc-300 hover:bg-white/10" aria-label="Aumentar zoom">+</button>
         </div>
       </div>
-    );
-  }
 
-  const idsPrimeiraFase = idsPrimeiraFasePorLado(lutas, abaAtual);
-  const primeira = (posicao: number, slotLado: 1 | 2, lado: 'esquerda' | 'direita') => {
-    const id = idsPrimeiraFase[lado](posicao);
-    const luta = lutas.find(item => String(item.id_visual) === String(id));
-    return slot(luta, slotLado, buscarFoto, destaque, onAvancar);
-  };
-  const meio = (idBase: number, multiplicador: number, slotDelta: number, slotLado: 1 | 2) => {
-    const id = idBase + (abaAtual - 1) * multiplicador + slotDelta;
-    const luta = lutas.find(item => String(item.id_visual) === String(id));
-    return slot(luta, slotLado, buscarFoto, destaque, onAvancar);
-  };
-
-  return (
-    <div className="relative hidden w-full min-w-0 flex-col items-center overflow-x-auto bg-[#050816] py-6 shadow-2xl scrollbar-hide md:flex md:rounded-3xl md:border md:border-white/10 md:p-10">
-      {totalAbas > 1 && <p className="absolute left-4 top-4 text-sm font-bold uppercase tracking-widest text-zinc-500">Chave {abaAtual}/{totalAbas}</p>}
-      <div className="flex w-max justify-center px-2 pt-6 pb-8 opacity-90 transition-all md:w-full md:px-0 md:pt-0">
-        <div className="flex">
-          <div className="flex flex-col gap-[20px]">
-            {([1, 2, 3, 4] as const).flatMap(posicao => ([1, 2] as const).map(lado => {
-              const item = primeira(posicao, lado, 'esquerda');
-              return <Atleta key={`e-${posicao}-${lado}`} {...item} destaque={marcaDestaque(item, destaque)} />;
-            }))}
+      <div className="overflow-x-auto pb-6 pt-2 scrollbar-hide">
+        <div className="flex min-w-max origin-top flex-col items-center px-4 py-4 md:min-w-full" style={{ transform: `scale(${zoom})` }}>
+          <div className="mb-4 flex w-full max-w-sm flex-col items-center rounded-2xl border border-yellow-500/40 bg-gradient-to-b from-yellow-500/15 to-black/70 px-4 py-3 shadow-[0_0_24px_rgba(234,179,8,0.18)]">
+            <span className="text-[11px] font-black uppercase tracking-widest text-yellow-400">Campeão</span>
+            <Atleta {...campeao} centralizado campeao destaque={marcaDestaque(campeao, destaque)} />
           </div>
-          <div className="flex flex-col gap-[80px] pt-[30px]"><ConectorPequeno /><ConectorPequeno /><ConectorPequeno /><ConectorPequeno /></div>
-          <div className="flex flex-col gap-[100px] pt-[40px]">
-            {([[1, 1], [1, 2], [2, 1], [2, 2]] as const).map(([delta, lado]) => {
-              const item = meio(100, 2, delta, lado);
-              return <Atleta key={`m1-${delta}-${lado}`} larguraClass="w-[16px] md:w-[140px]" {...item} destaque={marcaDestaque(item, destaque)} />;
-            })}
-          </div>
-          <div className="flex flex-col gap-[160px] pt-[70px]"><ConectorMedio /><ConectorMedio /></div>
-          <div className="flex flex-col gap-[260px] pt-[120px]">
-            {([1, 2] as const).map(lado => {
-              const item = meio(200, 1, 1, lado);
-              return <Atleta key={`m2-${lado}`} larguraClass="w-[16px] md:w-[140px]" {...item} destaque={marcaDestaque(item, destaque)} />;
-            })}
-          </div>
-          <div className="flex flex-col pt-[150px]"><ConectorGrande /></div>
-        </div>
-
-        <CentroFinal final={final} campeao={campeao} buscarFoto={buscarFoto} destaque={destaque} onAvancar={onAvancar} />
-
-        <div className="flex">
-          <div className="flex flex-col pt-[150px]"><ConectorGrande reverso /></div>
-          <div className="flex flex-col gap-[260px] pt-[120px]">
-            {([1, 2] as const).map(lado => {
-              const item = meio(200, 1, 2, lado);
-              return <Atleta key={`m2d-${lado}`} larguraClass="w-[16px] md:w-[140px]" {...item} reverso destaque={marcaDestaque(item, destaque)} />;
-            })}
-          </div>
-          <div className="flex flex-col gap-[160px] pt-[70px]"><ConectorMedio reverso /><ConectorMedio reverso /></div>
-          <div className="flex flex-col gap-[100px] pt-[40px]">
-            {([[3, 1], [3, 2], [4, 1], [4, 2]] as const).map(([delta, lado]) => {
-              const item = meio(100, 2, delta, lado);
-              return <Atleta key={`m1d-${delta}-${lado}`} larguraClass="w-[16px] md:w-[140px]" {...item} reverso destaque={marcaDestaque(item, destaque)} />;
-            })}
-          </div>
-          <div className="flex flex-col gap-[80px] pt-[30px]"><ConectorPequeno reverso /><ConectorPequeno reverso /><ConectorPequeno reverso /><ConectorPequeno reverso /></div>
-          <div className="flex flex-col gap-[20px]">
-            {([1, 2, 3, 4] as const).flatMap(posicao => ([1, 2] as const).map(lado => {
-              const item = primeira(posicao, lado, 'direita');
-              return <Atleta key={`d-${posicao}-${lado}`} {...item} reverso destaque={marcaDestaque(item, destaque)} />;
-            }))}
+          <div className="flex items-center justify-center">
+            {estrutura.esquerda.length > 0 && (
+              <LadoArvore
+                colunas={estrutura.esquerda}
+                lutas={lutas}
+                buscarFoto={buscarFoto}
+                destaque={destaque}
+                onAvancar={onAvancar}
+                rotulos={rotulos.lados}
+              />
+            )}
+            <CentroFinal
+              final={final}
+              buscarFoto={buscarFoto}
+              destaque={destaque}
+              onAvancar={onAvancar}
+              rotulo={rotulos.centro}
+            />
+            {estrutura.direita.length > 0 && (
+              <LadoArvore
+                colunas={estrutura.direita}
+                reverso
+                lutas={lutas}
+                buscarFoto={buscarFoto}
+                destaque={destaque}
+                onAvancar={onAvancar}
+                rotulos={rotulos.lados}
+              />
+            )}
           </div>
         </div>
       </div>

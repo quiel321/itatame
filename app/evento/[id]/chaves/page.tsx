@@ -4,8 +4,6 @@ import { useEffect, useState } from "react"
 import { useParams } from "next/navigation"
 import { supabase } from "@/app/lib/supabase"
 import { rotuloLuta } from "@/app/lib/lutas-rotulos"
-import { lutasFormamChaveDeTres } from "@/app/lib/chave-de-tres"
-import { ChaveTriangularPainel } from "@/app/components/ChaveDeTresPainel"
 import ArvoreChaveDesktop from "@/app/components/ArvoreChaveDesktop"
 
 export default function ChavesPage() {
@@ -15,8 +13,7 @@ export default function ChavesPage() {
   const [categoriasMenu, setCategoriasMenu] = useState<string[]>([])
   const [categoriaSelecionada, setCategoriaSelecionada] = useState("")
   const [lutas, setLutas] = useState<any[]>([])
-  const [abaAtual, setAbaAtual] = useState(1) 
-  const [modoAdmin, setModoAdmin] = useState(false)
+  const [abaAtual, setAbaAtual] = useState(1)
   
   const [atletasDB, setAtletasDB] = useState<{ id?: number; nome: string; foto_url: string | null }[]>([])
 
@@ -88,11 +85,6 @@ export default function ChavesPage() {
     return typeof match?.foto_url === 'string' && match.foto_url ? match.foto_url : null;
   }
 
-  const handleAvancar = async (..._args: unknown[]) => {
-    if (!modoAdmin) return;
-    window.location.href = `/admin/resultados?evento=${params.id}`;
-  };
-
   const getCampeao = () => {
     const lutaFinal = lutas.find(l => String(l.id_visual) === "999") || lutas.find(l => !l.proxima_luta);
     const campeao = limparNome(lutaFinal?.vencedor || null);
@@ -100,9 +92,6 @@ export default function ChavesPage() {
       nome: campeao,
       equipe: "",
       foto: buscarFoto(lutaFinal?.vencedor_id, campeao),
-      luta_id: lutaFinal?.id_visual,
-      id_banco: lutaFinal?.id,
-      onAvancar: modoAdmin ? handleAvancar : undefined
     }
   }
 
@@ -117,35 +106,30 @@ export default function ChavesPage() {
 
   const campeaoData = getCampeao();
   const temCampeao = campeaoData.nome && campeaoData.nome !== "";
-  const ehChaveDeTres = lutasFormamChaveDeTres(lutas);
 
   return (
     <main className="min-h-screen bg-black p-0 md:p-6">
       <div className="w-full max-w-[1400px] mx-auto pt-6 md:pt-0">
         
-        <div className="flex flex-col md:flex-row justify-between items-center mb-6 md:mb-10 px-4 md:px-0">
-          <h1 className="text-white text-3xl md:text-5xl font-black">Chaveamento</h1>
-          <button 
-            onClick={() => setModoAdmin(!modoAdmin)}
-            className={`mt-4 md:mt-0 px-6 py-3 rounded-xl font-bold transition-all border ${
-              modoAdmin ? 'bg-red-600 border-red-500 text-white animate-pulse shadow-[0_0_20px_rgba(220,38,38,0.5)]' : 'bg-zinc-900 border-zinc-700 text-zinc-400 hover:text-white'
-            }`}
-          >
-            {modoAdmin ? "🔴 MODO JUIZ ATIVADO" : "Ativar Modo Juiz"}
-          </button>
+        <div className="mb-4 flex items-center justify-between gap-3 px-4 md:mb-8 md:items-end md:px-0">
+          <div className="min-w-0">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-400">Árvore do campeonato</p>
+            <h1 className="mt-0.5 text-2xl font-black tracking-tight text-white md:text-5xl">Chaveamento</h1>
+            <p className="mt-1 hidden max-w-xl text-sm text-zinc-400 md:block">Troque a categoria acima da árvore. Os nomes e as fotos ficam no caminho até a final.</p>
+          </div>
         </div>
 
-        <div className="bg-[#050816] md:border border-white/10 md:rounded-3xl p-4 md:p-6 mb-4 mx-4 md:mx-0 flex flex-col md:flex-row gap-4 items-end">
-          <div className="flex-1 w-full flex flex-col gap-2">
-            <label className="text-[#57d8ff] text-xs font-bold uppercase tracking-wider pl-1">Tipo Categoria</label>
-            <select value={tipoCategoria} onChange={(e) => setTipoCategoria(e.target.value)} className="w-full bg-black/50 border border-zinc-700 text-white rounded-lg p-3 outline-none focus:border-[#57d8ff]">
-              <option value="peso">Categoria de Peso Jiu-Jitsu</option>
-              <option value="absoluto">Categoria Absoluto Jiu-Jitsu</option>
+        <div className="sticky top-16 z-30 mx-4 mb-3 flex flex-col items-end gap-3 rounded-2xl border border-white/10 bg-[#050816]/95 p-3 backdrop-blur md:top-20 md:mx-0 md:mb-4 md:rounded-3xl md:p-5 md:flex-row">
+          <div className="flex w-full flex-1 flex-col gap-2">
+            <label className="pl-1 text-xs font-bold uppercase tracking-wider text-[#57d8ff]">Tipo de categoria</label>
+            <select value={tipoCategoria} onChange={(e) => setTipoCategoria(e.target.value)} className="w-full rounded-xl border border-zinc-700 bg-black/50 p-3 text-white outline-none focus:border-[#57d8ff]">
+              <option value="peso">Categoria de peso</option>
+              <option value="absoluto">Absoluto</option>
             </select>
           </div>
-          <div className="flex-[2] w-full flex flex-col gap-2">
-            <label className="text-[#57d8ff] text-xs font-bold uppercase tracking-wider pl-1">Categoria</label>
-            <select value={categoriaSelecionada} onChange={(e) => setCategoriaSelecionada(e.target.value)} className="w-full bg-black/50 border border-zinc-700 text-white rounded-lg p-3 outline-none focus:border-[#57d8ff]">
+          <div className="flex w-full flex-[2] flex-col gap-2">
+            <label className="pl-1 text-xs font-bold uppercase tracking-wider text-[#57d8ff]">Categoria e faixa</label>
+            <select value={categoriaSelecionada} onChange={(e) => setCategoriaSelecionada(e.target.value)} className="w-full rounded-xl border border-zinc-700 bg-black/50 p-3 text-white outline-none focus:border-[#57d8ff]">
               {categoriasFiltradas.length === 0 && <option value="">Nenhuma chave nesta modalidade...</option>}
               {categoriasFiltradas.map((cat) => {
                 const [nomeCategoria, faixa] = cat.split("__")
@@ -165,54 +149,42 @@ export default function ChavesPage() {
           </div>
         )}
 
-        <ArvoreChaveDesktop
-          lutas={lutas}
-          abaAtual={abaAtual}
-          totalAbas={totalAbas}
-          buscarFoto={(id) => buscarFoto(id, "")}
-          onAvancar={modoAdmin ? handleAvancar : undefined}
-        />
+        <div className="hidden px-4 md:block md:px-0">
+          <ArvoreChaveDesktop
+            lutas={lutas}
+            abaAtual={abaAtual}
+            totalAbas={totalAbas}
+            buscarFoto={(id) => buscarFoto(id, "")}
+          />
+        </div>
 
-        {ehChaveDeTres && (
-          <div className="mt-5 bg-[#050816] py-6 md:hidden">
-            <div className="px-4">
-              <ChaveTriangularPainel lutas={lutas} buscarFoto={(id) => buscarFoto(id, "")} />
-            </div>
-          </div>
-        )}
-
-        {/* ======================================================= */}
-        {/* MODO MOBILE: CARDS VERTICAIS E CLEAN                    */}
-        {/* ======================================================= */}
-        {!ehChaveDeTres && (
-        <div className="flex md:hidden flex-col w-full px-4 mb-20 mt-4">
+        <div className="mb-16 mt-3 flex w-full flex-col px-4 md:hidden">
           
           {temCampeao && (
-            <div className="bg-gradient-to-t from-yellow-600/20 to-[#0c1220] border border-yellow-500/30 rounded-2xl p-6 flex flex-col items-center justify-center shadow-[0_0_20px_rgba(234,179,8,0.15)] mb-6 animate-in fade-in zoom-in duration-500">
-              <span className="text-yellow-500 font-black text-sm mb-3 tracking-widest drop-shadow-[0_0_10px_rgba(234,179,8,0.5)]">🏆 CAMPEÃO OFICIAL</span>
-              <div className="w-16 h-16 rounded-full border-[3px] border-yellow-500 overflow-hidden bg-black flex items-center justify-center shadow-[0_0_15px_rgba(234,179,8,0.3)] mb-3 shrink-0">
+            <div className="mb-3 flex items-center gap-3 rounded-xl border border-yellow-500/30 bg-gradient-to-r from-yellow-600/20 to-[#0c1220] px-3 py-2.5">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-yellow-500 bg-black">
                 {campeaoData.foto ? (
-                  <img src={campeaoData.foto} className="w-full h-full object-cover" />
+                  <img src={campeaoData.foto} className="h-full w-full object-cover" />
                 ) : (
-                  <span className="text-2xl text-yellow-500 font-black">{campeaoData.nome.charAt(0)}</span>
+                  <span className="text-sm font-black text-yellow-500">{campeaoData.nome.charAt(0)}</span>
                 )}
               </div>
-              <h2 className="text-white text-lg font-black uppercase tracking-tight text-center">{campeaoData.nome}</h2>
+              <div className="min-w-0">
+                <p className="text-[9px] font-black uppercase tracking-widest text-yellow-500">Campeão</p>
+                <h2 className="truncate text-sm font-black uppercase text-white">{campeaoData.nome}</h2>
+              </div>
             </div>
           )}
 
           {lutasMobile.length === 0 ? (
             <div className="text-center text-zinc-500 py-10 text-sm">Nenhum confronto ativo no momento.</div>
           ) : (
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-2">
               {lutasMobile.map(luta => {
                 const a1 = limparNome(luta.atleta_1);
                 const a2 = limparNome(luta.atleta_2);
                 const foto1 = buscarFoto(luta.atleta_1_id, a1);
                 const foto2 = buscarFoto(luta.atleta_2_id, a2);
-
-                const handleClickA1 = () => modoAdmin && a1 && a1 !== "BYE" ? handleAvancar(luta.id, luta.id_visual, a1, luta.equipe_1) : undefined;
-                const handleClickA2 = () => modoAdmin && a2 && a2 !== "BYE" ? handleAvancar(luta.id, luta.id_visual, a2, luta.equipe_2) : undefined;
 
                 return (
                   <div key={luta.id} className="bg-[#0c1220] border border-[#57d8ff]/20 rounded-xl flex flex-col shadow-md relative overflow-hidden">
@@ -226,7 +198,7 @@ export default function ChavesPage() {
 
                     <div className="p-3 flex flex-col gap-1.5">
                       
-                      <div onClick={handleClickA1} className={`flex justify-between items-center p-2 rounded-lg border transition-colors ${modoAdmin && a1 && a1 !== "BYE" ? 'cursor-pointer hover:border-[#57d8ff]/50' : ''} ${luta.vencedor && luta.vencedor === a1 ? 'bg-green-500/10 border-green-500/40' : 'bg-black/40 border-white/5'}`}>
+                      <div className={`flex justify-between items-center p-2 rounded-lg border ${luta.vencedor && luta.vencedor === a1 ? 'bg-green-500/10 border-green-500/40' : 'bg-black/40 border-white/5'}`}>
                         <div className="flex items-center gap-2.5">
                           <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center text-xs font-black text-zinc-400 border border-zinc-600 overflow-hidden shrink-0">
                             {foto1 ? <img src={foto1} className="w-full h-full object-cover"/> : a1 ? a1.charAt(0) : "?"}
@@ -244,7 +216,7 @@ export default function ChavesPage() {
                         <div className="w-full border-t border-white/5"></div>
                       </div>
 
-                      <div onClick={handleClickA2} className={`flex justify-between items-center p-2 rounded-lg border transition-colors ${modoAdmin && a2 && a2 !== "BYE" ? 'cursor-pointer hover:border-[#57d8ff]/50' : ''} ${luta.vencedor && luta.vencedor === a2 ? 'bg-green-500/10 border-green-500/40' : 'bg-black/40 border-white/5'}`}>
+                      <div className={`flex justify-between items-center p-2 rounded-lg border ${luta.vencedor && luta.vencedor === a2 ? 'bg-green-500/10 border-green-500/40' : 'bg-black/40 border-white/5'}`}>
                         <div className="flex items-center gap-2.5">
                           <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center text-xs font-black text-zinc-400 border border-zinc-600 overflow-hidden shrink-0">
                             {foto2 ? <img src={foto2} className="w-full h-full object-cover"/> : a2 ? a2.charAt(0) : "?"}
@@ -264,7 +236,6 @@ export default function ChavesPage() {
             </div>
           )}
         </div>
-        )}
 
       </div>
     </main>
