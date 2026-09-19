@@ -4,7 +4,7 @@ import { createSupabaseServerClient } from '@/app/lib/supabase-server';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-async function todos<T>(carregar: (de: number, ate: number) => Promise<{ data: T[] | null; error: { message?: string } | null }>) {
+async function todos<T>(carregar: (de: number, ate: number) => PromiseLike<{ data: T[] | null; error: { message?: string } | null }>) {
   const pagina = 1000;
   const linhas: T[] = [];
   for (let de = 0; ; de += pagina) {
@@ -67,11 +67,10 @@ export async function GET(_request: Request, contexto: { params: Promise<{ id: s
   let ultimoErro: unknown = null;
   for (const colunas of colunasInscricao) {
     try {
-      inscricoes = await todos((de, ate) => db
-        .from('inscricoes')
-        .select(colunas)
-        .eq('evento_id', eventoId)
-        .range(de, ate));
+      inscricoes = await todos(async (de, ate) => {
+        const { data, error } = await db.from('inscricoes').select(colunas).eq('evento_id', eventoId).range(de, ate);
+        return { data: (data as unknown as Array<Record<string, unknown>>) || [], error };
+      });
       ultimoErro = null;
       break;
     } catch (erro) {
@@ -84,7 +83,10 @@ export async function GET(_request: Request, contexto: { params: Promise<{ id: s
   const atletas: Array<Record<string, unknown>> = [];
   for (let i = 0; i < userIds.length; i += 200) {
     const fatia = userIds.slice(i, i + 200);
-    let fatiaAtletas = await db.from('atletas_publico').select('user_id,nome,equipe,academia,professor,faixa,peso,sexo,nascimento,modalidade').in('user_id', fatia);
+    let fatiaAtletas: { data: Array<Record<string, unknown>> | null; error: { message?: string } | null } = await db
+      .from('atletas_publico')
+      .select('user_id,nome,equipe,academia,professor,faixa,peso,sexo,nascimento,modalidade')
+      .in('user_id', fatia);
     if (fatiaAtletas.error) {
       fatiaAtletas = await db.from('atletas_publico').select('user_id,nome,equipe,academia,professor,faixa,peso,sexo').in('user_id', fatia);
     }

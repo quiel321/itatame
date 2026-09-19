@@ -52,12 +52,19 @@ export function letraAtleta(nome: string) {
   return /[A-Z]/.test(letra) ? letra : '#';
 }
 
-function idadeDaInscricao(insc: Record<string, unknown>, atleta: Record<string, unknown> | undefined, dataEvento?: string | null) {
+function idadeDaInscricao(insc: Record<string, unknown>, atleta: Record<string, unknown> | undefined, dataEvento?: string | null): string | number | null | undefined {
   const direto = Number(insc.idade);
   if (insc.idade !== '' && insc.idade != null && Number.isInteger(direto)) return direto;
   const nascimento = atleta?.nascimento ? String(atleta.nascimento) : null;
   const calculada = idadeCompetitiva(nascimento, dataEvento);
-  return Number.isInteger(calculada) ? calculada : insc.idade;
+  if (Number.isInteger(calculada)) return calculada;
+  if (insc.idade == null) return null;
+  return String(insc.idade);
+}
+
+function textoOpcional(valor: unknown): string | null {
+  if (valor == null || valor === '') return null;
+  return String(valor);
 }
 
 function chaveAbsolutoInscrito(sexo: string): ChaveChecagem {
@@ -103,7 +110,7 @@ export function montarInscritosChecagem(
       sexo,
       peso: String(insc.peso || atl?.peso || ''),
       idade: idadeDaInscricao(insc, atl, dataEvento),
-      modalidade: insc.modalidade || atl?.modalidade || null,
+      modalidade: textoOpcional(insc.modalidade) || textoOpcional(atl?.modalidade),
     }, categorias);
     if (Boolean(insc.absoluto) && !chaves.some((chave) => chave.tipo === 'absoluto')) {
       chaves.push(chaveAbsolutoInscrito(sexo));
@@ -135,7 +142,7 @@ export function montarInscritosChecagem(
       sexo,
       pagamento_ok: Boolean(insc.pagamento_ok),
       absoluto: Boolean(insc.absoluto) || chaves.some((chave) => chave.tipo === 'absoluto'),
-      sozinho: false,
+      sozinho: false as boolean,
       logo_url: (insc.equipe_id ? logoPorEquipe.get(String(insc.equipe_id)) : null) || logoPorNome.get(equipe.trim().toUpperCase()) || null,
       academia_logo_url: unidade?.logo || (oficial ? logoAcademiaPadrao.get(oficial.id) : null) || null,
       chaves,
