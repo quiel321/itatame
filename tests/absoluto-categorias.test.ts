@@ -5,12 +5,14 @@ import {
   absolutoDaInscricao,
   chavesDaInscricao,
   grupoInscricao,
+  rotuloCategoriaAoVivo,
   serializarFaixasCategoria,
   type CategoriaCompeticao,
 } from "../app/lib/categorias-competicao";
 import { prepararGrupos } from "../app/lib/gerar-chaves";
 import { calcularResultadosChaves } from "../app/lib/ranking-eventos";
-import { nomeEquipeChecagem } from "../app/lib/equipes-nome";
+import { chaveEquipeFlexivel, nomeEquipeChecagem, nomesEquipeIguais } from "../app/lib/equipes-nome";
+import { chavesDoTipo, lutaChaveTravada } from "../app/lib/chaveamento-evento";
 
 const femininoBranca: CategoriaCompeticao = {
   id: "abs-fem-branca",
@@ -233,4 +235,34 @@ test("checagem mostra a equipe da inscrição mesmo sem lista oficial", () => {
   assert.equal(nomeEquipeChecagem({ equipe: "Legado Jiu" }, [{ id: "1", nome: "LEGADO" }]), "LEGADO");
   assert.equal(nomeEquipeChecagem({ equipe_id: "1", equipe: "" }, [{ id: "1", nome: "LEGADO" }]), "LEGADO");
   assert.equal(nomeEquipeChecagem({ equipe: "" }, [], "SEM EQUIPE"), "SEM EQUIPE OFICIAL");
+});
+
+test("rótulo ao vivo corta modalidade, idade e sexo e evita faixa duplicada", () => {
+  assert.equal(
+    rotuloCategoriaAoVivo("Jiu-Jitsu · Pena · 18-29 anos · Masculino · 64 a 70 kg", "Branca"),
+    "Pena · Branca",
+  );
+  assert.equal(
+    rotuloCategoriaAoVivo("Jiu-Jitsu · Absoluto · Branca · Azul · Roxa · Preta · 18-50 anos · Masculino · Absoluto", "Branca · Azul · Roxa · Preta"),
+    "Absoluto · Faixas mistas",
+  );
+});
+
+test("logo da equipe casa nome com e sem espaço", () => {
+  assert.equal(chaveEquipeFlexivel("Spartan Jiu Jitsu"), "SPARTAN");
+  assert.equal(nomesEquipeIguais("GRACIE TESTE", "GRACIETESTE"), true);
+  assert.equal(nomesEquipeIguais("LEGADO", "Legado Team"), true);
+});
+
+test("regenerar chave só mexe no tipo pedido e trava luta já iniciada", () => {
+  const lutas = [
+    { id: "peso-1", categoria: "Jiu-Jitsu · Leve · Branca", status_luta: "agendada" },
+    { id: "abs-1", categoria: "Jiu-Jitsu · Absoluto · Todas as faixas", status_luta: "concluida", vencedor: "Ana" },
+  ];
+  assert.deepEqual(chavesDoTipo(lutas, "peso").map((luta) => luta.id), ["peso-1"]);
+  assert.deepEqual(chavesDoTipo(lutas, "absoluto").map((luta) => luta.id), ["abs-1"]);
+  assert.equal(chavesDoTipo(lutas, "peso").some(lutaChaveTravada), false);
+  assert.equal(chavesDoTipo(lutas, "absoluto").some(lutaChaveTravada), true);
+  assert.equal(lutaChaveTravada({ status_luta: "em_andamento" }), true);
+  assert.equal(lutaChaveTravada({ status_luta: "agendada" }), false);
 });

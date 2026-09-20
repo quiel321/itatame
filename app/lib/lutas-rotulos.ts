@@ -38,5 +38,8 @@ export function rotuloLuta(luta: LutaComRotulo) {
 
 export function rotuloLutaCurto(luta: LutaComRotulo) {
   const rotulo = rotuloLuta(luta);
-  return rotulo === "Final" ? "Final" : rotulo;
+  return rotulo
+    .replace(/de final/gi, "")
+    .replace(/\s+/g, " ")
+    .trim() || rotulo;
 }

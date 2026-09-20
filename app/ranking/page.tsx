@@ -5,7 +5,22 @@ import { supabase } from "../lib/supabase";
 import Link from "next/link";
 import { ChevronRight, Medal, Search, Trophy, Clock } from "lucide-react";
 import { calcularResultadosChaves, isCompetidorReal } from "../lib/ranking-eventos";
-import { chaveRankingEquipe, nomeExibicaoEquipe } from "../lib/equipes-nome";
+import { chaveEquipeFlexivel, chaveRankingEquipe, nomeExibicaoEquipe } from "../lib/equipes-nome";
+
+type LogoBandeira = { nome: string; academia?: string | null; logo_url?: string | null; academia_logo_url?: string | null };
+
+function inicialNome(nome?: string | null) {
+  return String(nome || "?").trim().charAt(0).toUpperCase() || "?";
+}
+
+function LogoRanking({ src, nome, tamanho, borda }: { src?: string | null; nome?: string | null; tamanho: string; borda: string }) {
+  const [ok, setOk] = useState(Boolean(src));
+  useEffect(() => { setOk(Boolean(src)); }, [src]);
+  if (src && ok) {
+    return <img src={src} alt="" onError={() => setOk(false)} className={`${tamanho} shrink-0 rounded-full object-cover bg-black ${borda}`} />;
+  }
+  return <div className={`${tamanho} shrink-0 rounded-full bg-[#0a0a0e] flex items-center justify-center text-sm font-extrabold ${borda}`}>{inicialNome(nome)}</div>;
+}
 
 export default function RankingPage() {
   const [loading, setLoading] = useState(true);
@@ -25,6 +40,8 @@ export default function RankingPage() {
   const [historicoLoading, setHistoricoLoading] = useState(false);
   const [historicoEventos, setHistoricoEventos] = useState<any[]>([]);
   const [pronto, setPronto] = useState(false);
+  const [logosEquipe, setLogosEquipe] = useState<LogoBandeira[]>([]);
+  const [logosAcademia, setLogosAcademia] = useState<Array<{ nome: string; logo_url: string | null }>>([]);
 
   useEffect(() => {
     carregarDadosIniciais();
@@ -44,13 +61,46 @@ export default function RankingPage() {
 
     const { data: atls } = await supabase.from("atletas_publico").select("id, user_id, nome, foto_url, faixa, academia, equipe, ouro, prata, bronze, vitorias, vitorias_wo, participacoes, lutas");
     if (atls) setTodosAtletas(atls);
+    const eventoParam = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("evento") : null;
+    await carregarLogos(eventoParam && evts?.some((evento: any) => String(evento.id) === String(eventoParam)) ? eventoParam : "Geral");
     setPronto(true);
     setLoading(false);
   }
 
+  async function carregarLogos(eventoId: string) {
+    try {
+      const resposta = await fetch(`/api/ranking/logos?evento=${encodeURIComponent(eventoId || "Geral")}`);
+      if (resposta.ok) {
+        const json = await resposta.json() as { equipes?: LogoBandeira[]; academias?: Array<{ nome: string; logo_url: string | null }> };
+        setLogosEquipe(json.equipes || []);
+        setLogosAcademia((json.academias || []).filter((item) => item.logo_url));
+        return;
+      }
+    } catch {
+      // cai no supabase direto
+    }
+
+    let equipesQuery = supabase.from("equipes_evento").select("nome,academia,logo_url,academia_logo_url");
+    if (eventoId !== "Geral") equipesQuery = equipesQuery.eq("evento_id", eventoId);
+    const { data: equipes, error } = await equipesQuery;
+    if (error) {
+      const semLogo = eventoId !== "Geral"
+        ? await supabase.from("equipes_evento").select("nome,academia").eq("evento_id", eventoId)
+        : await supabase.from("equipes_evento").select("nome,academia");
+      setLogosEquipe((semLogo.data || []).map((item) => ({ ...item, logo_url: null, academia_logo_url: null })) as LogoBandeira[]);
+    } else {
+      setLogosEquipe((equipes || []) as LogoBandeira[]);
+    }
+
+    let academiasQuery = supabase.from("solicitacoes_equipe_evento").select("academia,logo_url,status").eq("status", "aprovada");
+    if (eventoId !== "Geral") academiasQuery = academiasQuery.eq("evento_id", eventoId);
+    const { data: academias } = await academiasQuery;
+    setLogosAcademia((academias || []).filter((item) => item.logo_url).map((item) => ({ nome: String(item.academia || ""), logo_url: item.logo_url })));
+  }
+
   useEffect(() => {
     if (pronto) void calcularRanking();
-  }, [filtroEvento, filtroChave, todosAtletas, eventos, pronto]);
+  }, [filtroEvento, filtroChave, todosAtletas, eventos, pronto, logosEquipe, logosAcademia]);
 
   async function calcularRanking() {
     try {
@@ -172,6 +222,22 @@ export default function RankingPage() {
     }
   }
 
+  function fotoDaEquipe(nome?: string | null) {
+    const chave = chaveEquipeFlexivel(nome);
+    if (!chave) return null;
+    const comFoto = logosEquipe.find((item) => chaveEquipeFlexivel(item.nome) === chave && item.logo_url);
+    return comFoto?.logo_url || logosEquipe.find((item) => chaveEquipeFlexivel(item.nome) === chave)?.logo_url || null;
+  }
+
+  function fotoDaAcademia(nome?: string | null) {
+    const chave = chaveEquipeFlexivel(nome);
+    if (!chave) return null;
+    const daSolicitacao = logosAcademia.find((item) => chaveEquipeFlexivel(item.nome) === chave && item.logo_url);
+    if (daSolicitacao?.logo_url) return daSolicitacao.logo_url;
+    const daEquipe = logosEquipe.find((item) => chaveEquipeFlexivel(item.academia) === chave && item.academia_logo_url);
+    return daEquipe?.academia_logo_url || logosEquipe.find((item) => chaveEquipeFlexivel(item.academia) === chave)?.academia_logo_url || null;
+  }
+
   function processarRankings(dados: any[], equipesCalculadas: any[] = []) {
     const atletasProcessados = dados.map(atleta => ({
       ...atleta, 
@@ -195,7 +261,11 @@ export default function RankingPage() {
     setRankingAtletas(atletasProcessados);
 
     if (equipesCalculadas.length > 0) {
-      setRankingEquipes(equipesCalculadas);
+      setRankingEquipes(equipesCalculadas.map((equipe) => ({
+        ...equipe,
+        pontos: Number(equipe.pontos ?? equipe.pts ?? 0),
+        foto_url: fotoDaEquipe(equipe.nome),
+      })));
     } else {
       const mapaEquipes: Record<string, any> = {};
       atletasProcessados.forEach(atleta => {
@@ -210,7 +280,7 @@ export default function RankingPage() {
         mapaEquipes[chave].vitorias += atleta.vitorias;
         mapaEquipes[chave].lutas += atleta.lutas;
       });
-      setRankingEquipes(Object.values(mapaEquipes).sort((a: any, b: any) => {
+      setRankingEquipes(Object.values(mapaEquipes).map((equipe: any) => ({ ...equipe, foto_url: fotoDaEquipe(equipe.nome) })).sort((a: any, b: any) => {
         if (b.pontos !== a.pontos) return b.pontos - a.pontos;
         if (b.ouro !== a.ouro) return b.ouro - a.ouro;
         return b.prata - a.prata;
@@ -219,18 +289,21 @@ export default function RankingPage() {
 
     const mapaAcademias: Record<string, any> = {};
     atletasProcessados.forEach(atleta => {
-      const nomeAcademia = atleta.academia ? atleta.academia.trim().toUpperCase() : "";
+      const equipeOficial = logosEquipe.find((item) => chaveEquipeFlexivel(item.nome) === chaveEquipeFlexivel(atleta.equipe));
+      const nomeAcademia = String(atleta.academia || equipeOficial?.academia || "").trim();
       if (!nomeAcademia) return;
-      if (!mapaAcademias[nomeAcademia]) mapaAcademias[nomeAcademia] = { nome: nomeAcademia, equipeBase: atleta.equipe, pontos: 0, ouro: 0, prata: 0, bronze: 0, vitorias: 0, lutas: 0 };
-      mapaAcademias[nomeAcademia].pontos += atleta.pontos;
-      mapaAcademias[nomeAcademia].ouro += atleta.ouro;
-      mapaAcademias[nomeAcademia].prata += atleta.prata;
-      mapaAcademias[nomeAcademia].bronze += atleta.bronze;
-      mapaAcademias[nomeAcademia].vitorias += atleta.vitorias;
-      mapaAcademias[nomeAcademia].lutas += atleta.lutas;
+      const chave = chaveEquipeFlexivel(nomeAcademia) || nomeAcademia.toUpperCase();
+      if (!mapaAcademias[chave]) mapaAcademias[chave] = { nome: nomeAcademia, equipeBase: atleta.equipe, pontos: 0, ouro: 0, prata: 0, bronze: 0, vitorias: 0, lutas: 0 };
+      else mapaAcademias[chave].nome = nomeExibicaoEquipe(mapaAcademias[chave].nome, nomeAcademia);
+      mapaAcademias[chave].pontos += atleta.pontos;
+      mapaAcademias[chave].ouro += atleta.ouro;
+      mapaAcademias[chave].prata += atleta.prata;
+      mapaAcademias[chave].bronze += atleta.bronze;
+      mapaAcademias[chave].vitorias += atleta.vitorias;
+      mapaAcademias[chave].lutas += atleta.lutas;
     });
 
-    const academiasArr = Object.values(mapaAcademias).sort((a: any, b: any) => {
+    const academiasArr = Object.values(mapaAcademias).map((academia: any) => ({ ...academia, foto_url: fotoDaAcademia(academia.nome) })).sort((a: any, b: any) => {
       if (b.pontos !== a.pontos) return b.pontos - a.pontos;
       if (b.ouro !== a.ouro) return b.ouro - a.ouro;
       return b.prata - a.prata;
@@ -321,6 +394,7 @@ export default function RankingPage() {
               onChange={(e) => {
                 setFiltroEvento(e.target.value);
                 if (e.target.value === "Geral") setFiltroChave("todos");
+                void carregarLogos(e.target.value);
               }}
               className="w-full md:w-[280px] bg-[#0a0a0e] border border-white/10 text-white rounded-xl px-4 py-2.5 outline-none focus:border-red-500 transition-colors shadow-inner text-[10px] font-extrabold uppercase tracking-widest cursor-pointer appearance-none"
             >
@@ -389,17 +463,13 @@ export default function RankingPage() {
               {top3[1] && (
                 <div onClick={() => abrirPerfilAtleta(top3[1])} className={`w-[30%] max-w-[140px] flex flex-col items-center relative animate-in slide-in-from-bottom-8 duration-700 delay-100 group ${abaAtiva === 'atletas' ? 'cursor-pointer' : 'cursor-default'}`}>
                   <div className="absolute -top-10 z-10 flex flex-col items-center transition-transform duration-300 group-hover:-translate-y-1.5">
-                    {abaAtiva === "atletas" && top3[1].foto_url ? (
-                      <img src={top3[1].foto_url} className="w-12 h-12 md:w-14 md:h-14 rounded-full object-cover border-2 border-zinc-400 bg-black shadow-[0_0_15px_rgba(161,161,170,0.15)]" />
-                    ) : (
-                      <div className="w-12 h-12 md:w-14 md:h-14 rounded-full border-2 border-zinc-400 bg-[#0a0a0e] flex items-center justify-center text-sm font-extrabold text-zinc-400 shadow-[0_0_15px_rgba(161,161,170,0.15)]">{abaAtiva === "atletas" ? top3[1].nome.charAt(0) : (abaAtiva === "equipes" ? "EQ" : "AC")}</div>
-                    )}
+                    <LogoRanking src={top3[1].foto_url} nome={top3[1].nome} tamanho="w-12 h-12 md:w-14 md:h-14" borda="border-2 border-zinc-400 text-zinc-400 shadow-[0_0_15px_rgba(161,161,170,0.15)]" />
                   </div>
                   <div className="w-full h-[120px] md:h-[140px] bg-gradient-to-t from-white/[0.03] to-transparent border-t-2 border-zinc-400 rounded-t-xl flex flex-col items-center justify-end pb-4 px-2 text-center relative transition-colors duration-300 group-hover:from-white/[0.06]">
                     <span className="text-zinc-500/20 font-black text-4xl absolute top-3 pointer-events-none">2</span>
                     <h4 className="text-white font-extrabold text-[10px] md:text-[11px] uppercase tracking-tight line-clamp-2 leading-tight mb-1 relative z-10">{top3[1].nome}</h4>
                     {abaAtiva === "atletas" && <span className="text-zinc-500 text-[8px] uppercase tracking-widest truncate w-full relative z-10">{top3[1].equipe || "S/ Equipe"}</span>}
-                    <span className="text-zinc-300 font-extrabold text-xs md:text-sm mt-2 relative z-10">{top3[1].pontos} pts</span>
+                    <span className="text-zinc-300 font-extrabold text-xs md:text-sm mt-2 relative z-10">{Number(top3[1].pontos || 0)} pts</span>
                   </div>
                 </div>
               )}
@@ -408,17 +478,13 @@ export default function RankingPage() {
               {top3[0] && (
                 <div onClick={() => abrirPerfilAtleta(top3[0])} className={`w-[35%] max-w-[170px] flex flex-col items-center relative z-20 animate-in slide-in-from-bottom-12 duration-700 group ${abaAtiva === 'atletas' ? 'cursor-pointer' : 'cursor-default'}`}>
                   <div className="absolute -top-12 z-10 flex flex-col items-center transition-transform duration-300 group-hover:-translate-y-1.5">
-                    {abaAtiva === "atletas" && top3[0].foto_url ? (
-                      <img src={top3[0].foto_url} className="w-16 h-16 md:w-20 md:h-20 rounded-full object-cover border-2 border-yellow-500 bg-black shadow-[0_0_20px_rgba(234,179,8,0.2)]" />
-                    ) : (
-                      <div className="w-16 h-16 md:w-20 md:h-20 rounded-full border-2 border-yellow-500 bg-[#0a0a0e] flex items-center justify-center text-xl font-extrabold text-yellow-500 shadow-[0_0_20px_rgba(234,179,8,0.2)]">{abaAtiva === "atletas" ? top3[0].nome.charAt(0) : (abaAtiva === "equipes" ? "EQ" : "AC")}</div>
-                    )}
+                    <LogoRanking src={top3[0].foto_url} nome={top3[0].nome} tamanho="w-16 h-16 md:w-20 md:h-20" borda="border-2 border-yellow-500 text-yellow-500 shadow-[0_0_20px_rgba(234,179,8,0.2)]" />
                   </div>
                   <div className="w-full h-[160px] md:h-[180px] bg-gradient-to-t from-yellow-500/10 to-transparent border-t-2 border-yellow-500 rounded-t-xl flex flex-col items-center justify-end pb-4 px-2 text-center relative transition-colors duration-300 group-hover:from-yellow-500/20">
                     <span className="text-yellow-500/10 font-black text-6xl absolute top-2 pointer-events-none">1</span>
                     <h4 className="text-white font-extrabold text-[10px] md:text-xs uppercase tracking-tight line-clamp-2 leading-tight mb-1 relative z-10">{top3[0].nome}</h4>
                     {abaAtiva === "atletas" && <span className="text-yellow-500/70 text-[8px] uppercase tracking-widest truncate w-full relative z-10">{top3[0].equipe || "S/ Equipe"}</span>}
-                    <span className="text-yellow-500 font-extrabold text-sm md:text-base mt-2 relative z-10">{top3[0].pontos} pts</span>
+                    <span className="text-yellow-500 font-extrabold text-sm md:text-base mt-2 relative z-10">{Number(top3[0].pontos || 0)} pts</span>
                   </div>
                 </div>
               )}
@@ -427,17 +493,13 @@ export default function RankingPage() {
               {top3[2] && (
                 <div onClick={() => abrirPerfilAtleta(top3[2])} className={`w-[30%] max-w-[140px] flex flex-col items-center relative animate-in slide-in-from-bottom-8 duration-700 delay-200 group ${abaAtiva === 'atletas' ? 'cursor-pointer' : 'cursor-default'}`}>
                   <div className="absolute -top-10 z-10 flex flex-col items-center transition-transform duration-300 group-hover:-translate-y-1.5">
-                    {abaAtiva === "atletas" && top3[2].foto_url ? (
-                      <img src={top3[2].foto_url} className="w-12 h-12 md:w-14 md:h-14 rounded-full object-cover border-2 border-orange-600 bg-black shadow-[0_0_15px_rgba(234,88,12,0.15)]" />
-                    ) : (
-                      <div className="w-12 h-12 md:w-14 md:h-14 rounded-full border-2 border-orange-600 bg-[#0a0a0e] flex items-center justify-center text-sm font-extrabold text-orange-500 shadow-[0_0_15px_rgba(234,88,12,0.15)]">{abaAtiva === "atletas" ? top3[2].nome.charAt(0) : (abaAtiva === "equipes" ? "EQ" : "AC")}</div>
-                    )}
+                    <LogoRanking src={top3[2].foto_url} nome={top3[2].nome} tamanho="w-12 h-12 md:w-14 md:h-14" borda="border-2 border-orange-600 text-orange-500 shadow-[0_0_15px_rgba(234,88,12,0.15)]" />
                   </div>
                   <div className="w-full h-[100px] md:h-[120px] bg-gradient-to-t from-orange-500/5 to-transparent border-t-2 border-orange-600 rounded-t-xl flex flex-col items-center justify-end pb-4 px-2 text-center relative transition-colors duration-300 group-hover:from-orange-500/10">
                     <span className="text-orange-600/10 font-black text-4xl absolute top-3 pointer-events-none">3</span>
                     <h4 className="text-white font-extrabold text-[10px] md:text-[11px] uppercase tracking-tight line-clamp-2 leading-tight mb-1 relative z-10">{top3[2].nome}</h4>
                     {abaAtiva === "atletas" && <span className="text-orange-500/70 text-[8px] uppercase tracking-widest truncate w-full relative z-10">{top3[2].equipe || "S/ Equipe"}</span>}
-                    <span className="text-orange-500 font-extrabold text-xs md:text-sm mt-2 relative z-10">{top3[2].pontos} pts</span>
+                    <span className="text-orange-500 font-extrabold text-xs md:text-sm mt-2 relative z-10">{Number(top3[2].pontos || 0)} pts</span>
                   </div>
                 </div>
               )}
@@ -479,7 +541,10 @@ export default function RankingPage() {
                             </div>
                           </>
                         ) : (
-                          <div className="flex items-center gap-2 truncate">
+                          <div className="flex items-center gap-2 min-w-0 truncate">
+                            <div className="w-7 h-7 rounded-full bg-zinc-900 border border-white/10 overflow-hidden shrink-0">
+                              {item.foto_url ? <img src={item.foto_url} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-[9px] font-extrabold text-zinc-500">{inicialNome(item.nome)}</div>}
+                            </div>
                             <div className="truncate flex-1">
                               <h4 className="text-[11px] font-extrabold text-zinc-200 uppercase tracking-tight truncate">{item.nome}</h4>
                               {abaAtiva === "academias" && item.equipeBase && <span className="text-[7px] font-medium text-zinc-500 uppercase tracking-widest truncate block mt-0.5">Bandeira: {item.equipeBase}</span>}
@@ -494,7 +559,7 @@ export default function RankingPage() {
                         <div className="flex flex-col md:flex-row items-center gap-1 md:w-8 text-center"><span className="text-[7px] md:hidden text-orange-700 uppercase font-bold">Bronze</span><span className="text-[11px] font-bold text-zinc-500">{item.bronze}</span></div>
                       </div>
                       <div className="col-span-1 md:col-span-2 text-right absolute right-4 md:static">
-                        <span className="text-white font-extrabold text-xs">{item.pontos} <span className="text-[8px] text-zinc-500 uppercase font-medium">pts</span></span>
+                        <span className="text-white font-extrabold text-xs">{Number(item.pontos || 0)} <span className="text-[8px] text-zinc-500 uppercase font-medium">pts</span></span>
                       </div>
                     </div>
                   );

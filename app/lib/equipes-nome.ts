@@ -13,10 +13,17 @@ export function chaveRankingEquipe(nome?: string | null) {
   return chave;
 }
 
+export function chaveEquipeFlexivel(nome?: string | null) {
+  return chaveRankingEquipe(nome).replace(/[\s-]+/g, '');
+}
+
 export function nomesEquipeIguais(a?: string | null, b?: string | null) {
   const esquerda = chaveRankingEquipe(a);
   const direita = chaveRankingEquipe(b);
-  return Boolean(esquerda && direita && esquerda === direita);
+  if (esquerda && direita && esquerda === direita) return true;
+  const flexEsquerda = chaveEquipeFlexivel(a);
+  const flexDireita = chaveEquipeFlexivel(b);
+  return Boolean(flexEsquerda && flexDireita && flexEsquerda === flexDireita);
 }
 
 export function encontrarEquipeSemelhante<T extends { id: string; nome: string }>(equipes: T[], nome?: string | null) {

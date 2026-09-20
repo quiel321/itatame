@@ -102,7 +102,12 @@ begin
   if not found then raise exception 'Evento não autorizado.'; end if;
   if p_tipo not in ('peso','absoluto') or jsonb_array_length(p_lutas)=0 then raise exception 'Chaveamento vazio ou inválido.'; end if;
   perform 1 from public.chaves where evento_id=p_evento for update;
-  if exists(select 1 from public.chaves where evento_id=p_evento and (status_luta in ('em_andamento','concluida') or vencedor is not null or iniciada_em is not null)) then
+  if exists(
+    select 1 from public.chaves
+    where evento_id=p_evento
+      and ((p_tipo='absoluto' and categoria ilike '%Absoluto%') or (p_tipo='peso' and categoria not ilike '%Absoluto%'))
+      and (status_luta in ('em_andamento','concluida') or vencedor is not null or iniciada_em is not null)
+  ) then
     raise exception 'Evento com lutas iniciadas ou resultados. O chaveamento foi preservado.';
   end if;
   if exists(select 1 from jsonb_array_elements(p_lutas) x where x->>'evento_id' is distinct from p_evento::text) then raise exception 'Evento divergente.'; end if;

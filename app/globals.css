@@ -66,6 +66,31 @@ body.fotos-route > main {
   padding-top: 0 !important;
 }
 
+body.itatame-telao-ativo > header,
+body.itatame-telao-ativo > footer,
+body.itatame-telao-ativo .nav-global-mobile {
+  display: none !important;
+}
+
+body.itatame-telao-ativo > main {
+  padding-top: 0 !important;
+  margin-top: 0 !important;
+}
+
+body.itatame-aovivo-pagina > footer {
+  display: none !important;
+}
+
+body.itatame-aovivo-pagina > main {
+  padding-bottom: 5.5rem;
+}
+
+@media (min-width: 768px) {
+  body.itatame-aovivo-pagina > main {
+    padding-bottom: 0;
+  }
+}
+
 /* Proteção imediata das prévias: a classe é aplicada no primeiro keydown,
    antes de aguardar um novo ciclo de renderização do React. */
 html.fotos-protecao-instantanea [data-foto-protegida-imagem] {

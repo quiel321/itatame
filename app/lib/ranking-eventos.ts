@@ -117,7 +117,9 @@ export function calcularResultadosChaves(lutas: any[], regrasPorEvento?: Record<
     });
 
     return {
-      equipes: Object.values(rankingEquipes),
+      equipes: Object.values(rankingEquipes)
+        .map((equipe) => ({ ...equipe, pontos: Number(equipe.pts || 0) }))
+        .sort((a, b) => b.pontos - a.pontos || b.ouro - a.ouro || b.prata - a.prata),
       atletas: Object.entries(rankingAtletas).map(([atleta_id, dados]) => ({ atleta_id, ...dados }))
     };
   }

@@ -19,9 +19,59 @@ export function normalizarCompeticao(valor: unknown) {
 }
 
 export function semFaixaDuplicada(categoria: string, faixa: string) {
-  return categoria.split('·').map(parte => parte.trim())
-    .filter(parte => normalizarCompeticao(parte) !== normalizarCompeticao(faixa))
-    .join(' · ');
+  const faixas = String(faixa || '').split('·').map(parte => normalizarCompeticao(parte)).filter(Boolean);
+  const faixaInteira = normalizarCompeticao(faixa);
+  const vistos = new Set<string>();
+  return String(categoria || '').split('·').map(parte => parte.trim()).filter(parte => {
+    const chave = normalizarCompeticao(parte);
+    if (!chave || chave === faixaInteira || faixas.includes(chave) || vistos.has(chave)) return false;
+    vistos.add(chave);
+    return true;
+  }).join(' · ');
+}
+
+export function rotuloCategoriaCompacta(categoria: string, faixa = '') {
+  const base = semFaixaDuplicada(categoria, faixa);
+  const faixas = String(faixa || '').split('·').map(parte => parte.trim()).filter(Boolean);
+  const faixaCurta = faixas.length > 1 ? 'Faixas mistas' : (faixas[0] || '');
+  return [base, faixaCurta].filter(Boolean).join(' · ');
+}
+
+const PARTE_CATEGORIA_IRRELEVANTE = /^(JIU[\s-]?JITSU|BJJ|MASCULINO|FEMININO|MASC|FEM|TODAS AS FAIXAS|TODAS FAIXAS|LIVRE)$/;
+const PARTE_IDADE = /^\d+\s*-\s*\d+\s*ANOS$/;
+const PARTE_PESO_FAIXA = /^(\d+(?:[.,]\d+)?)\s*A\s*(\d+(?:[.,]\d+)?)\s*KG$/;
+const PARTE_PESO_ACIMA = /^ACIMA DE\s+(\d+(?:[.,]\d+)?)\s*KG$/;
+const CLASSE_PESO = /^(GALO|PLUMA|PENA|LEVE|SUPER[- ]?LEVE|MEDIO|MEIO[- ]?PESADO|PESADO|SUPER[- ]?PESADO|PESADISSIMO|ABSOLUTO)$/;
+
+export function rotuloCategoriaAoVivo(categoria: string, faixa = '') {
+  const faixas = String(faixa || '').split('·').map(parte => parte.trim()).filter(Boolean);
+  const faixaCurta = faixas.length > 1 ? 'Faixas mistas' : (faixas[0] || '');
+  const saida: string[] = [];
+  let temClassePeso = false;
+  for (const parte of semFaixaDuplicada(categoria, faixa).split('·').map(item => item.trim()).filter(Boolean)) {
+    const chave = normalizarCompeticao(parte);
+    if (!chave || PARTE_CATEGORIA_IRRELEVANTE.test(chave) || PARTE_IDADE.test(chave)) continue;
+    if (CLASSE_PESO.test(chave)) {
+      temClassePeso = true;
+      saida.push(parte);
+      continue;
+    }
+    const pesoFaixa = chave.match(PARTE_PESO_FAIXA);
+    if (pesoFaixa) {
+      if (!temClassePeso) saida.push(`${pesoFaixa[1].replace(',', '.')}-${pesoFaixa[2].replace(',', '.')}kg`);
+      continue;
+    }
+    const pesoAcima = chave.match(PARTE_PESO_ACIMA);
+    if (pesoAcima) {
+      if (!temClassePeso) saida.push(`+${pesoAcima[1].replace(',', '.')}kg`);
+      continue;
+    }
+    saida.push(parte);
+  }
+  if (faixaCurta && !saida.some(parte => normalizarCompeticao(parte) === normalizarCompeticao(faixaCurta))) {
+    saida.push(faixaCurta);
+  }
+  return saida.slice(0, 4).join(' · ');
 }
 
 export function dataCompeticao(valor?: string | Date | null) {

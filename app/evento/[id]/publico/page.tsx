@@ -1,12 +1,12 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useParams } from "next/navigation"
 import { supabase } from "@/app/lib/supabase"
 import Link from "next/link"
 import { Clock, Search } from "lucide-react"
 import { rotuloLuta } from "@/app/lib/lutas-rotulos"
-import { semFaixaDuplicada } from "@/app/lib/categorias-competicao"
+import { rotuloCategoriaAoVivo } from "@/app/lib/categorias-competicao"
 import { lutasFormamChaveDeTres, placeholderSlotChaveDeTres, resumoHumanoChave, textoAguardandoChaveDeTres, textoOuroAposChecagem } from "@/app/lib/chave-de-tres"
 import ArvoreChaveDesktop from "@/app/components/ArvoreChaveDesktop"
 
@@ -39,6 +39,7 @@ export default function ChavesPublicoPage() {
   const [eventoNome, setEventoNome] = useState("")
   const [busca, setBusca] = useState("")
   const [indice, setIndice] = useState<IndiceLuta[]>([])
+  const pedidoChaves = useRef(0)
 
   async function verificarPagamento() {
     if (!idEvento) return;
@@ -68,8 +69,10 @@ export default function ChavesPublicoPage() {
 
   async function carregarChaves() {
     if (!categoriaSelecionada || !idEvento) return
+    const pedido = ++pedidoChaves.current
     const [cat, fx] = categoriaSelecionada.split("__")
     const { data } = await supabase.from("chaves").select("*").eq("evento_id", idEvento).eq("categoria", cat).eq("faixa", fx)
+    if (pedido !== pedidoChaves.current) return
     setLutas(data || [])
   }
 
@@ -240,19 +243,30 @@ export default function ChavesPublicoPage() {
   };
 
   const resumo = useMemo(() => resumoHumanoChave(lutas), [lutas]);
-  const lutaAgora = lutasEmAndamento[0];
   const [nomeCategoria, faixaCategoria] = categoriaSelecionada.split("__");
   const tituloCategoria = categoriaSelecionada
-    ? `${semFaixaDuplicada(String(nomeCategoria || "").replace("-", "").trim(), faixaCategoria || "")} · ${faixaCategoria || ""}`
+    ? rotuloCategoriaAoVivo(String(nomeCategoria || "").replace("-", "").trim(), faixaCategoria || "")
     : "Escolha uma categoria";
 
   const rotuloChip = (chave: string) => {
     const [nome, faixa] = chave.split("__");
-    return `${semFaixaDuplicada(String(nome || "").replace("-", "").trim(), faixa || "")} · ${faixa || ""}`;
+    return rotuloCategoriaAoVivo(String(nome || "").replace("-", "").trim(), faixa || "");
   };
 
+  function escolherTipo(tipo: string) {
+    setTipoCategoria(tipo);
+    setLutas([]);
+    const lista = categoriasMenu.filter((cat) => {
+      const isAbsoluto = cat.toLowerCase().includes("absoluto");
+      return tipo === "peso" ? !isAbsoluto : isAbsoluto;
+    });
+    if (lista[0] && lista[0] !== categoriaSelecionada) {
+      setCategoriaSelecionada(lista[0]);
+    }
+  }
+
   return (
-    <main className="min-h-screen max-w-full overflow-x-hidden bg-black p-0 md:p-6">
+    <main className="min-h-screen max-w-full bg-black p-0 md:p-6">
       <div className="mx-auto w-full min-w-0 max-w-[1400px] pt-6 md:pt-0">
 
         {temPendencia && (
@@ -285,11 +299,11 @@ export default function ChavesPublicoPage() {
           </Link>
         </div>
 
-        <div className="sticky top-16 z-30 mx-0 mt-3 border-y border-white/10 bg-[#050816]/95 p-3 shadow-lg backdrop-blur md:top-20 md:mt-6 md:rounded-3xl md:border md:p-5">
+        <div className="sticky top-0 z-30 mx-0 mt-3 border-y border-white/10 bg-[#050816]/95 p-3 shadow-lg backdrop-blur md:mt-6 md:rounded-3xl md:border md:p-5">
           <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
             <div className="flex rounded-xl border border-white/10 bg-black/40 p-0.5 md:rounded-2xl md:p-1">
-              <button type="button" onClick={() => setTipoCategoria("peso")} className={`flex-1 rounded-lg px-3 py-2 text-[10px] font-black uppercase tracking-widest md:rounded-xl md:px-4 md:py-2.5 md:text-[11px] ${tipoCategoria === "peso" ? "bg-white text-black" : "text-zinc-400 hover:text-white"}`}>Por peso</button>
-              <button type="button" onClick={() => setTipoCategoria("absoluto")} className={`flex-1 rounded-lg px-3 py-2 text-[10px] font-black uppercase tracking-widest md:rounded-xl md:px-4 md:py-2.5 md:text-[11px] ${tipoCategoria === "absoluto" ? "bg-white text-black" : "text-zinc-400 hover:text-white"}`}>Absoluto</button>
+              <button type="button" onClick={() => escolherTipo("peso")} className={`flex-1 rounded-lg px-3 py-2 text-[10px] font-black uppercase tracking-widest md:rounded-xl md:px-4 md:py-2.5 md:text-[11px] ${tipoCategoria === "peso" ? "bg-white text-black" : "text-zinc-400 hover:text-white"}`}>Por peso</button>
+              <button type="button" onClick={() => escolherTipo("absoluto")} className={`flex-1 rounded-lg px-3 py-2 text-[10px] font-black uppercase tracking-widest md:rounded-xl md:px-4 md:py-2.5 md:text-[11px] ${tipoCategoria === "absoluto" ? "bg-white text-black" : "text-zinc-400 hover:text-white"}`}>Absoluto</button>
             </div>
             <label className="relative min-w-0 flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
@@ -323,11 +337,15 @@ export default function ChavesPublicoPage() {
           <section className="mx-4 mt-3 rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-3 py-2.5 md:mx-0 md:mt-5 md:rounded-2xl md:p-5">
             <p className="truncate text-[9px] font-black uppercase tracking-widest text-cyan-300 md:text-[10px]">{tituloCategoria}</p>
             <p className="mt-1 text-xs font-medium leading-snug text-cyan-50 md:mt-2 md:text-base md:leading-relaxed">{resumo}</p>
-            {lutaAgora && (
-              <p className="mt-2 inline-flex items-center gap-2 rounded-full border border-red-500/30 bg-red-500/15 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-red-300 md:mt-3 md:text-[11px]">
-                <span className="h-2 w-2 animate-ping rounded-full bg-red-500" />
-                Agora: {limparNome(lutaAgora.atleta_1)} vs {limparNome(lutaAgora.atleta_2)}
-              </p>
+            {lutasEmAndamento.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-2 md:mt-3">
+                {lutasEmAndamento.map((luta) => (
+                  <p key={luta.id} className="inline-flex max-w-full items-center gap-2 rounded-full border border-red-500/30 bg-red-500/15 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-red-300 md:text-[11px]">
+                    <span className="h-2 w-2 shrink-0 animate-ping rounded-full bg-red-500" />
+                    <span className="truncate">Agora: {limparNome(luta.atleta_1)} vs {limparNome(luta.atleta_2)}{luta.tatame ? ` · ${luta.tatame}` : ""}</span>
+                  </p>
+                ))}
+              </div>
             )}
           </section>
         )}

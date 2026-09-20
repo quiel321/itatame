@@ -79,6 +79,7 @@ export async function POST(request: Request) {
     if (tipo === 'academia' && academiaId && !academiaId.startsWith('equipe-')) {
       const { error } = await db.from('solicitacoes_equipe_evento').update({ logo_url: logoUrl }).eq('id', academiaId).eq('evento_id', eventoId).eq('equipe_id', equipeId);
       if (error) return NextResponse.json({ error: 'Rode supabase/equipes_logo.sql para liberar a logo da academia.' }, { status: 409 });
+      await db.from('equipes_evento').update({ academia_logo_url: logoUrl }).eq('id', equipeId).eq('evento_id', eventoId);
     } else if (tipo === 'academia') {
       const { error } = await db.from('equipes_evento').update({ academia_logo_url: logoUrl }).eq('id', equipeId).eq('evento_id', eventoId);
       if (error) return NextResponse.json({ error: 'Rode supabase/equipes_logo.sql para liberar a logo da academia.' }, { status: 409 });

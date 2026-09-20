@@ -4,11 +4,12 @@
 import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { Clock, Medal, Monitor, Radio, Search, Trophy, X, ChevronRight } from "lucide-react";
+import { Clock, Medal, Monitor, Radio, Search, Trophy } from "lucide-react";
+import QRCode from "react-qr-code";
 import { supabase } from "@/app/lib/supabase";
 import { obterTempoRegulamentar } from "@/app/lib/cronograma";
-import { rotuloLuta } from "@/app/lib/lutas-rotulos";
-import { semFaixaDuplicada } from "@/app/lib/categorias-competicao";
+import { rotuloLutaCurto } from "@/app/lib/lutas-rotulos";
+import { rotuloCategoriaAoVivo } from "@/app/lib/categorias-competicao";
 
 // --- TIPOS ---
 type Evento = {
@@ -136,7 +137,81 @@ function nomeMetodoLuta(luta: LutaAoVivo) {
 }
 
 function subtituloLuta(luta: LutaAoVivo) {
-  return [luta.fase, semFaixaDuplicada(luta.categoria || '', luta.faixa || ''), luta.faixa].filter(Boolean).join(" • ");
+  return rotuloCategoriaAoVivo(luta.categoria || "", luta.faixa || "");
+}
+
+function metaLuta(luta: LutaAoVivo) {
+  return [luta.tatame, rotuloLutaCurto(luta), subtituloLuta(luta)].filter(Boolean).join(" · ");
+}
+
+function urlPublicaChaves(eventoId: string) {
+  const base = String(process.env.NEXT_PUBLIC_BASE_URL || "https://www.itatame.com.br").replace(/\/$/, "");
+  return `${base}/evento/${eventoId}/publico`;
+}
+
+function TelaoOcioso({
+  eventoId,
+  fila,
+  resultados,
+}: {
+  eventoId: string;
+  fila: LutaAoVivo[];
+  resultados: LutaAoVivo[];
+}) {
+  const url = urlPublicaChaves(eventoId);
+  const urlCurta = url.replace(/^https?:\/\//, "");
+  return (
+    <div className="grid h-full min-h-0 gap-4 overflow-hidden xl:grid-cols-[minmax(280px,38%)_minmax(0,1fr)]">
+      <aside className="flex min-h-0 flex-col items-center justify-center overflow-hidden rounded-2xl border border-cyan-400/25 bg-[#0a0a0e] px-5 py-6">
+        <span className="text-[11px] font-black uppercase tracking-[0.28em] text-cyan-400">Aponte a câmera</span>
+        <h2 className="mt-2 text-center text-3xl font-black uppercase leading-none tracking-tight text-white lg:text-4xl">Chaves no celular</h2>
+        <p className="mt-3 max-w-sm text-center text-xs font-bold uppercase leading-relaxed tracking-wider text-zinc-500">
+          Fila, resultados e o caminho até a final. Sem baixar app.
+        </p>
+        <div className="mt-6 rounded-3xl bg-white p-4 shadow-[0_0_40px_rgba(34,211,238,0.12)]">
+          <QRCode value={url} size={220} level="M" />
+        </div>
+        <span className="mt-4 max-w-full break-all text-center text-[10px] font-black uppercase tracking-widest text-zinc-500">{urlCurta}</span>
+      </aside>
+      <div className="grid min-h-0 min-w-0 content-start gap-4 overflow-hidden">
+        {fila.length > 0 && (
+          <section className="min-h-0 min-w-0 overflow-hidden">
+            <h3 className="mb-2 text-[11px] font-black uppercase tracking-widest text-cyan-300">Próximas chamadas</h3>
+            <div className="grid min-w-0 gap-2">
+              {fila.slice(0, 6).map((luta, index) => (
+                <article key={luta.id} className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-3 overflow-hidden rounded-xl border border-white/10 bg-black/40 px-3 py-2.5">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-cyan-500 text-sm font-black text-black">#{index + 1}</span>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-black uppercase text-white">{limparNome(luta.atleta_1)} <span className="text-zinc-600">vs</span> {limparNome(luta.atleta_2)}</p>
+                    <p className="mt-0.5 truncate text-[10px] font-bold uppercase text-zinc-500">{metaLuta(luta)}</p>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
+        {resultados.length > 0 && (
+          <section className="min-h-0 min-w-0 overflow-hidden">
+            <h3 className="mb-2 text-[11px] font-black uppercase tracking-widest text-emerald-300">Resultados recentes</h3>
+            <div className="grid min-w-0 gap-2 md:grid-cols-2">
+              {resultados.slice(0, 6).map((luta) => (
+                <article key={luta.id} className="min-w-0 overflow-hidden rounded-xl border border-emerald-500/15 bg-black/40 p-3">
+                  <span className="block truncate text-[10px] font-black uppercase tracking-widest text-emerald-400">{luta.tatame} · {rotuloLutaCurto(luta)}</span>
+                  <h4 className="mt-1 truncate text-lg font-black uppercase text-white">{limparNome(luta.vencedor)}</h4>
+                  <p className="mt-0.5 truncate text-[10px] font-bold uppercase text-zinc-500">{subtituloLuta(luta)} · {nomeMetodoLuta(luta)}</p>
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
+        {fila.length === 0 && resultados.length === 0 && (
+          <div className="flex h-full min-h-48 items-center justify-center rounded-2xl border border-dashed border-white/10 bg-black/20 px-6 text-center text-lg font-black uppercase tracking-widest text-zinc-600">
+            Aguardando o primeiro combate. As chaves já estão no QR.
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function getAtletaPerfil(map: Record<number, AtletaPerfil>, id?: number | null) {
@@ -243,14 +318,14 @@ function LutaTvActiveCard({
   const renderAtleta = (a: string, e: string | null | undefined, p: Pontuacao, isAzul: boolean, id?: number | null) => {
     const foto = getAtletaPerfil(atletas, id)?.foto_url;
     return (
-      <div className={`relative grid min-h-0 grid-cols-[clamp(3.25rem,5vw,4.5rem)_minmax(0,1fr)_auto] items-center rounded-xl border shadow-sm ${compacto ? 'gap-2 p-2.5' : 'gap-3 p-3 lg:gap-4 lg:p-4'} ${isAzul ? 'bg-[#0f172a] border-blue-900/50' : 'bg-[#450a0a] border-red-900/50'}`}>
+      <div className={`relative grid min-h-0 min-w-0 grid-cols-[clamp(2.75rem,4.5vw,4rem)_minmax(0,1fr)_auto] items-center rounded-xl border shadow-sm ${compacto ? 'gap-1.5 p-2' : 'gap-2.5 p-2.5 lg:gap-3 lg:p-3'} ${isAzul ? 'bg-[#0f172a] border-blue-900/50' : 'bg-[#450a0a] border-red-900/50'}`}>
         <div className={`aspect-square w-full max-w-[72px] rounded-full overflow-hidden border-2 shrink-0 bg-black ${isAzul ? 'border-blue-500' : 'border-red-500'}`}>
           {foto ? <img src={foto} alt={a} className="w-full h-full object-cover" /> :
             <div className="w-full h-full flex items-center justify-center text-2xl font-black text-white/50">{a.charAt(0)}</div>
           }
         </div>
         <div className="min-w-0 self-center">
-          <h4 className={`${compacto ? 'text-base xl:text-lg' : 'text-lg xl:text-2xl'} line-clamp-2 font-black uppercase leading-[1.05] text-white [overflow-wrap:normal] [word-break:normal]`}>{a}</h4>
+          <h4 className={`${compacto ? 'text-sm xl:text-lg' : 'text-base xl:text-xl'} line-clamp-2 font-black uppercase leading-[1.05] text-white`}>{a}</h4>
           <span className={`mt-1 block truncate text-[9px] font-bold uppercase tracking-wide xl:text-xs ${isAzul ? 'text-blue-300' : 'text-red-300'}`}>{e || "Sem Equipe"}</span>
         </div>
         <div className={`grid shrink-0 grid-cols-[auto_auto] items-center border-l border-white/10 ${compacto ? 'gap-1.5 pl-2' : 'gap-2 pl-3'}`}>
@@ -268,12 +343,12 @@ function LutaTvActiveCard({
   };
 
   return (
-    <article className={`flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-white/5 bg-[#0a0a0e] shadow-2xl ${compacto ? 'p-3' : 'p-4'}`}>
+    <article className={`flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border border-white/5 bg-[#0a0a0e] shadow-2xl ${compacto ? 'p-2.5' : 'p-3 lg:p-4'}`}>
       <header className={`flex items-start justify-between ${compacto ? 'mb-2 gap-2' : 'mb-3 gap-3'}`}>
         <div className="min-w-0 flex-1">
           <div className="mb-1 flex items-center gap-2">
             <span className="flex h-2.5 w-2.5 shrink-0 animate-pulse items-center justify-center rounded-full bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.8)]"></span>
-            <h2 className={`${compacto ? 'text-lg xl:text-xl' : 'text-xl xl:text-2xl'} line-clamp-2 font-black uppercase leading-tight tracking-tight text-white`}>{luta.tatame || "Tatame"} · {rotuloLuta(luta)}</h2>
+            <h2 className={`${compacto ? 'text-base xl:text-xl' : 'text-lg xl:text-2xl'} line-clamp-2 font-black uppercase leading-tight tracking-tight text-white`}>{luta.tatame || "Tatame"} · {rotuloLutaCurto(luta)}</h2>
           </div>
           <p className={`${compacto ? 'text-[9px]' : 'text-[10px] xl:text-xs'} line-clamp-2 font-bold uppercase leading-tight tracking-wider text-zinc-400`}>{subtituloLuta(luta)}</p>
         </div>
@@ -301,7 +376,7 @@ function FilaTvLine({ luta, index, agora }: { luta: LutaAoVivo; index: number; a
           <span className="text-[10px] font-black text-zinc-600">VS</span>
           <span className="text-sm font-black uppercase text-white truncate">{limparNome(luta.atleta_2) || "A DEFINIR"}</span>
         </div>
-        <span className="block text-[10px] font-bold uppercase text-zinc-400 truncate">{luta.tatame} • {subtituloLuta(luta)}</span>
+        <span className="block text-[10px] font-bold uppercase text-zinc-400 truncate">{metaLuta(luta)}</span>
       </div>
       <div className="text-right shrink-0 border-l border-white/5 pl-4">
         <strong className={`block text-lg font-black leading-none ${isPrimeira ? 'text-cyan-400' : 'text-white'}`}>{formatarHorario(luta.horario_estimado)}</strong>
@@ -325,7 +400,7 @@ function ResultadoTvLine({ luta }: { luta: LutaAoVivo }) {
       </div>
       <div className="flex-1 min-w-0">
         <strong className="block text-sm font-black uppercase text-white truncate">{vencedorNome || "A DEFINIR"}</strong>
-        <span className="block text-[9px] font-bold text-zinc-500 truncate uppercase mt-0.5">{luta.tatame} • {subtituloLuta(luta)}</span>
+        <span className="block text-[9px] font-bold text-zinc-500 truncate uppercase mt-0.5">{metaLuta(luta)}</span>
       </div>
       <div className="text-center shrink-0 border-l border-white/10 pl-3">
         <strong className="block text-lg font-black text-white tabular-nums leading-none">{pVencedor.pontos}</strong>
@@ -368,16 +443,16 @@ function LutaAoVivoCardMobile({ luta, agora, atletas }: { luta: LutaAoVivo; agor
   const foto2 = getAtletaPerfil(atletas, luta.atleta_2_id)?.foto_url;
 
   return (
-    <article className="overflow-hidden rounded-xl md:rounded-2xl border border-red-500/30 bg-[#0a0a0e] shadow-lg">
-      <div className="bg-zinc-900 border-b border-white/5 p-2.5 md:p-3 flex justify-between items-center">
+    <article className="min-w-0 overflow-hidden rounded-xl border border-red-500/30 bg-[#0a0a0e] shadow-lg md:rounded-2xl">
+      <div className="flex items-center justify-between gap-2 border-b border-white/5 bg-zinc-900 p-2.5 md:p-3">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5 mb-0.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping shrink-0"></span>
-            <span className="text-[10px] md:text-xs font-black uppercase text-white truncate">
-              {luta.tatame || "Tatame"} · {rotuloLuta(luta)}
+          <div className="mb-0.5 flex items-center gap-1.5">
+            <span className="h-1.5 w-1.5 shrink-0 animate-ping rounded-full bg-red-500"></span>
+            <span className="truncate text-[10px] font-black uppercase text-white md:text-xs">
+              {luta.tatame || "Tatame"} · {rotuloLutaCurto(luta)}
             </span>
           </div>
-          <span className="text-[8px] md:text-[9px] font-medium uppercase text-zinc-400 truncate block leading-tight">{subtituloLuta(luta)}</span>
+          <span className="block truncate text-[8px] font-medium uppercase leading-tight text-zinc-400 md:text-[9px]">{subtituloLuta(luta)}</span>
         </div>
         <div className="bg-black/50 rounded px-2 md:px-3 py-1 text-center border border-white/5 ml-2 shrink-0">
           <span className="block text-lg md:text-xl font-black text-white tabular-nums leading-none">{formatarTempo(tempoLuta)}</span>
@@ -431,24 +506,22 @@ function FilaLinhaMobile({ luta, index, agora }: { luta: LutaAoVivo; index: numb
   const a2 = limparNome(luta.atleta_2) || "A DEFINIR";
 
   return (
-    <article className="border border-white/5 bg-[#0a0a0e] rounded-xl p-2.5 flex items-center gap-3">
-      <div className="w-9 h-9 rounded bg-cyan-500/10 border border-cyan-500/20 flex flex-col items-center justify-center shrink-0">
-        <span className="text-[8px] text-cyan-500/70 font-black leading-none mb-0.5">FILA</span>
-        <span className="text-sm font-black text-cyan-400 leading-none">#{posicao}</span>
+    <article className="grid min-h-[58px] min-w-0 grid-cols-[2.75rem_minmax(0,1fr)_3.25rem] items-center gap-2 overflow-hidden rounded-xl border border-white/5 bg-[#0a0a0e] px-2 py-1.5 md:gap-3 md:px-3">
+      <div className="flex h-10 w-11 shrink-0 flex-col items-center justify-center rounded-lg bg-cyan-500/10 border border-cyan-500/20">
+        <span className="text-[7px] font-black leading-none text-cyan-500/70">FILA</span>
+        <span className="text-sm font-black leading-none text-cyan-400">#{posicao}</span>
       </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap md:flex-nowrap items-center gap-x-1.5 gap-y-0.5 truncate leading-tight">
-          <span className="text-[10px] md:text-xs font-black uppercase text-white truncate">{a1}</span>
-          <span className="text-[8px] font-black text-zinc-600 shrink-0">VS</span>
-          <span className="text-[10px] md:text-xs font-black uppercase text-white truncate">{a2}</span>
-        </div>
-        <span className="block text-[8px] md:text-[9px] font-bold uppercase text-zinc-500 truncate mt-1">
-          {luta.tatame} • {subtituloLuta(luta)}
-        </span>
+      <div className="min-w-0">
+        <p className="truncate text-[11px] font-black uppercase leading-tight text-white md:text-xs">
+          {a1} <span className="text-zinc-600">vs</span> {a2}
+        </p>
+        <p className="mt-0.5 truncate text-[8px] font-bold uppercase text-zinc-500 md:text-[9px]">
+          {metaLuta(luta)}
+        </p>
       </div>
-      <div className="text-right shrink-0 border-l border-white/5 pl-3">
-        <span className="block text-[11px] font-black text-cyan-400">{formatarHorario(luta.horario_estimado)}</span>
-        <span className="block text-[8px] font-bold uppercase text-zinc-500 mt-0.5">{textoPrevisao(luta.horario_estimado, agora)}</span>
+      <div className="min-w-0 border-l border-white/5 pl-2 text-right">
+        <span className="block truncate text-[11px] font-black tabular-nums text-cyan-400">{formatarHorario(luta.horario_estimado)}</span>
+        <span className="mt-0.5 block truncate text-[8px] font-bold uppercase text-zinc-500">{textoPrevisao(luta.horario_estimado, agora)}</span>
       </div>
     </article>
   );
@@ -464,19 +537,20 @@ function ResultadoLinhaMobile({ luta }: { luta: LutaAoVivo }) {
   const pPerdedor = vencedorNome === a1 ? p2 : p1;
 
   return (
-    <article className="border border-white/5 bg-[#0a0a0e] rounded-xl overflow-hidden">
-      <div className="bg-zinc-900 border-b border-white/5 p-2 px-3 flex justify-between items-center">
-        <span className="text-[8px] md:text-[9px] font-bold uppercase tracking-widest text-zinc-400 truncate">{luta.tatame} • {subtituloLuta(luta)}</span>
-        <span className="text-[7px] font-black uppercase text-zinc-300 bg-white/10 px-1.5 py-0.5 rounded ml-2 shrink-0">{nomeMetodoLuta(luta)}</span>
+    <article className="min-w-0 overflow-hidden rounded-xl border border-white/5 bg-[#0a0a0e]">
+      <div className="flex min-w-0 items-center gap-2 border-b border-white/5 bg-zinc-900 px-2.5 py-1.5 md:px-3">
+        <span className="shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wide text-zinc-300">{luta.tatame || "Tatame"}</span>
+        <span className="min-w-0 flex-1 truncate text-[8px] font-bold uppercase tracking-wide text-zinc-500 md:text-[9px]">{rotuloLutaCurto(luta)} · {subtituloLuta(luta)}</span>
+        <span className="shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[7px] font-black uppercase text-zinc-300">{nomeMetodoLuta(luta)}</span>
       </div>
-      <div className="p-2.5 px-3 space-y-1.5">
-        <div className="flex justify-between items-center min-w-0">
-          <span className="text-[11px] md:text-xs font-black uppercase text-emerald-400 truncate flex items-center gap-1.5">🥇 {vencedorNome}</span>
-          <span className="text-xs md:text-sm font-black text-white shrink-0 ml-2 bg-white/10 px-2 py-0.5 rounded">{pVencedor.pontos} <span className="text-[8px] text-zinc-500">PTS</span></span>
+      <div className="space-y-1 px-2.5 py-2 md:px-3">
+        <div className="flex min-w-0 items-center justify-between gap-2">
+          <span className="min-w-0 truncate text-[11px] font-black uppercase text-emerald-400 md:text-xs">🥇 {vencedorNome}</span>
+          <span className="shrink-0 rounded bg-white/10 px-2 py-0.5 text-xs font-black tabular-nums text-white">{pVencedor.pontos} <span className="text-[8px] text-zinc-500">PTS</span></span>
         </div>
-        <div className="flex justify-between items-center min-w-0 opacity-60">
-          <span className="text-[9px] md:text-[10px] font-bold uppercase text-white truncate flex items-center gap-1.5">❌ {perdedor}</span>
-          <span className="text-[10px] md:text-xs font-bold text-white shrink-0 ml-2 px-2">{pPerdedor.pontos} <span className="text-[7px] text-zinc-500">PTS</span></span>
+        <div className="flex min-w-0 items-center justify-between gap-2 opacity-60">
+          <span className="min-w-0 truncate text-[9px] font-bold uppercase text-white md:text-[10px]">❌ {perdedor}</span>
+          <span className="shrink-0 px-2 text-[10px] font-bold tabular-nums text-white md:text-xs">{pPerdedor.pontos} <span className="text-[7px] text-zinc-500">PTS</span></span>
         </div>
       </div>
     </article>
@@ -503,9 +577,10 @@ export default function AoVivoPage() {
 
   // Controle de estado para exibir o Winner Overlay
   const prevLutasRef = useRef<LutaAoVivo[]>([]);
-  const [vencedorRecente, setVencedorRecente] = useState<LutaAoVivo | null>(null);
+  const [filaVencedores, setFilaVencedores] = useState<LutaAoVivo[]>([]);
   const [ultimoResultado, setUltimoResultado] = useState<LutaAoVivo | null>(null);
-  const fecharVencedor = useCallback(() => setVencedorRecente(null), []);
+  const fecharVencedor = useCallback(() => setFilaVencedores((atual) => atual.slice(1)), []);
+  const vencedorRecente = filaVencedores[0] || null;
 
   const alternarModoTv = async () => {
     const ativar = !modoTv;
@@ -542,7 +617,7 @@ export default function AoVivoPage() {
       return Number(a.id_visual || 0) - Number(b.id_visual || 0);
     });
 
-    // 🔥 LÓGICA DO WINNER OVERLAY (Detecta se uma luta acabou de finalizar)
+    const recemFinalizadas: LutaAoVivo[] = [];
     if (prevLutasRef.current.length > 0) {
       ordenadas.forEach(lutaAtual => {
         const lutaAnterior = prevLutasRef.current.find(l => l.id === lutaAtual.id);
@@ -552,19 +627,22 @@ export default function AoVivoPage() {
           lutaAtual.status_luta === "concluida" &&
           !isFantasma(lutaAtual.vencedor)
         ) {
-          // Só mostra o modal se não tiver outro sendo exibido
-          if (!vencedorRecente) {
-            setVencedorRecente(lutaAtual);
-            setUltimoResultado(lutaAtual);
-          }
+          recemFinalizadas.push(lutaAtual);
         }
       });
+    }
+    if (recemFinalizadas.length > 0) {
+      setFilaVencedores((atual) => {
+        const ids = new Set(atual.map((luta) => luta.id));
+        return [...atual, ...recemFinalizadas.filter((luta) => !ids.has(luta.id))];
+      });
+      setUltimoResultado(recemFinalizadas[recemFinalizadas.length - 1]);
     }
     prevLutasRef.current = ordenadas;
 
     setLutas(ordenadas);
     await carregarAtletas(ordenadas);
-  }, [carregarAtletas, eventoId, vencedorRecente]);
+  }, [carregarAtletas, eventoId]);
 
   useEffect(() => {
     async function carregarDados() {
@@ -624,12 +702,14 @@ export default function AoVivoPage() {
     };
     window.addEventListener('keydown', handleKeyDown);
 
+    document.body.classList.add('itatame-aovivo-pagina');
     document.body.classList.toggle('itatame-telao-ativo', modoTv);
     if (modoTv) document.body.style.backgroundColor = '#050505';
     else document.body.style.backgroundColor = '';
 
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
+      document.body.classList.remove('itatame-aovivo-pagina');
       document.body.classList.remove('itatame-telao-ativo');
       document.body.style.backgroundColor = '';
     };
@@ -694,10 +774,9 @@ export default function AoVivoPage() {
     );
   }
 
-  // RENDERIZA O MODAL DE VITÓRIA SOBRE TUDO SE ESTIVER ATIVO
-  if (vencedorRecente) {
-    return <WinnerOverlay luta={vencedorRecente} atletas={atletas} onClose={fecharVencedor} />;
-  }
+  const overlayVencedor = vencedorRecente ? (
+    <WinnerOverlay luta={vencedorRecente} atletas={atletas} onClose={fecharVencedor} />
+  ) : null;
 
   // =========================================================================================================
   // RENDER: MODO TV / TELÃO
@@ -705,6 +784,7 @@ export default function AoVivoPage() {
   if (modoTv) {
     return (
       <main className="flex h-screen w-full flex-col overflow-hidden bg-[#050505] p-3 font-sans text-white select-none lg:p-5">
+        {overlayVencedor}
         <style dangerouslySetInnerHTML={{ __html: `
           body.itatame-telao-ativo > header,
           body.itatame-telao-ativo > nav,
@@ -749,20 +829,18 @@ export default function AoVivoPage() {
         {/* LUTAS ATIVAS (CENTRO DA TELA) */}
         <section className="flex min-h-0 flex-1 flex-col justify-center overflow-hidden pb-3">
           {lutasAtivas.length === 0 ? (
-            <div className="flex h-full min-h-48 items-center justify-center rounded-2xl border-2 border-dashed border-zinc-800 bg-[#0a0a0e] p-6">
-              <span className="text-2xl font-bold uppercase tracking-widest text-zinc-600 text-center">Aguardando início dos combates...</span>
-            </div>
+            <TelaoOcioso eventoId={eventoId} fila={filaLutas} resultados={lutasFinalizadas} />
           ) : (
             <div className={`grid h-full min-h-0 gap-3 ${
               lutasAtivas.length === 1
                 ? 'mx-auto w-full max-w-5xl grid-cols-1'
                 : lutasAtivas.length === 2
-                  ? 'grid-cols-2'
+                  ? 'grid-cols-1 md:grid-cols-2'
                   : lutasAtivas.length === 3
-                    ? 'grid-cols-3'
+                    ? 'grid-cols-1 md:grid-cols-3'
                     : lutasAtivas.length === 4
                       ? 'grid-cols-2 grid-rows-2'
-                      : 'grid-cols-3 grid-rows-2'
+                      : 'grid-cols-2 md:grid-cols-3 grid-rows-2'
             }`}>
               {lutasAtivas.map((luta) => (
                 <LutaTvActiveCard
@@ -770,7 +848,7 @@ export default function AoVivoPage() {
                   luta={luta}
                   agora={agora}
                   atletas={atletas}
-                  compacto={lutasAtivas.length >= 4}
+                  compacto={lutasAtivas.length >= 3}
                 />
               ))}
             </div>
@@ -786,12 +864,12 @@ export default function AoVivoPage() {
   // RENDER: MODO PADRÃO (MOBILE / WEB)
   // =========================================================================================================
   return (
-    <main className="min-h-screen w-full bg-[#050505] pb-10 font-sans text-white overflow-x-hidden">
+    <main className="w-full min-w-0 overflow-x-hidden bg-[#050505] pb-6 font-sans text-white">
+      {overlayVencedor}
       {ultimoResultado && <AvisoResultadoBorda luta={ultimoResultado} />}
       
-      {/* HEADER COMPACTO (Fixo no Topo) */}
-      <header className="bg-[#0a0a0e] border-b border-white/5 px-3 py-3 md:px-6 md:py-4 sticky top-0 z-40 shadow-md">
-        <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
+      <header className="border-b border-white/5 bg-[#0a0a0e] px-3 py-3 md:px-6 md:py-4">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 mb-0.5">
               <span className="flex items-center gap-1.5 rounded bg-red-600 px-1.5 py-0.5 text-[8px] md:text-[9px] font-black uppercase tracking-widest text-white">
@@ -813,21 +891,20 @@ export default function AoVivoPage() {
         </div>
       </header>
 
-      <div className="mx-auto px-3 mt-4 md:mt-6 max-w-5xl">
+      <div className="mx-auto mt-3 w-full min-w-0 max-w-6xl px-3 md:mt-5 md:px-4">
         
-        {/* 1. SEÇÃO AO VIVO */}
-        <section className="mb-6">
+        <section className="mb-4">
           {lutasAtivas.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-white/5 bg-[#0a0a0e] p-6 text-xs md:text-sm text-zinc-500 text-center uppercase tracking-widest font-bold">Nenhuma luta em andamento.</div>
+            <div className="rounded-xl border border-dashed border-white/5 bg-[#0a0a0e] px-4 py-3 text-center text-[10px] font-bold uppercase tracking-widest text-zinc-500 md:text-xs">Nenhuma luta em andamento.</div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className={`grid auto-rows-fr grid-cols-1 gap-3 ${lutasAtivas.length === 1 ? 'md:mx-auto md:max-w-3xl' : lutasAtivas.length === 2 ? 'md:grid-cols-2' : 'md:grid-cols-2 xl:grid-cols-3'}`}>
               {lutasAtivas.map((luta) => <LutaAoVivoCardMobile key={luta.id} luta={luta} agora={agora} atletas={atletas} />)}
             </div>
           )}
         </section>
 
         {atletasNaBaia.length > 0 && (
-          <section className="mb-6 rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-3">
+          <section className="mb-4 rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-3">
             <h2 className="mb-2 text-[9px] font-black uppercase tracking-widest text-cyan-300">Na baia · presença confirmada pelo chamador</h2>
             <div className="flex flex-wrap gap-2">
               {atletasNaBaia.map((item) => (
@@ -837,24 +914,22 @@ export default function AoVivoPage() {
           </section>
         )}
 
-        {/* 2. ESTATÍSTICAS RÁPIDAS */}
-        <section className="mb-6 grid grid-cols-3 gap-2 md:gap-4">
-          <div className="rounded-xl border border-red-500/10 bg-red-500/5 p-2.5 md:p-4 text-center items-center">
-            <span className="text-[8px] md:text-[10px] font-black uppercase tracking-widest text-red-400">Ao vivo</span>
-            <strong className="mt-0.5 md:mt-1 block text-lg md:text-2xl font-black text-red-300">{lutasAtivas.length}</strong>
+        <section className="mb-4 grid grid-cols-3 gap-2 md:gap-3">
+          <div className="rounded-xl border border-red-500/10 bg-red-500/5 px-2 py-2 text-center md:py-3">
+            <span className="text-[8px] font-black uppercase tracking-widest text-red-400 md:text-[10px]">Ao vivo</span>
+            <strong className="mt-0.5 block text-lg font-black tabular-nums text-red-300 md:text-2xl">{lutasAtivas.length}</strong>
           </div>
-          <div className="rounded-xl border border-cyan-500/10 bg-cyan-500/5 p-2.5 md:p-4 text-center items-center">
-            <span className="text-[8px] md:text-[10px] font-black uppercase tracking-widest text-cyan-400">Na fila</span>
-            <strong className="mt-0.5 md:mt-1 block text-lg md:text-2xl font-black text-cyan-300">{filaLutas.length}</strong>
+          <div className="rounded-xl border border-cyan-500/10 bg-cyan-500/5 px-2 py-2 text-center md:py-3">
+            <span className="text-[8px] font-black uppercase tracking-widest text-cyan-400 md:text-[10px]">Na fila</span>
+            <strong className="mt-0.5 block text-lg font-black tabular-nums text-cyan-300 md:text-2xl">{filaLutas.length}</strong>
           </div>
-          <div className="rounded-xl border border-emerald-500/10 bg-emerald-500/5 p-2.5 md:p-4 text-center items-center">
-            <span className="text-[8px] md:text-[10px] font-black uppercase tracking-widest text-emerald-400">Resultados</span>
-            <strong className="mt-0.5 md:mt-1 block text-lg md:text-2xl font-black text-emerald-300">{totalFinalizadas}</strong>
+          <div className="rounded-xl border border-emerald-500/10 bg-emerald-500/5 px-2 py-2 text-center md:py-3">
+            <span className="text-[8px] font-black uppercase tracking-widest text-emerald-400 md:text-[10px]">Resultados</span>
+            <strong className="mt-0.5 block text-lg font-black tabular-nums text-emerald-300 md:text-2xl">{totalFinalizadas}</strong>
           </div>
         </section>
 
-        {/* 3. FILTROS */}
-        <section className="mb-6 rounded-xl border border-white/5 bg-[#0a0a0e] p-3">
+        <section className="mb-4 rounded-xl border border-white/5 bg-[#0a0a0e] p-2.5 md:p-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <label className="flex items-center gap-2 rounded-lg border border-white/5 bg-black px-3 py-2.5 w-full">
               <Search size={14} className="text-zinc-600 shrink-0" />
@@ -868,25 +943,25 @@ export default function AoVivoPage() {
         </section>
 
         {/* 4. FILA E RESULTADOS */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <section>
-            <h2 className="mb-3 flex items-center gap-2 text-xs md:text-sm font-black uppercase tracking-widest text-white px-1"><Clock size={14} className="text-cyan-500" /> Próximas Chamadas</h2>
+        <div className="grid min-w-0 grid-cols-1 items-start gap-5 lg:grid-cols-2">
+          <section className="min-w-0">
+            <h2 className="mb-2 flex items-center gap-2 px-1 text-xs font-black uppercase tracking-widest text-white md:text-sm"><Clock size={14} className="text-cyan-500" /> Próximas Chamadas</h2>
             {filaLutas.length === 0 ? (
-              <div className="rounded-xl border border-white/5 bg-[#0a0a0e] p-6 text-xs text-zinc-600 text-center font-bold uppercase tracking-widest">Fila vazia.</div>
+              <div className="rounded-xl border border-white/5 bg-[#0a0a0e] px-4 py-5 text-center text-[10px] font-bold uppercase tracking-widest text-zinc-600">Fila vazia.</div>
             ) : (
-              <div className="grid gap-2">
+              <div className="grid min-w-0 gap-1.5">
                 {filaLutas.map((luta, index) => <FilaLinhaMobile key={luta.id} luta={luta} index={index} agora={agora} />)}
               </div>
             )}
           </section>
 
-          <section>
-            <h2 className="mb-3 flex items-center gap-2 text-xs md:text-sm font-black uppercase tracking-widest text-white px-1"><Medal size={14} className="text-emerald-500" /> Resultados Recentes</h2>
+          <section className="min-w-0">
+            <h2 className="mb-2 flex items-center gap-2 px-1 text-xs font-black uppercase tracking-widest text-white md:text-sm"><Medal size={14} className="text-emerald-500" /> Resultados Recentes</h2>
             {lutasFinalizadas.length === 0 ? (
-              <div className="rounded-xl border border-white/5 bg-[#0a0a0e] p-6 text-xs text-zinc-600 text-center font-bold uppercase tracking-widest">Nenhum resultado.</div>
+              <div className="rounded-xl border border-white/5 bg-[#0a0a0e] px-4 py-5 text-center text-[10px] font-bold uppercase tracking-widest text-zinc-600">Nenhum resultado.</div>
             ) : (
-              <div className="grid gap-2">
-                {lutasFinalizadas.map((luta) => <Link key={luta.id} href={`/evento/${eventoId}/luta/${luta.id}`}><ResultadoLinhaMobile luta={luta} /></Link>)}
+              <div className="grid min-w-0 gap-1.5">
+                {lutasFinalizadas.map((luta) => <Link key={luta.id} href={`/evento/${eventoId}/luta/${luta.id}`} className="block min-w-0"><ResultadoLinhaMobile luta={luta} /></Link>)}
               </div>
             )}
           </section>

@@ -38,6 +38,40 @@ export function lutaEhAbsoluto(luta: { categoria?: string | null }) {
   return String(luta.categoria || '').toLowerCase().includes('absoluto');
 }
 
+export function lutaChaveTravada(luta: { vencedor?: string | null; iniciada_em?: string | null; status_luta?: string | null }) {
+  return Boolean(luta.vencedor || luta.iniciada_em || ['concluida', 'em_andamento'].includes(luta.status_luta || ''));
+}
+
+export function chavesDoTipo<T extends { categoria?: string | null }>(lutas: T[], tipo: 'peso' | 'absoluto') {
+  return lutas.filter((luta) => tipo === 'absoluto' ? lutaEhAbsoluto(luta) : !lutaEhAbsoluto(luta));
+}
+
+function linhaInsertChave(luta: Record<string, unknown>) {
+  return {
+    evento_id: luta.evento_id,
+    categoria: luta.categoria,
+    faixa: luta.faixa,
+    categoria_id: luta.categoria_id ?? null,
+    tempo_minutos: luta.tempo_minutos ?? null,
+    id_visual: luta.id_visual ?? null,
+    atleta_1: luta.atleta_1 ?? null,
+    equipe_1: luta.equipe_1 ?? null,
+    numero_1: luta.numero_1 ?? null,
+    atleta_1_id: luta.atleta_1_id ?? null,
+    atleta_2: luta.atleta_2 ?? null,
+    equipe_2: luta.equipe_2 ?? null,
+    numero_2: luta.numero_2 ?? null,
+    atleta_2_id: luta.atleta_2_id ?? null,
+    fase: luta.fase ?? null,
+    ordem: luta.ordem ?? null,
+    lado: luta.lado ?? null,
+    proxima_luta: luta.proxima_luta ?? null,
+    status_luta: 'agendada',
+    pontuacao_atleta_1: luta.pontuacao_atleta_1 || { pontos: 0, vantagens: 0, punicoes: 0 },
+    pontuacao_atleta_2: luta.pontuacao_atleta_2 || { pontos: 0, vantagens: 0, punicoes: 0 },
+  };
+}
+
 type LutaExistente = {
   categoria?: string | null;
   faixa?: string | null;
@@ -112,8 +146,8 @@ export async function prepararChavesEvento(
   ]);
   if (inscritos.error || existentes.error) throw new Error('Não foi possível conferir as inscrições e chaves. Tente novamente.');
   if (categorias.error) throw new Error('A atualização do banco de competição ainda não foi instalada. As chaves foram preservadas.');
-  if ((existentes.data || []).some((luta: { vencedor?: string | null; iniciada_em?: string | null; status_luta?: string | null }) => luta.vencedor || luta.iniciada_em || ['concluida', 'em_andamento'].includes(luta.status_luta || ''))) {
-    throw new Error('Já existem lutas iniciadas ou resultados neste evento. As chaves foram preservadas.');
+  if (chavesDoTipo(existentes.data || [], tipo).some(lutaChaveTravada)) {
+    throw new Error('Já existem lutas iniciadas ou resultados neste tipo de chave. O chaveamento foi preservado.');
   }
   const inscricoesComAcademia = await enriquecerAcademiaInscricoes(db, (inscritos.data || []) as InscricaoCompeticao[]);
   const gruposPreparados = prepararGrupos(inscricoesComAcademia, tipo, (categorias.data || []) as CategoriaCompeticao[]);
@@ -147,15 +181,29 @@ export async function gravarChavesEvento(
   tipo: 'peso' | 'absoluto',
   lutas: unknown[],
 ) {
-  const { data: total, error } = await db.rpc('substituir_chaves_evento', {
-    p_evento: evento.id,
-    p_tipo: tipo,
-    p_lutas: lutas,
-    p_organizador: evento.organizador_id,
-  });
-  if (error) throw new Error(error.code === 'PGRST202' ? 'Instale a atualização do banco antes de gerar chaves.' : error.message);
+  const { data: atuais, error: leitura } = await db
+    .from('chaves')
+    .select('id,categoria,status_luta,vencedor,iniciada_em')
+    .eq('evento_id', evento.id);
+  if (leitura) throw new Error('Não foi possível conferir as chaves atuais. Nada foi apagado.');
+  const alvo = chavesDoTipo(atuais || [], tipo);
+  if (alvo.some(lutaChaveTravada)) {
+    throw new Error('Já existem lutas iniciadas ou resultados neste tipo de chave. O chaveamento foi preservado.');
+  }
+
+  const ids = alvo.map((luta: { id?: string }) => luta.id).filter(Boolean);
+  for (let i = 0; i < ids.length; i += 80) {
+    const fatia = ids.slice(i, i + 80);
+    const { error } = await db.from('chaves').delete().eq('evento_id', evento.id).in('id', fatia);
+    if (error) throw new Error('Não foi possível substituir só este tipo de chave. O outro chaveamento foi preservado.');
+  }
+
+  const linhas = (lutas as Record<string, unknown>[]).map(linhaInsertChave);
+  if (!linhas.length) throw new Error('Chaveamento vazio. Nada foi gravado.');
+  const { error: insertError } = await db.from('chaves').insert(linhas);
+  if (insertError) throw new Error(insertError.message || 'Não foi possível gravar as novas chaves.');
   await processarAvancosAutomaticosChaves(db, evento.id);
-  return Number(total) || lutas.length;
+  return linhas.length;
 }
 
 export async function gerarChavesAutomaticasEvento(db: ClienteSupabase, evento: EventoChaveamento) {
@@ -163,12 +211,12 @@ export async function gerarChavesAutomaticasEvento(db: ClienteSupabase, evento: 
   for (const tipo of ['peso', 'absoluto'] as const) {
     try {
       const preparado = await prepararChavesEvento(db, evento.id, tipo, false);
-      const jaExiste = (preparado.existentes as { categoria?: string | null }[]).some(luta => tipo === 'absoluto' ? lutaEhAbsoluto(luta) : !lutaEhAbsoluto(luta));
+      const jaExiste = chavesDoTipo(preparado.existentes as { categoria?: string | null }[], tipo).length > 0;
       if (jaExiste && !preparado.precisaAtualizarTriangular) continue;
       const total = await gravarChavesEvento(db, evento, tipo, preparado.lutas);
       gerados.push({ tipo, total });
     } catch (error) {
-      if (error instanceof Error && (error.message.includes('Já existem lutas iniciadas') || error.message.includes('Nenhuma inscrição apta'))) continue;
+      if (error instanceof Error && (error.message.includes('Já existem lutas iniciadas') || error.message.includes('Nenhuma inscrição apta') || error.message.includes('O outro chaveamento foi preservado'))) continue;
       throw error;
     }
   }
