@@ -38,11 +38,19 @@ export function lutaEhAbsoluto(luta: { categoria?: string | null }) {
   return String(luta.categoria || '').toLowerCase().includes('absoluto');
 }
 
-export function lutaChaveTravada(luta: { vencedor?: string | null; iniciada_em?: string | null; status_luta?: string | null }) {
+export type LutaChaveExistente = {
+  id?: string;
+  categoria?: string | null;
+  vencedor?: string | null;
+  iniciada_em?: string | null;
+  status_luta?: string | null;
+};
+
+export function lutaChaveTravada(luta: LutaChaveExistente) {
   return Boolean(luta.vencedor || luta.iniciada_em || ['concluida', 'em_andamento'].includes(luta.status_luta || ''));
 }
 
-export function chavesDoTipo<T extends { categoria?: string | null }>(lutas: T[], tipo: 'peso' | 'absoluto') {
+export function chavesDoTipo<T extends LutaChaveExistente>(lutas: T[], tipo: 'peso' | 'absoluto') {
   return lutas.filter((luta) => tipo === 'absoluto' ? lutaEhAbsoluto(luta) : !lutaEhAbsoluto(luta));
 }
 
@@ -146,7 +154,7 @@ export async function prepararChavesEvento(
   ]);
   if (inscritos.error || existentes.error) throw new Error('Não foi possível conferir as inscrições e chaves. Tente novamente.');
   if (categorias.error) throw new Error('A atualização do banco de competição ainda não foi instalada. As chaves foram preservadas.');
-  if (chavesDoTipo(existentes.data || [], tipo).some(lutaChaveTravada)) {
+  if (chavesDoTipo((existentes.data || []) as LutaChaveExistente[], tipo).some(lutaChaveTravada)) {
     throw new Error('Já existem lutas iniciadas ou resultados neste tipo de chave. O chaveamento foi preservado.');
   }
   const inscricoesComAcademia = await enriquecerAcademiaInscricoes(db, (inscritos.data || []) as InscricaoCompeticao[]);
@@ -186,12 +194,12 @@ export async function gravarChavesEvento(
     .select('id,categoria,status_luta,vencedor,iniciada_em')
     .eq('evento_id', evento.id);
   if (leitura) throw new Error('Não foi possível conferir as chaves atuais. Nada foi apagado.');
-  const alvo = chavesDoTipo(atuais || [], tipo);
+  const alvo = chavesDoTipo((atuais || []) as LutaChaveExistente[], tipo);
   if (alvo.some(lutaChaveTravada)) {
     throw new Error('Já existem lutas iniciadas ou resultados neste tipo de chave. O chaveamento foi preservado.');
   }
 
-  const ids = alvo.map((luta: { id?: string }) => luta.id).filter(Boolean);
+  const ids = alvo.map((luta) => luta.id).filter((id): id is string => Boolean(id));
   for (let i = 0; i < ids.length; i += 80) {
     const fatia = ids.slice(i, i + 80);
     const { error } = await db.from('chaves').delete().eq('evento_id', evento.id).in('id', fatia);
@@ -211,7 +219,7 @@ export async function gerarChavesAutomaticasEvento(db: ClienteSupabase, evento: 
   for (const tipo of ['peso', 'absoluto'] as const) {
     try {
       const preparado = await prepararChavesEvento(db, evento.id, tipo, false);
-      const jaExiste = chavesDoTipo(preparado.existentes as { categoria?: string | null }[], tipo).length > 0;
+      const jaExiste = chavesDoTipo((preparado.existentes || []) as LutaChaveExistente[], tipo).length > 0;
       if (jaExiste && !preparado.precisaAtualizarTriangular) continue;
       const total = await gravarChavesEvento(db, evento, tipo, preparado.lutas);
       gerados.push({ tipo, total });
