@@ -9,7 +9,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
   const { data: evento } = await supabase
     .from("eventos")
-    .select("nome, descricao, banner_url, cidade, estado, data_evento")
+    .select("nome, descricao, cidade, estado, data_evento")
     .eq("id", id)
     .single();
 
@@ -28,17 +28,12 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     ? `${evento.descricao}. Confira inscrições, checagem, chaves, lutas ao vivo e resultados no iTatame.`
     : `Confira inscrições, checagem, chaves, lutas ao vivo e resultados do ${evento.nome}${contexto ? ` — ${contexto}` : ""}.`;
   const canonical = `${baseUrl}/evento/${id}`;
-  const banner = evento.banner_url && /^https?:\/\//i.test(evento.banner_url)
-    ? evento.banner_url
-    : evento.banner_url
-      ? `${baseUrl}${evento.banner_url.startsWith("/") ? "" : "/"}${evento.banner_url}`
-      : "";
   const imagemPrevia = {
-    url: `${baseUrl}/evento/${id}/opengraph-image`,
+    url: `${baseUrl}/evento/${id}/capa`,
     width: 1200,
     height: 630,
     alt: evento.nome,
-    type: "image/png",
+    type: "image/jpeg",
   };
 
   return {
@@ -52,13 +47,13 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
       siteName: "iTatame",
       title: `${evento.nome} | iTatame`,
       description: descricao,
-      images: banner ? [imagemPrevia, { url: banner, width: 1200, height: 630, alt: evento.nome }] : [imagemPrevia],
+      images: [imagemPrevia],
     },
     twitter: {
       card: "summary_large_image",
       title: `${evento.nome} | iTatame`,
       description: descricao,
-      images: [`${baseUrl}/evento/${id}/opengraph-image`],
+      images: [imagemPrevia.url],
     },
   };
 }
