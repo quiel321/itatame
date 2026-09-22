@@ -17,7 +17,7 @@ export function placeholderSlotChaveDeTres(
   luta: { id_visual?: string | number | null; fase?: string | null },
   lado: 1 | 2,
 ) {
-  if (!ehFaseChaveDeTres(luta.fase) && String(luta.id_visual) !== '999') return null;
+  if (!ehFaseChaveDeTres(luta.fase)) return null;
   const id = String(luta.id_visual);
   const seis = String(luta.fase || '').toUpperCase().includes('CHAVE DE 6') || ['3', '4', '101', '102'].includes(id);
   if ((id === '2' || id === '4') && lado === 1) return id === '4' ? 'Perdedor da luta 1 direita' : 'Perdedor da luta 1';
@@ -41,7 +41,7 @@ export function textoAguardandoChaveDeTres(luta: {
   atleta_1?: string | null;
   atleta_2?: string | null;
 }) {
-  if (!ehFaseChaveDeTres(luta.fase) && String(luta.id_visual) !== '999') return null;
+  if (!ehFaseChaveDeTres(luta.fase)) return null;
   const id = String(luta.id_visual);
   const espera1 = slotVazio(luta.atleta_1);
   const espera2 = slotVazio(luta.atleta_2);
@@ -66,7 +66,7 @@ export function textoAguardandoChaveDeTres(luta: {
 }
 
 export function ordemOperacionalChaveTriangular(luta: { id_visual?: string | number | null; fase?: string | null }) {
-  if (!ehFaseChaveDeTres(luta.fase) && String(luta.id_visual) !== '999') return null;
+  if (!ehFaseChaveDeTres(luta.fase)) return null;
   const id = String(luta.id_visual);
   if (id === '1') return 1;
   if (id === '2') return 2;

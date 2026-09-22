@@ -1,6 +1,8 @@
 type LutaVisual = {
   id_visual?: string | number | null;
   proxima_luta?: string | number | null;
+  lado?: string | null;
+  fase?: string | null;
 };
 
 function idsPrimeiraFase(lutas: LutaVisual[]) {
@@ -10,47 +12,190 @@ function idsPrimeiraFase(lutas: LutaVisual[]) {
     .sort((a, b) => a - b);
 }
 
-function idsNoIntervalo(lutas: LutaVisual[], min: number, max: number) {
-  return lutas
-    .map(luta => Number(luta.id_visual))
-    .filter(id => Number.isFinite(id) && id >= min && id < max)
-    .sort((a, b) => a - b)
-    .map(String);
-}
-
 function completar(lista: string[], tamanho: number) {
   const copia = lista.slice(0, tamanho);
   while (copia.length < tamanho) copia.push('');
   return copia;
 }
 
-export function primeiraFasePorLado(
-  lutas: LutaVisual[],
-  abaAtual = 1,
-) {
-  const primeira = idsPrimeiraFase(lutas);
-  const metade = Math.ceil(primeira.length / 2);
-  const offset = (Math.max(1, abaAtual) - 1) * 4;
-  const esquerda: number[] = [];
-  const direita: number[] = [];
-  for (let i = 0; i < 4; i++) {
-    const indice = offset + i;
-    if (indice >= 0 && indice < metade) esquerda.push(primeira[indice]);
-  }
-  for (let i = 0; i < 4; i++) {
-    const indice = metade + offset + i;
-    if (indice >= 0 && indice < primeira.length) direita.push(primeira[indice]);
-  }
-  return { esquerda, direita };
+function lutaPorId(lutas: LutaVisual[], id: string | number) {
+  return lutas.find(luta => String(luta.id_visual) === String(id));
 }
 
-export function tamanhoVisualChave(lutas: LutaVisual[], abaAtual = 1) {
-  const { esquerda, direita } = primeiraFasePorLado(lutas, abaAtual);
-  const n = esquerda.length + direita.length;
+function tamanhoPorQuantidade(n: number) {
   if (n <= 1) return 2;
   if (n <= 2) return 4;
   if (n <= 4) return 8;
-  return 16;
+  if (n <= 8) return 16;
+  if (n <= 16) return 32;
+  return 64;
+}
+
+function proximaInferida(id: number, lutas: LutaVisual[]) {
+  if (!Number.isFinite(id) || id === 999) return null;
+  const ids = new Set(lutas.map(luta => Number(luta.id_visual)).filter(Number.isFinite));
+  if (id < 100) {
+    const tamanho = tamanhoPorQuantidade(idsPrimeiraFase(lutas).length);
+    if (tamanho <= 2) return null;
+    if (tamanho === 4) return '999';
+    return String(101 + Math.floor((id - 1) / 2));
+  }
+  const fase = Math.floor(id / 100);
+  const indice = id % 100;
+  const seguinte = (fase + 1) * 100 + Math.floor((indice - 1) / 2) + 1;
+  if (ids.has(seguinte)) return String(seguinte);
+  if (ids.has(999)) return '999';
+  return null;
+}
+
+function proximaDaLuta(luta: LutaVisual | undefined, id: number, lutas: LutaVisual[]) {
+  if (luta?.proxima_luta != null && String(luta.proxima_luta) !== '') {
+    return String(luta.proxima_luta);
+  }
+  return proximaInferida(id, lutas);
+}
+
+function rotuloFase(fase?: string | null) {
+  const texto = String(fase || '');
+  if (/32/i.test(texto)) return '32-avos';
+  if (/16/i.test(texto)) return '16-avos';
+  if (/oitava/i.test(texto)) return 'Oitavas';
+  if (/quarta/i.test(texto)) return 'Quartas';
+  if (/semi/i.test(texto)) return 'Semifinal';
+  if (/final/i.test(texto)) return 'Final';
+  return '';
+}
+
+function idsQueApontam(lutas: LutaVisual[], destino: string) {
+  return lutas.flatMap(luta => {
+    const id = Number(luta.id_visual);
+    if (!Number.isFinite(id)) return [];
+    return proximaDaLuta(luta, id, lutas) === destino ? [String(luta.id_visual)] : [];
+  });
+}
+
+function colunasAteEncontro(ids: number[], lutas: LutaVisual[]) {
+  const dentro = new Set(ids.map(String));
+  const colunas: string[][] = [];
+  let atual = ids.map(String).filter(Boolean);
+  let encontro = '';
+
+  while (atual.length) {
+    colunas.push(atual);
+    const proximo: string[] = [];
+    const visto = new Set<string>();
+    for (const id of atual) {
+      const next = proximaDaLuta(lutaPorId(lutas, id), Number(id), lutas);
+      if (!next || next === '999' || visto.has(next)) continue;
+      visto.add(next);
+      proximo.push(next);
+    }
+    if (!proximo.length) break;
+    const saida = proximo.find(id => idsQueApontam(lutas, id).some(origem => !dentro.has(origem)));
+    if (saida) {
+      encontro = saida;
+      break;
+    }
+    proximo.forEach(id => dentro.add(id));
+    atual = proximo;
+  }
+
+  if (!colunas.length) return { colunas, encontro };
+  const base = colunas[0].length;
+  return {
+    colunas: colunas.map((coluna, indice) => completar(coluna, Math.max(1, Math.ceil(base / 2 ** indice)))),
+    encontro,
+  };
+}
+
+function caminhoAteFinal(id: string, lutas: LutaVisual[]) {
+  const caminho: string[] = [];
+  let cursor = id;
+  while (cursor && cursor !== '999' && !caminho.includes(cursor)) {
+    caminho.push(cursor);
+    const next = proximaDaLuta(lutaPorId(lutas, cursor), Number(cursor), lutas);
+    if (!next) break;
+    cursor = next;
+  }
+  return caminho;
+}
+
+function colunasDoLado(ids: number[], lutas: LutaVisual[]) {
+  const colunas: string[][] = [];
+  let atual = ids.map(String).filter(Boolean);
+  while (atual.length) {
+    const coluna: string[] = [];
+    const naColuna = new Set<string>();
+    for (const id of atual) {
+      if (!id || id === '999' || naColuna.has(id)) continue;
+      naColuna.add(id);
+      coluna.push(id);
+    }
+    if (!coluna.length) break;
+    colunas.push(coluna);
+
+    const proximo: string[] = [];
+    const visto = new Set<string>();
+    for (const id of coluna) {
+      const next = proximaDaLuta(lutaPorId(lutas, id), Number(id), lutas);
+      if (!next || next === '999' || visto.has(next)) continue;
+      visto.add(next);
+      proximo.push(next);
+    }
+    atual = proximo;
+  }
+
+  if (!colunas.length) return colunas;
+  const base = colunas[0].length;
+  return colunas.map((coluna, indice) => completar(coluna, Math.max(1, Math.ceil(base / 2 ** indice))));
+}
+
+export function primeiraFasePorLado(
+  lutas: LutaVisual[],
+  _abaAtual = 1,
+) {
+  const primeira = idsPrimeiraFase(lutas);
+  const lutasPrimeira = primeira.map(id => lutaPorId(lutas, id));
+  const todosComLado = lutasPrimeira.length > 0 && lutasPrimeira.every(
+    luta => luta?.lado === 'esquerda' || luta?.lado === 'direita',
+  );
+  if (todosComLado) {
+    return {
+      esquerda: primeira.filter((_, indice) => lutasPrimeira[indice]?.lado === 'esquerda'),
+      direita: primeira.filter((_, indice) => lutasPrimeira[indice]?.lado === 'direita'),
+    };
+  }
+  const metade = Math.ceil(primeira.length / 2);
+  return {
+    esquerda: primeira.slice(0, metade),
+    direita: primeira.slice(metade),
+  };
+}
+
+export function tamanhoVisualChave(lutas: LutaVisual[], _abaAtual = 1) {
+  return tamanhoPorQuantidade(idsPrimeiraFase(lutas).length);
+}
+
+function estruturaPainel(lutas: LutaVisual[], abaAtual: number, tamanho: number) {
+  const primeira = idsPrimeiraFase(lutas);
+  const abas = totalAbasArvore(lutas);
+  const aba = Math.min(abas, Math.max(1, abaAtual || 1));
+  const fatia = primeira.slice((aba - 1) * 8, aba * 8);
+  const corte = Math.ceil(fatia.length / 2);
+  const ladoEsquerdo = colunasAteEncontro(fatia.slice(0, corte), lutas);
+  const ladoDireito = colunasAteEncontro(fatia.slice(corte), lutas);
+  const encontro = ladoEsquerdo.encontro || ladoDireito.encontro;
+  const rotulosLados = (ladoEsquerdo.colunas.length ? ladoEsquerdo.colunas : ladoDireito.colunas)
+    .map((coluna, indice) => rotuloFase(lutaPorId(lutas, coluna.find(Boolean) || '')?.fase) || ['32-avos', '16-avos', 'Oitavas', 'Quartas'][indice] || '');
+
+  return {
+    tamanho,
+    esquerda: ladoEsquerdo.colunas,
+    direita: ladoDireito.colunas,
+    final: '999',
+    caminho: encontro ? caminhoAteFinal(encontro, lutas) : [],
+    rotulos: { lados: rotulosLados, centro: 'Final' },
+  };
 }
 
 export function estruturaVisualChave(lutas: LutaVisual[], abaAtual = 1) {
@@ -60,6 +205,9 @@ export function estruturaVisualChave(lutas: LutaVisual[], abaAtual = 1) {
   const final = ids.has('999')
     ? '999'
     : (esquerda[0] && !direita.length ? String(esquerda[0]) : '999');
+  const rotulos = rotulosColunasArvore(tamanho);
+
+  if (totalAbasArvore(lutas) > 1) return estruturaPainel(lutas, abaAtual, tamanho);
 
   if (tamanho <= 2) {
     return {
@@ -67,31 +215,18 @@ export function estruturaVisualChave(lutas: LutaVisual[], abaAtual = 1) {
       esquerda: [] as string[][],
       direita: [] as string[][],
       final,
+      caminho: [] as string[],
+      rotulos,
     };
   }
 
-  const matchesLado = tamanho / 4;
-  const colunasEsquerda = [completar(esquerda.map(String), matchesLado)];
-  const colunasDireita = [completar(direita.map(String), matchesLado)];
-
-  const intermediarias: string[][] = [];
-  if (tamanho >= 16) intermediarias.push(idsNoIntervalo(lutas, 100, 200));
-  if (tamanho >= 8) {
-    intermediarias.push(tamanho >= 16 ? idsNoIntervalo(lutas, 200, 300) : idsNoIntervalo(lutas, 100, 200));
-  }
-
-  intermediarias.forEach((idsRodada, indice) => {
-    const esperados = matchesLado / (2 ** (indice + 1));
-    const metadeRodada = Math.ceil(idsRodada.length / 2);
-    colunasEsquerda.push(completar(idsRodada.slice(0, metadeRodada), esperados));
-    colunasDireita.push(completar(idsRodada.slice(metadeRodada), esperados));
-  });
-
   return {
     tamanho,
-    esquerda: colunasEsquerda,
-    direita: colunasDireita,
+    esquerda: colunasDoLado(esquerda, lutas),
+    direita: colunasDoLado(direita, lutas),
     final,
+    caminho: [] as string[],
+    rotulos,
   };
 }
 
@@ -99,7 +234,19 @@ export function rotulosColunasArvore(tamanho: number) {
   if (tamanho <= 2) return { lados: [] as string[], centro: 'Final' };
   if (tamanho === 4) return { lados: ['Semifinal'], centro: 'Final' };
   if (tamanho === 8) return { lados: ['Quartas', 'Semifinal'], centro: 'Final' };
-  return { lados: ['Oitavas', 'Quartas', 'Semifinal'], centro: 'Final' };
+  if (tamanho === 16) return { lados: ['Oitavas', 'Quartas', 'Semifinal'], centro: 'Final' };
+  if (tamanho === 32) return { lados: ['16-avos', 'Oitavas', 'Quartas', 'Semifinal'], centro: 'Final' };
+  return { lados: ['32-avos', '16-avos', 'Oitavas', 'Quartas', 'Semifinal'], centro: 'Final' };
+}
+
+export function rotulosLadoArvore(rotulos: string[], reverso = false) {
+  return reverso ? [...rotulos].reverse() : rotulos;
+}
+
+export function totalAbasArvore(lutas: LutaVisual[] = []) {
+  const quantidade = idsPrimeiraFase(lutas).length;
+  if (quantidade <= 16) return 1;
+  return Math.max(1, Math.ceil(quantidade / 8));
 }
 
 export function idsPrimeiraFasePorLado(

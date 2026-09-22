@@ -5,6 +5,7 @@ import { useParams } from "next/navigation"
 import { supabase } from "@/app/lib/supabase"
 import { rotuloLuta } from "@/app/lib/lutas-rotulos"
 import ArvoreChaveDesktop from "@/app/components/ArvoreChaveDesktop"
+import { totalAbasArvore } from "@/app/lib/chave-visual"
 
 export default function ChavesPage() {
   const params = useParams()
@@ -44,7 +45,7 @@ export default function ChavesPage() {
     carregarFotos();
   }, [])
 
-  useEffect(() => { carregarChaves() }, [categoriaSelecionada])
+  useEffect(() => { carregarChaves(); setAbaAtual(1) }, [categoriaSelecionada])
 
   const categoriasFiltradas = categoriasMenu.filter((cat) => {
     const isAbsoluto = cat.toLowerCase().includes("absoluto")
@@ -56,13 +57,7 @@ export default function ChavesPage() {
     setAbaAtual(1) 
   }, [tipoCategoria, categoriasMenu])
 
-  const atletas = lutas.flatMap((luta: any) => [
-    { numero: String(luta.numero_1 || ""), nome: luta.atleta_1 || "", equipe: luta.equipe_1 || "" },
-    { numero: String(luta.numero_2 || ""), nome: luta.atleta_2 || "", equipe: luta.equipe_2 || "" }
-  ])
-
-  const maxNumero = atletas.length > 0 ? Math.max(...atletas.map(a => parseInt(a.numero) || 0)) : 0;
-  const totalAbas = Math.max(1, Math.ceil(maxNumero / 16));
+  const totalAbas = totalAbasArvore(lutas);
 
   const limparNome = (nome: string | null) => {
     if (!nome) return "";
@@ -140,7 +135,7 @@ export default function ChavesPage() {
         </div>
 
         {totalAbas > 1 && (
-          <div className="flex justify-center gap-2 mb-6 flex-wrap px-4">
+          <div className="mb-6 hidden flex-wrap justify-center gap-2 px-4 md:flex">
             {Array.from({ length: totalAbas }).map((_, i) => (
               <button key={i} onClick={() => setAbaAtual(i + 1)} className={`px-6 py-2 rounded-lg font-bold transition-all ${abaAtual === i + 1 ? 'bg-red-600 text-white' : 'bg-zinc-800 text-zinc-500 hover:bg-zinc-700'}`}>
                 {i + 1}/{totalAbas}

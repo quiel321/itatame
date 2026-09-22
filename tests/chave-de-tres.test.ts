@@ -10,7 +10,7 @@ import {
   resumoHumanoChave,
 } from "../app/lib/chave-de-tres";
 import { rotuloLuta } from "../app/lib/lutas-rotulos";
-import { estruturaVisualChave, idsPrimeiraFasePorLado } from "../app/lib/chave-visual";
+import { estruturaVisualChave, idsPrimeiraFasePorLado, rotulosColunasArvore, rotulosLadoArvore, totalAbasArvore } from "../app/lib/chave-visual";
 import { montarChaves, prepararGrupos } from "../app/lib/gerar-chaves";
 import type { InscricaoCompeticao } from "../app/lib/categorias-competicao";
 
@@ -145,6 +145,119 @@ test("chave de 6 coloca a decisão 102 só à direita", () => {
   assert.deepEqual(arvore.direita[0], ["3", "4"]);
   assert.deepEqual(arvore.esquerda[1], ["101"]);
   assert.deepEqual(arvore.direita[1], ["102"]);
+});
+
+test("árvore de 32 mostra a semifinal e não fatia 1/2 2/2", () => {
+  const lutas = [];
+  for (let i = 0; i < 16; i++) {
+    lutas.push({
+      id_visual: String(i + 1),
+      fase: "16-Avos",
+      lado: i < 8 ? "esquerda" : "direita",
+      proxima_luta: 101 + Math.floor(i / 2),
+    });
+  }
+  for (let i = 0; i < 8; i++) {
+    lutas.push({
+      id_visual: String(101 + i),
+      fase: "Oitavas",
+      lado: i < 4 ? "esquerda" : "direita",
+      proxima_luta: 201 + Math.floor(i / 2),
+    });
+  }
+  for (let i = 0; i < 4; i++) {
+    lutas.push({
+      id_visual: String(201 + i),
+      fase: "Quartas",
+      lado: i < 2 ? "esquerda" : "direita",
+      proxima_luta: 301 + Math.floor(i / 2),
+    });
+  }
+  lutas.push({
+    id_visual: "301",
+    fase: "Semifinal",
+    lado: "esquerda",
+    proxima_luta: 999,
+    atleta_1: "Nego Dario",
+    atleta_2: "Geraldo",
+    vencedor: "Nego Dario",
+  });
+  lutas.push({
+    id_visual: "302",
+    fase: "Semifinal",
+    lado: "direita",
+    proxima_luta: 999,
+    atleta_1: "Ezequiel Castro",
+    atleta_2: "Queiroz Lima",
+    vencedor: "Queiroz Lima",
+  });
+  lutas.push({
+    id_visual: "999",
+    fase: "Final",
+    lado: "centro",
+    proxima_luta: null,
+    atleta_1: "Nego Dario",
+    atleta_2: "Queiroz Lima",
+    vencedor: "Nego Dario",
+  });
+
+  const arvore = estruturaVisualChave(lutas);
+  assert.equal(arvore.tamanho, 32);
+  assert.equal(arvore.esquerda.length, 4);
+  assert.equal(arvore.direita.length, 4);
+  assert.deepEqual(arvore.esquerda[3], ["301"]);
+  assert.deepEqual(arvore.direita[3], ["302"]);
+  assert.equal(arvore.final, "999");
+  assert.equal(totalAbasArvore(lutas), 1);
+
+  const rotulos = rotulosColunasArvore(32).lados;
+  assert.deepEqual(rotulos, ["16-avos", "Oitavas", "Quartas", "Semifinal"]);
+  assert.deepEqual(rotulosLadoArvore(rotulos, true), ["Semifinal", "Quartas", "Oitavas", "16-avos"]);
+});
+
+function chaveGerada(quantidade: number) {
+  return montarChaves("evento-teste", prepararGrupos(atletas(Array.from({ length: quantidade }, (_, indice) => ({
+    atleta: `Atleta ${indice + 1}`,
+    academia: indice % 2 ? "PORRADA" : "SPARTAN",
+    equipe: indice % 2 ? "PORRADA" : "LEGADO",
+  }))), "peso", [categoriaLeve]));
+}
+
+test("33 atletas abrem quatro galhos e cada painel segue até a final", () => {
+  const lutas = chaveGerada(33);
+  assert.equal(totalAbasArvore(lutas), 4);
+
+  const painel1 = estruturaVisualChave(lutas, 1);
+  assert.deepEqual(painel1.esquerda[0], ["1", "2", "3", "4"]);
+  assert.deepEqual(painel1.direita[0], ["5", "6", "7", "8"]);
+  assert.equal(painel1.esquerda.flat().includes("301"), false);
+  assert.equal(painel1.direita.flat().includes("401"), false);
+  assert.deepEqual(painel1.caminho, ["301", "401"]);
+  assert.equal(painel1.final, "999");
+  assert.deepEqual(painel1.rotulos.lados, ["32-avos", "16-avos", "Oitavas"]);
+  assert.deepEqual(rotulosLadoArvore(painel1.rotulos.lados, true), ["Oitavas", "16-avos", "32-avos"]);
+
+  const painel2 = estruturaVisualChave(lutas, 2);
+  assert.deepEqual(painel2.esquerda[0], ["9", "10", "11", "12"]);
+  assert.deepEqual(painel2.caminho, ["302", "401"]);
+
+  const painel4 = estruturaVisualChave(lutas, 4);
+  assert.deepEqual(painel4.direita[0], ["29", "30", "31", "32"]);
+  assert.deepEqual(painel4.caminho, ["304", "402"]);
+  assert.equal(painel4.caminho.includes("999"), false);
+});
+
+test("32 atletas continuam numa árvore só, mesmo se a aba pedir outro painel", () => {
+  const lutas = chaveGerada(32);
+  assert.equal(totalAbasArvore(lutas), 1);
+  const arvore = estruturaVisualChave(lutas, 2);
+  assert.deepEqual(arvore.caminho, []);
+  assert.equal(arvore.esquerda.flat().includes("301"), true);
+  assert.equal(arvore.direita.flat().includes("302"), true);
+});
+
+test("lado direito de 8 espelha Quartas no extremo e Semifinal no centro", () => {
+  assert.deepEqual(rotulosLadoArvore(["Quartas", "Semifinal"], true), ["Semifinal", "Quartas"]);
 });
 
 test("seis atletas geram duas chaves de 3 e a final", () => {

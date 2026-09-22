@@ -9,6 +9,7 @@ import { rotuloLuta } from "@/app/lib/lutas-rotulos"
 import { rotuloCategoriaAoVivo } from "@/app/lib/categorias-competicao"
 import { lutasFormamChaveDeTres, placeholderSlotChaveDeTres, resumoHumanoChave, textoAguardandoChaveDeTres, textoOuroAposChecagem } from "@/app/lib/chave-de-tres"
 import ArvoreChaveDesktop from "@/app/components/ArvoreChaveDesktop"
+import { totalAbasArvore } from "@/app/lib/chave-visual"
 
 const formatarHorarioEstimado = (isoString: string | null) => {
   if (!isoString) return '';
@@ -117,6 +118,10 @@ export default function ChavesPublicoPage() {
   })
 
   useEffect(() => {
+    setAbaAtual(1)
+  }, [categoriaSelecionada])
+
+  useEffect(() => {
     setCategoriaSelecionada((atual) => {
       if (atual && categoriasFiltradas.includes(atual)) return atual;
       return categoriasFiltradas[0] || "";
@@ -131,13 +136,7 @@ export default function ChavesPublicoPage() {
     }
   }, [termoBusca, categoriasVisiveis, categoriaSelecionada])
 
-  const atletas = lutas.flatMap((luta: any) => [
-    { numero: String(luta.numero_1 || ""), nome: luta.atleta_1 || "", equipe: luta.equipe_1 || "" },
-    { numero: String(luta.numero_2 || ""), nome: luta.atleta_2 || "", equipe: luta.equipe_2 || "" }
-  ])
-
-  const maxNumero = atletas.length > 0 ? Math.max(...atletas.map(a => parseInt(a.numero) || 0)) : 0;
-  const totalAbas = Math.max(1, Math.ceil(maxNumero / 16));
+  const totalAbas = totalAbasArvore(lutas);
 
   const limparNome = (nome: string | null) => {
     if (!nome) return "";
@@ -351,7 +350,7 @@ export default function ChavesPublicoPage() {
         )}
 
         {totalAbas > 1 && (
-          <div className="mb-4 mt-5 flex flex-wrap justify-center gap-2 px-4">
+          <div className="mb-4 mt-5 hidden flex-wrap justify-center gap-2 px-4 md:flex">
             {Array.from({ length: totalAbas }).map((_, i) => (
               <button key={i} onClick={() => setAbaAtual(i + 1)} className={`rounded-lg px-6 py-2 font-bold transition-all ${abaAtual === i + 1 ? "bg-red-600 text-white" : "bg-zinc-800 text-zinc-500 hover:bg-zinc-700"}`}>
                 {i + 1}/{totalAbas}

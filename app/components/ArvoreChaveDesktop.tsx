@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { placeholderSlotChaveDeTres } from '@/app/lib/chave-de-tres';
-import { estruturaVisualChave, rotulosColunasArvore } from '@/app/lib/chave-visual';
+import { estruturaVisualChave, rotulosColunasArvore, rotulosLadoArvore } from '@/app/lib/chave-visual';
 
 export type LutaArvore = {
   id?: string | number;
@@ -210,7 +210,7 @@ function LadoArvore({
         style={{ gridTemplateColumns: templateCols }}
       >
         {colunas.flatMap((_, indice) => {
-          const rotulo = rotulos[indice] || '';
+          const rotulo = rotulosLadoArvore(rotulos, reverso)[indice] || '';
           return reverso
             ? [
                 <span key={`c-${indice}`} />,
@@ -256,30 +256,73 @@ function LadoArvore({
   );
 }
 
+function tituloDaFase(luta?: LutaArvore) {
+  const fase = String(luta?.fase || '');
+  if (/semi/i.test(fase)) return 'Semifinal';
+  if (/quarta/i.test(fase)) return 'Quartas';
+  if (/oitava/i.test(fase)) return 'Oitavas';
+  if (/16/i.test(fase)) return '16-avos';
+  if (/32/i.test(fase)) return '32-avos';
+  if (/final/i.test(fase)) return 'Final';
+  return fase || 'Fase';
+}
+
+function CartaoCentro({
+  luta,
+  titulo,
+  final = false,
+  buscarFoto,
+  destaque,
+  onAvancar,
+}: {
+  luta?: LutaArvore;
+  titulo: string;
+  final?: boolean;
+  buscarFoto: (id?: number | null) => string | null;
+  destaque: string;
+  onAvancar?: (...args: unknown[]) => void;
+}) {
+  const a = slot(luta, 1, buscarFoto, onAvancar);
+  const b = slot(luta, 2, buscarFoto, onAvancar);
+  return (
+    <div className={`w-full rounded-2xl border px-3 py-3 ${final ? 'border-red-500/30 bg-[#070b16] shadow-[0_0_18px_rgba(239,68,68,0.12)]' : 'border-yellow-500/25 bg-[#070b16]'}`}>
+      <p className={`mb-2 text-center text-[10px] font-black uppercase tracking-widest ${final ? 'text-red-500' : 'text-yellow-500'}`}>{titulo}</p>
+      <Atleta {...a} centralizado destaque={marcaDestaque(a, destaque)} />
+      <p className="py-1 text-center text-[9px] font-black uppercase tracking-widest text-zinc-600">vs</p>
+      <Atleta {...b} centralizado destaque={marcaDestaque(b, destaque)} />
+    </div>
+  );
+}
+
 function CentroFinal({
   final,
+  caminho,
   buscarFoto,
   destaque,
   onAvancar,
   rotulo,
 }: {
   final?: LutaArvore;
+  caminho: LutaArvore[];
   buscarFoto: (id?: number | null) => string | null;
   destaque: string;
   onAvancar?: (...args: unknown[]) => void;
   rotulo: string;
 }) {
-  const a = slot(final, 1, buscarFoto, onAvancar);
-  const b = slot(final, 2, buscarFoto, onAvancar);
   return (
-    <div className="relative mx-1 flex w-[180px] shrink-0 flex-col items-center justify-center md:w-[200px]">
-      <p className="mb-2 text-[10px] font-black uppercase tracking-[0.2em] text-yellow-500">{rotulo}</p>
-      <div className="w-full rounded-2xl border border-red-500/30 bg-[#070b16] px-3 py-3 shadow-[0_0_18px_rgba(239,68,68,0.12)]">
-        <p className="mb-2 text-center text-[10px] font-black uppercase tracking-widest text-red-500">Luta final</p>
-        <Atleta {...a} centralizado destaque={marcaDestaque(a, destaque)} />
-        <p className="py-1 text-center text-[9px] font-black uppercase tracking-widest text-zinc-600">vs</p>
-        <Atleta {...b} centralizado destaque={marcaDestaque(b, destaque)} />
-      </div>
+    <div className="relative mx-1 flex w-[180px] shrink-0 flex-col items-center justify-center gap-3 md:w-[200px]">
+      {caminho.length === 0 && <p className="text-[10px] font-black uppercase tracking-[0.2em] text-yellow-500">{rotulo}</p>}
+      {caminho.map(luta => (
+        <CartaoCentro
+          key={String(luta.id_visual)}
+          luta={luta}
+          titulo={tituloDaFase(luta)}
+          buscarFoto={buscarFoto}
+          destaque={destaque}
+          onAvancar={onAvancar}
+        />
+      ))}
+      <CartaoCentro luta={final} titulo="Luta final" final buscarFoto={buscarFoto} destaque={destaque} onAvancar={onAvancar} />
     </div>
   );
 }
@@ -301,8 +344,9 @@ export default function ArvoreChaveDesktop({
 }) {
   const [zoom, setZoom] = useState(1);
   const estrutura = useMemo(() => estruturaVisualChave(lutas, abaAtual), [lutas, abaAtual]);
-  const rotulos = rotulosColunasArvore(estrutura.tamanho);
+  const rotulos = estrutura.rotulos || rotulosColunasArvore(estrutura.tamanho);
   const final = achar(lutas, estrutura.final) || lutas.find(luta => !luta.proxima_luta);
+  const caminho = (estrutura.caminho || []).map(id => achar(lutas, id)).filter((luta): luta is LutaArvore => Boolean(luta));
   const campeaoNome = final?.vencedor && !fantasma(final.vencedor) ? String(final.vencedor) : '';
   const campeao: AtletaSlot = {
     nome: campeaoNome,
@@ -346,6 +390,7 @@ export default function ArvoreChaveDesktop({
             )}
             <CentroFinal
               final={final}
+              caminho={caminho}
               buscarFoto={buscarFoto}
               destaque={destaque}
               onAvancar={onAvancar}
