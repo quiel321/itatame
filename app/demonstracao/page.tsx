@@ -18,7 +18,7 @@ const paradas = [
 type ParadaId = (typeof paradas)[number]["id"];
 
 export default function DemonstracaoPage() {
-  const [ativa, setAtiva] = useState<ParadaId>("inscricao");
+  const [ativa, setAtiva] = useState<ParadaId>("aviso");
 
   useEffect(() => {
     const alvos = paradas
