@@ -3,10 +3,12 @@ import test from "node:test";
 import {
   FAIXA_TODAS_AS_FAIXAS,
   absolutoDaInscricao,
+  categoriaCompativel,
   chavesDaInscricao,
   grupoInscricao,
   rotuloCategoriaAoVivo,
   serializarFaixasCategoria,
+  validarCategoria,
   type CategoriaCompeticao,
 } from "../app/lib/categorias-competicao";
 import { prepararGrupos } from "../app/lib/gerar-chaves";
@@ -49,6 +51,42 @@ test("absoluto masculino reúne todas as faixas de juvenil a master", () => {
   assert.equal(absolutoDaInscricao({ idade: 16, sexo: "Masculino", faixa: "Branca", modalidade: "Jiu-Jitsu" }, categorias)?.id, "abs-masc-todas");
   assert.equal(absolutoDaInscricao({ idade: 34, sexo: "Masculino", faixa: "Preta", modalidade: "Jiu-Jitsu" }, categorias)?.id, "abs-masc-todas");
   assert.equal(absolutoDaInscricao({ idade: 15, sexo: "Masculino", faixa: "Azul", modalidade: "Jiu-Jitsu" }, categorias), null);
+});
+
+test("categoria de peso infantil aceita o grupo de faixas da tabela", () => {
+  const faixaBrancaCinza = serializarFaixasCategoria(["Branca", "Cinza"]);
+  const faixaColoridas = serializarFaixasCategoria(["Verde", "Amarela", "Laranja"]);
+  assert.equal(faixaBrancaCinza, "Cinza · Branca");
+  assert.equal(faixaColoridas, "Amarela · Laranja · Verde");
+  const leve: CategoriaCompeticao = {
+    ...femininoBranca,
+    id: "mirim-leve",
+    nome: "Mirim Leve",
+    faixa: faixaBrancaCinza,
+    idade_min: 7,
+    idade_max: 8,
+    peso_min: 0,
+    peso_max: 27,
+    tempo_minutos: 3,
+    tipo: "peso",
+  };
+  const pesadoInfantil: CategoriaCompeticao = {
+    ...leve,
+    id: "infantil-pesado",
+    nome: "Infantil I Pesado",
+    faixa: faixaColoridas,
+    idade_min: 9,
+    idade_max: 10,
+    peso_min: 36,
+    peso_max: null,
+  };
+  assert.equal(categoriaCompativel(leve, { idade: 8, sexo: "Feminino", faixa: "Cinza", modalidade: "Jiu-Jitsu", peso: 27 }), true);
+  assert.equal(categoriaCompativel(leve, { idade: 8, sexo: "Feminino", faixa: "Branca", modalidade: "Jiu-Jitsu", peso: 20 }), true);
+  assert.equal(categoriaCompativel(leve, { idade: 8, sexo: "Feminino", faixa: "Amarela", modalidade: "Jiu-Jitsu", peso: 20 }), false);
+  assert.equal(categoriaCompativel(pesadoInfantil, { idade: 10, sexo: "Feminino", faixa: "Verde", modalidade: "Jiu-Jitsu", peso: 36.1 }), true);
+  assert.equal(categoriaCompativel(pesadoInfantil, { idade: 10, sexo: "Feminino", faixa: "Verde", modalidade: "Jiu-Jitsu", peso: 34 }), false);
+  assert.doesNotThrow(() => validarCategoria(leve));
+  assert.throws(() => validarCategoria({ ...leve, faixa: FAIXA_TODAS_AS_FAIXAS }), /ao menos uma faixa/);
 });
 
 test("absoluto feminino branca e azul reúne só essas faixas na mesma chave", () => {

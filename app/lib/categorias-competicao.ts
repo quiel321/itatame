@@ -128,7 +128,7 @@ export function categoriaCompativelSemPeso(c: CategoriaCompeticao, i: InscricaoC
   return c.ativa && i.idade !== '' && i.idade != null && Number.isInteger(idade)
     && idade >= c.idade_min && idade <= c.idade_max
     && normalizarCompeticao(i.sexo) === normalizarCompeticao(c.sexo)
-    && normalizarCompeticao(i.faixa) === normalizarCompeticao(c.faixa)
+    && faixaAtletaCompativel(c.faixa, i.faixa)
     && (!i.modalidade || normalizarCompeticao(i.modalidade) === normalizarCompeticao(c.modalidade));
 }
 
@@ -208,7 +208,7 @@ export function absolutoDaInscricao(i: InscricaoCompeticao, categorias: Categori
 export function validarCategoria(c: Omit<CategoriaCompeticao, 'id' | 'evento_id'>) {
   if (!['peso', 'absoluto'].includes(c.tipo)) throw new Error('Informe se a categoria é de peso ou absoluto.');
   if (!c.nome.trim() || !c.modalidade.trim() || !c.faixa.trim() || !['Masculino', 'Feminino'].includes(c.sexo)) throw new Error('Informe nome, modalidade, sexo e faixa.');
-  if (c.tipo === 'peso' && (faixaEhLivre(c.faixa) || faixasDaCategoria(c.faixa).length !== 1)) throw new Error('Categoria de peso precisa de uma faixa específica.');
+  if (c.tipo === 'peso' && (faixaEhLivre(c.faixa) || !faixasDaCategoria(c.faixa).length)) throw new Error('Categoria de peso precisa de ao menos uma faixa.');
   if (c.tipo === 'absoluto' && !faixaEhLivre(c.faixa) && !faixasDaCategoria(c.faixa).length) throw new Error('Escolha as faixas que entram neste absoluto.');
   if (![c.idade_min, c.idade_max].every(Number.isInteger) || c.idade_min < 4 || c.idade_max > 100 || c.idade_min > c.idade_max) throw new Error('Confira o intervalo de idades.');
   if (!Number.isFinite(c.peso_min) || c.peso_min < 0 || (c.peso_max != null && (!Number.isFinite(c.peso_max) || c.peso_max <= c.peso_min))) throw new Error('Confira o intervalo de peso.');
