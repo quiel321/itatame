@@ -247,6 +247,39 @@ test("33 atletas abrem quatro galhos e cada painel segue até a final", () => {
   assert.equal(painel4.caminho.includes("999"), false);
 });
 
+test("65 atletas de peso abrem duas chaves e ninguém fica de fora", () => {
+  const preparados = prepararGrupos(atletas(Array.from({ length: 65 }, (_, indice) => ({
+    atleta: `Atleta ${indice + 1}`,
+    academia: indice % 2 ? "PORRADA" : "SPARTAN",
+    equipe: indice % 2 ? "PORRADA" : "LEGADO",
+  }))), "peso", [categoriaLeve]);
+  const grupos = Object.values(preparados.grupos);
+  assert.equal(grupos.length, 2);
+  assert.equal(grupos.reduce((total, grupo) => total + grupo.length, 0), 65);
+  assert.equal(grupos.every((grupo) => grupo.length <= 64), true);
+  assert.equal(Math.abs(grupos[0].length - grupos[1].length) <= 1, true);
+  const nomes = Object.values(preparados.metadados).map((meta) => meta.categoria);
+  assert.equal(nomes.some((nome) => nome.endsWith("Chave 1")), true);
+  assert.equal(nomes.some((nome) => nome.endsWith("Chave 2")), true);
+  assert.equal(nomes.some((nome) => nome.toLowerCase().includes("absoluto")), false);
+
+  const lutas = montarChaves("evento-teste", preparados);
+  const categoriasGeradas = [...new Set(lutas.map((luta) => String(luta.categoria)))];
+  assert.equal(categoriasGeradas.length, 2);
+  const abas = categoriasGeradas.map((categoria) => totalAbasArvore(lutas.filter((luta) => luta.categoria === categoria))).sort();
+  assert.deepEqual(abas, [1, 4]);
+  assert.equal(categoriasGeradas.every((categoria) => lutas.some((luta) => luta.categoria === categoria && String(luta.id_visual) === "999")), true);
+});
+
+test("64 atletas de peso continuam numa categoria só", () => {
+  const preparados = prepararGrupos(atletas(Array.from({ length: 64 }, (_, indice) => ({
+    atleta: `Atleta ${indice + 1}`,
+    academia: indice % 2 ? "PORRADA" : "SPARTAN",
+  }))), "peso", [categoriaLeve]);
+  assert.equal(Object.keys(preparados.grupos).length, 1);
+  assert.equal(Object.values(preparados.metadados).some((meta) => meta.categoria.includes("Chave")), false);
+});
+
 test("32 atletas continuam numa árvore só, mesmo se a aba pedir outro painel", () => {
   const lutas = chaveGerada(32);
   assert.equal(totalAbasArvore(lutas), 1);

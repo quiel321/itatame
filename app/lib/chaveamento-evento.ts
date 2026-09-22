@@ -167,7 +167,7 @@ export async function prepararChavesEvento(
       equipes.set(atleta.equipe_chave, atual);
     });
     return {
-      categoria: categoria.replace('__', ' · '),
+      categoria: gruposPreparados.metadados[chave]?.categoria || categoria.replace('__', ' · '),
       atletas: atletas.length,
       equipesAcimaDoLimite: Array.from(equipes.values()).filter((equipe) => equipe.total > 2),
     };

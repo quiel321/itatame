@@ -152,10 +152,52 @@ export function prepararGrupos(inscricoes: InscricaoCompeticao[], tipo: 'peso' |
     metadados[chave] = grupo;
   }
   for (const [chave, atletas] of Object.entries(grupos)) {
-    if (atletas.length > 64) throw new Error(`${chave}: mais de 64 atletas. Nenhum atleta será descartado.`);
     if (new Set(atletas.map(a => a.atleta_id)).size !== atletas.length) throw new Error(`${chave}: atleta duplicado.`);
   }
+  dividirGruposAcimaDe64(grupos, metadados);
   return { grupos, metadados };
+}
+
+const LIMITE_ATLETAS_POR_CHAVE = 64;
+
+function distribuirEmChaves(atletas: Participante[], partes: number) {
+  const baldes: Participante[][] = Array.from({ length: partes }, () => []);
+  const porEquipe = new Map<string, Participante[]>();
+  atletas.forEach((atleta) => {
+    const lista = porEquipe.get(atleta.equipe_chave) || [];
+    lista.push(atleta);
+    porEquipe.set(atleta.equipe_chave, lista);
+  });
+  [...porEquipe.values()]
+    .sort((a, b) => b.length - a.length)
+    .forEach((equipe) => {
+      equipe.forEach((atleta) => {
+        const destino = baldes
+          .map((balde, indice) => ({ indice, total: balde.length }))
+          .sort((a, b) => a.total - b.total || a.indice - b.indice)[0];
+        baldes[destino.indice].push(atleta);
+      });
+    });
+  return baldes.filter((balde) => balde.length > 0);
+}
+
+function dividirGruposAcimaDe64(
+  grupos: Record<string, Participante[]>,
+  metadados: Record<string, ReturnType<typeof grupoInscricao>>,
+) {
+  for (const [chave, atletas] of Object.entries(grupos)) {
+    if (atletas.length <= LIMITE_ATLETAS_POR_CHAVE) continue;
+    const meta = metadados[chave];
+    const partes = Math.ceil(atletas.length / LIMITE_ATLETAS_POR_CHAVE);
+    const fatias = distribuirEmChaves(atletas, partes);
+    delete grupos[chave];
+    delete metadados[chave];
+    fatias.forEach((fatia, indice) => {
+      const novaChave = `${chave}::chave-${indice + 1}`;
+      grupos[novaChave] = fatia;
+      metadados[novaChave] = { ...meta, categoria: `${meta.categoria} · Chave ${indice + 1}` };
+    });
+  }
 }
   function embaralhar<T>(lista: T[]) {
     for (let i = lista.length - 1; i > 0; i--) {

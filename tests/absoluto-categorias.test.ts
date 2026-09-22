@@ -97,6 +97,28 @@ test("ranking ignora medalha de absoluto quando o edital não pontua essa chave"
   assert.equal(pontua.atletas.find(atleta => atleta.atleta_id === "2")?.prata, 1);
 });
 
+test("absoluto com mais de 64 abre chaves numeradas e continua sendo absoluto", () => {
+  const inscricoes = Array.from({ length: 65 }, (_, indice) => ({
+    id: indice + 1,
+    atleta: `Atleta ${indice + 1}`,
+    atleta_id: indice + 1,
+    absoluto: true,
+    idade: 25,
+    sexo: "Masculino",
+    faixa: indice % 2 ? "Preta" : "Branca",
+    modalidade: "Jiu-Jitsu",
+    categoria: "Leve",
+    equipe: indice % 2 ? "PORRADA" : "LEGADO",
+    academia: indice % 2 ? "PORRADA" : "SPARTAN",
+  }));
+  const preparados = prepararGrupos(inscricoes, "absoluto", categorias);
+  const nomes = Object.values(preparados.metadados).map((meta) => meta.categoria);
+  assert.equal(nomes.length, 2);
+  assert.equal(nomes.every((nome) => nome.toLowerCase().includes("absoluto") && /Chave [12]$/.test(nome)), true);
+  assert.equal(Object.values(preparados.grupos).reduce((total, grupo) => total + grupo.length, 0), 65);
+  assert.equal(Object.values(preparados.grupos).every((grupo) => grupo.length <= 64), true);
+});
+
 test("a chave de absoluto não mistura os dois grupos cadastrados", () => {
   const preparados = prepararGrupos([
     { id: 1, atleta: "Ana", atleta_id: 1, absoluto: true, idade: 22, sexo: "Feminino", faixa: "Branca", modalidade: "Jiu-Jitsu", categoria: "Pena", equipe: "A" },
