@@ -175,6 +175,10 @@ export default function AprovarOrganizadoresPage() {
                   </div>
                 </div>
 
+                <Link href={`/super-admin/suporte?org=${org.user_id || org.id}`} className="mb-4 block rounded-xl border border-yellow-500/30 bg-yellow-500/10 py-2.5 text-center text-[10px] font-black uppercase tracking-widest text-yellow-200">
+                  Ver painel deste organizador
+                </Link>
+
                 <div className="mb-4 rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-3">
                   <label className="mb-2 block text-[9px] font-black uppercase tracking-widest text-indigo-300">Plano comercial · somente Super Admin</label>
                   <select value={getPlanoComercial(org.plano_comercial).id} onChange={(event) => alterarPlano(org.id, event.target.value as PlanoComercialId)} disabled={loadingAcao === org.id} className="w-full rounded-lg border border-white/10 bg-black px-3 py-2.5 text-[10px] font-black uppercase tracking-widest text-white outline-none disabled:opacity-50">

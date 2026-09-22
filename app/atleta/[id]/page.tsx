@@ -1,9 +1,30 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
 import { calcularResultadosChaves } from "@/app/lib/ranking-eventos";
+
+function partesNome(valor?: string | null) {
+  return String(valor || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .split(/[^a-z]+/)
+    .filter((parte) => parte.length > 1);
+}
+
+function alunoDoMestre(
+  aluno: { professor?: string | null; professor_id?: string | null },
+  mestre: { user_id?: string | null; nome?: string | null },
+) {
+  if (aluno.professor_id && mestre.user_id && aluno.professor_id === mestre.user_id) return true;
+  const partes = partesNome(aluno.professor);
+  if (partes.length < 2) return false;
+  const alvo = new Set(partesNome(mestre.nome));
+  return partes.every((parte) => alvo.has(parte));
+}
 
 export default function PerfilPublicoAtleta() {
   const params = useParams();
@@ -13,6 +34,7 @@ export default function PerfilPublicoAtleta() {
   const [loading, setLoading] = useState(true);
   const [atleta, setAtleta] = useState<any>(null);
   const [historico, setHistorico] = useState<any[]>([]);
+  const [alunos, setAlunos] = useState<any[]>([]);
   const [estatisticas, setEstatisticas] = useState({ ouro: 0, prata: 0, bronze: 0, lutas: 0 });
   const [copiado, setCopiado] = useState(false);
 
@@ -23,7 +45,7 @@ export default function PerfilPublicoAtleta() {
       // 1. Busca os dados do Atleta
       const { data: atlData } = await supabase
         .from("atletas_publico")
-        .select("id, user_id, nome, foto_url, faixa, equipe, academia, professor, cidade, nascimento, peso, ouro, prata, bronze, vitorias, derrotas, vitorias_wo, lutas")
+        .select("id, user_id, nome, foto_url, faixa, equipe, academia, professor, cidade, nascimento, peso, ouro, prata, bronze, vitorias, derrotas, vitorias_wo, lutas, role, modalidade")
         .eq("user_id", userId)
         .single();
 
@@ -44,6 +66,25 @@ export default function PerfilPublicoAtleta() {
           .order("created_at", { ascending: false });
 
         if (inscData) setHistorico(inscData);
+
+        if (atlData.role === "professor") {
+          const primeiroNome = partesNome(atlData.nome)[0];
+          let consulta = supabase
+            .from("atletas_publico")
+            .select("user_id, nome, foto_url, faixa, equipe, academia, ouro, prata, bronze, modalidade, professor, professor_id")
+            .neq("user_id", userId)
+            .limit(200);
+          consulta = primeiroNome
+            ? consulta.or(`professor_id.eq.${userId},professor.ilike.%${primeiroNome}%`)
+            : consulta.eq("professor_id", userId);
+          const { data: alunosData } = await consulta;
+          const medalhasDe = (item: { ouro?: number | null; prata?: number | null; bronze?: number | null }) => Number(item.ouro || 0) * 3 + Number(item.prata || 0) * 2 + Number(item.bronze || 0);
+          setAlunos(
+            (alunosData || [])
+              .filter((item) => item.nome && alunoDoMestre(item, atlData))
+              .sort((a, b) => medalhasDe(b) - medalhasDe(a) || String(a.nome).localeCompare(String(b.nome), "pt-BR")),
+          );
+        }
 
         const { data: lutasAtletaData } = await supabase
           .from("chaves")
@@ -113,13 +154,17 @@ export default function PerfilPublicoAtleta() {
   );
 
   const estiloFaixa = getEstiloFaixa(atleta.faixa);
+  const ehMestre = atleta.role === "professor";
+  const ourosAlunos = alunos.reduce((total, aluno) => total + Number(aluno.ouro || 0), 0);
+  const pratasAlunos = alunos.reduce((total, aluno) => total + Number(aluno.prata || 0), 0);
+  const bronzesAlunos = alunos.reduce((total, aluno) => total + Number(aluno.bronze || 0), 0);
 
   return (
     <main className="min-h-screen bg-[#050505] font-sans relative overflow-x-hidden selection:bg-cyan-500/30 pb-20">
 
       {/* 🌟 EFEITOS DE FUNDO SUTIS */}
-      <div className="absolute top-0 left-0 w-full h-[300px] bg-gradient-to-b from-cyan-900/10 to-transparent pointer-events-none"></div>
-      <div className="absolute top-[-50px] left-1/2 -translate-x-1/2 w-[400px] h-[200px] bg-cyan-500/5 blur-[80px] rounded-full pointer-events-none"></div>
+      <div className={`absolute top-0 left-0 w-full h-[300px] bg-gradient-to-b ${ehMestre ? "from-yellow-900/15" : "from-cyan-900/10"} to-transparent pointer-events-none`}></div>
+      <div className={`absolute top-[-50px] left-1/2 -translate-x-1/2 w-[400px] h-[200px] ${ehMestre ? "bg-yellow-500/10" : "bg-cyan-500/5"} blur-[80px] rounded-full pointer-events-none`}></div>
 
       {/* CONTAINER "APP FEEL" (max-w-2xl para ficar estreito e focado) */}
       <div className="max-w-2xl mx-auto relative z-10 px-4 sm:px-6 pt-6">
@@ -159,8 +204,8 @@ export default function PerfilPublicoAtleta() {
 
             {/* DADOS DO ATLETA */}
             <div className="flex-1 text-center md:text-left w-full mt-2 md:mt-0">
-              <div className="inline-block bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded mb-2">
-                Atleta Oficial iTatame
+              <div className={`inline-block text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded mb-2 border ${ehMestre ? "bg-yellow-500/10 border-yellow-500/30 text-yellow-400" : "bg-cyan-500/10 border-cyan-500/20 text-cyan-400"}`}>
+                {ehMestre ? "Mestre oficial iTatame" : "Atleta oficial iTatame"}
               </div>
               <h1 className="text-2xl md:text-3xl font-black text-white leading-tight tracking-tight mb-1">
                 {atleta.nome}
@@ -221,6 +266,42 @@ export default function PerfilPublicoAtleta() {
             <span className="text-[9px] font-black text-cyan-600/80 uppercase tracking-widest mt-1">Lutas</span>
           </div>
         </div>
+
+        {ehMestre && (
+          <section className="mb-8">
+            <h3 className="text-[11px] font-black text-white uppercase tracking-widest mb-3 flex items-center gap-1.5 px-1">
+              Alunos da academia
+            </h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
+              <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-3 text-center"><span className="block text-2xl font-black text-yellow-400">{alunos.length}</span><span className="text-[9px] font-black uppercase tracking-widest text-yellow-700">Alunos</span></div>
+              <div className="rounded-xl border border-yellow-500/20 bg-black/40 p-3 text-center"><span className="block text-2xl font-black text-yellow-500">{ourosAlunos}</span><span className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Ouros</span></div>
+              <div className="rounded-xl border border-white/10 bg-black/40 p-3 text-center"><span className="block text-2xl font-black text-zinc-300">{pratasAlunos}</span><span className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Pratas</span></div>
+              <div className="rounded-xl border border-orange-700/20 bg-black/40 p-3 text-center"><span className="block text-2xl font-black text-orange-500">{bronzesAlunos}</span><span className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Bronzes</span></div>
+            </div>
+            {alunos.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-white/10 bg-black/30 p-6 text-center text-xs text-zinc-500">Nenhum aluno vinculado a este mestre ainda.</div>
+            ) : (
+              <div className="space-y-2">
+                {alunos.map((aluno) => (
+                  <Link key={aluno.user_id} href={`/atleta/${aluno.user_id}`} className="flex items-center gap-3 rounded-xl border border-white/5 bg-black/40 p-3 transition-colors hover:border-yellow-500/30 hover:bg-white/5">
+                    <div className="h-12 w-12 shrink-0 overflow-hidden rounded-full border border-yellow-500/20 bg-zinc-900">
+                      {aluno.foto_url ? <img src={aluno.foto_url} alt="" className="h-full w-full object-cover" /> : <span className="flex h-full items-center justify-center text-sm font-black text-zinc-600">{aluno.nome?.charAt(0)}</span>}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-black text-white">{aluno.nome}</p>
+                      <p className="truncate text-[10px] font-bold uppercase tracking-widest text-zinc-500">{aluno.faixa || "Faixa não informada"} · {aluno.academia || aluno.equipe || "Academia"}{aluno.modalidade ? ` · ${aluno.modalidade}` : ""}</p>
+                    </div>
+                    <div className="shrink-0 text-right text-[10px] font-black uppercase tracking-widest">
+                      <p className="text-yellow-500">{Number(aluno.ouro || 0)} ouro</p>
+                      <p className="text-zinc-400">{Number(aluno.prata || 0)} prata</p>
+                      <p className="text-orange-500">{Number(aluno.bronze || 0)} bronze</p>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
 
         {/* ⚔️ HISTÓRICO DE CAMPEONATOS */}
         <h3 className="text-[11px] font-black text-white uppercase tracking-widest mb-3 flex items-center gap-1.5 px-1">

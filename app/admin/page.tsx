@@ -16,6 +16,7 @@ import { useMensagensNaoLidas, SeloNaoLidas } from "@/app/components/ChatEvento"
 import { formatarDocumento } from '@/app/lib/formatar-documento';
 import { formatarTelefone } from '@/app/lib/formatar-telefone';
 import { formatarValorInscricao, pacoteInscricao, rotuloPacoteInscricao, type PacoteInscricao } from '@/app/lib/valor-inscricao';
+import { classificarVinculoInscricao, type EquipeOficial, type UnidadeOficial, type VinculoInscricao } from '@/app/lib/vinculo-inscricao';
 
 function classePacote(pacote: PacoteInscricao) {
   if (pacote === 'combo') return 'border-yellow-500/30 bg-yellow-500/10 text-yellow-300';
@@ -56,11 +57,16 @@ export default function AdminPage() {
   const [inscricoes, setInscricoes] = useState<any[]>([]);
   const [busca, setBusca] = useState("");
   const [filtroPagamento, setFiltroPagamento] = useState("todos");
+  const [filtroVinculo, setFiltroVinculo] = useState<"todos" | "sem" | "com">("todos");
+  const [equipesOficiais, setEquipesOficiais] = useState<EquipeOficial[]>([]);
+  const [unidadesOficiais, setUnidadesOficiais] = useState<UnidadeOficial[]>([]);
+  const [perfisVinculo, setPerfisVinculo] = useState<Record<string, { equipe?: string | null; academia?: string | null; professor?: string | null }>>({});
   const [visualizacaoAtletas, setVisualizacaoAtletas] = useState<'lista' | 'detalhado'>('detalhado');
   const [preparacao, setPreparacao] = useState({ categorias: 0, equipes: 0, solicitacoes: 0 });
   const [loading, setLoading] = useState(true);
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [editando, setEditando] = useState<any>(null);
+  const [confirmandoPagamento, setConfirmandoPagamento] = useState<any>(null);
 
   // ==========================================
   // ESTADOS E FUNÇÕES DE GESTÃO DE STAFF
@@ -235,6 +241,53 @@ export default function AdminPage() {
     if (eventoSelecionado) carregarInscricoes();
   }, [eventoSelecionado, eventos]);
 
+  useEffect(() => {
+    if (!eventoSelecionado || eventoSelecionado === "todos") {
+      setEquipesOficiais([]);
+      setUnidadesOficiais([]);
+      return;
+    }
+    let ativo = true;
+    Promise.all([
+      supabase.from("equipes_evento").select("id,nome,academia,professor").eq("evento_id", eventoSelecionado).eq("ativa", true),
+      supabase.from("solicitacoes_equipe_evento").select("equipe_id,academia,professor,status").eq("evento_id", eventoSelecionado).eq("status", "aprovada"),
+    ]).then(([equipesResposta, unidadesResposta]) => {
+      if (!ativo) return;
+      const equipes = (equipesResposta.data || []) as EquipeOficial[];
+      const unidades: UnidadeOficial[] = [];
+      for (const equipe of equipes) {
+        if (equipe.academia) unidades.push({ equipeId: equipe.id, academia: equipe.academia, professor: equipe.professor });
+      }
+      for (const item of unidadesResposta.data || []) {
+        if (!item.equipe_id || !item.academia) continue;
+        if (unidades.some((unidade) => unidade.equipeId === item.equipe_id && unidade.academia.trim().toLocaleLowerCase("pt-BR") === String(item.academia).trim().toLocaleLowerCase("pt-BR"))) continue;
+        unidades.push({ equipeId: item.equipe_id, academia: item.academia, professor: item.professor });
+      }
+      setEquipesOficiais(equipes);
+      setUnidadesOficiais(unidades);
+    });
+    return () => { ativo = false; };
+  }, [eventoSelecionado]);
+
+  useEffect(() => {
+    const ids = [...new Set(inscricoes.map((item) => item.user_id).filter(Boolean))];
+    if (ids.length === 0) {
+      setPerfisVinculo({});
+      return;
+    }
+    let ativo = true;
+    async function lerPerfis() {
+      const { data } = await supabase.from("atletas_publico").select("user_id,equipe,academia,professor").in("user_id", ids);
+      if (!ativo) return;
+      const mapa: Record<string, { equipe?: string | null; academia?: string | null; professor?: string | null }> = {};
+      for (const perfil of data || []) mapa[perfil.user_id] = perfil;
+      setPerfisVinculo(mapa);
+    }
+    void lerPerfis();
+    const timer = window.setInterval(() => { void lerPerfis(); }, 15000);
+    return () => { ativo = false; window.clearInterval(timer); };
+  }, [inscricoes]);
+
   async function handleNovaFoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -302,6 +355,14 @@ export default function AdminPage() {
     }
   }
 
+  function pedirAlteracaoPagamento(inscricao: any) {
+    if (inscricao.pagamento_ok) {
+      void toggleStatus(inscricao.id, "pagamento_ok", true);
+      return;
+    }
+    setConfirmandoPagamento(inscricao);
+  }
+
   async function toggleStatus(id: string, campo: string, valorAtual: boolean) {
     setLoadingId(id);
     const { error } = await supabase.from("inscricoes").update({ [campo]: !valorAtual }).eq("id", id);
@@ -342,11 +403,27 @@ export default function AdminPage() {
   // ==========================================
   // FILTRAGEM
   // ==========================================
+  function vinculoDaInscricao(insc: { equipe_id?: string | null; equipe?: string | null; user_id?: string | null }): VinculoInscricao {
+    const perfil = insc.user_id ? perfisVinculo[insc.user_id] : undefined;
+    return classificarVinculoInscricao({
+      equipeId: insc.equipe_id,
+      equipeInscricao: insc.equipe,
+      equipePerfil: perfil?.equipe,
+      academiaPerfil: perfil?.academia,
+      professorPerfil: perfil?.professor,
+      equipes: equipesOficiais,
+      unidades: unidadesOficiais,
+    });
+  }
+
   const inscricoesFiltradas = inscricoes.filter((inst) => {
     const termo = busca.toLowerCase();
     const matchBusca = (inst.atleta && inst.atleta.toLowerCase().includes(termo)) || (inst.equipe && inst.equipe.toLowerCase().includes(termo));
     const matchPagamento = filtroPagamento === "todos" ? true : filtroPagamento === "pagos" ? inst.pagamento_ok === true : inst.pagamento_ok !== true;
-    return matchBusca && matchPagamento;
+    if (!matchBusca || !matchPagamento) return false;
+    if (filtroVinculo === "todos" || eventoSelecionado === "todos") return true;
+    const vinculado = vinculoDaInscricao(inst).situacao === "vinculado";
+    return filtroVinculo === "com" ? vinculado : !vinculado;
   });
 
   // ==========================================
@@ -728,6 +805,15 @@ export default function AdminPage() {
               </div>
             )}
 
+            {eventoSelecionado && eventoSelecionado !== "todos" && inscricoes.length > 0 && (
+              <ConferenciaVinculo
+                itens={inscricoes.map((insc) => ({ nome: insc.atleta || "Atleta", userId: String(insc.user_id || ""), vinculo: vinculoDaInscricao(insc) }))}
+                filtro={filtroVinculo}
+                onFiltro={setFiltroVinculo}
+                eventoId={eventoSelecionado}
+              />
+            )}
+
             {!loading && eventos.length === 0 && (
               <div className="py-20 text-center flex flex-col items-center justify-center bg-black/40 border border-dashed border-white/10 rounded-3xl mt-4 shadow-xl">
                 <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mb-4">
@@ -754,8 +840,8 @@ export default function AdminPage() {
                     <div className="divide-y divide-white/5">{inscricoesFiltradas.map(insc => {
                       const pacote = pacoteInscricao(insc);
                       return <article key={insc.id} className="grid gap-3 px-4 py-3 hover:bg-white/[0.025] lg:grid-cols-[1.4fr_1fr_1.3fr_0.9fr_220px] lg:items-center">
-                      <div className="min-w-0"><h3 className="truncate text-sm font-black text-white">{insc.atleta || 'Não informado'}</h3><p className="mt-1 truncate text-[10px] text-zinc-600">{insc.eventos?.nome || 'Evento'} · {insc.faixa || 'Sem faixa'} · {insc.idade ? `${insc.idade} anos` : 'Sem idade'} · {insc.peso ? `${insc.peso} kg` : 'Sem peso'}</p></div>
-                      <p className="truncate text-xs text-zinc-400">{insc.equipe || 'Sem equipe'}</p>
+                      <div className="min-w-0"><h3 className="truncate text-sm font-black text-white">{insc.atleta || 'Não informado'}</h3><p className="mt-1 truncate text-[10px] text-zinc-600">{insc.eventos?.nome || 'Evento'} · {insc.faixa || 'Sem faixa'} · {insc.idade ? `${insc.idade} anos` : 'Sem idade'} · {insc.peso ? `${insc.peso} kg` : 'Sem peso'}</p><LinhaVinculo vinculo={vinculoDaInscricao(insc)} /></div>
+                      <p className="truncate text-xs text-zinc-400">{vinculoDaInscricao(insc).equipe || insc.equipe || 'Sem equipe'}</p>
                       <div className="min-w-0 space-y-1.5">
                         <span className={`inline-flex rounded-full border px-2 py-0.5 text-[8px] font-black uppercase ${classePacote(pacote)}`}>{rotuloPacoteInscricao(pacote)}</span>
                         <p className="truncate text-xs text-yellow-400/80">{insc.categoria || 'Sem categoria'}</p>
@@ -763,7 +849,8 @@ export default function AdminPage() {
                       </div>
                       <div className="flex flex-wrap gap-1.5"><span className={`rounded-full border px-2 py-1 text-[8px] font-black uppercase ${insc.pagamento_ok ? 'border-green-500/20 bg-green-500/10 text-green-400' : 'border-red-500/20 bg-red-500/10 text-red-400'}`}>{insc.pagamento_ok ? 'Pago' : 'Pendente'}</span><span className={`rounded-full border px-2 py-1 text-[8px] font-black uppercase ${insc.pesagem_ok ? 'border-blue-500/20 bg-blue-500/10 text-blue-300' : 'border-white/5 bg-white/5 text-zinc-500'}`}>{insc.pesagem_ok ? 'Peso OK' : 'Sem peso'}</span></div>
                       <div className="flex flex-wrap gap-1.5">
-                        <button onClick={() => toggleStatus(insc.id, 'pagamento_ok', insc.pagamento_ok)} disabled={loadingId === insc.id} className={`rounded-lg border px-2.5 py-2 text-[8px] font-black uppercase ${insc.pagamento_ok ? 'border-white/10 text-zinc-400' : 'border-green-500/30 bg-green-500/10 text-green-400'}`}>{insc.pagamento_ok ? 'Desfazer pagamento' : 'Aprovar pagamento'}</button>
+                        {!insc.pagamento_ok && <button onClick={() => pedirAlteracaoPagamento(insc)} disabled={loadingId === insc.id} className="rounded-lg px-2 py-2 text-[8px] font-bold uppercase text-zinc-600 hover:text-zinc-300">Marcar pago</button>}
+                        {insc.pagamento_ok && <button onClick={() => pedirAlteracaoPagamento(insc)} disabled={loadingId === insc.id} className="rounded-lg border border-white/10 px-2.5 py-2 text-[8px] font-bold uppercase text-zinc-500">Desfazer pagamento</button>}
                         <button onClick={() => setEditando(insc)} className="rounded-lg border border-white/10 px-2.5 py-2 text-[8px] font-black uppercase text-zinc-300">Ver / Editar</button>
                         <button onClick={() => excluirInscricao(insc.id, insc.atleta || 'Atleta')} disabled={loadingId === insc.id} className="rounded-lg px-2 py-2 text-[8px] font-black uppercase text-red-400">Excluir</button>
                       </div>
@@ -797,7 +884,7 @@ export default function AdminPage() {
                         </div>
 
                         <h4 className="text-lg md:text-xl font-black text-white uppercase tracking-tight line-clamp-1" title={insc.atleta}>{insc.atleta || "NÃO INFORMADO"}</h4>
-                        <p className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest mt-0.5 line-clamp-1" title={insc.equipe}>{insc.equipe || "SEM EQUIPE"}</p>
+                        <LinhaVinculo vinculo={vinculoDaInscricao(insc)} destaque />
                         
                         <div className="flex flex-col gap-2 mt-4 mb-4">
                           <div className="flex flex-wrap gap-2">
@@ -817,14 +904,6 @@ export default function AdminPage() {
                       </div>
 
                       <div className="relative z-10 flex flex-col gap-2 mt-auto border-t border-white/5 pt-4">
-                        <button 
-                          onClick={() => toggleStatus(insc.id, 'pagamento_ok', insc.pagamento_ok)}
-                          disabled={loadingId === insc.id}
-                          className={`cursor-pointer w-full py-2.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border flex items-center justify-center active:scale-95 ${insc.pagamento_ok ? 'bg-transparent text-zinc-500 border-white/5 hover:text-white hover:bg-white/5' : 'bg-green-600/10 text-green-500 border-green-500/30 hover:bg-green-600/20'}`}
-                        >
-                          {loadingId === insc.id ? '...' : insc.pagamento_ok ? 'Desfazer Pagamento' : 'Aprovar Pagamento'}
-                        </button>
-                        
                         <div className="flex gap-2">
                           <button 
                             onClick={() => setEditando(insc)} 
@@ -840,6 +919,14 @@ export default function AdminPage() {
                             <Trash2 size={12} /> Excluir
                           </button>
                         </div>
+                        <button
+                          type="button"
+                          onClick={() => pedirAlteracaoPagamento(insc)}
+                          disabled={loadingId === insc.id}
+                          className="self-center px-2 py-1 text-[8px] font-bold uppercase tracking-widest text-zinc-600 transition-colors hover:text-zinc-300 disabled:opacity-50"
+                        >
+                          {loadingId === insc.id ? "..." : insc.pagamento_ok ? "Desfazer pagamento" : "Marcar como pago"}
+                        </button>
                       </div>
 
                     </div>
@@ -944,6 +1031,22 @@ export default function AdminPage() {
                 </div>
               )}
 
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmandoPagamento && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/90 p-4">
+          <div className="w-full max-w-md rounded-3xl border border-yellow-500/30 bg-[#0e0e12] p-6 shadow-2xl">
+            <p className="text-[10px] font-black uppercase tracking-widest text-yellow-400">Confirmar pagamento manual</p>
+            <h3 className="mt-2 text-xl font-black text-white">{confirmandoPagamento.atleta || "Atleta"}</h3>
+            <p className="mt-3 text-sm leading-relaxed text-zinc-300">
+              Esta inscrição está pendente, no valor de {formatarValorInscricao(Number(confirmandoPagamento.valor_total || confirmandoPagamento.valor_inscricao || 0))}. Ao confirmar, ela entra como paga sem cobrança no Mercado Pago.
+            </p>
+            <div className="mt-6 flex gap-2">
+              <button type="button" onClick={() => setConfirmandoPagamento(null)} className="flex-1 rounded-xl border border-white/10 py-3 text-[10px] font-black uppercase tracking-widest text-zinc-300">Cancelar</button>
+              <button type="button" onClick={() => { const alvo = confirmandoPagamento; setConfirmandoPagamento(null); void toggleStatus(alvo.id, "pagamento_ok", false); }} className="flex-1 rounded-xl bg-yellow-500 py-3 text-[10px] font-black uppercase tracking-widest text-black">Confirmar aprovação</button>
             </div>
           </div>
         </div>
@@ -1128,5 +1231,73 @@ export default function AdminPage() {
       )}
 
     </main>
+  );
+}
+
+function LinhaVinculo({ vinculo, destaque = false }: { vinculo: VinculoInscricao; destaque?: boolean }) {
+  const ok = vinculo.situacao === "vinculado";
+  const texto = ok
+    ? `${vinculo.equipe} · ${vinculo.academia}${vinculo.professor ? ` · ${vinculo.professor}` : ""}`
+    : vinculo.situacao === "sem-equipe"
+      ? `Sem equipe no campeonato${vinculo.escrito ? ` · escreveu ${vinculo.escrito}` : ""}`
+      : `Equipe ${vinculo.equipe} · academia sem vínculo${vinculo.escrito ? ` · escreveu ${vinculo.escrito}` : ""}`;
+  return <p className={`${destaque ? "mt-1 text-[10px] font-bold uppercase tracking-wide" : "mt-1 text-[10px] font-bold"} ${ok ? "text-emerald-400" : "text-amber-300"}`}>{texto}</p>;
+}
+
+function ConferenciaVinculo({
+  itens,
+  filtro,
+  onFiltro,
+  eventoId,
+}: {
+  itens: Array<{ nome: string; userId: string; vinculo: VinculoInscricao }>;
+  filtro: "todos" | "sem" | "com";
+  onFiltro: (filtro: "todos" | "sem" | "com") => void;
+  eventoId: string;
+}) {
+  const sem = itens.filter((item) => item.vinculo.situacao !== "vinculado");
+  const com = itens.filter((item) => item.vinculo.situacao === "vinculado");
+  const grupos: Record<string, string[]> = {};
+  for (const item of com) {
+    const chave = `${item.vinculo.equipe} · ${item.vinculo.academia}`;
+    grupos[chave] = [...(grupos[chave] || []), item.nome];
+  }
+  return (
+    <section className="mb-8 rounded-2xl border border-white/10 bg-black/40 p-4">
+      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Conferência de vínculo</p>
+          <p className="mt-1 text-xs text-zinc-400">Quem está na equipe e na academia oficiais pontua no ranking. Os demais precisam de correção com o atleta ou o professor.</p>
+        </div>
+        <Link href={`/admin/equipes?evento=${eventoId}`} className="text-[10px] font-black uppercase tracking-widest text-red-300">Abrir equipes</Link>
+      </div>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <button type="button" onClick={() => onFiltro(filtro === "sem" ? "todos" : "sem")} className={`rounded-full border px-3 py-1.5 text-[10px] font-black uppercase tracking-widest ${filtro === "sem" ? "border-amber-400 bg-amber-500/20 text-amber-200" : "border-amber-500/30 text-amber-300"}`}>{sem.length} sem vínculo</button>
+        <button type="button" onClick={() => onFiltro(filtro === "com" ? "todos" : "com")} className={`rounded-full border px-3 py-1.5 text-[10px] font-black uppercase tracking-widest ${filtro === "com" ? "border-emerald-400 bg-emerald-500/20 text-emerald-200" : "border-emerald-500/30 text-emerald-300"}`}>{com.length} vinculados</button>
+      </div>
+      {sem.length > 0 && (
+        <ul className="mt-4 space-y-2">
+          {sem.map((item, indice) => (
+            <li key={`${item.nome}-${indice}`} className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs">
+              <strong className="text-white">{item.nome}</strong>
+              <span className="mt-0.5 block text-amber-200">{item.vinculo.situacao === "sem-equipe" ? "Não entrou em nenhuma equipe deste campeonato." : `Está na equipe ${item.vinculo.equipe}, mas a academia não está inscrita.`}{item.vinculo.professor ? ` Professor: ${item.vinculo.professor}.` : ""}{item.vinculo.escrito ? ` No cadastro: ${item.vinculo.escrito}.` : ""}</span>
+              {item.userId && <Link href={`/admin/mensagens?atleta=${item.userId}&aviso=vinculo`} className="mt-2 inline-block text-[10px] font-black uppercase tracking-widest text-amber-100">Pedir o vínculo no chat</Link>}
+            </li>
+          ))}
+        </ul>
+      )}
+      <details className="mt-4">
+        <summary className="cursor-pointer text-[10px] font-black uppercase tracking-widest text-zinc-400">Relatório por equipe e academia</summary>
+        <div className="mt-3 space-y-3">
+          {Object.entries(grupos).map(([titulo, atletas]) => (
+            <article key={titulo} className="rounded-xl border border-white/10 px-3 py-2">
+              <p className="text-sm font-black text-white">{titulo}</p>
+              <p className="mt-1 text-xs text-zinc-400">{atletas.join(", ")}</p>
+            </article>
+          ))}
+          {Object.keys(grupos).length === 0 && <p className="text-xs text-zinc-500">Nenhum atleta vinculado ainda.</p>}
+        </div>
+      </details>
+    </section>
   );
 }

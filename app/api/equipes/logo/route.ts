@@ -77,9 +77,11 @@ export async function POST(request: Request) {
     const logoUrl = `${db.storage.from('avatars').getPublicUrl(destino).data.publicUrl}?v=${Date.now()}`;
 
     if (tipo === 'academia' && academiaId && !academiaId.startsWith('equipe-')) {
-      const { error } = await db.from('solicitacoes_equipe_evento').update({ logo_url: logoUrl }).eq('id', academiaId).eq('evento_id', eventoId).eq('equipe_id', equipeId);
-      if (error) return NextResponse.json({ error: 'Rode supabase/equipes_logo.sql para liberar a logo da academia.' }, { status: 409 });
-      await db.from('equipes_evento').update({ academia_logo_url: logoUrl }).eq('id', equipeId).eq('evento_id', eventoId);
+      const { data: vinculo, error } = await db.from('solicitacoes_equipe_evento').update({ logo_url: logoUrl }).eq('id', academiaId).eq('evento_id', eventoId).eq('equipe_id', equipeId).select('academia').maybeSingle();
+      if (error || !vinculo) return NextResponse.json({ error: 'Rode supabase/equipes_logo.sql para liberar a logo da academia.' }, { status: 409 });
+      const { data: equipeDona } = await db.from('equipes_evento').select('academia').eq('id', equipeId).eq('evento_id', eventoId).maybeSingle();
+      const mesmaAcademia = String(equipeDona?.academia || '').trim().toLocaleLowerCase('pt-BR') === String(vinculo.academia || '').trim().toLocaleLowerCase('pt-BR');
+      if (mesmaAcademia) await db.from('equipes_evento').update({ academia_logo_url: logoUrl }).eq('id', equipeId).eq('evento_id', eventoId);
     } else if (tipo === 'academia') {
       const { error } = await db.from('equipes_evento').update({ academia_logo_url: logoUrl }).eq('id', equipeId).eq('evento_id', eventoId);
       if (error) return NextResponse.json({ error: 'Rode supabase/equipes_logo.sql para liberar a logo da academia.' }, { status: 409 });

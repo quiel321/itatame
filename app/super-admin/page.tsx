@@ -1,395 +1,684 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
-import { supabase } from "@/app/lib/supabase"; 
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { jsPDF } from "jspdf";
-import autoTable from "jspdf-autotable";
-import { ShieldCheck, Map, Trash2, Users, RefreshCw, Edit3, Trophy, Search, ChevronDown, Activity, Globe, Scale, Medal, Banknote } from "lucide-react";
+import { Activity, AlertTriangle, Banknote, ChevronDown, FileText, Globe, Scale, Search, ShieldCheck, Users } from "lucide-react";
+import { supabase } from "@/app/lib/supabase";
+import { baixarCsv, exportarPdfRetratt, exportarPdfSuporte } from "@/app/lib/super-admin-relatorio";
+import {
+  buscarPaginas,
+  dataCurta,
+  eventoEmbutido,
+  indiceOrganizadores,
+  itemResumoDaInscricao,
+  moeda,
+  montarLinhaSuporte,
+  resumirItatame,
+  situacaoInscricao,
+  whatsappDe,
+  type EventoPainel,
+  type InscricaoPainel,
+  type OrganizadorPainel,
+  type SituacaoInscricao,
+} from "@/app/lib/super-admin-painel";
+
+type Sistema = "itatame" | "retratt";
+
+type ResumoRetratt = {
+  faturamentoCentavos: number;
+  comissaoItatameCentavos: number;
+  royaltyEmAbertoCentavos: number;
+  royaltyDisponivelCentavos: number;
+  royaltyPagoCentavos: number;
+  pedidosPagos: number;
+  fotosVendidas: number;
+};
+
+type FinanceiroRetratt = {
+  geral: ResumoRetratt & { ticketMedioCentavos: number; galerias: number; organizadores: number; fotografos: number };
+  organizadores: Array<ResumoRetratt & { id: string; nome: string; galerias: number }>;
+  pedidosRecentes: Array<{
+    id: string;
+    data: string;
+    galeria: string;
+    fotografo: string;
+    organizador: string;
+    totalCentavos: number;
+    comissaoItatameCentavos: number;
+    royaltyCentavos: number;
+    repasseStatus: string;
+    fotos: number;
+  }>;
+};
+
+const rotuloRepasse: Record<string, string> = {
+  pendente: "Pendente",
+  aguardando_liberacao: "Aguardando liberação",
+  disponivel: "Disponível",
+  pago: "Pago",
+  estornado: "Estornado",
+  nao_aplicavel: "Sem royalty",
+};
+
+function centavos(valor?: number | null) {
+  return moeda((valor || 0) / 100);
+}
 
 export default function SuperAdminMasterPage() {
-  const router = useRouter()
-  
-  // ESTADOS DO USUÁRIO MASTER
-  const [nomeDono, setNomeDono] = useState("Mestre")
-  const [fotoUrl, setFotoUrl] = useState("") 
-  const [loadingMaster, setLoadingMaster] = useState(true)
-
-  // ESTADOS DA TABELA GLOBAL E MÉTRICAS
-  const [inscricoesGlobais, setInscricoesGlobais] = useState<any[]>([])
-  const [eventosGlobais, setEventosGlobais] = useState<any[]>([])
-  const [organizadoresAtivos, setOrganizadoresAtivos] = useState(0)
-  
-  // ESTADOS DE FILTRO DA TABELA
-  const [filtroFaixa, setFiltroFaixa] = useState("")
-  const [filtroCategoria, setFiltroCategoria] = useState("")
-  const [filtroNome, setFiltroNome] = useState("")
-  const [filtroEquipe, setFiltroEquipe] = useState("")
-
-  // ESTADOS DO GERADOR DE REGRAS GLOBAIS
-  const [showRegrasModal, setShowRegrasModal] = useState(false)
-  const [novaRegra, setNovaRegra] = useState({ tipo: 'peso', nome: '', genero: 'Masculino' })
+  const router = useRouter();
+  const [nomeDono, setNomeDono] = useState("Mestre");
+  const [fotoUrl, setFotoUrl] = useState("");
+  const [carregando, setCarregando] = useState(true);
+  const [erro, setErro] = useState("");
+  const [sistema, setSistema] = useState<Sistema>("itatame");
+  const [organizadores, setOrganizadores] = useState<OrganizadorPainel[]>([]);
+  const [eventos, setEventos] = useState<EventoPainel[]>([]);
+  const [inscricoes, setInscricoes] = useState<InscricaoPainel[]>([]);
+  const [retratt, setRetratt] = useState<FinanceiroRetratt | null>(null);
+  const [erroRetratt, setErroRetratt] = useState("");
+  const [carregandoRetratt, setCarregandoRetratt] = useState(true);
+  const [busca, setBusca] = useState("");
+  const [organizadorId, setOrganizadorId] = useState("");
+  const [eventoId, setEventoId] = useState("");
+  const [faixa, setFaixa] = useState("");
+  const [situacao, setSituacao] = useState<"todos" | SituacaoInscricao>("todos");
+  const [semIdMp, setSemIdMp] = useState(false);
+  const [limite, setLimite] = useState(80);
+  const [buscaRetratt, setBuscaRetratt] = useState("");
+  const [showRegrasModal, setShowRegrasModal] = useState(false);
+  const [novaRegra, setNovaRegra] = useState({ tipo: "peso", nome: "", genero: "Masculino" });
 
   useEffect(() => {
-    async function inicializarMainframe() {
-      // 1. BLINDAGEM DE DEUS: Validar quem é o Super Admin logado
+    let ativo = true;
+    async function carregar() {
       const { data: authData } = await supabase.auth.getUser();
       if (!authData.user) {
         router.push("/login-organizador");
         return;
       }
-
-      // 🚨 IMPORTANTE: No futuro, crie uma coluna 'role' = 'super_admin' na sua tabela de usuários e descomente a validação abaixo:
-      /*
-      const { data: adminCheck } = await supabase.from("usuarios").select("role").eq("id", authData.user.id).single();
-      if (adminCheck?.role !== 'super_admin') {
-        router.push("/acesso-negado"); // Expulsa quem tentar acessar pela URL
-        return;
-      }
-      */
-
-      const { data: perfil } = await supabase.from("perfis").select("nome").eq("id", authData.user.id).maybeSingle();
+      const [{ data: perfil }, { data: atleta }] = await Promise.all([
+        supabase.from("perfis").select("nome").eq("id", authData.user.id).maybeSingle(),
+        supabase.from("atletas").select("foto_url").eq("user_id", authData.user.id).maybeSingle(),
+      ]);
+      if (!ativo) return;
       if (perfil?.nome) setNomeDono(perfil.nome.split(" ")[0]);
-
-      const { data: atleta } = await supabase.from("atletas").select("foto_url").eq("user_id", authData.user.id).maybeSingle();
       if (atleta?.foto_url) setFotoUrl(atleta.foto_url);
 
-      // 2. VISÃO GLOBAL: Puxar TODAS as inscrições de TODOS os eventos do SaaS
-      const { data: inscricoes } = await supabase.from("inscricoes").select("*, eventos(nome)").order("id", { ascending: false });
-      if (inscricoes) setInscricoesGlobais(inscricoes);
-
-      // 3. Puxar Eventos e Organizadores para as Métricas
-      const { data: eventos } = await supabase.from("eventos").select("id");
-      if (eventos) setEventosGlobais(eventos);
-
-      const { count: orgCount } = await supabase.from("organizadores").select("*", { count: 'exact', head: true });
-      if (orgCount) setOrganizadoresAtivos(orgCount);
-      
-      setLoadingMaster(false);
+      try {
+        const [listaOrganizadores, listaEventos, listaInscricoes] = await Promise.all([
+          buscarPaginas<OrganizadorPainel>(async (inicio, fim) => {
+            const resultado = await supabase
+              .from("organizadores")
+              .select("id, user_id, nome, academia, email, telefone, foto_url, status, plano_comercial, comissao_percentual, mp_connected_at, cidade, estado, documento, created_at")
+              .order("created_at", { ascending: false })
+              .range(inicio, fim);
+            return { data: resultado.data as OrganizadorPainel[] | null, error: resultado.error };
+          }),
+          buscarPaginas<EventoPainel>(async (inicio, fim) => {
+            const resultado = await supabase
+              .from("eventos")
+              .select("id, nome, data_evento, data_fim_inscricoes, organizador_id, cidade, estado, local")
+              .order("data_evento", { ascending: false })
+              .range(inicio, fim);
+            return { data: resultado.data as EventoPainel[] | null, error: resultado.error };
+          }),
+          buscarPaginas<InscricaoPainel>(async (inicio, fim) => {
+            const resultado = await supabase
+              .from("inscricoes")
+              .select("id, atleta, equipe, categoria, faixa, peso, idade, absoluto, pagamento_ok, pesagem_ok, valor_inscricao, valor_total, mp_payment_id, estorno_status, estorno_valor, created_at, evento_id, eventos(nome, organizador_id, data_evento, cidade)")
+              .order("id", { ascending: false })
+              .range(inicio, fim);
+            return { data: resultado.data as InscricaoPainel[] | null, error: resultado.error };
+          }),
+        ]);
+        if (!ativo) return;
+        setOrganizadores(listaOrganizadores);
+        setEventos(listaEventos);
+        setInscricoes(listaInscricoes);
+      } catch (falha) {
+        if (ativo) setErro(falha instanceof Error ? falha.message : "Não foi possível carregar o Itatame.");
+      } finally {
+        if (ativo) setCarregando(false);
+      }
     }
-    
-    inicializarMainframe();
+    void carregar();
+    return () => {
+      ativo = false;
+    };
   }, [router]);
 
-  // Lógica de Filtros Globais
-  const inscricoesFiltradas = inscricoesGlobais.filter((item) => {
-    const faixaOk = filtroFaixa === "" || item.faixa === filtroFaixa
-    const categoriaOk = filtroCategoria === "" || item.categoria === filtroCategoria
-    const nomeOk = (item.atleta || "").toLowerCase().includes(filtroNome.toLowerCase()) || (item.equipe || "").toLowerCase().includes(filtroNome.toLowerCase())
-    const equipeOk = filtroEquipe === "" || item.equipe === filtroEquipe
+  useEffect(() => {
+    let ativo = true;
+    async function carregarRetratt() {
+      const { data: sessao } = await supabase.auth.getSession();
+      const token = sessao.session?.access_token;
+      if (!token) {
+        if (ativo) {
+          setErroRetratt("Sessão expirada para consultar a Retratt.");
+          setCarregandoRetratt(false);
+        }
+        return;
+      }
+      try {
+        const response = await fetch("/api/super-admin/fotos-financeiro", {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        const resultado = await response.json();
+        if (!response.ok) throw new Error(resultado.error || "Falha ao carregar a Retratt.");
+        if (ativo) setRetratt(resultado);
+      } catch (falha) {
+        if (ativo) setErroRetratt(falha instanceof Error ? falha.message : "Falha ao carregar a Retratt.");
+      } finally {
+        if (ativo) setCarregandoRetratt(false);
+      }
+    }
+    void carregarRetratt();
+    return () => {
+      ativo = false;
+    };
+  }, []);
 
-    return faixaOk && categoriaOk && nomeOk && equipeOk
-  });
+  const organizadoresPorUsuario = useMemo(() => indiceOrganizadores(organizadores), [organizadores]);
+  const eventosPorId = useMemo(() => new Map(eventos.map((evento) => [String(evento.id), evento])), [eventos]);
+  const resumoItatame = useMemo(
+    () => resumirItatame(inscricoes.map((item) => itemResumoDaInscricao(item, organizadoresPorUsuario))),
+    [inscricoes, organizadoresPorUsuario],
+  );
 
-  const equipesUnicas = Array.from(new Set(inscricoesGlobais.map(i => i.equipe).filter(Boolean)));
-  
-  // O Faturamento aqui pode ser real no futuro somando os valores das faturas.
-  const totalFaturamento = inscricoesGlobais.length * 90; 
+  const fila = organizadores.filter((item) => item.status === "pendente").length;
+  const aprovados = organizadores.filter((item) => item.status === "aprovado");
+  const semMercadoPago = aprovados.filter((item) => !item.mp_connected_at).length;
 
-  const exportarCSV = () => { /* MESMO CÓDIGO DO CSV */ }
-  const exportarPDF = () => { /* MESMO CÓDIGO DO PDF */ }
+  const faixas = useMemo(
+    () => Array.from(new Set(inscricoes.map((item) => item.faixa).filter(Boolean))) as string[],
+    [inscricoes],
+  );
 
-  const salvarNovaRegraGlobal = () => {
-    // Aqui você enviará para a tabela `categorias_globais` no Supabase
-    alert(`Regra de ${novaRegra.tipo.toUpperCase()} [${novaRegra.nome}] adicionada ao Padrão Global com sucesso! Organizadores já podem usá-la.`);
-    setNovaRegra({ tipo: 'peso', nome: '', genero: 'Masculino' });
-    setShowRegrasModal(false);
+  const filtradas = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+    return inscricoes.filter((item) => {
+      const evento = item.evento_id != null ? eventosPorId.get(String(item.evento_id)) : undefined;
+      const embutido = eventoEmbutido(item);
+      const userId = evento?.organizador_id || embutido?.organizador_id || "";
+      const organizador = organizadoresPorUsuario.get(userId);
+      if (organizadorId && userId !== organizadorId) return false;
+      if (eventoId && String(item.evento_id) !== eventoId) return false;
+      if (faixa && item.faixa !== faixa) return false;
+      const atual = situacaoInscricao(item);
+      if (situacao !== "todos" && atual !== situacao) return false;
+      if (semIdMp && (atual !== "pago" || Boolean(item.mp_payment_id))) return false;
+      if (!termo) return true;
+      return [item.atleta, item.equipe, item.categoria, item.mp_payment_id, organizador?.nome, organizador?.academia, organizador?.email, evento?.nome, embutido?.nome]
+        .join(" ")
+        .toLowerCase()
+        .includes(termo);
+    });
+  }, [busca, eventoId, eventosPorId, faixa, inscricoes, organizadorId, organizadoresPorUsuario, semIdMp, situacao]);
+
+  const resumoFiltrado = useMemo(
+    () => resumirItatame(filtradas.map((item) => itemResumoDaInscricao(item, organizadoresPorUsuario))),
+    [filtradas, organizadoresPorUsuario],
+  );
+
+  const retrattFiltrado = useMemo(() => {
+    const termo = buscaRetratt.trim().toLowerCase();
+    return (retratt?.organizadores || []).filter((item) => !termo || item.nome.toLowerCase().includes(termo));
+  }, [buscaRetratt, retratt]);
+
+  function linhaDaInscricao(item: InscricaoPainel) {
+    const evento = item.evento_id != null ? eventosPorId.get(String(item.evento_id)) : undefined;
+    const userId = evento?.organizador_id || eventoEmbutido(item)?.organizador_id || "";
+    return montarLinhaSuporte(item, organizadoresPorUsuario.get(userId), evento);
   }
 
-  if (loadingMaster) {
+  function exportarItatame(formato: "pdf" | "csv") {
+    if (filtradas.length === 0) {
+      alert("Nenhuma inscrição do Itatame neste filtro.");
+      return;
+    }
+    const linhas = filtradas.map(linhaDaInscricao);
+    const hoje = new Date().toLocaleString("pt-BR");
+    if (formato === "csv") {
+      baixarCsv(
+        `itatame-suporte-${new Date().toISOString().slice(0, 10)}.csv`,
+        ["Organizador", "Academia", "Contato", "Plano", "Mercado Pago", "Evento", "Data", "Atleta", "Equipe", "Categoria", "Faixa", "Peso", "Pacote", "Valor", "Pagamento", "Pesagem", "ID Mercado Pago"],
+        linhas.map((linha) => [linha.organizador, linha.academia, linha.contato, linha.plano, linha.mercadoPago, linha.evento, linha.dataEvento, linha.atleta, linha.equipe, linha.categoria, linha.faixa, linha.peso, linha.pacote, linha.valor, linha.pagamento, linha.pesagem, linha.mercadoPagoId]),
+      );
+      return;
+    }
+    exportarPdfSuporte({
+      titulo: "Itatame — ficha de suporte",
+      subtitulo: `Gerado em ${hoje}. ${filtradas.length} inscrições no filtro atual. Valores da Retratt não entram neste relatório.`,
+      resumo: [
+        ["Faturamento pago", moeda(resumoFiltrado.faturamento)],
+        ["Comissão da plataforma", moeda(resumoFiltrado.comissao)],
+        ["Repasse dos organizadores", moeda(resumoFiltrado.repasse)],
+        ["Aguardando pagamento", moeda(resumoFiltrado.pendente)],
+        ["Estornado", moeda(resumoFiltrado.estornado)],
+        ["Pagas", String(resumoFiltrado.pagos)],
+        ["Pendentes", String(resumoFiltrado.pendentes)],
+        ["Estornos", String(resumoFiltrado.estornos)],
+      ],
+      linhas,
+      nomeArquivo: `itatame-suporte-${new Date().toISOString().slice(0, 10)}.pdf`,
+    });
+  }
+
+  function exportarRetratt() {
+    if (!retratt || retrattFiltrado.length === 0) {
+      alert("Nenhum organizador da Retratt neste filtro.");
+      return;
+    }
+    exportarPdfRetratt({
+      subtitulo: `Gerado em ${new Date().toLocaleString("pt-BR")}. Somente pedidos pagos de foto. Inscrições de campeonato ficam no relatório do Itatame.`,
+      resumo: [
+        ["Vendas pagas", centavos(retratt.geral.faturamentoCentavos)],
+        ["Comissão Itatame", centavos(retratt.geral.comissaoItatameCentavos)],
+        ["Royalty em aberto", centavos(retratt.geral.royaltyEmAbertoCentavos)],
+        ["Fotos vendidas", String(retratt.geral.fotosVendidas)],
+      ],
+      linhas: retrattFiltrado.map((item) => ({
+        organizador: item.nome,
+        galerias: String(item.galerias),
+        vendas: centavos(item.faturamentoCentavos),
+        comissao: centavos(item.comissaoItatameCentavos),
+        royaltyAberto: centavos(item.royaltyEmAbertoCentavos),
+        royaltyDisponivel: centavos(item.royaltyDisponivelCentavos),
+        royaltyPago: centavos(item.royaltyPagoCentavos),
+      })),
+      nomeArquivo: `retratt-financeiro-${new Date().toISOString().slice(0, 10)}.pdf`,
+    });
+  }
+
+  if (carregando) {
     return (
-      <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center text-indigo-500 font-black uppercase tracking-widest text-xs">
-        <Activity className="w-10 h-10 animate-pulse mb-4 text-indigo-500" />
-        <span className="animate-pulse">Acessando Mainframe Global...</span>
+      <div className="flex min-h-screen flex-col items-center justify-center bg-[#050505] text-xs font-black uppercase tracking-widest text-indigo-400">
+        <Activity className="mb-4 h-10 w-10 animate-pulse" />
+        Separando Itatame e Retratt...
       </div>
     );
   }
 
+  const visiveis = filtradas.slice(0, limite);
+
   return (
-    <main className="min-h-screen bg-[#050505] text-white p-4 md:p-6 lg:p-8 relative overflow-x-hidden selection:bg-indigo-500/30">
-      
-      {/* BACKGROUND GLOW DE SUPER ADMIN */}
-      <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-indigo-900/15 blur-[150px] rounded-full pointer-events-none"></div>
-      <div className="absolute top-[40%] left-[-10%] w-[500px] h-[500px] bg-purple-900/10 blur-[150px] rounded-full pointer-events-none"></div>
-
-      <div className="max-w-7xl mx-auto relative z-10">
-
-        {/* CABEÇALHO DO DASHBOARD (VIP) COM FOTO */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
-          <div className="flex items-center gap-4 md:gap-5">
-            <div className="shrink-0">
+    <main className="relative min-h-screen overflow-x-hidden bg-[#050505] p-4 text-white md:p-6 lg:p-8">
+      <div className="pointer-events-none absolute right-0 top-0 h-[520px] w-[520px] rounded-full bg-indigo-900/15 blur-[150px]" />
+      <div className="relative mx-auto max-w-7xl">
+        <header className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-end">
+          <div className="flex items-center gap-4">
               {fotoUrl ? (
-                <img src={fotoUrl} alt="Perfil Super Admin" className="w-16 h-16 md:w-20 md:h-20 rounded-full object-cover border-2 border-indigo-500/50 shadow-[0_0_20px_rgba(99,102,241,0.3)] pointer-events-none" />
+              <img src={fotoUrl} alt="" className="h-16 w-16 rounded-full border-2 border-indigo-500/50 object-cover md:h-20 md:w-20" />
               ) : (
-                <div className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-zinc-900 border-2 border-white/10 flex items-center justify-center text-zinc-600 shadow-lg">
-                  <ShieldCheck className="w-8 h-8" />
+              <div className="flex h-16 w-16 items-center justify-center rounded-full border border-white/10 bg-zinc-900 text-zinc-500 md:h-20 md:w-20">
+                <ShieldCheck className="h-8 w-8" />
                 </div>
               )}
-            </div>
-
             <div>
-              <div className="flex items-center gap-3 mb-2">
-                <span className="bg-indigo-600 text-white text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md shadow-[0_0_10px_rgba(79,70,229,0.5)] cursor-default flex items-center gap-1.5">
-                  <Globe size={12} /> Acesso Super Admin
+              <div className="mb-2 flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 rounded-md bg-indigo-600 px-2.5 py-1 text-[9px] font-black uppercase tracking-widest">
+                  <Globe size={12} /> Super Admin
                 </span>
-                <span className="flex items-center gap-1.5 text-[9px] text-green-400 font-bold uppercase tracking-widest cursor-default">
-                  <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span> Sistemas Online
-                </span>
+                <span className="text-[9px] font-bold uppercase tracking-widest text-green-400">Sistemas separados</span>
               </div>
-              <h1 className="text-3xl md:text-4xl lg:text-5xl font-black text-white tracking-tight">QG iTatame</h1>
-              <p className="text-zinc-400 text-[10px] md:text-sm mt-1 max-w-xl">
-                Bem-vindo ao cockpit de controle global, <strong>{nomeDono}</strong>.
+              <h1 className="text-3xl font-black tracking-tight md:text-5xl">QG de suporte</h1>
+              <p className="mt-1 max-w-xl text-sm text-zinc-400">
+                {nomeDono}, o Itatame e a Retratt ficam em caixas diferentes. O dinheiro de campeonato não entra no de foto.
               </p>
             </div>
           </div>
-          
-          <div className="flex items-center gap-2 mt-4 md:mt-0">
-            <button onClick={() => supabase.auth.signOut().then(() => router.push('/'))} className="cursor-pointer bg-white/5 hover:bg-white/10 border border-white/10 text-white text-[10px] md:text-xs font-bold uppercase tracking-widest px-4 py-2.5 rounded-lg transition-colors flex items-center gap-1.5">
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
-              Encerrar Sessão
-            </button>
-          </div>
-        </div>
-
-        {/* MÉTRICAS GLOBAIS DA PLATAFORMA */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-8">
-          <div className="bg-[#0a0a0e]/80 backdrop-blur-md border border-indigo-500/30 rounded-2xl p-4 md:p-5 shadow-[0_0_30px_rgba(99,102,241,0.1)] relative overflow-hidden pointer-events-none">
-            <div className="absolute -right-4 -top-4 w-20 h-20 bg-indigo-500/20 blur-2xl rounded-full"></div>
-            <p className="text-indigo-400 text-[9px] md:text-[10px] font-black uppercase tracking-widest mb-1">Vol. Financeiro Global</p>
-            <h3 className="text-xl md:text-3xl font-black text-white">
-              <span className="text-indigo-500 text-sm md:text-lg mr-1">R$</span>{totalFaturamento.toLocaleString('pt-BR')}
-            </h3>
-          </div>
-          <div className="bg-[#0a0a0e]/80 backdrop-blur-md border border-white/10 rounded-2xl p-4 md:p-5 shadow-xl relative overflow-hidden pointer-events-none">
-            <p className="text-zinc-500 text-[9px] md:text-[10px] font-black uppercase tracking-widest mb-1">Atletas na Plataforma</p>
-            <h3 className="text-xl md:text-3xl font-black text-white">{inscricoesGlobais.length} <span className="text-zinc-600 text-xs md:text-sm font-medium">registros</span></h3>
-          </div>
-          <div className="bg-[#0a0a0e]/80 backdrop-blur-md border border-white/10 rounded-2xl p-4 md:p-5 shadow-xl relative overflow-hidden pointer-events-none">
-            <p className="text-zinc-500 text-[9px] md:text-[10px] font-black uppercase tracking-widest mb-1">Eventos Criados</p>
-            <h3 className="text-xl md:text-3xl font-black text-white">{eventosGlobais.length} <span className="text-zinc-600 text-xs md:text-sm font-medium">torneios</span></h3>
-          </div>
-          <div className="bg-[#0a0a0e]/80 backdrop-blur-md border border-white/10 rounded-2xl p-4 md:p-5 shadow-xl relative overflow-hidden pointer-events-none">
-            <p className="text-zinc-500 text-[9px] md:text-[10px] font-black uppercase tracking-widest mb-1">Organizadores Ativos</p>
-            <h3 className="text-xl md:text-3xl font-black text-white">{organizadoresAtivos} <span className="text-zinc-600 text-xs md:text-sm font-medium">contas</span></h3>
-          </div>
-        </div>
-
-        <h2 className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-3 ml-1 cursor-default">Módulos Exclusivos Super-Admin</h2>
-        
-        {/* GRID DE ACESSOS RÁPIDOS */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-10">
-          
-          <Link href="/super-admin/organizadores" className="group cursor-pointer relative bg-gradient-to-br from-[#0a0a0e] to-black border border-white/5 hover:border-indigo-500/50 rounded-2xl p-5 md:p-6 transition-all shadow-lg overflow-hidden flex flex-col justify-between min-h-[160px]">
-            <div className="absolute right-0 bottom-0 w-24 h-24 bg-indigo-500/5 blur-2xl group-hover:bg-indigo-500/10 transition-colors pointer-events-none"></div>
-            <div className="w-10 h-10 bg-indigo-500/10 text-indigo-400 rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 group-hover:bg-indigo-500 group-hover:text-white transition-all shadow-[0_0_15px_rgba(99,102,241,0.2)]">
-              <ShieldCheck className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-sm md:text-base font-black text-white group-hover:text-indigo-300 transition-colors">Homologação de Contas</h3>
-              <p className="text-zinc-500 text-[9px] md:text-[10px] font-medium mt-1 leading-relaxed">Aprovar ou bloquear novos organizadores.</p>
-            </div>
-          </Link>
-
-          {/* O MOTOR DE CATEGORIAS GLOBAIS ESTÁ AQUI */}
-          <button onClick={() => setShowRegrasModal(true)} className="text-left group cursor-pointer relative bg-gradient-to-br from-[#0a0a0e] to-black border border-white/5 hover:border-blue-500/50 rounded-2xl p-5 md:p-6 transition-all shadow-lg overflow-hidden flex flex-col justify-between min-h-[160px]">
-            <div className="absolute right-0 bottom-0 w-24 h-24 bg-blue-500/5 blur-2xl group-hover:bg-blue-500/10 transition-colors pointer-events-none"></div>
-            <div className="w-10 h-10 bg-blue-500/10 text-blue-400 rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 group-hover:bg-blue-500 group-hover:text-white transition-all shadow-[0_0_15px_rgba(59,130,246,0.2)]">
-              <Scale className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-sm md:text-base font-black text-white group-hover:text-blue-300 transition-colors">Livro de Regras Global</h3>
-              <p className="text-zinc-500 text-[9px] md:text-[10px] font-medium mt-1 leading-relaxed">Gerenciar pesos, faixas e idades (IBJJF).</p>
-            </div>
+          <button
+            onClick={() => supabase.auth.signOut().then(() => router.push("/"))}
+            className="rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest"
+          >
+            Encerrar sessão
           </button>
+        </header>
 
-          <Link href="/admin" className="col-span-2 md:col-span-1 group cursor-pointer relative bg-gradient-to-br from-[#0a0a0e] to-black border border-white/5 hover:border-yellow-500/50 rounded-2xl p-5 md:p-6 transition-all shadow-lg overflow-hidden flex flex-col justify-between min-h-[160px]">
-            <div className="absolute right-0 bottom-0 w-24 h-24 bg-yellow-500/5 blur-2xl group-hover:bg-yellow-500/10 transition-colors pointer-events-none"></div>
-            <div className="w-10 h-10 bg-yellow-500/10 text-yellow-500 rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 group-hover:bg-yellow-500 group-hover:text-black transition-all shadow-[0_0_15px_rgba(234,179,8,0.2)]">
-              <Activity className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-sm md:text-base font-black text-white group-hover:text-yellow-400 transition-colors">Acessar Painel Comum</h3>
-              <p className="text-zinc-500 text-[9px] md:text-[10px] font-medium mt-1 leading-relaxed">Ir para a visão normal de organizador.</p>
-            </div>
-          </Link>
-
-          <Link href="/super-admin/fotos" className="col-span-2 md:col-span-1 group cursor-pointer relative bg-gradient-to-br from-[#0a0a0e] to-black border border-cyan-500/20 hover:border-cyan-500/60 rounded-2xl p-5 md:p-6 transition-all shadow-lg overflow-hidden flex flex-col justify-between min-h-[160px]">
-            <div className="absolute right-0 bottom-0 w-28 h-28 bg-cyan-500/10 blur-2xl group-hover:bg-cyan-500/20 transition-colors pointer-events-none"></div>
-            <div className="w-10 h-10 bg-cyan-500/10 text-cyan-400 rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 group-hover:bg-cyan-500 group-hover:text-black transition-all shadow-[0_0_15px_rgba(6,182,212,0.2)]">
-              <Banknote className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-sm md:text-base font-black text-white group-hover:text-orange-300 transition-colors">Financeiro Retratt</h3>
-              <p className="text-zinc-500 text-[9px] md:text-[10px] font-medium mt-1 leading-relaxed">Comissões, royalties, galerias e repasses.</p>
-            </div>
-          </Link>
-          <Link href="/super-admin/inscricoes" className="col-span-2 md:col-span-1 group cursor-pointer relative bg-gradient-to-br from-[#0a0a0e] to-black border border-red-500/20 hover:border-red-500/60 rounded-2xl p-5 md:p-6 transition-all shadow-lg overflow-hidden flex flex-col justify-between min-h-[160px]">
-            <div className="absolute right-0 bottom-0 w-28 h-28 bg-red-500/10 blur-2xl pointer-events-none"></div><div className="w-10 h-10 bg-red-500/10 text-red-400 rounded-xl flex items-center justify-center mb-3 group-hover:bg-red-500 group-hover:text-white transition-all"><RefreshCw className="w-5 h-5"/></div><div><h3 className="text-sm md:text-base font-black text-white group-hover:text-red-300">Estornos de Inscrições</h3><p className="text-zinc-500 text-[9px] md:text-[10px] font-medium mt-1 leading-relaxed">Auditar e devolver pagamentos de campeonatos.</p></div>
-          </Link>
+        <div className="mb-6 grid gap-3 md:grid-cols-2">
+          <button
+            type="button"
+            onClick={() => setSistema("itatame")}
+            className={`rounded-3xl border p-5 text-left transition ${sistema === "itatame" ? "border-red-500/60 bg-red-500/10" : "border-white/10 bg-[#0a0a0e] hover:border-white/20"}`}
+          >
+            <p className="text-[10px] font-black uppercase tracking-widest text-red-400">Sistema Itatame</p>
+            <p className="mt-2 text-2xl font-black">{moeda(resumoItatame.faturamento)}</p>
+            <p className="mt-1 text-xs text-zinc-400">Inscrições pagas · comissão {moeda(resumoItatame.comissao)} · {eventos.length} campeonatos · {aprovados.length} organizadores</p>
+          </button>
+          <button
+            type="button"
+            onClick={() => setSistema("retratt")}
+            className={`rounded-3xl border p-5 text-left transition ${sistema === "retratt" ? "border-cyan-500/60 bg-cyan-500/10" : "border-white/10 bg-[#0a0a0e] hover:border-white/20"}`}
+          >
+            <p className="text-[10px] font-black uppercase tracking-widest text-cyan-400">Sistema Retratt</p>
+            <p className="mt-2 text-2xl font-black">{carregandoRetratt ? "..." : centavos(retratt?.geral.faturamentoCentavos)}</p>
+            <p className="mt-1 text-xs text-zinc-400">
+              {carregandoRetratt ? "Consolidando vendas de foto..." : `${retratt?.geral.pedidosPagos || 0} pedidos pagos · ${retratt?.geral.galerias || 0} galerias · royalty aberto ${centavos(retratt?.geral.royaltyEmAbertoCentavos)}`}
+            </p>
+            </button>
         </div>
 
-        {/* BASE DE DADOS GLOBAL (TABELA DE AUDITORIA) */}
-        <div className="bg-[#0a0a0e]/90 backdrop-blur-xl border border-white/10 rounded-3xl p-5 md:p-6 shadow-2xl">
-          <div className="flex flex-col md:flex-row md:justify-between items-start md:items-center gap-4 mb-6 border-b border-white/5 pb-4">
-            <h2 className="text-lg md:text-xl font-black uppercase tracking-widest text-white flex items-center gap-2 cursor-default">
-              <Globe className="w-5 h-5 text-indigo-500" />
-              Master Data: Visão Global
-            </h2>
-            
-            <div className="flex gap-2 w-full md:w-auto">
-              <button onClick={exportarCSV} className="flex-1 md:flex-none justify-center cursor-pointer bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 text-indigo-400 text-[9px] md:text-[10px] font-bold uppercase tracking-widest px-4 py-2.5 rounded-lg transition-colors flex items-center gap-1.5">
-                Gerar CSV
-              </button>
-              <button onClick={exportarPDF} className="flex-1 md:flex-none justify-center cursor-pointer bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300 text-[9px] md:text-[10px] font-bold uppercase tracking-widest px-4 py-2.5 rounded-lg transition-colors flex items-center gap-1.5">
-                Gerar PDF
-              </button>
+        {sistema === "itatame" ? (
+          <section>
+            {erro && <p className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">{erro}</p>}
+            <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <article className="rounded-2xl border border-red-500/30 bg-[#0a0a0e] p-4">
+                <p className="text-[9px] font-black uppercase tracking-widest text-red-300">Faturamento Itatame</p>
+                <p className="mt-2 text-xl font-black md:text-2xl">{moeda(resumoItatame.faturamento)}</p>
+                <p className="mt-1 text-[10px] text-zinc-500">{resumoItatame.pagos} pagas · repasse {moeda(resumoItatame.repasse)}</p>
+              </article>
+              <article className="rounded-2xl border border-white/10 bg-[#0a0a0e] p-4">
+                <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Comissão da plataforma</p>
+                <p className="mt-2 text-xl font-black md:text-2xl">{moeda(resumoItatame.comissao)}</p>
+                <p className="mt-1 text-[10px] text-zinc-500">Pelo plano de cada organizador</p>
+              </article>
+              <article className="rounded-2xl border border-white/10 bg-[#0a0a0e] p-4">
+                <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Em aberto</p>
+                <p className="mt-2 text-xl font-black md:text-2xl">{moeda(resumoItatame.pendente)}</p>
+                <p className="mt-1 text-[10px] text-zinc-500">{resumoItatame.pendentes} pendentes · {moeda(resumoItatame.estornado)} estornado</p>
+              </article>
+              <article className="rounded-2xl border border-white/10 bg-[#0a0a0e] p-4">
+                <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Organizadores</p>
+                <p className="mt-2 text-xl font-black md:text-2xl">{aprovados.length}</p>
+                <p className="mt-1 text-[10px] text-zinc-500">{fila} na fila · {semMercadoPago} sem Mercado Pago</p>
+              </article>
             </div>
+
+            <div className="mb-6 grid gap-3 md:grid-cols-4">
+              <Link href="/super-admin/suporte" className="rounded-2xl border border-yellow-500/40 bg-yellow-500/10 p-5 transition hover:border-yellow-400">
+                <Users className="mb-3 text-yellow-400" size={20} />
+                <h2 className="font-black">Acessar painel comum</h2>
+                <p className="mt-1 text-[11px] leading-relaxed text-zinc-400">Visão detalhada da tela de cada organizador, para o suporte atender qualquer conta.</p>
+              </Link>
+              <Link href="/super-admin/organizadores" className="rounded-2xl border border-white/10 bg-[#0a0a0e] p-5 transition hover:border-indigo-500/50">
+                <ShieldCheck className="mb-3 text-indigo-400" size={20} />
+                <h2 className="font-black">Homologação</h2>
+                <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">{fila} conta(s) aguardando análise de acesso.</p>
+              </Link>
+              <Link href="/super-admin/inscricoes" className="rounded-2xl border border-white/10 bg-[#0a0a0e] p-5 transition hover:border-red-500/50">
+                <Banknote className="mb-3 text-red-400" size={20} />
+                <h2 className="font-black">Estornos Itatame</h2>
+                <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">Devolução de inscrição de campeonato, separada do reembolso de foto.</p>
+          </Link>
+              <button type="button" onClick={() => setShowRegrasModal(true)} className="rounded-2xl border border-white/10 bg-[#0a0a0e] p-5 text-left transition hover:border-blue-500/50">
+                <Scale className="mb-3 text-blue-400" size={20} />
+                <h2 className="font-black">Livro de regras</h2>
+                <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">Pesos, faixas e idades usados nos campeonatos.</p>
+          </button>
+            </div>
+
+            <div className="mb-4 flex flex-wrap gap-2">
+              <button type="button" onClick={() => { setSituacao("pendente"); setSemIdMp(false); }} className="rounded-full border border-yellow-500/30 bg-yellow-500/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-yellow-200">
+                {resumoItatame.pendentes} pagamentos pendentes
+              </button>
+              <button type="button" onClick={() => { setSituacao("pago"); setSemIdMp(true); }} className="rounded-full border border-orange-500/30 bg-orange-500/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-orange-200">
+                <AlertTriangle size={12} className="mr-1 inline" /> Pagas sem ID Mercado Pago
+              </button>
+              <button type="button" onClick={() => { setSituacao("estornado"); setSemIdMp(false); }} className="rounded-full border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-red-200">
+                {resumoItatame.estornos} estornos
+              </button>
+              <button type="button" onClick={() => { setSituacao("todos"); setSemIdMp(false); setOrganizadorId(""); setEventoId(""); setFaixa(""); setBusca(""); }} className="rounded-full border border-white/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-zinc-400">
+                Limpar filtros
+              </button>
           </div>
 
-          {/* BARRA DE FILTROS AVANÇADA */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-            <div className="relative cursor-text">
-              <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input type="text" placeholder="Buscar atleta ou equipe..." value={filtroNome} onChange={(e) => setFiltroNome(e.target.value)} className="w-full bg-black/60 border border-white/5 rounded-xl pl-9 pr-3 py-2.5 outline-none focus:border-indigo-500 text-white transition-colors text-xs" />
+            <div className="rounded-3xl border border-white/10 bg-[#0a0a0e]/90 p-5">
+              <div className="mb-5 flex flex-col justify-between gap-3 border-b border-white/5 pb-4 md:flex-row md:items-center">
+                <div>
+                  <h2 className="text-lg font-black">Lista de suporte · Itatame</h2>
+                  <p className="mt-1 text-xs text-zinc-500">
+                    {filtradas.length} inscrições · pago {moeda(resumoFiltrado.faturamento)} · pendente {moeda(resumoFiltrado.pendente)}
+                  </p>
             </div>
-            <div className="relative cursor-pointer">
-              <select value={filtroFaixa} onChange={(e) => setFiltroFaixa(e.target.value)} className="cursor-pointer w-full bg-black/60 border border-white/5 rounded-xl px-3 py-2.5 outline-none focus:border-indigo-500 text-white transition-colors appearance-none text-xs font-bold">
-                <option value="">Todas as Faixas</option>
-                <option value="Branca">Branca</option>
-                <option value="Azul">Azul</option>
-                <option value="Roxa">Roxa</option>
-                <option value="Marrom">Marrom</option>
-                <option value="Preta">Preta</option>
-              </select>
-              <ChevronDown className="w-3.5 h-3.5 text-zinc-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => exportarItatame("csv")} className="rounded-lg border border-white/10 px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest text-zinc-300">CSV</button>
+                  <button type="button" onClick={() => exportarItatame("pdf")} className="inline-flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest text-red-300">
+                    <FileText size={13} /> PDF de suporte
+                  </button>
             </div>
-            <div className="relative cursor-pointer">
-              <select value={filtroCategoria} onChange={(e) => setFiltroCategoria(e.target.value)} className="cursor-pointer w-full bg-black/60 border border-white/5 rounded-xl px-3 py-2.5 outline-none focus:border-indigo-500 text-white transition-colors appearance-none text-xs font-bold">
-                <option value="">Todas Categorias</option>
-                <option value="Pluma (Até 64.500 kg)">Pluma (Até 64.500 kg)</option>
-                <option value="Leve (Até 72.500 kg)">Leve (Até 72.500 kg)</option>
-                <option value="Pesadíssimo (Acima de 85.5 kg)">Pesadíssimo (Acima de 85.5 kg)</option>
-              </select>
-              <ChevronDown className="w-3.5 h-3.5 text-zinc-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             </div>
-            <div className="relative cursor-pointer">
-              <select value={filtroEquipe} onChange={(e) => setFiltroEquipe(e.target.value)} className="cursor-pointer w-full bg-black/60 border border-white/5 rounded-xl px-3 py-2.5 outline-none focus:border-indigo-500 text-white transition-colors appearance-none text-xs font-bold">
-                <option value="">Todas as Equipes</option>
-                {equipesUnicas.map((eq: any, idx) => (
-                  <option key={idx} value={eq}>{eq}</option>
-                ))}
-              </select>
-              <ChevronDown className="w-3.5 h-3.5 text-zinc-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+
+              <div className="mb-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                <label className="relative xl:col-span-2">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={15} />
+                  <input value={busca} onChange={(event) => setBusca(event.target.value)} placeholder="Atleta, equipe, organizador, e-mail ou ID MP" className="w-full rounded-xl border border-white/10 bg-black py-2.5 pl-9 pr-3 text-xs outline-none focus:border-red-500" />
+                </label>
+                <SelectFiltro value={organizadorId} onChange={setOrganizadorId} placeholder="Todos os organizadores">
+                  {Array.from(organizadoresPorUsuario.values())
+                    .sort((a, b) => String(a.nome).localeCompare(String(b.nome), "pt-BR"))
+                    .map((item) => (
+                      <option key={item.user_id} value={item.user_id || ""}>{item.nome || "Sem nome"} · {item.academia || item.status}</option>
+                    ))}
+                </SelectFiltro>
+                <SelectFiltro value={eventoId} onChange={setEventoId} placeholder="Todos os campeonatos">
+                  {eventos.map((evento) => <option key={evento.id} value={String(evento.id)}>{evento.nome}</option>)}
+                </SelectFiltro>
+                <SelectFiltro value={situacao} onChange={(valor) => setSituacao(valor as "todos" | SituacaoInscricao)} placeholder="">
+                  <option value="todos">Pagamento: todos</option>
+                  <option value="pago">Somente pagos</option>
+                  <option value="pendente">Somente pendentes</option>
+                  <option value="estornado">Somente estornados</option>
+                </SelectFiltro>
             </div>
+              <div className="mb-5 max-w-xs">
+                <SelectFiltro value={faixa} onChange={setFaixa} placeholder="Todas as faixas">
+                  {faixas.map((item) => <option key={item} value={item}>{item}</option>)}
+                </SelectFiltro>
           </div>
 
-          {/* TABELA GLOBAL */}
-          <div className="border border-white/5 rounded-2xl overflow-hidden">
-            <div className="overflow-x-auto custom-scrollbar">
-              <table className="w-full text-left border-collapse whitespace-nowrap">
-                <thead className="bg-black/80 border-b border-white/5 text-zinc-500 text-[9px] md:text-[10px] uppercase tracking-widest font-black">
-                  <tr>
-                    <th className="p-4 pl-5">Atleta / Evento</th>
-                    <th className="p-4">Equipe</th>
-                    <th className="p-4">Faixa</th>
-                    <th className="p-4">Categoria / Idade</th>
-                    <th className="p-4 pr-5 text-center">Status Interno</th>
+              <div className="overflow-x-auto rounded-2xl border border-white/5">
+                <table className="w-full min-w-[980px] text-left text-xs">
+                  <thead className="bg-black text-[9px] uppercase tracking-widest text-zinc-500">
+                    <tr>
+                      <th className="p-3">Organizador</th>
+                      <th className="p-3">Atleta</th>
+                      <th className="p-3">Campeonato</th>
+                      <th className="p-3">Chave</th>
+                      <th className="p-3">Valor</th>
+                      <th className="p-3">Situação</th>
+                      <th className="p-3">Suporte</th>
                   </tr>
                 </thead>
-                <tbody className="text-[11px] md:text-xs text-zinc-300 font-medium">
-                  {inscricoesFiltradas.length > 0 ? (
-                    inscricoesFiltradas.map((item, index) => (
-                      <tr key={index} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
-                        <td className="p-4 pl-5">
-                          <div className="text-white font-bold group-hover:text-indigo-400 transition-colors">{item.atleta || item.nome}</div>
-                          <div className="text-[9px] text-zinc-500 uppercase mt-0.5">{item.eventos?.nome || "Evento Desconhecido"}</div>
+                  <tbody>
+                    {visiveis.length === 0 ? (
+                      <tr><td colSpan={7} className="p-10 text-center text-[10px] font-bold uppercase tracking-widest text-zinc-500">Nenhuma inscrição do Itatame neste filtro.</td></tr>
+                    ) : visiveis.map((item) => {
+                      const linha = linhaDaInscricao(item);
+                      const evento = item.evento_id != null ? eventosPorId.get(String(item.evento_id)) : undefined;
+                      const userId = evento?.organizador_id || eventoEmbutido(item)?.organizador_id || "";
+                      const organizador = organizadoresPorUsuario.get(userId);
+                      const zap = whatsappDe(organizador?.telefone);
+                      const situacaoAtual = situacaoInscricao(item);
+                      return (
+                        <tr key={item.id} className="border-t border-white/5 align-top">
+                          <td className="p-3">
+                            <p className="font-bold text-white">{linha.organizador}</p>
+                            <p className="text-[10px] text-zinc-500">{linha.academia}</p>
+                            <p className="text-[10px] text-zinc-600">{linha.plano}</p>
+                          </td>
+                          <td className="p-3">
+                            <p className="font-bold">{linha.atleta}</p>
+                            <p className="text-[10px] text-zinc-500">{linha.equipe}</p>
+                          </td>
+                          <td className="p-3">
+                            <p>{linha.evento}</p>
+                            <p className="text-[10px] text-zinc-500">{linha.dataEvento}{evento?.cidade ? ` · ${evento.cidade}` : ""}</p>
                         </td>
-                        <td className="p-4 text-zinc-400">{item.equipe || "-"}</td>
-                        <td className="p-4">
-                          <span className="bg-white/10 px-2 py-1 rounded text-[9px] font-bold text-white border border-white/5 pointer-events-none">
-                            {item.faixa}
-                          </span>
+                          <td className="p-3">
+                            <p>{linha.categoria}</p>
+                            <p className="text-[10px] text-zinc-500">{linha.faixa} · {linha.peso} · {linha.pacote}</p>
                         </td>
-                        <td className="p-4">
-                          <div className="text-white">{item.categoria}</div>
-                          <div className="text-[9px] text-zinc-500 uppercase mt-0.5">{item.idade || "?"} anos • {item.peso} kg</div>
+                          <td className="p-3 font-bold">{linha.valor}</td>
+                          <td className="p-3">
+                            <p className={situacaoAtual === "pago" ? "text-emerald-400" : situacaoAtual === "estornado" ? "text-red-400" : "text-yellow-300"}>{linha.pagamento}</p>
+                            <p className="text-[10px] text-zinc-500">{linha.pesagem}</p>
+                            <p className="text-[10px] text-zinc-600">{item.mp_payment_id ? `MP ${item.mp_payment_id}` : "Sem ID MP"}</p>
                         </td>
-                        <td className="p-4 pr-5 flex items-center justify-center gap-2 h-full min-h-[50px]">
-                          <div title={item.pagamento_ok ? "Pagamento Confirmado" : "Pagamento Pendente"} className={`w-2.5 h-2.5 rounded-full ${item.pagamento_ok ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" : "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]"}`}></div>
-                          <div title={item.pesagem_ok ? "Pesagem OK" : "Pesagem Pendente"} className={`w-2.5 h-2.5 rounded-full ${item.pesagem_ok ? "bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)]" : "bg-zinc-700"}`}></div>
+                          <td className="p-3">
+                            <div className="flex flex-col gap-1">
+                              {userId && <Link href={`/super-admin/suporte?org=${userId}`} className="text-[10px] font-bold uppercase tracking-widest text-yellow-300">Abrir painel</Link>}
+                              {zap && <a href={zap} target="_blank" rel="noreferrer" className="text-[10px] font-bold uppercase tracking-widest text-emerald-400">WhatsApp</a>}
+                              {evento && <Link href={`/evento/${evento.id}`} className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Página pública</Link>}
+                            </div>
                         </td>
                       </tr>
-                    ))
-                  ) : (
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              {filtradas.length > limite && (
+                <button type="button" onClick={() => setLimite((atual) => atual + 80)} className="mt-4 w-full rounded-xl border border-white/10 py-3 text-[10px] font-black uppercase tracking-widest text-zinc-300">
+                  Mostrar mais {Math.min(80, filtradas.length - limite)} de {filtradas.length - limite}
+                </button>
+              )}
+            </div>
+          </section>
+        ) : (
+          <section>
+            {erroRetratt && <p className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">{erroRetratt}</p>}
+            <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <article className="rounded-2xl border border-cyan-500/30 bg-[#0a0a0e] p-4">
+                <p className="text-[9px] font-black uppercase tracking-widest text-cyan-300">Vendas Retratt</p>
+                <p className="mt-2 text-xl font-black md:text-2xl">{centavos(retratt?.geral.faturamentoCentavos)}</p>
+                <p className="mt-1 text-[10px] text-zinc-500">{retratt?.geral.pedidosPagos || 0} pedidos pagos</p>
+              </article>
+              <article className="rounded-2xl border border-white/10 bg-[#0a0a0e] p-4">
+                <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Comissão Itatame</p>
+                <p className="mt-2 text-xl font-black md:text-2xl">{centavos(retratt?.geral.comissaoItatameCentavos)}</p>
+                <p className="mt-1 text-[10px] text-zinc-500">Snapshot de cada venda de foto</p>
+              </article>
+              <article className="rounded-2xl border border-white/10 bg-[#0a0a0e] p-4">
+                <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Royalty em aberto</p>
+                <p className="mt-2 text-xl font-black md:text-2xl">{centavos(retratt?.geral.royaltyEmAbertoCentavos)}</p>
+                <p className="mt-1 text-[10px] text-zinc-500">Disponível {centavos(retratt?.geral.royaltyDisponivelCentavos)} · pago {centavos(retratt?.geral.royaltyPagoCentavos)}</p>
+              </article>
+              <article className="rounded-2xl border border-white/10 bg-[#0a0a0e] p-4">
+                <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Operação</p>
+                <p className="mt-2 text-xl font-black md:text-2xl">{retratt?.geral.fotosVendidas || 0}</p>
+                <p className="mt-1 text-[10px] text-zinc-500">{retratt?.geral.galerias || 0} galerias · {retratt?.geral.fotografos || 0} fotógrafos</p>
+              </article>
+            </div>
+
+            <div className="mb-6 flex flex-wrap gap-3">
+              <Link href="/super-admin/fotos" className="rounded-xl bg-cyan-500 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-black">Abrir financeiro completo e reembolsos</Link>
+              <button type="button" onClick={exportarRetratt} className="rounded-xl border border-cyan-500/30 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-cyan-300">PDF dos royalties</button>
+            </div>
+
+            <div className="rounded-3xl border border-white/10 bg-[#0a0a0e] p-5">
+              <div className="mb-4 flex flex-col justify-between gap-3 md:flex-row md:items-center">
+                <div>
+                  <h2 className="text-lg font-black">Organizadores na Retratt</h2>
+                  <p className="mt-1 text-xs text-zinc-500">Royalties de foto. Não inclui inscrição de campeonato.</p>
+                </div>
+                <label className="relative w-full md:w-72">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={15} />
+                  <input value={buscaRetratt} onChange={(event) => setBuscaRetratt(event.target.value)} placeholder="Buscar organizador da Retratt" className="w-full rounded-xl border border-white/10 bg-black py-2.5 pl-9 pr-3 text-xs outline-none focus:border-cyan-500" />
+                </label>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[760px] text-left text-xs">
+                  <thead className="text-[9px] uppercase tracking-widest text-zinc-500">
                     <tr>
-                      <td colSpan={5} className="p-10 text-center text-zinc-500 font-bold uppercase tracking-widest text-[10px] border-none cursor-default">
-                        Nenhum registro encontrado no banco de dados global.
-                      </td>
+                      <th className="p-3">Organizador</th>
+                      <th className="p-3">Galerias</th>
+                      <th className="p-3">Vendas</th>
+                      <th className="p-3">Comissão</th>
+                      <th className="p-3">Royalty aberto</th>
+                      <th className="p-3">Já repassado</th>
                     </tr>
-                  )}
+                  </thead>
+                  <tbody>
+                    {retrattFiltrado.length === 0 ? (
+                      <tr><td colSpan={6} className="p-8 text-center text-zinc-500">{carregandoRetratt ? "Carregando Retratt..." : "Nenhum organizador encontrado."}</td></tr>
+                    ) : retrattFiltrado.map((item) => (
+                      <tr key={item.id} className="border-t border-white/5">
+                        <td className="p-3 font-bold">{item.nome}</td>
+                        <td className="p-3">{item.galerias}</td>
+                        <td className="p-3">{centavos(item.faturamentoCentavos)}</td>
+                        <td className="p-3">{centavos(item.comissaoItatameCentavos)}</td>
+                        <td className="p-3 text-amber-300">{centavos(item.royaltyEmAbertoCentavos)}</td>
+                        <td className="p-3 text-emerald-300">{centavos(item.royaltyPagoCentavos)}</td>
+                      </tr>
+                    ))}
                 </tbody>
               </table>
             </div>
+
+              <h3 className="mb-3 mt-8 text-sm font-black uppercase tracking-widest text-zinc-400">Pedidos pagos recentes</h3>
+              <div className="space-y-2">
+                {(retratt?.pedidosRecentes || []).map((pedido) => (
+                  <article key={pedido.id} className="grid gap-2 rounded-xl border border-white/5 bg-black/40 p-3 text-xs md:grid-cols-5">
+                    <div>
+                      <p className="font-bold">{pedido.galeria}</p>
+                      <p className="text-[10px] text-zinc-500">{dataCurta(pedido.data)} · {pedido.fotos} fotos</p>
+                    </div>
+                    <p className="text-zinc-300">{pedido.organizador}</p>
+                    <p className="text-zinc-400">{pedido.fotografo}</p>
+                    <p>{centavos(pedido.totalCentavos)} <span className="text-zinc-500">· comissão {centavos(pedido.comissaoItatameCentavos)}</span></p>
+                    <p className="text-cyan-300">{rotuloRepasse[pedido.repasseStatus] || pedido.repasseStatus} · royalty {centavos(pedido.royaltyCentavos)}</p>
+                  </article>
+                ))}
           </div>
         </div>
-
+          </section>
+        )}
       </div>
 
-      {/* ========================================================================= */}
-      {/* MODAL DO LIVRO DE REGRAS GLOBAIS (Gerador de Categorias)                  */}
-      {/* ========================================================================= */}
       {showRegrasModal && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-3 md:p-6 bg-black/95 backdrop-blur-md animate-in fade-in zoom-in duration-300">
-          <div className="bg-[#0e0e12] border border-blue-500/20 rounded-2xl md:rounded-3xl w-full max-w-2xl shadow-2xl relative overflow-hidden flex flex-col">
-            
-            <div className="p-5 md:p-6 border-b border-white/5 relative z-10 shrink-0 bg-[#050816]">
-              <div className="flex items-center gap-3 mb-2">
-                <Scale className="w-6 h-6 text-blue-500" />
-                <h2 className="text-xl md:text-2xl font-black text-white uppercase tracking-tight">Livro de Regras</h2>
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/95 p-4">
+          <div className="w-full max-w-2xl rounded-3xl border border-blue-500/20 bg-[#0e0e12]">
+            <div className="flex items-start justify-between border-b border-white/5 p-6">
+              <div>
+                <h2 className="text-xl font-black">Livro de regras</h2>
+                <p className="mt-1 text-xs text-zinc-400">Categorias oficiais dos campeonatos Itatame.</p>
               </div>
-              <p className="text-zinc-400 text-xs mt-1">Crie as categorias oficiais. Elas aparecerão para todos os organizadores.</p>
-              <button onClick={() => setShowRegrasModal(false)} className="absolute top-6 right-6 p-2 bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white rounded-lg transition-colors cursor-pointer">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"></path></svg>
-              </button>
+              <button type="button" onClick={() => setShowRegrasModal(false)} className="rounded-lg bg-white/5 px-3 py-2 text-xs">Fechar</button>
             </div>
-
-            <div className="p-5 md:p-6 bg-black/40">
-              <div className="flex gap-2 mb-6">
-                <button onClick={() => setNovaRegra({...novaRegra, tipo: 'peso'})} className={`flex-1 py-2.5 rounded-lg text-xs font-black uppercase tracking-widest transition-all border ${novaRegra.tipo === 'peso' ? 'bg-blue-500/10 text-blue-400 border-blue-500/30' : 'bg-black/50 text-zinc-500 border-white/5 hover:text-white'}`}>Categoria de Peso</button>
-                <button onClick={() => setNovaRegra({...novaRegra, tipo: 'idade'})} className={`flex-1 py-2.5 rounded-lg text-xs font-black uppercase tracking-widest transition-all border ${novaRegra.tipo === 'idade' ? 'bg-blue-500/10 text-blue-400 border-blue-500/30' : 'bg-black/50 text-zinc-500 border-white/5 hover:text-white'}`}>Idade / Divisão</button>
-                <button onClick={() => setNovaRegra({...novaRegra, tipo: 'faixa'})} className={`flex-1 py-2.5 rounded-lg text-xs font-black uppercase tracking-widest transition-all border ${novaRegra.tipo === 'faixa' ? 'bg-blue-500/10 text-blue-400 border-blue-500/30' : 'bg-black/50 text-zinc-500 border-white/5 hover:text-white'}`}>Faixa Oficial</button>
+            <div className="space-y-4 p-6">
+              <div className="flex gap-2">
+                {(["peso", "idade", "faixa"] as const).map((tipo) => (
+                  <button key={tipo} type="button" onClick={() => setNovaRegra({ ...novaRegra, tipo })} className={`flex-1 rounded-lg border py-2 text-[10px] font-black uppercase tracking-widest ${novaRegra.tipo === tipo ? "border-blue-500/40 bg-blue-500/10 text-blue-300" : "border-white/10 text-zinc-500"}`}>{tipo}</button>
+                ))}
               </div>
-
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-zinc-500 text-[10px] font-black uppercase tracking-widest block mb-1.5 ml-1">Gênero Alvo</label>
-                    <select value={novaRegra.genero} onChange={(e) => setNovaRegra({...novaRegra, genero: e.target.value})} className="w-full bg-[#050505] border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-blue-500 text-white text-xs font-bold appearance-none cursor-pointer">
-                      <option value="Masculino">Masculino</option>
-                      <option value="Feminino">Feminino</option>
-                      <option value="Ambos">Ambos</option>
+              <div className="grid gap-3 md:grid-cols-2">
+                <select value={novaRegra.genero} onChange={(event) => setNovaRegra({ ...novaRegra, genero: event.target.value })} className="rounded-xl border border-white/10 bg-black px-3 py-3 text-xs">
+                  <option>Masculino</option>
+                  <option>Feminino</option>
+                  <option>Ambos</option>
                     </select>
-                  </div>
-                  <div>
-                    <label className="text-zinc-500 text-[10px] font-black uppercase tracking-widest block mb-1.5 ml-1">Nome da Regra</label>
-                    <input type="text" value={novaRegra.nome} onChange={(e) => setNovaRegra({...novaRegra, nome: e.target.value})} placeholder={novaRegra.tipo === 'peso' ? 'Ex: Leve (Até 76kg)' : novaRegra.tipo === 'faixa' ? 'Ex: Faixa Preta' : 'Ex: Master 1 (30 a 35 anos)'} className="w-full bg-[#050505] border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-blue-500 text-white text-xs placeholder:text-zinc-700" />
-                  </div>
-                </div>
-
-                <button onClick={salvarNovaRegraGlobal} disabled={!novaRegra.nome} className="w-full mt-4 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white py-3.5 rounded-xl font-black uppercase tracking-widest text-xs transition-colors shadow-[0_0_15px_rgba(59,130,246,0.3)]">
-                  Adicionar ao Livro Oficial
-                </button>
+                <input value={novaRegra.nome} onChange={(event) => setNovaRegra({ ...novaRegra, nome: event.target.value })} placeholder="Nome da regra" className="rounded-xl border border-white/10 bg-black px-3 py-3 text-xs outline-none" />
               </div>
-            </div>
-
-            <div className="p-4 bg-blue-900/10 border-t border-blue-500/20 text-center">
-              <p className="text-blue-400/80 text-[10px] uppercase font-bold tracking-widest">A tabela de 'categorias_globais' deve ser criada no Supabase para salvar estes dados.</p>
+              <button
+                type="button"
+                disabled={!novaRegra.nome}
+                onClick={() => {
+                  alert(`Regra de ${novaRegra.tipo} [${novaRegra.nome}] anotada. A tabela categorias_globais ainda precisa existir no banco para publicar aos organizadores.`);
+                  setNovaRegra({ tipo: "peso", nome: "", genero: "Masculino" });
+                  setShowRegrasModal(false);
+                }}
+                className="w-full rounded-xl bg-blue-600 py-3 text-xs font-black uppercase tracking-widest disabled:opacity-40"
+              >
+                Adicionar ao livro
+              </button>
             </div>
           </div>
         </div>
       )}
-
     </main>
+  );
+}
+
+function SelectFiltro({ value, onChange, placeholder, children }: { value: string; onChange: (valor: string) => void; placeholder: string; children: ReactNode }) {
+  return (
+    <div className="relative">
+      <select value={value} onChange={(event) => onChange(event.target.value)} className="w-full appearance-none rounded-xl border border-white/10 bg-black px-3 py-2.5 text-xs font-bold outline-none focus:border-red-500">
+        {placeholder && <option value="">{placeholder}</option>}
+        {children}
+      </select>
+      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500" size={14} />
+    </div>
   );
 }

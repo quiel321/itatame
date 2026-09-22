@@ -586,6 +586,14 @@ function FormularioInscricao() {
       });
     }
 
+    if (inscricaoCriada?.id && !ampliando) {
+      await fetch("/api/aviso-professor-inscricao", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: authorization },
+        body: JSON.stringify({ inscricaoId: inscricaoCriada.id }),
+      });
+    }
+
     setErro("");
     setProcessando(false);
 

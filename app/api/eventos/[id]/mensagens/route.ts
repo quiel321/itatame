@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { autenticarRequest } from '@/app/lib/api-auth';
+import { avisarAtletaPrimeiraMensagem } from '@/app/lib/aviso-chat-atleta';
 import { createSupabaseServerClient } from '@/app/lib/supabase-server';
 
 export const runtime = 'nodejs';
@@ -111,10 +112,13 @@ export async function POST(request: Request, contexto: { params: Promise<{ id: s
   }
   const atletaUserId = acesso.papel === 'organizador' ? String(body.atletaUserId || '') : usuario.id;
   if (!atletaUserId) return NextResponse.json({ error: 'Escolha a conversa do atleta.' }, { status: 400 });
+  let primeiraDoOrganizador = false;
   if (acesso.papel === 'organizador') {
     const { data: inscrito } = await acesso.db.from('inscricoes').select('id').eq('evento_id', eventoId).eq('user_id', atletaUserId).limit(1).maybeSingle();
-    const { data: thread } = inscrito ? { data: inscrito } : await acesso.db.from('mensagens_evento').select('id').eq('evento_id', eventoId).eq('atleta_user_id', atletaUserId).limit(1).maybeSingle();
-    if (!thread) return NextResponse.json({ error: 'Este atleta não tem conversa neste campeonato.' }, { status: 400 });
+    if (!inscrito) return NextResponse.json({ error: 'Este atleta não está inscrito neste campeonato.' }, { status: 400 });
+    const { count } = await acesso.db.from('mensagens_evento').select('id', { count: 'exact', head: true })
+      .eq('evento_id', eventoId).eq('atleta_user_id', atletaUserId).eq('remetente', 'organizador');
+    primeiraDoOrganizador = !count;
   }
 
   const { data, error } = await acesso.db.from('mensagens_evento').insert({
@@ -124,5 +128,12 @@ export async function POST(request: Request, contexto: { params: Promise<{ id: s
     texto,
   }).select('id,evento_id,atleta_user_id,remetente,texto,lida,criado_em').single();
   if (error) return NextResponse.json({ error: 'Não foi possível enviar. Confirme se o chat deste evento já foi ativado.' }, { status: 409 });
+  if (primeiraDoOrganizador) {
+    try {
+      await avisarAtletaPrimeiraMensagem(eventoId, atletaUserId, acesso.evento.nome || 'Campeonato');
+    } catch (erro) {
+      console.error('Aviso da primeira mensagem não enviado:', erro);
+    }
+  }
   return NextResponse.json({ mensagem: data });
 }

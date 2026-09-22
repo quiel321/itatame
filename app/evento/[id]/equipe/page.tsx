@@ -9,7 +9,7 @@ type Solicitacao = { id: string; status: 'pendente' | 'aprovada' | 'recusada'; e
 type EquipeEvento = { id: string; nome: string; academia: string; professor: string; cidade: string; logo_url?: string | null; academia_logo_url?: string | null };
 const campo = 'mt-1 w-full rounded-xl border border-white/10 bg-black px-3 py-3 text-sm text-white outline-none focus:border-yellow-500';
 
-import { encontrarEquipeSemelhante } from '@/app/lib/equipes-nome';
+import { encontrarEquipeSemelhante, nomesEquipeIguais } from '@/app/lib/equipes-nome';
 import { UploadLogoEquipe } from '@/app/components/UploadLogoEquipe';
 
 export default function SolicitarEquipeEventoPage() {
@@ -21,7 +21,6 @@ export default function SolicitarEquipeEventoPage() {
   const [solicitacao, setSolicitacao] = useState<Solicitacao | null>(null);
   const [equipes, setEquipes] = useState<EquipeEvento[]>([]);
   const [busca, setBusca] = useState('');
-  const [listaAberta, setListaAberta] = useState(false);
   const [equipeEscolhidaId, setEquipeEscolhidaId] = useState('');
   const [form, setForm] = useState({ equipe_nome: '', academia: '', professor: '', cidade: '' });
   const [carregando, setCarregando] = useState(true);
@@ -48,8 +47,12 @@ export default function SolicitarEquipeEventoPage() {
       if (!ativo) return;
       setEhProfessor(perfil?.role === 'professor');
       if (pedido) setSolicitacao(pedido as Solicitacao);
+      const equipesDoCampeonato = (equipesEvento || []) as EquipeEvento[];
+      const nomeDoCadastro = perfil?.equipe || pedido?.equipe_nome || '';
+      const equipeDoCadastro = encontrarEquipeSemelhante(equipesDoCampeonato, nomeDoCadastro);
+      if (equipeDoCadastro) setEquipeEscolhidaId(equipeDoCadastro.id);
       setForm({
-        equipe_nome: '',
+        equipe_nome: equipeDoCadastro?.nome || nomeDoCadastro,
         academia: perfil?.academia || pedido?.academia || '',
         professor: perfil?.nome || pedido?.professor || '',
         cidade: perfil?.cidade || pedido?.cidade || '',
@@ -126,9 +129,12 @@ export default function SolicitarEquipeEventoPage() {
         </div>
         <div>
           <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-zinc-400">Logo da academia · aparece em Equipe e professor</p>
-          <UploadLogoEquipe eventoId={eventoId} equipeId={solicitacao.equipe_id} academiaId={solicitacao.id} tipo="academia" logoUrl={solicitacao.logo_url || equipes.find(item => item.id === solicitacao.equipe_id)?.academia_logo_url} nome={solicitacao.academia || solicitacao.equipe_nome} onAtualizou={(url) => {
+          <UploadLogoEquipe eventoId={eventoId} equipeId={solicitacao.equipe_id} academiaId={solicitacao.id} tipo="academia" logoUrl={(() => { const equipeAtual = equipes.find(item => item.id === solicitacao.equipe_id); return solicitacao.logo_url || (equipeAtual && nomesEquipeIguais(equipeAtual.academia, solicitacao.academia) ? equipeAtual.academia_logo_url : null); })()} nome={solicitacao.academia || solicitacao.equipe_nome} onAtualizou={(url) => {
             setSolicitacao(atual => atual ? { ...atual, logo_url: url } : atual);
-            setEquipes(atual => atual.map(item => item.id === solicitacao.equipe_id ? { ...item, academia_logo_url: url } : item));
+            const equipeAtual = equipes.find(item => item.id === solicitacao.equipe_id);
+            if (equipeAtual && nomesEquipeIguais(equipeAtual.academia, solicitacao.academia)) {
+              setEquipes(atual => atual.map(item => item.id === solicitacao.equipe_id ? { ...item, academia_logo_url: url } : item));
+            }
           }} />
         </div>
       </div>}
@@ -136,9 +142,9 @@ export default function SolicitarEquipeEventoPage() {
     : <form onSubmit={enviar} className="mt-8 space-y-4 rounded-2xl border border-white/10 bg-zinc-900/60 p-6">
       <p className="text-xs leading-relaxed text-zinc-500">Pesquise a equipe antes de cadastrar. Se ela já estiver no campeonato, entre nela para não duplicar o nome no ranking.</p>
       <label className="block text-xs text-zinc-400">Pesquisar equipe no campeonato
-        <input maxLength={120} className={campo} placeholder="Digite para buscar ou clique para ver as equipes" value={busca} onChange={e => { setBusca(e.target.value); setListaAberta(true); if (equipeEscolhidaId) setEquipeEscolhidaId(''); }} onFocus={() => setListaAberta(true)} onBlur={() => window.setTimeout(() => setListaAberta(false), 120)} />
+        <input maxLength={120} className={campo} placeholder="Filtre pelo nome, ou escolha na lista abaixo" value={busca} onChange={e => { setBusca(e.target.value); if (equipeEscolhidaId) setEquipeEscolhidaId(''); }} />
       </label>
-      {listaAberta && !equipeEscolhida && <ul className="overflow-hidden rounded-xl border border-white/10">{sugestoes.length ? sugestoes.map(equipe => <li key={equipe.id} className="border-t border-white/10 first:border-t-0"><button type="button" onMouseDown={e => e.preventDefault()} onClick={() => { setEquipeEscolhidaId(equipe.id); setForm({ ...form, equipe_nome: equipe.nome }); setBusca(equipe.nome); setListaAberta(false); }} className="flex w-full flex-col items-start gap-0.5 px-3 py-3 text-left hover:bg-white/5"><span className="text-sm font-bold text-white">{equipe.nome}</span><span className="text-xs text-zinc-500">{[equipe.academia, equipe.cidade].filter(Boolean).join(' · ') || 'Entrar nesta equipe'}</span></button></li>) : <li className="px-3 py-3 text-xs text-zinc-500">Nenhuma equipe encontrada. Cadastre um nome novo abaixo.</li>}</ul>}
+      {equipes.length > 0 && <ul className="overflow-hidden rounded-xl border border-white/10">{sugestoes.length ? sugestoes.map(equipe => <li key={equipe.id} className="border-t border-white/10 first:border-t-0"><button type="button" onClick={() => { setEquipeEscolhidaId(equipe.id); setForm({ ...form, equipe_nome: equipe.nome }); setBusca(''); }} className={`flex w-full flex-col items-start gap-0.5 px-3 py-3 text-left hover:bg-white/5 ${equipe.id === equipeEscolhidaId ? 'bg-yellow-500/10' : ''}`}><span className="text-sm font-bold text-white">{equipe.nome}</span><span className="text-xs text-zinc-500">{equipe.academia ? `Cadastrada por ${equipe.academia}${equipe.cidade ? ` · ${equipe.cidade}` : ''}` : (equipe.cidade || 'Entrar nesta equipe')}</span></button></li>) : <li className="px-3 py-3 text-xs text-zinc-500">Nenhuma equipe encontrada com esse filtro. O nome do seu cadastro continua no campo abaixo.</li>}</ul>}
       {equipeDestino && <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-3 text-xs text-emerald-100">
         {equipeDestino.nome.toLocaleLowerCase('pt-BR') === form.equipe_nome.trim().toLocaleLowerCase('pt-BR')
           ? 'Esta equipe já está no campeonato. Informe sua academia e entre nela, sem criar outro nome.'

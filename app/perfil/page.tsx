@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { supabase } from "../lib/supabase";
 import { calcularResultadosChaves } from "../lib/ranking-eventos";
 import QRCode from "react-qr-code";
@@ -10,6 +11,8 @@ import { MENSAGEM_MENOR_DE_IDADE, validarNascimentoTitular } from '@/app/lib/ida
 import { CategoriaCompeticao, categoriaCompativel, categoriaCompativelSemPeso, rotuloCategoria } from '@/app/lib/categorias-competicao';
 import { ChatEvento, BotaoChatInscricao, useMensagensNaoLidas, SeloNaoLidas } from '@/app/components/ChatEvento';
 import { comprimirAvatar } from '@/app/lib/comprimir-avatar';
+import { academiasDaEquipe, equipesOficiais, nomeOficial } from '@/app/lib/vinculo-equipe';
+import CampoNomeOficial from '@/app/components/CampoNomeOficial';
 
 export default function PerfilPage() {
   const [perfilId, setPerfilId] = useState<number | null>(null);
@@ -24,6 +27,25 @@ export default function PerfilPage() {
   const [erro, setErro] = useState("");
 
   const [abaAtiva, setAbaAtiva] = useState("resumo");
+  const [carteiraEnviada, setCarteiraEnviada] = useState("");
+  const conteudoRef = useRef<HTMLDivElement>(null);
+  const rolarAoAbrir = useRef(false);
+
+  function rolarParaConteudo() {
+    if (window.matchMedia("(min-width: 768px)").matches) return;
+    window.setTimeout(() => {
+      conteudoRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 60);
+  }
+
+  function abrirAba(aba: string) {
+    if (aba === abaAtiva) {
+      rolarParaConteudo();
+      return;
+    }
+    rolarAoAbrir.current = true;
+    setAbaAtiva(aba);
+  }
   const [filtroInscricao, setFiltroInscricao] = useState("Todas");
   const [chatEvento, setChatEvento] = useState<{ id: string; nome: string } | null>(null);
 
@@ -382,14 +404,19 @@ export default function PerfilPage() {
       setSalvando(false); return;
     }
 
+    const equipeSalva = nomeOficial(equipe, equipesOficiais(professoresDisponiveis));
+    const academiaSalva = nomeOficial(academia, academiasDaEquipe(equipeSalva, professoresDisponiveis));
+    setEquipe(equipeSalva);
+    setAcademia(academiaSalva);
+
     const perfilAtualizado: any = {
       user_id: userId,
       email,
       nome,
       cpf: cpfFormatado,
       telefone: telefoneDigitos,
-      equipe,
-      academia,
+      equipe: equipeSalva,
+      academia: academiaSalva,
       professor,
       professor_id: professorId || null,
       cidade,
@@ -411,7 +438,8 @@ export default function PerfilPage() {
     if (error) {
       setErro(error.message.includes("duplicate key") ? "Este CPF já está em uso." : "Erro ao salvar: " + error.message);
     } else {
-      setMensagem("Dados atualizados com sucesso!");
+      const uniuNomes = equipeSalva !== equipe.trim() || academiaSalva !== academia.trim();
+      setMensagem(uniuNomes ? "Dados salvos. Equipe e academia foram unidas aos nomes que já existiam." : "Dados atualizados com sucesso!");
       setTimeout(() => { setMensagem(""); setAbaAtiva("resumo"); }, 2000);
     }
     setSalvando(false);
@@ -458,8 +486,8 @@ export default function PerfilPage() {
       cpf: formDependente.cpf ? formatarCpf(formDependente.cpf) : null,
       nascimento: formDependente.nascimento,
       sexo: formDependente.sexo,
-      equipe: formDependente.equipe,
-      academia: formDependente.academia,
+      equipe: nomeOficial(formDependente.equipe || "", equipesOficiais(professoresDisponiveis)),
+      academia: nomeOficial(formDependente.academia || "", academiasDaEquipe(nomeOficial(formDependente.equipe || "", equipesOficiais(professoresDisponiveis)), professoresDisponiveis)),
       professor: formDependente.professor,
       professor_id: formDependente.professor_id || null,
       faixa: formDependente.faixa,
@@ -650,6 +678,34 @@ export default function PerfilPage() {
     setSalvandoInscricao(false);
   }
 
+  function urlCarteira() {
+    return `${window.location.origin}/atleta/${userId}`;
+  }
+
+  async function compartilharCarteira() {
+    const url = urlCarteira();
+    const titulo = role === "professor" ? `Carteira do mestre ${nome}` : `Carteira de ${nome}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: titulo, text: `${titulo} no iTatame`, url });
+        setCarteiraEnviada("Pronto para enviar");
+        window.setTimeout(() => setCarteiraEnviada(""), 2000);
+        return;
+      } catch (erroCompartilhar) {
+        if (erroCompartilhar instanceof DOMException && erroCompartilhar.name === "AbortError") return;
+      }
+    }
+    await navigator.clipboard.writeText(url);
+    setCarteiraEnviada("Link copiado");
+    window.setTimeout(() => setCarteiraEnviada(""), 2000);
+  }
+
+  function enviarCarteiraWhatsApp() {
+    const titulo = role === "professor" ? "Carteira do mestre" : "Carteira do atleta";
+    const texto = `${titulo} ${nome} no iTatame: ${urlCarteira()}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, "_blank", "noopener,noreferrer");
+  }
+
   const formatarData = (dataStr: string) => {
     if (!dataStr) return "Data a definir";
     const [ano, mes, dia] = dataStr.split("-");
@@ -674,10 +730,19 @@ export default function PerfilPage() {
     return dep ? dep.nome : "Desconhecido";
   };
 
+  useEffect(() => {
+    if (!rolarAoAbrir.current) return;
+    rolarAoAbrir.current = false;
+    rolarParaConteudo();
+  }, [abaAtiva]);
+
+  const listaEquipes = equipesOficiais(professoresDisponiveis);
+  const listaAcademias = academiasDaEquipe(equipe, professoresDisponiveis);
+
   if (loading) return <div className="p-10 text-center text-zinc-500 mt-20 uppercase font-bold text-xs tracking-widest">A carregar perfil...</div>;
 
   return (
-    <div className="w-full max-w-[100vw] overflow-x-hidden px-3 sm:px-4 md:px-6 pt-6 md:pt-10 pb-8">
+    <div className="w-full max-w-[100vw] overflow-x-clip px-3 sm:px-4 md:px-6 pt-6 md:pt-10 pb-8">
       <div className="grid md:grid-cols-[240px_1fr] gap-4 md:gap-6 max-w-6xl mx-auto w-full">
 
         {/* SIDEBAR ESQUERDA */}
@@ -716,24 +781,24 @@ export default function PerfilPage() {
           <div className="w-full flex flex-col gap-1.5">
             {role === "professor" ? (
               <>
-                <button onClick={() => setAbaAtiva("resumo")} className={`cursor-pointer w-full py-2.5 px-4 rounded-xl text-[11px] font-bold text-left transition-colors flex items-center gap-3 ${abaAtiva === "resumo" ? "bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 shadow-sm" : "text-zinc-500 hover:text-white hover:bg-white/5"}`}>
+                <button onClick={() => abrirAba("resumo")} className={`cursor-pointer w-full py-2.5 px-4 rounded-xl text-[11px] font-bold text-left transition-colors flex items-center gap-3 ${abaAtiva === "resumo" ? "bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 shadow-sm" : "text-zinc-500 hover:text-white hover:bg-white/5"}`}>
                   <svg className="w-3.5 h-3.5 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg> Dashboard Academia
                 </button>
-                <button onClick={() => setAbaAtiva("carteirinha")} className={`cursor-pointer w-full py-2.5 px-4 rounded-xl text-[11px] font-bold text-left transition-colors flex items-center gap-3 ${abaAtiva === "carteirinha" ? "bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 shadow-sm" : "text-zinc-500 hover:text-white hover:bg-white/5"}`}>
+                <button onClick={() => abrirAba("carteirinha")} className={`cursor-pointer w-full py-2.5 px-4 rounded-xl text-[11px] font-bold text-left transition-colors flex items-center gap-3 ${abaAtiva === "carteirinha" ? "bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 shadow-sm" : "text-zinc-500 hover:text-white hover:bg-white/5"}`}>
                   <svg className="w-3.5 h-3.5 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2"></path></svg> Carteira do Mestre
                 </button>
-                <button onClick={() => setAbaAtiva("editar")} className={`cursor-pointer w-full py-2.5 px-4 rounded-xl text-[11px] font-bold text-left transition-colors flex items-center gap-3 ${abaAtiva === "editar" ? "bg-white/10 text-white border border-white/5 shadow-sm" : "text-zinc-500 hover:text-white hover:bg-white/5"}`}>
+                <button onClick={() => abrirAba("editar")} className={`cursor-pointer w-full py-2.5 px-4 rounded-xl text-[11px] font-bold text-left transition-colors flex items-center gap-3 ${abaAtiva === "editar" ? "bg-white/10 text-white border border-white/5 shadow-sm" : "text-zinc-500 hover:text-white hover:bg-white/5"}`}>
                   <svg className="w-3.5 h-3.5 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg> Dados da Academia
                 </button>
-                <button onClick={() => setAbaAtiva("equipe")} className={`cursor-pointer w-full py-2.5 px-4 rounded-xl text-[11px] font-bold text-left transition-colors flex justify-between items-center ${abaAtiva === "equipe" ? "bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 shadow-sm" : "text-zinc-500 hover:text-yellow-500 hover:bg-yellow-500/5"}`}>
+                <button onClick={() => abrirAba("equipe")} className={`cursor-pointer w-full py-2.5 px-4 rounded-xl text-[11px] font-bold text-left transition-colors flex justify-between items-center ${abaAtiva === "equipe" ? "bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 shadow-sm" : "text-zinc-500 hover:text-yellow-500 hover:bg-yellow-500/5"}`}>
                   <span className="flex items-center gap-3"><svg className="w-3.5 h-3.5 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg> Lista de Alunos</span>
                   <span className="bg-zinc-800 text-zinc-400 text-[9px] px-1.5 py-0.5 rounded-full pointer-events-none">{totalAlunos}</span>
                 </button>
-                <button onClick={() => setAbaAtiva("dependentes")} className={`cursor-pointer w-full py-2.5 px-4 rounded-xl text-[11px] font-bold text-left transition-colors flex justify-between items-center ${abaAtiva === "dependentes" ? "bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 shadow-sm" : "text-zinc-500 hover:text-white hover:bg-white/5"}`}>
+                <button onClick={() => abrirAba("dependentes")} className={`cursor-pointer w-full py-2.5 px-4 rounded-xl text-[11px] font-bold text-left transition-colors flex justify-between items-center ${abaAtiva === "dependentes" ? "bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 shadow-sm" : "text-zinc-500 hover:text-white hover:bg-white/5"}`}>
                   <span className="flex items-center gap-3"><svg className="w-3.5 h-3.5 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg> Família / Dependentes</span>
                   {dependentes.length > 0 && <span className="bg-zinc-800 text-zinc-400 text-[9px] px-1.5 py-0.5 rounded-full pointer-events-none">{dependentes.length}</span>}
                 </button>
-                <button onClick={() => setAbaAtiva("inscricoes")} className={`relative cursor-pointer w-full py-2.5 px-4 rounded-xl text-[11px] font-bold text-left transition-colors flex justify-between items-center ${abaAtiva === "inscricoes" ? "bg-white/10 text-white border border-white/5 shadow-sm" : "text-zinc-500 hover:text-white hover:bg-white/5"}`}>
+                <button onClick={() => abrirAba("inscricoes")} className={`relative cursor-pointer w-full py-2.5 px-4 rounded-xl text-[11px] font-bold text-left transition-colors flex justify-between items-center ${abaAtiva === "inscricoes" ? "bg-white/10 text-white border border-white/5 shadow-sm" : "text-zinc-500 hover:text-white hover:bg-white/5"}`}>
                   <span className="flex items-center gap-3"><svg className="w-3.5 h-3.5 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg> Minhas Inscrições</span>
                   {minhasInscricoes.length > 0 && <span className="bg-zinc-800 text-white text-[9px] px-1.5 py-0.5 rounded-full pointer-events-none">{minhasInscricoes.length}</span>}
                   <SeloNaoLidas quantidade={chatNaoLidas} discreto />
@@ -741,20 +806,20 @@ export default function PerfilPage() {
               </>
             ) : (
               <>
-                <button onClick={() => setAbaAtiva("resumo")} className={`cursor-pointer w-full py-2.5 px-4 rounded-xl text-[11px] font-bold text-left transition-colors flex items-center gap-3 ${abaAtiva === "resumo" ? "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 shadow-sm" : "text-zinc-500 hover:text-white hover:bg-white/5"}`}>
+                <button onClick={() => abrirAba("resumo")} className={`cursor-pointer w-full py-2.5 px-4 rounded-xl text-[11px] font-bold text-left transition-colors flex items-center gap-3 ${abaAtiva === "resumo" ? "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 shadow-sm" : "text-zinc-500 hover:text-white hover:bg-white/5"}`}>
                   <svg className="w-3.5 h-3.5 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg> Meu Perfil
                 </button>
-                <button onClick={() => setAbaAtiva("carteirinha")} className={`cursor-pointer w-full py-2.5 px-4 rounded-xl text-[11px] font-bold text-left transition-colors flex items-center gap-3 ${abaAtiva === "carteirinha" ? "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 shadow-sm" : "text-zinc-500 hover:text-white hover:bg-white/5"}`}>
+                <button onClick={() => abrirAba("carteirinha")} className={`cursor-pointer w-full py-2.5 px-4 rounded-xl text-[11px] font-bold text-left transition-colors flex items-center gap-3 ${abaAtiva === "carteirinha" ? "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 shadow-sm" : "text-zinc-500 hover:text-white hover:bg-white/5"}`}>
                   <svg className="w-3.5 h-3.5 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2"></path></svg> Carteira do Atleta
                 </button>
-                <button onClick={() => setAbaAtiva("editar")} className={`cursor-pointer w-full py-2.5 px-4 rounded-xl text-[11px] font-bold text-left transition-colors flex items-center gap-3 ${abaAtiva === "editar" ? "bg-white/10 text-white border border-white/5 shadow-sm" : "text-zinc-500 hover:text-white hover:bg-white/5"}`}>
+                <button onClick={() => abrirAba("editar")} className={`cursor-pointer w-full py-2.5 px-4 rounded-xl text-[11px] font-bold text-left transition-colors flex items-center gap-3 ${abaAtiva === "editar" ? "bg-white/10 text-white border border-white/5 shadow-sm" : "text-zinc-500 hover:text-white hover:bg-white/5"}`}>
                   <svg className="w-3.5 h-3.5 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg> Alterar Cadastro
                 </button>
-                <button onClick={() => setAbaAtiva("dependentes")} className={`cursor-pointer w-full py-2.5 px-4 rounded-xl text-[11px] font-bold text-left transition-colors flex justify-between items-center ${abaAtiva === "dependentes" ? "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 shadow-sm" : "text-zinc-500 hover:text-white hover:bg-white/5"}`}>
+                <button onClick={() => abrirAba("dependentes")} className={`cursor-pointer w-full py-2.5 px-4 rounded-xl text-[11px] font-bold text-left transition-colors flex justify-between items-center ${abaAtiva === "dependentes" ? "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 shadow-sm" : "text-zinc-500 hover:text-white hover:bg-white/5"}`}>
                   <span className="flex items-center gap-3"><svg className="w-3.5 h-3.5 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg> Família / Dependentes</span>
                   {dependentes.length > 0 && <span className="bg-zinc-800 text-zinc-400 text-[9px] px-1.5 py-0.5 rounded-full pointer-events-none">{dependentes.length}</span>}
                 </button>
-                <button onClick={() => setAbaAtiva("inscricoes")} className={`relative cursor-pointer w-full py-2.5 px-4 rounded-xl text-[11px] font-bold text-left transition-colors flex justify-between items-center ${abaAtiva === "inscricoes" ? "bg-white/10 text-white border border-white/5 shadow-sm" : "text-zinc-500 hover:text-white hover:bg-white/5"}`}>
+                <button onClick={() => abrirAba("inscricoes")} className={`relative cursor-pointer w-full py-2.5 px-4 rounded-xl text-[11px] font-bold text-left transition-colors flex justify-between items-center ${abaAtiva === "inscricoes" ? "bg-white/10 text-white border border-white/5 shadow-sm" : "text-zinc-500 hover:text-white hover:bg-white/5"}`}>
                   <span className="flex items-center gap-3"><svg className="w-3.5 h-3.5 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg> Minhas Inscrições</span>
                   {minhasInscricoes.length > 0 && <span className="bg-zinc-800 text-white text-[9px] px-1.5 py-0.5 rounded-full pointer-events-none">{minhasInscricoes.length}</span>}
                   <SeloNaoLidas quantidade={chatNaoLidas} discreto />
@@ -776,7 +841,7 @@ export default function PerfilPage() {
         </div>
 
         {/* CONTEÚDO PRINCIPAL */}
-        <div className={`bg-[#0a0a0e] border ${role === 'professor' && (abaAtiva === 'equipe' || abaAtiva === 'resumo' || abaAtiva === 'carteirinha') ? 'border-yellow-500/20' : 'border-white/5'} rounded-3xl p-4 md:p-6 shadow-xl min-h-[500px] w-full transition-colors duration-500`}>
+        <div ref={conteudoRef} className={`scroll-mt-20 bg-[#0a0a0e] border ${role === 'professor' && (abaAtiva === 'equipe' || abaAtiva === 'resumo' || abaAtiva === 'carteirinha') ? 'border-yellow-500/20' : 'border-white/5'} rounded-3xl p-4 md:p-6 shadow-xl min-h-[500px] w-full transition-colors duration-500 md:scroll-mt-0`}>
 
           {/* 🎫 NOVA ABA: CARTEIRA DO ATLETA */}
           {abaAtiva === "carteirinha" && (
@@ -792,45 +857,53 @@ export default function PerfilPage() {
                  </div>
 
                  {/* FOTO + IDENTIFICACAO */}
-                 <div className="flex gap-3.5 p-4">
-                    <div className={`w-[108px] h-[138px] rounded-lg overflow-hidden shrink-0 border ${role === 'professor' ? 'border-yellow-500/25' : 'border-cyan-500/25'} bg-black`}>
-                       {fotoUrl ? <img src={fotoUrl} alt={nome || "Foto do atleta"} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-4xl font-black text-zinc-700">{nome?.charAt(0) || "?"}</div>}
+                 <div className="flex gap-3 p-3">
+                    <div className={`h-[118px] w-[92px] shrink-0 overflow-hidden rounded-lg border bg-black ${role === 'professor' ? 'border-yellow-500/25' : 'border-cyan-500/25'}`}>
+                       {fotoUrl ? <img src={fotoUrl} alt={nome || "Foto do atleta"} className="h-full w-full object-cover" /> : <div className="flex h-full w-full items-center justify-center text-3xl font-black text-zinc-700">{nome?.charAt(0) || "?"}</div>}
                     </div>
 
-                    <div className="flex-1 min-w-0 flex flex-col">
+                    <div className="flex min-w-0 flex-1 flex-col">
                        <span className="text-[8px] font-black uppercase tracking-[0.18em] text-zinc-500">Nome</span>
-                       <span className="text-white text-[13px] font-black uppercase leading-tight break-words mb-2.5">{nome || "Não informado"}</span>
+                       <span className="mb-1.5 break-words text-[13px] font-black uppercase leading-tight text-white">{nome || "Não informado"}</span>
 
                        <span className="text-[8px] font-black uppercase tracking-[0.18em] text-zinc-500">Nascimento</span>
-                       <span className="text-white text-[11px] font-bold mb-2.5">
+                       <span className="mb-1.5 text-[11px] font-bold text-white">
                          {nascimento ? `${formatarData(nascimento)} · ${calcularIdade(nascimento)} anos` : "--/--/----"}
                        </span>
 
                        <span className="text-[8px] font-black uppercase tracking-[0.18em] text-zinc-500">Faixa</span>
-                       <span className={`mt-0.5 w-max px-2 py-1 rounded text-[9px] font-black uppercase tracking-widest ${getCorFaixa(faixa)}`}>
+                       <span className={`mt-0.5 w-max rounded px-2 py-0.5 text-[9px] font-black uppercase tracking-widest ${getCorFaixa(faixa)}`}>
                          {faixa || (role === 'professor' ? "Não informada" : "Branca")}
                        </span>
                     </div>
                  </div>
 
-                 {/* EQUIPE E MODALIDADE */}
-                 <div className="mx-4 mb-4 grid grid-cols-2 gap-px rounded-lg overflow-hidden border border-white/5 bg-white/5">
-                    <div className="bg-black/60 p-2.5 min-w-0">
-                       <span className="text-[8px] font-black uppercase tracking-[0.18em] text-zinc-500 block">Equipe / Academia</span>
-                       <span className={`text-[10px] font-black uppercase truncate block mt-0.5 ${role === 'professor' ? 'text-yellow-400' : 'text-cyan-400'}`}>{academia ? `${equipe} · ${academia}` : equipe || "Sem equipe"}</span>
+                 <div className="mx-3 mb-3 grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-white/5 bg-white/5">
+                    <div className="col-span-2 bg-black/60 px-2.5 py-1.5">
+                       <span className="block text-[8px] font-black uppercase tracking-[0.18em] text-zinc-500">Equipe</span>
+                       <span className={`mt-0.5 block break-words text-[11px] font-black uppercase leading-tight ${role === 'professor' ? 'text-yellow-400' : 'text-cyan-400'}`}>{equipe || "Sem equipe"}</span>
                     </div>
-                    <div className="bg-black/60 p-2.5 min-w-0">
-                       <span className="text-[8px] font-black uppercase tracking-[0.18em] text-zinc-500 block">Modalidade</span>
-                       <span className="text-[10px] font-black uppercase text-white truncate block mt-0.5">{modalidade || "Jiu-Jitsu"}</span>
+                    <div className="col-span-2 bg-black/60 px-2.5 py-1.5">
+                       <span className="block text-[8px] font-black uppercase tracking-[0.18em] text-zinc-500">Academia</span>
+                       <span className={`mt-0.5 block break-words text-[11px] font-black uppercase leading-tight ${role === 'professor' ? 'text-yellow-400' : 'text-cyan-400'}`}>{academia || "Não informada"}</span>
+                    </div>
+                    {role !== "professor" && (
+                      <div className="bg-black/60 px-2.5 py-1.5">
+                        <span className="block text-[8px] font-black uppercase tracking-[0.18em] text-zinc-500">Mestre</span>
+                        <span className="mt-0.5 block break-words text-[11px] font-black uppercase leading-tight text-cyan-400">{professor || "Não informado"}</span>
+                      </div>
+                    )}
+                    <div className={`bg-black/60 px-2.5 py-1.5 ${role === "professor" ? "col-span-2" : ""}`}>
+                       <span className="block text-[8px] font-black uppercase tracking-[0.18em] text-zinc-500">Modalidade</span>
+                       <span className="mt-0.5 block break-words text-[11px] font-black uppercase leading-tight text-white">{modalidade || "Jiu-Jitsu"}</span>
                     </div>
                  </div>
 
-                 {/* QR + REGISTRO */}
-                 <div className="flex items-center gap-3.5 px-4 pb-4">
-                    <div className="w-[92px] h-[92px] bg-white p-1.5 rounded-lg shrink-0 flex items-center justify-center">
-                       <QRCode value={`${process.env.NEXT_PUBLIC_SITE_URL || "https://itatame.com.br"}/atleta/${userId}`} size={80} style={{ height: "auto", maxWidth: "100%", width: "100%" }} />
-                    </div>
-                    <div className="flex-1 min-w-0 space-y-2">
+                 <div className="flex items-center gap-3 px-3 pb-3">
+                    <Link href={`/atleta/${userId}`} aria-label="Abrir perfil público" className="block h-[76px] w-[76px] shrink-0 rounded-lg bg-white p-1">
+                       <QRCode value={`${process.env.NEXT_PUBLIC_SITE_URL || "https://itatame.com.br"}/atleta/${userId}`} size={68} style={{ height: "auto", maxWidth: "100%", width: "100%" }} />
+                    </Link>
+                    <div className="min-w-0 flex-1 space-y-1">
                        <div>
                           <span className="text-[8px] font-black uppercase tracking-[0.18em] text-zinc-500 block">Registro</span>
                           <span className="text-white text-[11px] font-black tracking-widest">{userId.substring(0, 8).toUpperCase()}</span>
@@ -839,6 +912,9 @@ export default function PerfilPage() {
                           <span className="text-[8px] font-black uppercase tracking-[0.18em] text-zinc-500 block">Validade</span>
                           <span className="text-white text-[11px] font-black tracking-widest">31/12/{new Date().getFullYear()}</span>
                        </div>
+                       <Link href={`/atleta/${userId}`} className={`inline-flex text-[9px] font-black uppercase tracking-widest ${role === "professor" ? "text-yellow-400" : "text-cyan-400"}`}>
+                          Abrir perfil público
+                       </Link>
                     </div>
                  </div>
 
@@ -848,13 +924,21 @@ export default function PerfilPage() {
                </div>
 
                {!nascimento && (
-                 <button onClick={() => setAbaAtiva("editar")} className="cursor-pointer mt-5 text-[10px] font-black uppercase tracking-widest text-yellow-500 hover:text-yellow-400 transition-colors">
+                 <button onClick={() => abrirAba("editar")} className="cursor-pointer mt-5 text-[10px] font-black uppercase tracking-widest text-yellow-500 hover:text-yellow-400 transition-colors">
                    Informe sua data de nascimento para completar a carteira
                  </button>
                )}
 
-               <p className="text-zinc-500 text-[10px] uppercase font-bold tracking-widest mt-5 text-center max-w-[320px]">
-                 Escaneie o QR Code para abrir o perfil público e o mural de medalhas.
+               <div className="mt-5 flex w-full max-w-[360px] flex-col gap-2">
+                 <button type="button" onClick={() => void compartilharCarteira()} className={`rounded-xl py-3 text-[10px] font-black uppercase tracking-widest ${role === "professor" ? "bg-yellow-500 text-black" : "bg-cyan-500 text-black"}`}>
+                   {carteiraEnviada || "Compartilhar carteira"}
+                 </button>
+                 <button type="button" onClick={enviarCarteiraWhatsApp} className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 py-3 text-center text-[10px] font-black uppercase tracking-widest text-emerald-300">
+                   Enviar no WhatsApp
+                 </button>
+               </div>
+               <p className="text-zinc-500 text-[10px] uppercase font-bold tracking-widest mt-4 text-center max-w-[320px]">
+                 O QR Code e o botão abrem o perfil público com o mural de medalhas.
                </p>
             </div>
           )}
@@ -1038,8 +1122,8 @@ export default function PerfilPage() {
                 {role === "professor" ? (
                   <>
                     <div><label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 pl-1 cursor-default">Data de Nascimento</label><input type="date" value={nascimento} onChange={(e) => setNascimento(e.target.value)} max={new Date().toISOString().slice(0, 10)} className="cursor-pointer w-full bg-black/50 border border-white/5 focus:border-yellow-500/50 outline-none rounded-xl px-3 py-2 text-xs text-white transition-colors [&::-webkit-calendar-picker-indicator]:invert" /></div>
-                    <div><label className="block text-[10px] font-bold text-yellow-500 uppercase tracking-wider mb-1 pl-1 cursor-default">Bandeira / Equipe Global Oficial</label><input type="text" value={equipe} onChange={(e) => setEquipe(e.target.value)} placeholder="Ex: Gracie Barra, Nova União" className="cursor-text w-full bg-black/50 border border-white/5 outline-none rounded-xl px-3 py-2 text-xs text-white transition-colors focus:border-yellow-500" /></div>
-                    <div><label className="block text-[10px] font-bold text-yellow-500 uppercase tracking-wider mb-1 pl-1 cursor-default">Nome da sua Academia / CT local</label><input type="text" value={academia} onChange={(e) => setAcademia(e.target.value)} placeholder="Ex: CT Silva, Matriz Centro" className="cursor-text w-full bg-black/50 border border-white/5 outline-none rounded-xl px-3 py-2 text-xs text-white transition-colors focus:border-yellow-500" /></div>
+                    <div className="md:col-span-2"><CampoNomeOficial rotulo="Bandeira / equipe oficial" valor={equipe} onChange={setEquipe} existentes={listaEquipes} placeholder="Busque a equipe ou cadastre uma nova" destaque="amarelo" /></div>
+                    <div className="md:col-span-2"><CampoNomeOficial rotulo="Academia / CT local" valor={academia} onChange={setAcademia} existentes={listaAcademias} placeholder="Busque a academia desta equipe ou cadastre a sua" destaque="amarelo" /></div>
                     <div>
                       <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 pl-1 cursor-default">Sua Faixa de Mestre</label>
                       <select value={faixa} onChange={(e) => setFaixa(e.target.value)} className="cursor-pointer w-full bg-black/50 border border-white/5 outline-none rounded-xl px-3 py-2 text-xs text-white transition-colors appearance-none focus:border-yellow-500">
@@ -1097,12 +1181,10 @@ export default function PerfilPage() {
                       )}
                     </div>
                     <div>
-                      <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 pl-1 cursor-default">Bandeira / Equipe Global</label>
-                      <input type="text" value={equipe} onChange={(e) => setEquipe(e.target.value)} disabled={!professorPersonalizado && professor !== ""} placeholder="Auto-preenchido" className={`w-full outline-none rounded-xl px-3 py-2 text-xs transition-colors ${(!professorPersonalizado && professor !== "") ? 'bg-black/30 border-transparent text-zinc-500 cursor-not-allowed' : 'cursor-text border bg-black/50 border-white/5 text-white focus:border-cyan-500/50'}`} />
+                      <CampoNomeOficial rotulo="Bandeira / equipe" valor={equipe} onChange={setEquipe} existentes={listaEquipes} placeholder={professor && !professorPersonalizado ? "Vem do professor" : "Busque a equipe"} disabled={!professorPersonalizado && professor !== ""} destaque="ciano" />
                     </div>
                     <div>
-                      <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 pl-1 cursor-default">Academia / CT de Treino</label>
-                      <input type="text" value={academia} onChange={(e) => setAcademia(e.target.value)} disabled={!professorPersonalizado && professor !== ""} placeholder="Auto-preenchido" className={`w-full outline-none rounded-xl px-3 py-2 text-xs transition-colors ${(!professorPersonalizado && professor !== "") ? 'bg-black/30 border-transparent text-zinc-500 cursor-not-allowed' : 'cursor-text border bg-black/50 border-white/5 text-white focus:border-cyan-500/50'}`} />
+                      <CampoNomeOficial rotulo="Academia / CT" valor={academia} onChange={setAcademia} existentes={listaAcademias} placeholder={professor && !professorPersonalizado ? "Vem do professor" : "Busque a academia"} disabled={!professorPersonalizado && professor !== ""} destaque="ciano" />
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 pl-1 cursor-default">Faixa</label>
@@ -1276,12 +1358,10 @@ export default function PerfilPage() {
                     </div>
 
                     <div>
-                      <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 pl-1 cursor-default">Equipe Global</label>
-                      <input type="text" value={formDependente.equipe || ""} onChange={(e) => setFormDependente({...formDependente, equipe: e.target.value})} disabled={!formDependente.professorPersonalizado && formDependente.professor !== ""} placeholder="Auto-preenchido" className={`w-full outline-none rounded-xl px-3 py-2 text-xs transition-colors ${(!formDependente.professorPersonalizado && formDependente.professor !== "") ? 'bg-black/30 border-transparent text-zinc-500 cursor-not-allowed' : 'cursor-text border bg-black/50 border-white/5 text-white focus:border-cyan-500/50'}`} />
+                      <CampoNomeOficial rotulo="Equipe" valor={formDependente.equipe || ""} onChange={(valor) => setFormDependente({ ...formDependente, equipe: valor })} existentes={listaEquipes} placeholder="Busque a equipe" disabled={!formDependente.professorPersonalizado && formDependente.professor !== ""} destaque="ciano" />
                     </div>
                     <div>
-                      <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 pl-1 cursor-default">Academia Local</label>
-                      <input type="text" value={formDependente.academia || ""} onChange={(e) => setFormDependente({...formDependente, academia: e.target.value})} disabled={!formDependente.professorPersonalizado && formDependente.professor !== ""} placeholder="Auto-preenchido" className={`w-full outline-none rounded-xl px-3 py-2 text-xs transition-colors ${(!formDependente.professorPersonalizado && formDependente.professor !== "") ? 'bg-black/30 border-transparent text-zinc-500 cursor-not-allowed' : 'cursor-text border bg-black/50 border-white/5 text-white focus:border-cyan-500/50'}`} />
+                      <CampoNomeOficial rotulo="Academia" valor={formDependente.academia || ""} onChange={(valor) => setFormDependente({ ...formDependente, academia: valor })} existentes={academiasDaEquipe(formDependente.equipe || "", professoresDisponiveis)} placeholder="Busque a academia" disabled={!formDependente.professorPersonalizado && formDependente.professor !== ""} destaque="ciano" />
                     </div>
 
                     <div><label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 pl-1 cursor-default">Faixa Atual *</label><select value={formDependente.faixa || ""} onChange={(e) => setFormDependente({...formDependente, faixa: e.target.value})} className="cursor-pointer w-full bg-black/50 border border-white/5 focus:border-cyan-500/50 outline-none rounded-xl px-3 py-2 text-xs text-white transition-colors appearance-none"><option value="" className="bg-[#0a0a0e] text-white">Selecione...</option><option value="Cinza" className="bg-[#0a0a0e] text-white">Cinza</option><option value="Amarela" className="bg-[#0a0a0e] text-white">Amarela</option><option value="Laranja" className="bg-[#0a0a0e] text-white">Laranja</option><option value="Verde" className="bg-[#0a0a0e] text-white">Verde</option><option value="Branca" className="bg-[#0a0a0e] text-white">Branca</option><option value="Azul" className="bg-[#0a0a0e] text-white">Azul</option></select></div>
@@ -1440,7 +1520,7 @@ export default function PerfilPage() {
                     <h4 className="text-yellow-500 font-black text-[11px] uppercase tracking-widest mb-1">Complete o cadastro da sua academia</h4>
                     <p className="text-zinc-400 text-xs">Preencha nome completo, Bandeira e nome do CT em "Dados da Academia" para que seus alunos encontrem você na lista de professores.</p>
                   </div>
-                  <button onClick={() => setAbaAtiva("editar")} className="cursor-pointer shrink-0 bg-yellow-600 text-black px-4 py-2 rounded-lg font-black text-[10px] uppercase tracking-widest hover:bg-yellow-500 transition-colors">Configurar Agora</button>
+                  <button onClick={() => abrirAba("editar")} className="cursor-pointer shrink-0 bg-yellow-600 text-black px-4 py-2 rounded-lg font-black text-[10px] uppercase tracking-widest hover:bg-yellow-500 transition-colors">Configurar Agora</button>
                 </div>
               )}
 

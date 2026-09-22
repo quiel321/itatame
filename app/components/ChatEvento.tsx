@@ -102,6 +102,7 @@ export function ChatEvento({
   titulo = 'Falar com a organização',
   compacto = false,
   inicialAberto,
+  textoInicial = '',
   onFechar,
 }: {
   eventoId: string;
@@ -109,6 +110,7 @@ export function ChatEvento({
   titulo?: string;
   compacto?: boolean;
   inicialAberto?: boolean;
+  textoInicial?: string;
   onFechar?: () => void;
 }) {
   const eu: 'atleta' | 'organizador' = atletaUserId ? 'organizador' : 'atleta';
@@ -121,7 +123,7 @@ export function ChatEvento({
     avisarChatAtualizado();
   }
   const [mensagens, setMensagens] = useState<Mensagem[]>([]);
-  const [texto, setTexto] = useState('');
+  const [texto, setTexto] = useState(textoInicial);
   const [erro, setErro] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [disponivel, setDisponivel] = useState(true);
