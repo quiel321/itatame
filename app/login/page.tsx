@@ -128,9 +128,9 @@ function FormularioLogin() {
         if (!response.ok) {
           setErro(resultado.error || "Não foi possível criar a conta.");
         } else {
-          setMensagem(resultado.requiresEmailConfirmation
+          setMensagem(resultado.message || (resultado.requiresEmailConfirmation
             ? "Cadastro realizado. Abra o e-mail enviado pelo iTatame e confirme seu endereço antes de entrar."
-            : "Cadastro realizado. Você já pode entrar.");
+            : "Cadastro realizado. Você já pode entrar."));
           setIsLogin(true);
           setSenha("");
           setCpf("");

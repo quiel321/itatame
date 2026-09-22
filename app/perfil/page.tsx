@@ -183,7 +183,7 @@ export default function PerfilPage() {
     const userRole = perfilData?.role || authData.user.user_metadata?.role || "atleta";
     setRole(userRole);
 
-    if (orgData && userRole !== "super-admin") {
+    if (orgData && userRole !== "super-admin" && userRole !== "professor") {
       window.location.href = "/admin";
       return;
     }

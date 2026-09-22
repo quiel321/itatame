@@ -1,12 +1,38 @@
 import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
 import { Resend } from "resend";
 import { enviarLinkAutenticacao } from "@/app/lib/email-autenticacao";
 import { consumirLimiteAuth, ipDaRequisicao } from '@/app/lib/limite-auth';
 import { cpfValido, variantesCpf } from '@/app/lib/validar-cpf';
+import { decidirVinculoProfessor } from '@/app/lib/vincular-professor';
 
 function texto(value: FormDataEntryValue | null) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function emailJaExiste(error: { code?: string; message?: string }) {
+  const mensagem = String(error.message || "").toLowerCase();
+  return error.code === "email_exists" || error.code === "user_already_exists" || mensagem.includes("already");
+}
+
+function erroIdentidade(error: { code?: string; message?: string }) {
+  if (error.code !== "23505") return "Não foi possível salvar o perfil. Confira os dados e tente novamente.";
+  const mensagem = String(error.message || "");
+  if (mensagem.includes("CPF") || mensagem.includes("telefone") || mensagem.includes("e-mail")) return mensagem;
+  return "CPF, telefone ou e-mail já cadastrado.";
+}
+
+async function confirmarSenhaDaConta(email: string, password: string) {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !anonKey) return { erro: "indisponivel" as const };
+  const anon = createClient(url, anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
+  const { data, error } = await anon.auth.signInWithPassword({ email, password });
+  if (error?.code === "email_not_confirmed") return { erro: "nao-confirmado" as const };
+  if (error || !data.user) return { erro: "senha" as const };
+  await anon.auth.signOut();
+  return { userId: data.user.id };
 }
 
 export async function POST(request: Request) {
@@ -77,8 +103,59 @@ export async function POST(request: Request) {
       email_confirm: false,
       user_metadata: { role: perfil, cpf: cpf || undefined, nome: nome || undefined },
     });
-    if (signUpError) return NextResponse.json({ error: signUpError.code === 'email_exists' || signUpError.message.toLowerCase().includes('already')
-      ? "Este e-mail já possui cadastro. Entre na conta existente ou recupere a senha." : "Não foi possível criar a conta. Tente novamente." }, { status: 400 });
+    if (signUpError) {
+      if (perfil === "professor" && emailJaExiste(signUpError)) {
+        const senha = await confirmarSenhaDaConta(email, password);
+        if ("erro" in senha) {
+          if (senha.erro === "indisponivel") {
+            return NextResponse.json({ error: "Cadastro temporariamente indisponível." }, { status: 503 });
+          }
+          if (senha.erro === "nao-confirmado") {
+            return NextResponse.json({ error: "Confirme o e-mail dessa conta antes de criar o perfil de professor." }, { status: 409 });
+          }
+          return NextResponse.json({ error: "Este e-mail já está em uso. Se for a conta de organizador, repita a mesma senha para criar também o perfil de professor." }, { status: 409 });
+        }
+
+        const [{ data: atletaExistente }, { data: organizador }] = await Promise.all([
+          supabase.from("atletas").select("role").eq("user_id", senha.userId).maybeSingle(),
+          supabase.from("organizadores").select("nome, academia, foto_url, status").eq("user_id", senha.userId).maybeSingle(),
+        ]);
+        const decisao = decidirVinculoProfessor(atletaExistente, organizador);
+        if (decisao === "ja-professor") {
+          return NextResponse.json({ success: true, requiresEmailConfirmation: false, message: "Este e-mail já tem perfil de professor. Entre com a senha da conta." });
+        }
+        if (decisao === "recusar" || !organizador) {
+          return NextResponse.json({ error: "Este e-mail já possui cadastro. Entre na conta existente ou recupere a senha." }, { status: 409 });
+        }
+
+        const academia = String(organizador.academia || "").trim();
+        const perfilProfessor = await supabase.from("atletas").insert({
+          user_id: senha.userId,
+          email,
+          cpf,
+          telefone,
+          role: "professor",
+          nome: String(organizador.nome || "").trim(),
+          equipe: academia || "Independente",
+          academia,
+          professor: "",
+          faixa: "",
+          cidade: "",
+          modalidade: "Jiu-Jitsu",
+          ...(organizador.foto_url ? { foto_url: organizador.foto_url } : {}),
+        });
+        if (perfilProfessor.error) {
+          return NextResponse.json({ error: erroIdentidade(perfilProfessor.error) }, { status: 400 });
+        }
+        return NextResponse.json({
+          success: true,
+          requiresEmailConfirmation: false,
+          message: "Perfil de professor ligado a este e-mail. Entre com a mesma senha do organizador.",
+        });
+      }
+      return NextResponse.json({ error: emailJaExiste(signUpError)
+        ? "Este e-mail já possui cadastro. Entre na conta existente ou recupere a senha." : "Não foi possível criar a conta. Tente novamente." }, { status: 400 });
+    }
     if (!data.user) return NextResponse.json({ error: "Não foi possível criar a conta." }, { status: 500 });
 
     let fotoUrl = "";
