@@ -6,6 +6,7 @@ import { calcularResultadosChaves } from "../lib/ranking-eventos";
 import QRCode from "react-qr-code";
 import { formatarTelefone } from '@/app/lib/formatar-telefone';
 import { cpfValido, formatarCpf } from '@/app/lib/validar-cpf';
+import { MENSAGEM_MENOR_DE_IDADE, validarNascimentoTitular } from '@/app/lib/idade-cadastro';
 import { CategoriaCompeticao, categoriaCompativel, categoriaCompativelSemPeso, rotuloCategoria } from '@/app/lib/categorias-competicao';
 import { ChatEvento, BotaoChatInscricao, useMensagensNaoLidas, SeloNaoLidas } from '@/app/components/ChatEvento';
 import { comprimirAvatar } from '@/app/lib/comprimir-avatar';
@@ -217,6 +218,10 @@ export default function PerfilPage() {
       setFotoUrl(perfilData.foto_url || "");
       setCpf(perfilData.cpf || authData.user.user_metadata?.cpf || "");
       setNascimento(perfilData.nascimento || "");
+      if (!perfilData.responsavel_id && perfilData.nascimento) {
+        const conta = validarNascimentoTitular(String(perfilData.nascimento).slice(0, 10));
+        if (!conta.ok && conta.erro === MENSAGEM_MENOR_DE_IDADE) setErro(conta.erro);
+      }
       setTelefone(formatarTelefone(perfilData.telefone || ""));
       setEquipe(perfilData.equipe || "");
       setAcademia(perfilData.academia || "");
@@ -358,8 +363,11 @@ export default function PerfilPage() {
     if (telefoneDigitos && (telefoneDigitos.length < 10 || telefoneDigitos.length > 11)) {
       setErro('Informe um telefone válido com DDD.'); setSalvando(false); return;
     }
-    if (nascimento && new Date(nascimento) > new Date()) {
-      setErro('A data de nascimento não pode estar no futuro.'); setSalvando(false); return;
+    if (nascimento) {
+      const nascimentoValido = validarNascimentoTitular(nascimento);
+      if (!nascimentoValido.ok) {
+        setErro(nascimentoValido.erro); setSalvando(false); return;
+      }
     }
     const { data: documento, error: documentoError } = await supabase.rpc('documento_em_uso', {
       p_cpf: cpf,

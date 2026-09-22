@@ -6,6 +6,7 @@ import { enviarLinkAutenticacao } from "@/app/lib/email-autenticacao";
 import { consumirLimiteAuth, ipDaRequisicao } from '@/app/lib/limite-auth';
 import { cpfValido, variantesCpf } from '@/app/lib/validar-cpf';
 import { decidirVinculoProfessor } from '@/app/lib/vincular-professor';
+import { validarNascimentoTitular } from '@/app/lib/idade-cadastro';
 
 function texto(value: FormDataEntryValue | null) {
   return typeof value === "string" ? value.trim() : "";
@@ -61,6 +62,11 @@ export async function POST(request: Request) {
     }
     if (perfil !== "organizador" && !cpfValido(cpf)) {
       return NextResponse.json({ error: "Este CPF não existe. Confira os números digitados." }, { status: 400 });
+    }
+    const nascimentoInformado = texto(form.get("nascimento"));
+    const nascimento = perfil === "organizador" ? null : validarNascimentoTitular(nascimentoInformado);
+    if (nascimento && !nascimento.ok) {
+      return NextResponse.json({ error: nascimento.erro }, { status: 400 });
     }
 
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -142,6 +148,7 @@ export async function POST(request: Request) {
           faixa: "",
           cidade: "",
           modalidade: "Jiu-Jitsu",
+          ...(nascimento && nascimento.ok ? { nascimento: nascimento.iso } : {}),
           ...(organizador.foto_url ? { foto_url: organizador.foto_url } : {}),
         });
         if (perfilProfessor.error) {
@@ -199,6 +206,7 @@ export async function POST(request: Request) {
           faixa: "",
           cidade: "",
           modalidade: "Jiu-Jitsu",
+          ...(nascimento && nascimento.ok ? { nascimento: nascimento.iso } : {}),
         });
 
     if (resultado.error) {

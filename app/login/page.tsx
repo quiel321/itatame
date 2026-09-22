@@ -8,6 +8,7 @@ import { Suspense } from "react";
 import { Eye, EyeOff } from 'lucide-react';
 import { formatarTelefone } from '@/app/lib/formatar-telefone';
 import { cpfValido, formatarCpf } from '@/app/lib/validar-cpf';
+import { MENSAGEM_MENOR_DE_IDADE, validarNascimentoTitular } from '@/app/lib/idade-cadastro';
 import { destinoInterno } from '@/app/lib/destino-interno';
 
 function FormularioLogin() {
@@ -23,6 +24,7 @@ function FormularioLogin() {
   const [senha, setSenha] = useState("");
   const [cpf, setCpf] = useState("");
   const [telefone, setTelefone] = useState('');
+  const [nascimento, setNascimento] = useState("");
   const [mostrarSenha, setMostrarSenha] = useState(false);
   const [emailPendente, setEmailPendente] = useState(false);
   
@@ -114,6 +116,12 @@ function FormularioLogin() {
         setLoading(false);
         return;
       }
+      const nascimentoValido = validarNascimentoTitular(nascimento);
+      if (!nascimentoValido.ok) {
+        setErro(nascimentoValido.erro);
+        setLoading(false);
+        return;
+      }
 
       try {
         const cadastro = new FormData();
@@ -122,6 +130,7 @@ function FormularioLogin() {
         cadastro.set("password", senha);
         cadastro.set("cpf", cpf);
         cadastro.set('telefone', telefone);
+        cadastro.set("nascimento", nascimentoValido.iso);
         const response = await fetch("/api/cadastro", { method: "POST", body: cadastro });
         const resultado = await response.json();
 
@@ -135,6 +144,7 @@ function FormularioLogin() {
           setSenha("");
           setCpf("");
           setTelefone('');
+          setNascimento("");
         }
       } catch {
         setErro('Não foi possível concluir o cadastro agora. Tente novamente.');
@@ -300,6 +310,20 @@ function FormularioLogin() {
                   className="w-full bg-black/60 border border-white/10 focus:border-red-500 outline-none rounded-lg pl-9 pr-3 py-2.5 text-white transition-colors text-xs font-bold placeholder:text-zinc-700 shadow-inner" 
                 />
               </div>
+            </div>
+          )}
+
+          {!isLogin && (
+            <div>
+              <label className="block text-[9px] font-black text-zinc-500 uppercase tracking-widest mb-1 ml-1">Data de nascimento</label>
+              <input type="date" required value={nascimento} max={new Date().toISOString().slice(0, 10)} onChange={(e) => {
+                const valor = e.target.value;
+                setNascimento(valor);
+                const validacao = valor ? validarNascimentoTitular(valor) : null;
+                if (validacao && !validacao.ok && validacao.erro === MENSAGEM_MENOR_DE_IDADE) setErro(validacao.erro);
+                else setErro((atual) => atual === MENSAGEM_MENOR_DE_IDADE ? "" : atual);
+              }} className="w-full bg-black/60 border border-white/10 focus:border-red-500 outline-none rounded-lg px-3 py-2.5 text-white text-xs font-bold [color-scheme:dark]" />
+              <p className="mt-1.5 text-[9px] leading-relaxed text-zinc-500">Menor de 18 anos não cria conta. O pai ou responsável cria a conta com os dados dele e cadastra o atleta como dependente.</p>
             </div>
           )}
 
