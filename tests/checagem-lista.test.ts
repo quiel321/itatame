@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { FAIXA_TODAS_AS_FAIXAS, type CategoriaCompeticao } from "../app/lib/categorias-competicao";
 import { obterEtapaEvento, periodoCorrecaoChecagem } from "../app/lib/evento-etapas";
-import { chaveProfessor, letraAtleta, montarInscritosChecagem } from "../app/lib/checagem-publico";
+import { chaveProfessor, letraAtleta, montarInscritosChecagem, rotuloPesoDeclarado } from "../app/lib/checagem-publico";
 
 test("lista de checagem fica visivel durante as inscricoes", () => {
   const etapa = obterEtapaEvento({
@@ -40,6 +40,26 @@ test("correcao de categoria so no periodo de checagem", () => {
 test("agrupa professor com academia e letra do atleta", () => {
   assert.equal(chaveProfessor("Keneth", "4BRAVO", "4BRAVO"), "4BRAVO — Keneth");
   assert.equal(letraAtleta("Adailton"), "A");
+  assert.equal(rotuloPesoDeclarado("58"), "Peso declarado · 58 kg");
+  assert.equal(rotuloPesoDeclarado("58,5"), "Peso declarado · 58,5 kg");
+  assert.equal(rotuloPesoDeclarado(""), "Peso não informado");
+});
+
+test("peso declarado usa o da inscricao e, se faltar, o do cadastro", () => {
+  const lista = montarInscritosChecagem(
+    [{ id: "1", user_id: "u1", atleta: "Jeize", equipe: "Spartan", faixa: "Branca", sexo: "Feminino", peso: "60", pagamento_ok: false }],
+    [{ user_id: "u2", nome: "Sem peso na inscricao", peso: "70" }],
+    [],
+    [],
+  );
+  assert.equal(lista[0].peso, "60");
+  const peloCadastro = montarInscritosChecagem(
+    [{ id: "2", user_id: "u2", atleta: "Sem peso na inscricao", equipe: "Spartan", faixa: "Branca", sexo: "Feminino" }],
+    [{ user_id: "u2", nome: "Sem peso na inscricao", peso: "70" }],
+    [],
+    [],
+  );
+  assert.equal(peloCadastro[0].peso, "70");
 });
 
 const absolutoMasculino: CategoriaCompeticao = {

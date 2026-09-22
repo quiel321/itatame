@@ -52,6 +52,13 @@ export function letraAtleta(nome: string) {
   return /[A-Z]/.test(letra) ? letra : '#';
 }
 
+export function rotuloPesoDeclarado(peso: string) {
+  const numero = Number(String(peso || '').trim().replace(',', '.'));
+  if (!Number.isFinite(numero) || numero <= 0) return 'Peso não informado';
+  const texto = Number.isInteger(numero) ? String(numero) : String(Math.round(numero * 10) / 10).replace('.', ',');
+  return `Peso declarado · ${texto} kg`;
+}
+
 function idadeDaInscricao(insc: Record<string, unknown>, atleta: Record<string, unknown> | undefined, dataEvento?: string | null): string | number | null | undefined {
   const direto = Number(insc.idade);
   if (insc.idade !== '' && insc.idade != null && Number.isInteger(direto)) return direto;
@@ -138,7 +145,7 @@ export function montarInscritosChecagem(
       academia,
       professor,
       faixa,
-      peso: String(insc.peso || ''),
+      peso: String(insc.peso || atl?.peso || ''),
       sexo,
       pagamento_ok: Boolean(insc.pagamento_ok),
       absoluto: Boolean(insc.absoluto) || chaves.some((chave) => chave.tipo === 'absoluto'),

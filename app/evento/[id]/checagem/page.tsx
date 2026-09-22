@@ -10,6 +10,7 @@ import {
   chaveProfessor,
   letraAtleta,
   montarInscritosChecagem,
+  rotuloPesoDeclarado,
   type AbaChecagem,
   type EquipeChecagem,
   type InscritoChecagem,
@@ -56,14 +57,17 @@ function CardAtleta({
 }) {
   const peso = insc.chaves.find((chave) => chave.tipo === 'peso');
   const absoluto = insc.chaves.find((chave) => chave.tipo === 'absoluto');
+  const inicial = letraAtleta(insc.atleta_nome);
   return (
-    <article className="border-b border-white/5 px-3 py-2 last:border-b-0">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+    <article className="border-b border-white/5 px-3 py-3 last:border-b-0">
+      <div className="flex items-start gap-3">
+        <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5 text-xs font-black text-zinc-200" aria-hidden="true">{inicial === '#' ? '•' : inicial}</span>
+        <div className="min-w-0 flex-1">
           <p className="text-[13px] font-semibold tracking-tight text-white">{insc.atleta_nome}</p>
+          <p className="mt-0.5 text-[11px] font-medium text-zinc-300">{rotuloPesoDeclarado(insc.peso)}</p>
           {peso && (
             <button type="button" onClick={() => onCategoria(peso.chave, 'peso')} className="mt-0.5 block text-left text-[10px] font-medium text-cyan-300 hover:underline">
-              Peso · {peso.rotulo}
+              Categoria · {peso.rotulo}
             </button>
           )}
           {absoluto && (
@@ -83,7 +87,7 @@ function CardAtleta({
           </div>
         </div>
         <div className="shrink-0 text-right">
-          <p className="font-mono text-[10px] text-zinc-500">{insc.numero}</p>
+          <p className="text-[9px] font-medium uppercase tracking-wider text-zinc-500">Pagamento</p>
           <div className="mt-1"><SeloPagamento ok={insc.pagamento_ok} /></div>
         </div>
       </div>
@@ -135,7 +139,7 @@ export default function ChecagemGeralPage() {
 
   const geral = useMemo(() => {
     const termo = buscaGeral.trim().toLowerCase();
-    return filtrarPagamento(inscricoes).filter((item) => !termo || [item.atleta_nome, item.equipe, item.academia, item.professor, item.categoria_rotulo, item.numero, ...item.chaves.map((chave) => chave.rotulo)].join(' ').toLowerCase().includes(termo));
+    return filtrarPagamento(inscricoes).filter((item) => !termo || [item.atleta_nome, item.equipe, item.academia, item.professor, item.categoria_rotulo, item.peso, rotuloPesoDeclarado(item.peso), ...item.chaves.map((chave) => chave.rotulo)].join(' ').toLowerCase().includes(termo));
   }, [inscricoes, buscaGeral, filtroPagamento]);
 
   const letras = useMemo(() => {
@@ -278,15 +282,21 @@ export default function ChecagemGeralPage() {
               <input value={buscaGeral} onChange={(e) => setBuscaGeral(e.target.value)} placeholder="Buscar atleta, equipe, professor ou categoria" className="w-full rounded-xl border border-white/10 bg-white/5 py-3 pl-10 pr-4 text-sm outline-none placeholder:text-zinc-600 focus:border-red-500" />
             </div>
             <p className="mb-3 text-[11px] font-medium text-zinc-500">{geral.length} {geral.length === 1 ? 'atleta' : 'atletas'}</p>
+            {letras.length > 1 && (
+              <div className="mb-3 flex gap-1.5 overflow-x-auto pb-1">
+                {letras.map(([letra]) => (
+                  <button key={letra} type="button" onClick={() => document.getElementById(`letra-${letra}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })} className="h-7 w-7 shrink-0 rounded-full border border-white/10 text-[11px] font-semibold text-zinc-300 hover:bg-white/10">
+                    {letra}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#0b0b10]">
-              {letras.length === 0 ? <p className="p-8 text-center text-sm text-zinc-500">Nenhum atleta encontrado.</p> : letras.map(([letra, atletas]) => (
-                <div key={letra}>
-                  <p className="sticky top-0 bg-red-950/80 px-3 py-1 text-[11px] font-semibold text-red-200 backdrop-blur">{letra}</p>
-                  {atletas.map((insc) => (
-                    <CardAtleta key={insc.id} insc={insc} onEquipe={irParaEquipe} onProfessor={irParaProfessor} onCategoria={irParaCategoria} />
-                  ))}
+              {geral.length === 0 ? <p className="p-8 text-center text-sm text-zinc-500">Nenhum atleta encontrado.</p> : letras.flatMap(([letra, atletas]) => atletas.map((insc, indice) => (
+                <div key={insc.id} id={indice === 0 ? `letra-${letra}` : undefined}>
+                  <CardAtleta insc={insc} onEquipe={irParaEquipe} onProfessor={irParaProfessor} onCategoria={irParaCategoria} />
                 </div>
-              ))}
+              )))}
             </div>
           </section>
         )}
