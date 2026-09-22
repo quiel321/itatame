@@ -2,7 +2,7 @@
 
 import { obterEventoOrganizador, guardarEventoOrganizador } from '@/app/lib/evento-organizador';
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -23,11 +23,14 @@ export default function VouchersAdminPage() {
   useEffect(() => { if (eventoId && eventoId !== 'todos') guardarEventoOrganizador(eventoId); }, [eventoId]);
   const [codigo, setCodigo] = useState("");
   const [tipoDesconto, setTipoDesconto] = useState("porcentagem");
-  const [valorDesconto, setValorDesconto] = useState<number | "">(100);
-  const [limiteUsos, setLimiteUsos] = useState<number | "">(5);
+  const [valorDesconto, setValorDesconto] = useState("100");
+  const [limiteUsos, setLimiteUsos] = useState("5");
   const [finalidade, setFinalidade] = useState("projeto_social");
   const [beneficiario, setBeneficiario] = useState("");
   const [observacoes, setObservacoes] = useState("");
+  const [editandoId, setEditandoId] = useState<string | null>(null);
+  const [usosJaFeitos, setUsosJaFeitos] = useState(0);
+  const formularioRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     carregarEventos();
@@ -82,32 +85,76 @@ export default function VouchersAdminPage() {
     }
   }
 
+  function limparFormulario() {
+    setEditandoId(null);
+    setUsosJaFeitos(0);
+    setCodigo("");
+    setValorDesconto("100");
+    setTipoDesconto("porcentagem");
+    setLimiteUsos("5");
+    setFinalidade("projeto_social");
+    setBeneficiario("");
+    setObservacoes("");
+  }
+
+  function editarCupom(cupomAtual: any) {
+    const percentual = Number(cupomAtual.desconto_porcentagem || 0);
+    const valorFixo = Number(cupomAtual.desconto_valor || 0);
+    const porPorcentagem = percentual > 0;
+    setErro("");
+    setMensagem("");
+    setEditandoId(cupomAtual.id);
+    setUsosJaFeitos(Number(cupomAtual.usos_atualmente || 0));
+    setEventoId(cupomAtual.evento_id);
+    setCodigo(cupomAtual.codigo || "");
+    setTipoDesconto(porPorcentagem ? "porcentagem" : "valor");
+    setValorDesconto(String(porPorcentagem ? percentual : valorFixo > 0 ? valorFixo : ""));
+    setLimiteUsos(String(cupomAtual.limite_usos ?? ""));
+    setFinalidade(cupomAtual.finalidade || "promocional");
+    setBeneficiario(cupomAtual.beneficiario || "");
+    setObservacoes(cupomAtual.observacoes || "");
+    formularioRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   async function gerarCupom(e: React.FormEvent) {
     e.preventDefault();
     setSalvando(true);
     setErro("");
     setMensagem("");
 
-    if (!eventoId || !codigo || valorDesconto === "" || limiteUsos === "") {
+    const codigoLimpo = codigo.trim().toUpperCase();
+    const valDesconto = Number(valorDesconto);
+    const limite = Number(limiteUsos);
+
+    if (!eventoId || !codigoLimpo || valorDesconto.trim() === "" || limiteUsos.trim() === "") {
       setErro("Preencha todos os campos corretamente.");
       setSalvando(false);
       return;
     }
 
-    const codigoLimpo = codigo.trim().toUpperCase();
-    const valDesconto = Number(valorDesconto);
+    if (!Number.isFinite(valDesconto) || valDesconto <= 0 || (tipoDesconto === "porcentagem" && valDesconto > 100)) {
+      setErro(tipoDesconto === "porcentagem" ? "A porcentagem deve ser entre 1 e 100." : "Informe um valor maior que zero.");
+      setSalvando(false);
+      return;
+    }
 
-    if (tipoDesconto === "porcentagem" && (valDesconto <= 0 || valDesconto > 100)) {
-      setErro("A porcentagem deve ser entre 1 e 100.");
-      setSalvando(false); return;
+    if (!Number.isInteger(limite) || limite < 1) {
+      setErro("O limite de usos precisa ser um número inteiro a partir de 1.");
+      setSalvando(false);
+      return;
+    }
+
+    if (editandoId && limite < usosJaFeitos) {
+      setErro(`Este cupom já foi usado ${usosJaFeitos} vez${usosJaFeitos === 1 ? "" : "es"}. O limite não pode ficar abaixo disso.`);
+      setSalvando(false);
+      return;
     }
 
     try {
-      const novoCupom = {
+      const dadosCupom = {
         codigo: codigoLimpo,
         evento_id: eventoId,
-        limite_usos: Number(limiteUsos),
-        usos_atualmente: 0,
+        limite_usos: limite,
         desconto_porcentagem: tipoDesconto === "porcentagem" ? valDesconto : 0,
         desconto_valor: tipoDesconto === "valor" ? valDesconto : 0,
         finalidade,
@@ -115,7 +162,10 @@ export default function VouchersAdminPage() {
         observacoes: observacoes.trim() || null,
       };
 
-      const { data, error } = await supabase.from("cupons").insert([novoCupom]).select().single();
+      const consulta = editandoId
+        ? supabase.from("cupons").update(dadosCupom).eq("id", editandoId).select().single()
+        : supabase.from("cupons").insert([{ ...dadosCupom, usos_atualmente: 0 }]).select().single();
+      const { data, error } = await consulta;
 
       if (error) {
         if (error.code === '23505') {
@@ -124,16 +174,11 @@ export default function VouchersAdminPage() {
         throw error;
       }
 
-      setMensagem(`Cupom ${codigoLimpo} ativado com sucesso!`);
-      setCodigo("");
-      setValorDesconto(100);
-      setTipoDesconto("porcentagem");
-      setLimiteUsos(5);
-      setBeneficiario("");
-      setObservacoes("");
-      
+      setMensagem(editandoId ? `Cupom ${codigoLimpo} atualizado.` : `Cupom ${codigoLimpo} ativado com sucesso!`);
+      limparFormulario();
+
       if (data) {
-        setCupons([data, ...cupons]);
+        setCupons(editandoId ? cupons.map((item) => item.id === data.id ? data : item) : [data, ...cupons]);
       }
 
       setTimeout(() => setMensagem(""), 3000);
@@ -145,10 +190,12 @@ export default function VouchersAdminPage() {
   }
 
   function prepararCortesiaSocial() {
+    setEditandoId(null);
+    setUsosJaFeitos(0);
     setFinalidade("projeto_social");
     setTipoDesconto("porcentagem");
-    setValorDesconto(100);
-    setLimiteUsos(10);
+    setValorDesconto("100");
+    setLimiteUsos("10");
     setCodigo(`SOCIAL${Math.random().toString(36).slice(2, 6).toUpperCase()}`);
   }
 
@@ -167,6 +214,7 @@ export default function VouchersAdminPage() {
     try {
       const { error } = await supabase.from("cupons").delete().eq("id", id);
       if (error) throw error;
+      if (editandoId === id) limparFormulario();
       setCupons(cupons.filter(c => c.id !== id));
     } catch (err: any) {
       alert("Erro ao excluir cupom: " + err.message);
@@ -203,8 +251,11 @@ export default function VouchersAdminPage() {
           {/* ========================================== */}
           {/* FORMULÁRIO DE GERAÇÃO                      */}
           {/* ========================================== */}
-          <div className="bg-[#0a0a0e] border border-white/5 rounded-3xl p-6 shadow-xl h-fit">
-            <h3 className="text-white font-black text-lg mb-6 border-b border-white/5 pb-4">Gerar Novo Cupom</h3>
+          <div ref={formularioRef} className="bg-[#0a0a0e] border border-white/5 rounded-3xl p-6 shadow-xl h-fit">
+            <div className="mb-6 flex items-center justify-between gap-3 border-b border-white/5 pb-4">
+              <h3 className="text-white font-black text-lg">{editandoId ? "Editar cupom" : "Gerar Novo Cupom"}</h3>
+              {editandoId && <button type="button" onClick={limparFormulario} className="text-[10px] font-black uppercase tracking-widest text-zinc-400 hover:text-white">Cancelar</button>}
+            </div>
 
             <button type="button" onClick={prepararCortesiaSocial} className="mb-5 w-full rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-left text-xs font-black text-emerald-300 hover:bg-emerald-500/20">
               Preparar inscrições gratuitas para projeto social
@@ -218,7 +269,7 @@ export default function VouchersAdminPage() {
               <div>
                 <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5 pl-1">1. Evento Alvo</label>
                 <div className="relative">
-                  <select value={eventoId} onChange={(e) => setEventoId(e.target.value)} required className={`${inputClass} appearance-none cursor-pointer`}>
+                  <select value={eventoId} onChange={(e) => setEventoId(e.target.value)} required disabled={Boolean(editandoId)} className={`${inputClass} appearance-none cursor-pointer disabled:opacity-60`}>
                     {eventos.length === 0 && <option value="" className="bg-[#0a0a0e]">Nenhum evento...</option>}
                     {eventos.map(ev => <option key={ev.id} value={ev.id} className="bg-[#0a0a0e]">{ev.nome}</option>)}
                   </select>
@@ -241,7 +292,7 @@ export default function VouchersAdminPage() {
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5 pl-1">Desconto</label>
-                  <input type="number" step="0.01" required value={valorDesconto} onChange={(e) => setValorDesconto(Number(e.target.value))} className={inputClass} />
+                  <input type="number" step="0.01" min="0" required value={valorDesconto} onChange={(e) => setValorDesconto(e.target.value)} placeholder="0" className={inputClass} />
                 </div>
               </div>
 
@@ -266,13 +317,15 @@ export default function VouchersAdminPage() {
 
               <div>
                 <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5 pl-1">3. Limite de Usos (Pessoas)</label>
-                <input type="number" required min="1" value={limiteUsos} onChange={(e) => setLimiteUsos(Number(e.target.value))} placeholder="Ex: 5" className={inputClass} />
+                <input type="number" required min="1" value={limiteUsos} onChange={(e) => setLimiteUsos(e.target.value)} placeholder="Ex: 5" className={inputClass} />
                 <p className="text-[9px] text-zinc-500 mt-1.5 ml-1">Após este limite, o cupom expira automaticamente.</p>
               </div>
 
+              {editandoId && usosJaFeitos > 0 && <p className="text-[10px] font-bold text-zinc-500">Inscrições que já usaram este código continuam com o desconto da hora em que foram feitas.</p>}
+
               <button type="submit" disabled={salvando || eventos.length === 0} className="w-full mt-2 cursor-pointer bg-yellow-500 hover:bg-yellow-400 text-black font-black text-sm uppercase tracking-widest py-3.5 rounded-xl transition-all shadow-[0_0_20px_rgba(234,179,8,0.2)] disabled:opacity-50 flex items-center justify-center gap-2">
                 <svg className="w-4 h-4 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"></path></svg>
-                {salvando ? "Salvando..." : "Ativar Cupom"}
+                {salvando ? "Salvando..." : editandoId ? "Salvar alterações" : "Ativar Cupom"}
               </button>
             </form>
           </div>
@@ -297,7 +350,7 @@ export default function VouchersAdminPage() {
                   const isEsgotado = saldo <= 0;
 
                   return (
-                    <div key={c.id} className="bg-black/40 border border-white/5 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:border-white/10 transition-colors relative overflow-hidden">
+                    <div key={c.id} className={`bg-black/40 border rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-colors relative overflow-hidden ${editandoId === c.id ? "border-yellow-500/40" : "border-white/5 hover:border-white/10"}`}>
                       
                       {/* BARRA DE PROGRESSO DE FUNDO */}
                       <div 
@@ -326,6 +379,7 @@ export default function VouchersAdminPage() {
                       </div>
 
                       <div className="flex items-center gap-4 shrink-0">
+                        <button type="button" onClick={() => editarCupom(c)} className="cursor-pointer rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 text-[9px] font-black uppercase tracking-widest text-yellow-300 hover:bg-yellow-500/20">Editar</button>
                         <button type="button" onClick={() => copiarOrientacao(c)} disabled={isEsgotado} className="cursor-pointer rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-[9px] font-black uppercase tracking-widest text-white hover:bg-white/10 disabled:opacity-40">Copiar instruções</button>
                         <div className="text-right">
                           <span className="text-2xl font-black text-white block leading-none">{c.usos_atualmente} <span className="text-sm text-zinc-600">/ {c.limite_usos}</span></span>
