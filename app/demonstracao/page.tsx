@@ -7,10 +7,11 @@ const whatsappLink = "https://wa.me/5565993059729?text=Olá!%20Quero%20montar%20
 const chavePublica = "https://www.itatame.com.br";
 
 const paradas = [
-  { id: "inscricao", nome: "Inscrição", detalhe: "Vaga, lote e Pix", hora: "Quando abre" },
+  { id: "aviso", nome: "Aviso", detalhe: "Chega no celular", hora: "Antes da chamada" },
   { id: "pesagem", nome: "Pesagem", detalhe: "Quem entra na chave", hora: "Manhã" },
   { id: "chave", nome: "Chave", detalhe: "Os dois lados até a final", hora: "Antes de chamar" },
   { id: "tatame", nome: "Tatame", detalhe: "Chamada e placar", hora: "A luta" },
+  { id: "telao", nome: "Telão", detalhe: "Lutas ao vivo na TV", hora: "Na arena" },
   { id: "podio", nome: "Pódio", detalhe: "Ranking no mesmo dia", hora: "Antes de ir embora" },
 ] as const;
 
@@ -57,16 +58,16 @@ export default function DemonstracaoPage() {
             Para quem organiza o campeonato
           </div>
           <h1 className="mt-5 max-w-xl text-[2.6rem] font-black leading-[0.92] tracking-tight md:text-6xl">
-            Da vaga no celular até o ouro na TV.
+            O celular avisa a luta. A TV mostra o placar.
           </h1>
           <p className="mt-5 max-w-lg text-base leading-relaxed text-zinc-300 md:text-lg">
-            O atleta se inscreve, paga no Pix e acompanha a própria luta. Você vê quem pesou, quem está no tatame e quem somou ponto para a equipe. A planilha fica em casa.
+            Quando a luta se aproxima, o atleta recebe a mensagem com o adversário e o tatame. Na arena, o telão acompanha os placares ao vivo. Você vê quem pesou, quem está lutando e quem somou ponto para a equipe.
           </p>
           <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:items-center">
             <a href={whatsappLink} target="_blank" rel="noopener noreferrer" className="inline-flex h-12 items-center justify-center rounded-full bg-red-600 px-6 text-sm font-bold text-white transition hover:bg-red-500">
               Montar o meu evento
             </a>
-            <button type="button" onClick={() => irPara("inscricao")} className="inline-flex h-12 items-center justify-center rounded-full border border-white/15 px-6 text-sm font-semibold text-zinc-200 transition hover:border-white/40">
+            <button type="button" onClick={() => irPara("aviso")} className="inline-flex h-12 items-center justify-center rounded-full border border-white/15 px-6 text-sm font-semibold text-zinc-200 transition hover:border-white/40">
               Ver como o dia anda
             </button>
           </div>
@@ -118,11 +119,11 @@ export default function DemonstracaoPage() {
         </nav>
 
         <div className="space-y-16 pt-8 xl:pt-12">
-          <Cena id="inscricao" kicker="A vaga" titulo="A inscrição fecha na vaga que você marcou.">
+          <Cena id="aviso" kicker="O aviso" titulo="O celular avisa antes de chamarem o nome no microfone.">
             <p>
-              Você define o limite, o lote e o prazo. Na última vaga a página avisa que esgotou e a próxima pessoa não entra. Quem já está inscrito ainda consegue ajustar a ficha. O Pix confirma na hora.
+              A mesa chama e a mensagem chega na hora: o nome do atleta, o adversário e o tatame. Antes disso, outro aviso diz quantas lutas faltam e o horário previsto. O chamador manda a chamada da categoria. A pessoa levanta da cadeira sem ficar perguntando na mesa.
             </p>
-            <FichaInscricao />
+            <AvisosNoCelular />
           </Cena>
 
           <Cena id="pesagem" kicker="A balança" titulo="Quem não passou na checagem não aparece na chave." invertida>
@@ -141,9 +142,16 @@ export default function DemonstracaoPage() {
 
           <Cena id="tatame" kicker="A mesa" titulo="Cada mesário só vê o tatame que é dele." invertida>
             <p>
-              O acesso da mesa é o nome da área. Se a luta está no Tatame 1, a identificação é Tatame 1. Com chamador na arena, a luta espera a chamada. O placar sobe para a TV. Quando o tatame para, a tela mostra o QR das chaves para a arquibancada.
+              O acesso da mesa é o nome da área. Se a luta está no Tatame 1, a identificação é Tatame 1. Com chamador na arena, a luta espera a chamada. Na hora de chamar, o aviso sai para o celular dos dois atletas e para quem está na fila.
             </p>
             <Mesas />
+          </Cena>
+
+          <Cena id="telao" kicker="O telão" titulo="A arquibancada vê a luta sem levantar da cadeira.">
+            <p>
+              A TV da arena mostra os tatames juntos, com o placar subindo na hora. A faixa de cima chama quem precisa se apresentar. Quando a luta acaba, o resultado entra na tela. Se o tatame para, o QR das chaves fica para a arquibancada apontar o celular.
+            </p>
+            <TelaoArena />
           </Cena>
 
           <Cena id="podio" kicker="O ouro" titulo="A equipe já sabe a pontuação antes de desmontar a arena.">
@@ -155,7 +163,7 @@ export default function DemonstracaoPage() {
 
           <section className="grid gap-px overflow-hidden rounded-[28px] border border-white/10 bg-white/10 sm:grid-cols-2 lg:grid-cols-4">
             {[
-              ["Atleta", "Paga, pesa, abre a chave no celular e recebe a chamada."],
+              ["Atleta", "Recebe o aviso no celular, sobe no tatame e acompanha a chave."],
               ["Professor", "Vê a equipe inteira e o caminho de cada aluno até a final."],
               ["Organizador", "Controla vaga, lote, categoria, absoluto e o dia da arena."],
               ["Mesa", "Chama, anota o placar e fecha o resultado na hora."],
@@ -258,29 +266,44 @@ function RelogioArena() {
   return <span>{texto}</span>;
 }
 
-function FichaInscricao() {
+function AvisosNoCelular() {
+  const avisos = [
+    {
+      hora: "agora",
+      titulo: "Sua luta foi chamada",
+      texto: "Helena, sua luta contra Lara Mendes foi chamada. Compareça agora ao Tatame 1.",
+      tom: "chamada",
+    },
+    {
+      hora: "há 6 min",
+      titulo: "Prepare-se para lutar",
+      texto: "Helena, você é a próxima luta no Tatame 1. Tempo aproximado: 8 minutos. Previsão: 10:42.",
+      tom: "fila",
+    },
+    {
+      hora: "há 12 min",
+      titulo: "1ª chamada da categoria",
+      texto: "Helena, apresente-se ao chamador para Leve · faixa verde.",
+      tom: "categoria",
+    },
+  ] as const;
   return (
-    <div className="rounded-2xl bg-black p-5">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-500">Spartan Open</p>
-          <p className="mt-1 text-lg font-black">Inscrições abertas</p>
-        </div>
-        <p className="rounded-full bg-red-600 px-3 py-1 text-[11px] font-bold">1º lote</p>
+    <div className="rounded-[24px] bg-black px-4 py-5">
+      <div className="mb-4 flex items-center justify-between px-1">
+        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-500">Celular da Helena</p>
+        <p className="font-mono text-[10px] font-bold uppercase tracking-widest text-zinc-600">Spartan Open</p>
       </div>
-      <div className="mt-6 flex items-end justify-between">
-        <p className="font-mono text-5xl font-black leading-none tracking-tight">84</p>
-        <p className="pb-1 text-sm text-zinc-500">de 100 vagas</p>
-      </div>
-      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10">
-        <div className="h-full w-[84%] rounded-full bg-red-500" />
-      </div>
-      <div className="mt-5 space-y-2 text-sm">
-        <Linha rotulo="Atleta" valor="Helena Souza" />
-        <Linha rotulo="Categoria" valor="Juvenil · Verde · Leve" />
-        <Linha rotulo="Equipe" valor="Spartan" />
-        <Linha rotulo="Pagamento" valor="Pix confirmado" destaque />
-      </div>
+      <ul className="space-y-2">
+        {avisos.map((aviso) => (
+          <li key={aviso.titulo} className="rounded-2xl border border-white/10 bg-[#101218] px-4 py-3">
+            <div className="flex items-center justify-between gap-3">
+              <p className={`text-[11px] font-bold uppercase tracking-[0.14em] ${aviso.tom === "chamada" ? "text-red-300" : aviso.tom === "fila" ? "text-yellow-200" : "text-zinc-400"}`}>{aviso.titulo}</p>
+              <span className="shrink-0 font-mono text-[10px] text-zinc-600">{aviso.hora}</span>
+            </div>
+            <p className="mt-1.5 text-sm leading-relaxed text-zinc-200">{aviso.texto}</p>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -360,6 +383,51 @@ function Lado({ lutas, avancos, reverso = false, rotulo }: { lutas: [string, str
   );
 }
 
+function TelaoArena() {
+  return (
+    <div className="overflow-hidden rounded-2xl bg-black">
+      <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+        <span className="rounded-md bg-red-600 px-2 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-white">Ao vivo</span>
+        <p className="truncate px-3 text-sm font-black tracking-tight">Spartan Open</p>
+        <RelogioArena />
+      </div>
+      <div className="flex items-center gap-2 border-b border-yellow-500/20 bg-yellow-500/10 px-4 py-2">
+        <span className="shrink-0 rounded bg-yellow-400 px-1.5 py-0.5 text-[10px] font-black uppercase text-black">Chamada</span>
+        <p className="truncate text-xs font-bold text-yellow-100">Helena Souza e Lara Mendes · Tatame 1</p>
+      </div>
+      <div className="grid gap-px bg-white/10 sm:grid-cols-2">
+        <PlacarTelao tatame="Tatame 1" categoria="Semifinal · Leve" a="Helena Souza" equipeA="Spartan" pontosA="2" b="Lara Mendes" equipeB="Alliance" pontosB="0" ativo />
+        <PlacarTelao tatame="Tatame 2" categoria="Quartas · Médio" a="Caio Nunes" equipeA="Gracie" pontosA="0" b="Enzo Ribeiro" equipeB="CheckMat" pontosB="1" />
+      </div>
+    </div>
+  );
+}
+
+function PlacarTelao({ tatame, categoria, a, equipeA, pontosA, b, equipeB, pontosB, ativo = false }: { tatame: string; categoria: string; a: string; equipeA: string; pontosA: string; b: string; equipeB: string; pontosB: string; ativo?: boolean }) {
+  return (
+    <article className="bg-black px-4 py-4">
+      <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-500">
+        <span className={ativo ? "text-red-300" : ""}>{tatame}</span>
+        <span>{categoria}</span>
+      </div>
+      <div className="mt-3 flex items-end justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-black">{a}</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">{equipeA}</p>
+        </div>
+        <p className="font-mono text-3xl font-black leading-none">{pontosA}</p>
+      </div>
+      <div className="mt-3 flex items-end justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-black text-zinc-300">{b}</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-600">{equipeB}</p>
+        </div>
+        <p className="font-mono text-3xl font-black leading-none text-zinc-400">{pontosB}</p>
+      </div>
+    </article>
+  );
+}
+
 function Mesas() {
   return (
     <div className="grid gap-3 sm:grid-cols-2">
@@ -419,11 +487,3 @@ function Podio() {
   );
 }
 
-function Linha({ rotulo, valor, destaque = false }: { rotulo: string; valor: string; destaque?: boolean }) {
-  return (
-    <div className="flex items-center justify-between gap-3 border-b border-white/5 py-2">
-      <span className="text-zinc-500">{rotulo}</span>
-      <span className={destaque ? "font-bold text-emerald-300" : "font-semibold text-white"}>{valor}</span>
-    </div>
-  );
-}
