@@ -86,7 +86,8 @@ test("categoria de peso infantil aceita o grupo de faixas da tabela", () => {
   assert.equal(categoriaCompativel(pesadoInfantil, { idade: 10, sexo: "Feminino", faixa: "Verde", modalidade: "Jiu-Jitsu", peso: 36.1 }), true);
   assert.equal(categoriaCompativel(pesadoInfantil, { idade: 10, sexo: "Feminino", faixa: "Verde", modalidade: "Jiu-Jitsu", peso: 34 }), false);
   assert.doesNotThrow(() => validarCategoria(leve));
-  assert.throws(() => validarCategoria({ ...leve, faixa: FAIXA_TODAS_AS_FAIXAS }), /ao menos uma faixa/);
+  assert.doesNotThrow(() => validarCategoria({ ...leve, faixa: FAIXA_TODAS_AS_FAIXAS }));
+  assert.equal(categoriaCompativel({ ...leve, faixa: FAIXA_TODAS_AS_FAIXAS }, { idade: 8, sexo: "Feminino", faixa: "Amarela", modalidade: "Jiu-Jitsu", peso: 20 }), true);
 });
 
 test("absoluto feminino branca e azul reúne só essas faixas na mesma chave", () => {

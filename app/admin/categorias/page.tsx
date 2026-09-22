@@ -22,6 +22,7 @@ function Editor({ eventoId }: { eventoId: string }) {
   const [eventoOrigem, setEventoOrigem] = useState('');
   const [modo, setModo] = useState<ModoCadastro>('modelo');
   const [form, setForm] = useState<CategoriaNova>(inicial);
+  const [pesoDe, setPesoDe] = useState('');
   const [mensagem, setMensagem] = useState('');
   const [salvando, setSalvando] = useState(false);
   const [carregando, setCarregando] = useState(true);
@@ -135,15 +136,17 @@ function Editor({ eventoId }: { eventoId: string }) {
     setForm({
       nome: categoria.nome, modalidade: categoria.modalidade, sexo: categoria.sexo,
       faixa: categoria.faixa, idade_min: categoria.idade_min, idade_max: categoria.idade_max,
-      peso_min: categoria.peso_min, peso_max: categoria.peso_max,
+      peso_min: Number(categoria.peso_min) || 0, peso_max: categoria.peso_max,
       tempo_minutos: categoria.tempo_minutos, tipo: categoria.tipo, ativa: categoria.ativa,
     });
+    setPesoDe(Number(categoria.peso_min) > 0 ? String(Number(categoria.peso_min)) : '');
     setMensagem('Editando a categoria selecionada.');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   function cancelarEdicao() {
     setEditandoId(null);
+    setPesoDe('');
     setForm(inicial);
   }
 
@@ -177,7 +180,6 @@ function Editor({ eventoId }: { eventoId: string }) {
           ...form,
           tipo,
           nome: tipo === 'absoluto' && !form.nome.trim() ? 'Absoluto' : form.nome,
-          faixa: tipo === 'peso' && faixaEhLivre(form.faixa) ? 'Branca' : form.faixa,
         });
       }}>
         <option value="peso">Categoria de peso</option>
@@ -185,49 +187,28 @@ function Editor({ eventoId }: { eventoId: string }) {
       </select>
     </label>
     <label className="block text-xs">Modalidade<input required maxLength={80} className={campo + ' mt-1'} value={form.modalidade} onChange={e => setForm({ ...form, modalidade: e.target.value })} /></label>
-    {form.tipo === 'absoluto' ? (
-      <fieldset>
-        <legend className="text-xs">Faixas deste absoluto</legend>
-        <label className="mt-2 flex items-center gap-2 text-xs">
-          <input type="checkbox" checked={faixaEhLivre(form.faixa)} onChange={e => setForm({ ...form, faixa: e.target.checked ? FAIXA_TODAS_AS_FAIXAS : 'Branca' })} />
-          Todas as faixas
-        </label>
-        <div className="mt-2 grid grid-cols-2 gap-2">
-          {faixasCadastradas.map(faixa => {
-            const marcada = !faixaEhLivre(form.faixa) && faixasDaCategoria(form.faixa).some(item => item.toLowerCase() === faixa.toLowerCase());
-            return <label key={faixa} className={`flex items-center gap-2 text-xs ${faixaEhLivre(form.faixa) ? 'opacity-40' : ''}`}>
-              <input type="checkbox" disabled={faixaEhLivre(form.faixa)} checked={marcada} onChange={e => {
-                const atuais = faixasDaCategoria(form.faixa);
-                const proxima = e.target.checked ? [...atuais, faixa] : atuais.filter(item => item.toLowerCase() !== faixa.toLowerCase());
-                if (!proxima.length) return;
-                setForm({ ...form, faixa: serializarFaixasCategoria(proxima) });
-              }} />
-              {faixa}
-            </label>;
-          })}
-        </div>
-        <span className="mt-2 block text-zinc-400">Marque só as faixas que lutam juntas. Ex.: Branca e Azul no feminino. Somente quem tiver uma dessas faixas, o mesmo sexo e a idade do intervalo vê e compra este extra. Juvenil a Master: idade 16 a 100.</span>
-      </fieldset>
-    ) : (
-      <fieldset>
-        <legend className="text-xs">Faixas desta categoria</legend>
-        <div className="mt-2 grid grid-cols-2 gap-2">
-          {faixasCadastradas.map(faixa => {
-            const marcada = faixasDaCategoria(form.faixa).some(item => item.toLowerCase() === faixa.toLowerCase());
-            return <label key={faixa} className="flex items-center gap-2 text-xs">
-              <input type="checkbox" checked={marcada} onChange={e => {
-                const atuais = faixasDaCategoria(form.faixa);
-                const proxima = e.target.checked ? [...atuais, faixa] : atuais.filter(item => item.toLowerCase() !== faixa.toLowerCase());
-                if (!proxima.length) return;
-                setForm({ ...form, faixa: serializarFaixasCategoria(proxima) });
-              }} />
-              {faixa}
-            </label>;
-          })}
-        </div>
-        <span className="mt-2 block text-zinc-400">Marque as faixas que lutam juntas neste peso. Quem tiver uma delas entra na mesma chave.</span>
-      </fieldset>
-    )}
+    <fieldset>
+      <legend className="text-xs">Faixas desta categoria</legend>
+      <label className="mt-2 flex items-center gap-2 text-xs">
+        <input type="checkbox" checked={faixaEhLivre(form.faixa)} onChange={e => setForm({ ...form, faixa: e.target.checked ? FAIXA_TODAS_AS_FAIXAS : 'Branca' })} />
+        Todas as faixas
+      </label>
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        {faixasCadastradas.map(faixa => {
+          const marcada = !faixaEhLivre(form.faixa) && faixasDaCategoria(form.faixa).some(item => item.toLowerCase() === faixa.toLowerCase());
+          return <label key={faixa} className={`flex items-center gap-2 text-xs ${faixaEhLivre(form.faixa) ? 'opacity-40' : ''}`}>
+            <input type="checkbox" disabled={faixaEhLivre(form.faixa)} checked={marcada} onChange={e => {
+              const atuais = faixasDaCategoria(form.faixa);
+              const proxima = e.target.checked ? [...atuais, faixa] : atuais.filter(item => item.toLowerCase() !== faixa.toLowerCase());
+              if (!proxima.length) return;
+              setForm({ ...form, faixa: serializarFaixasCategoria(proxima) });
+            }} />
+            {faixa}
+          </label>;
+        })}
+      </div>
+      <span className="mt-2 block text-zinc-400">Vale para peso e absoluto. Marque as faixas que lutam juntas, ou todas. Quem tiver uma delas entra na mesma chave.</span>
+    </fieldset>
     <label className="block text-xs">Sexo competitivo<select className={campo + ' mt-1'} value={form.sexo} onChange={e => setForm({ ...form, sexo: e.target.value })}><option>Masculino</option><option>Feminino</option></select></label>
     <div className="grid grid-cols-2 gap-3">{(['idade_min','idade_max','tempo_minutos'] as const).map(k => <label key={k} className="text-xs">{{ idade_min:'Idade mínima', idade_max:'Idade máxima', tempo_minutos:'Tempo de luta' }[k]}<input required type="number" min={k.startsWith('idade') ? 4 : 1} max={k.startsWith('idade') ? 100 : 30} step="1" className={campo + ' mt-1'} value={form[k]} onChange={e => setForm({ ...form, [k]: Number(e.target.value) })} /></label>)}</div>
   </>;
@@ -264,7 +245,7 @@ function Editor({ eventoId }: { eventoId: string }) {
       <section className="rounded-2xl border border-white/10 bg-zinc-900/50 p-5 self-start">
         {modo === 'modelo' && <div className="space-y-4"><h2 className="font-bold">Categorias de referência IBJJF</h2><p className="text-xs leading-relaxed text-zinc-400">Escolha Adulto ou Kids/Infantil. Nos modelos infantis, selecione a idade, a faixa e o sexo; o sistema preenche os nove pesos oficiais em quilogramas e o tempo de luta. A pesagem inclui o kimono.</p>{seletorModelo}<a href={modeloSelecionado.fonte || fonteCategoriasIBJJF} target="_blank" rel="noopener noreferrer" className="block text-xs font-bold text-cyan-400 underline underline-offset-4">Consultar fonte oficial da IBJJF</a><button type="button" disabled={salvando} onClick={importarModelo} className="w-full rounded-xl bg-red-600 p-3 font-bold disabled:opacity-40">Importar tabela selecionada</button></div>}
         {modo === 'copiar' && <div className="space-y-4"><h2 className="font-bold">Copiar de outro campeonato</h2><p className="text-xs text-zinc-400">Copia todas as categorias de outro evento seu. As categorias do evento original permanecem intactas.</p><label className="block text-xs">Campeonato de origem<select className={campo + ' mt-1'} value={eventoOrigem} onChange={e => setEventoOrigem(e.target.value)}><option value="">Selecione</option>{eventos.map(evento => <option key={evento.id} value={String(evento.id)}>{evento.nome || `Evento ${evento.id}`}</option>)}</select></label><button type="button" disabled={salvando || !eventoOrigem} onClick={copiarCampeonato} className="w-full rounded-xl bg-red-600 p-3 font-bold disabled:opacity-40">Copiar tabela</button></div>}
-        {modo === 'manual' && <form onSubmit={salvarManual} className="space-y-4"><h2 className="font-bold">{editandoId ? 'Editar categoria' : 'Nova categoria'}</h2><p className="text-xs text-zinc-400">{editandoId ? 'Revise os dados e salve. Categorias já utilizadas ficam protegidas.' : 'No peso, marque as faixas que lutam juntas. No absoluto, use uma faixa, um grupo ou todas as faixas.'}</p><label className="block text-xs">Nome da categoria<input required maxLength={80} className={campo + ' mt-1'} value={form.nome} onChange={e => setForm({ ...form, nome: e.target.value })} /></label>{seletorBase}<div className="grid grid-cols-2 gap-3"><label className="text-xs">Peso de (kg)<input required={form.tipo === 'peso'} type="number" min="0" max="500" step="0.1" className={campo + ' mt-1'} value={form.peso_min} onChange={e => setForm({ ...form, peso_min: Number(e.target.value) })} /></label><label className="text-xs">Peso até (kg)<input type="number" min="0.1" max="500" step="0.1" placeholder="Sem limite" className={campo + ' mt-1'} value={form.peso_max ?? ''} onChange={e => setForm({ ...form, peso_max: e.target.value === '' ? null : Number(e.target.value) })} /></label></div>{form.tipo === 'absoluto' && <p className="text-[11px] leading-relaxed text-zinc-500">No absoluto, peso de 0 até vazio vale para todas as categorias. Preencha os dois campos se este absoluto for só até determinado peso.</p>}<button disabled={salvando || carregando} className="w-full rounded-xl bg-red-600 p-3 font-bold disabled:opacity-40">{editandoId ? 'Salvar alterações' : 'Cadastrar categoria'}</button>{editandoId && <button type="button" onClick={cancelarEdicao} className="w-full rounded-xl border border-white/10 p-3 text-sm text-zinc-300">Cancelar edição</button>}</form>}
+        {modo === 'manual' && <form onSubmit={salvarManual} className="space-y-4"><h2 className="font-bold">{editandoId ? 'Editar categoria' : 'Nova categoria'}</h2><p className="text-xs text-zinc-400">{editandoId ? 'Revise os dados e salve. Categorias já utilizadas ficam protegidas.' : 'No peso e no absoluto, marque as faixas que lutam juntas.'}</p><label className="block text-xs">Nome da categoria<input required maxLength={80} className={campo + ' mt-1'} value={form.nome} onChange={e => setForm({ ...form, nome: e.target.value })} /></label>{seletorBase}<div className="grid grid-cols-2 gap-3"><label className="text-xs">Peso de (kg)<input type="number" min="0" max="500" step="0.1" placeholder="0" className={campo + ' mt-1'} value={pesoDe} onChange={e => { setPesoDe(e.target.value); setForm({ ...form, peso_min: e.target.value === '' ? 0 : Number(e.target.value) }); }} /></label><label className="text-xs">Peso até (kg)<input type="number" min="0.1" max="500" step="0.1" placeholder="Sem limite" className={campo + ' mt-1'} value={form.peso_max ?? ''} onChange={e => setForm({ ...form, peso_max: e.target.value === '' ? null : Number(e.target.value) })} /></label></div>{form.tipo === 'absoluto' && <p className="text-[11px] leading-relaxed text-zinc-500">No absoluto, peso de 0 até vazio vale para todas as categorias. Preencha os dois campos se este absoluto for só até determinado peso.</p>}<button disabled={salvando || carregando} className="w-full rounded-xl bg-red-600 p-3 font-bold disabled:opacity-40">{editandoId ? 'Salvar alterações' : 'Cadastrar categoria'}</button>{editandoId && <button type="button" onClick={cancelarEdicao} className="w-full rounded-xl border border-white/10 p-3 text-sm text-zinc-300">Cancelar edição</button>}</form>}
       </section>
 
       <section><label className="sr-only" htmlFor="busca-categoria">Buscar categoria</label><input id="busca-categoria" className={campo} placeholder="Buscar nome, faixa ou divisão" value={busca} onChange={e => setBusca(e.target.value)} /><p className="my-4 text-xs text-zinc-400">{categorias.length} categorias cadastradas</p><div className="space-y-3">{categorias.filter(c => rotuloCategoria(c).toLowerCase().includes(busca.toLowerCase())).map(c => { const emUso = categoriasEmUso.has(c.id); return <article key={c.id} className={`rounded-xl border p-4 ${c.ativa ? 'border-white/10' : 'border-yellow-500/20 bg-yellow-500/5 opacity-75'}`}><div className="flex flex-wrap items-start justify-between gap-2"><h2 className="font-bold">{c.nome}</h2><span className={`rounded-full px-2 py-1 text-[9px] font-black uppercase ${emUso ? 'bg-cyan-500/10 text-cyan-300' : c.ativa ? 'bg-green-500/10 text-green-300' : 'bg-yellow-500/10 text-yellow-300'}`}>{c.tipo === 'absoluto' ? 'Absoluto · ' : ''}{emUso ? 'Em uso · protegida' : c.ativa ? 'Ativa' : 'Pausada'}</span></div><p className="text-sm text-zinc-400 mt-1">{rotuloCategoria(c)}</p><p className="text-xs text-red-300 mt-2">{c.tempo_minutos} minutos</p>{emUso ? <p className="mt-3 rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-2 text-[10px] text-cyan-100">Possui inscrição ou chave vinculada. Os dados foram bloqueados para preservar o campeonato.</p> : <div className="mt-4 flex flex-wrap gap-2"><button type="button" onClick={() => editarCategoria(c)} className="rounded-lg border border-white/10 px-3 py-2 text-xs font-bold">Editar</button><button type="button" disabled={salvando} onClick={() => alternarCategoria(c)} className="rounded-lg border border-yellow-500/20 px-3 py-2 text-xs font-bold text-yellow-300 disabled:opacity-40">{c.ativa ? 'Pausar' : 'Reativar'}</button><button type="button" onClick={() => setCategoriaExcluir(c)} className="rounded-lg border border-red-500/20 px-3 py-2 text-xs font-bold text-red-300">Excluir</button></div>}</article>; })}</div>{!categorias.length && !carregando && <p className="text-zinc-400 text-sm">Nenhuma categoria cadastrada. Escolha uma das três opções ao lado para começar.</p>}</section>

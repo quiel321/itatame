@@ -208,8 +208,7 @@ export function absolutoDaInscricao(i: InscricaoCompeticao, categorias: Categori
 export function validarCategoria(c: Omit<CategoriaCompeticao, 'id' | 'evento_id'>) {
   if (!['peso', 'absoluto'].includes(c.tipo)) throw new Error('Informe se a categoria é de peso ou absoluto.');
   if (!c.nome.trim() || !c.modalidade.trim() || !c.faixa.trim() || !['Masculino', 'Feminino'].includes(c.sexo)) throw new Error('Informe nome, modalidade, sexo e faixa.');
-  if (c.tipo === 'peso' && (faixaEhLivre(c.faixa) || !faixasDaCategoria(c.faixa).length)) throw new Error('Categoria de peso precisa de ao menos uma faixa.');
-  if (c.tipo === 'absoluto' && !faixaEhLivre(c.faixa) && !faixasDaCategoria(c.faixa).length) throw new Error('Escolha as faixas que entram neste absoluto.');
+  if (!faixaEhLivre(c.faixa) && !faixasDaCategoria(c.faixa).length) throw new Error('Escolha ao menos uma faixa.');
   if (![c.idade_min, c.idade_max].every(Number.isInteger) || c.idade_min < 4 || c.idade_max > 100 || c.idade_min > c.idade_max) throw new Error('Confira o intervalo de idades.');
   if (!Number.isFinite(c.peso_min) || c.peso_min < 0 || (c.peso_max != null && (!Number.isFinite(c.peso_max) || c.peso_max <= c.peso_min))) throw new Error('Confira o intervalo de peso.');
   if (!Number.isFinite(c.tempo_minutos) || c.tempo_minutos < 1 || c.tempo_minutos > 30) throw new Error('O tempo deve ficar entre 1 e 30 minutos.');
