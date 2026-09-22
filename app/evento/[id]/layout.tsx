@@ -1,7 +1,7 @@
 import { Metadata } from "next";
 import { supabase } from "@/app/lib/supabase";
 
-const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://www.itatame.com.br";
+const baseUrl = (process.env.NEXT_PUBLIC_BASE_URL || "https://itatame.com.br").replace("://www.", "://");
 
 // 1. Esta função roda no servidor apenas para ler o banco e criar a capa do link
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
