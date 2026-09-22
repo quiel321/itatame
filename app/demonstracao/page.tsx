@@ -1,179 +1,316 @@
 "use client";
 
-import { BellRing, CalendarDays, CheckCircle2, ChevronRight, ClipboardCheck, Clock, CreditCard, FileText, Medal, MonitorDot, Radio, ShieldCheck, Smartphone, Swords, Trophy, Users, WalletCards } from "lucide-react";
+import { useEffect, useState } from "react";
+import QRCode from "react-qr-code";
 
-const whatsappLink = "https://wa.me/5565993059729?text=Olá!%20Quero%20agendar%20uma%20demonstração%20do%20sistema%20iTatame.";
+const whatsappLink = "https://wa.me/5565993059729?text=Olá!%20Quero%20montar%20meu%20campeonato%20no%20iTatame.";
+const chavePublica = "https://www.itatame.com.br";
+
+const paradas = [
+  { id: "inscricao", nome: "Inscrição", detalhe: "Vaga, lote e Pix", hora: "Quando abre" },
+  { id: "pesagem", nome: "Pesagem", detalhe: "Quem entra na chave", hora: "Manhã" },
+  { id: "chave", nome: "Chave", detalhe: "Os dois lados até a final", hora: "Antes de chamar" },
+  { id: "tatame", nome: "Tatame", detalhe: "Chamada e placar", hora: "A luta" },
+  { id: "podio", nome: "Pódio", detalhe: "Ranking no mesmo dia", hora: "Antes de ir embora" },
+] as const;
+
+type ParadaId = (typeof paradas)[number]["id"];
 
 export default function DemonstracaoPage() {
-  return (
-    <main className="min-h-screen bg-[#020202] text-white selection:bg-red-500/30 overflow-x-hidden font-sans">
-      
-      {/* 🚀 HERO SECTION ENXUTA */}
-      <section className="relative px-4 pt-12 pb-10 md:px-6 md:pt-24 md:pb-16 flex flex-col items-center justify-center border-b border-white/5">
-        <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[150px] md:w-[500px] md:h-[250px] bg-red-600/10 blur-[80px] md:blur-[120px] rounded-full"></div>
-          <img src="/arena.png" alt="Arena" className="h-full w-full object-cover object-top opacity-[0.05]" />
-          <div className="absolute inset-0 bg-gradient-to-b from-[#020202]/60 via-[#020202]/90 to-[#020202]" />
-        </div>
+  const [ativa, setAtiva] = useState<ParadaId>("inscricao");
 
-        <div className="relative z-10 w-full max-w-5xl mx-auto flex flex-col items-center text-center">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-red-500/20 bg-red-500/5 px-2.5 py-1 text-[8px] md:text-[9px] font-extrabold uppercase tracking-[0.2em] text-red-400 backdrop-blur-md mb-4 md:mb-5 shadow-[0_0_15px_rgba(239,68,68,0.1)]">
-            <span className="w-1 h-1 rounded-full bg-red-500 animate-pulse"></span>
-            Plataforma completa para artes marciais
-          </span>
-          
-          <h1 className="text-3xl sm:text-4xl md:text-[52px] font-extrabold uppercase tracking-tighter leading-[0.95] max-w-3xl drop-shadow-xl">
-            Sistema de campeonatos de{" "}<br/>
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-red-800">Jiu-Jitsu e lutas.</span>
+  useEffect(() => {
+    const alvos = paradas
+      .map((parada) => document.getElementById(parada.id))
+      .filter((nodo): nodo is HTMLElement => Boolean(nodo));
+    const observador = new IntersectionObserver(
+      (entradas) => {
+        const visivel = entradas
+          .filter((entrada) => entrada.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+        const id = visivel?.target.id as ParadaId | undefined;
+        if (id) setAtiva(id);
+      },
+      { rootMargin: "-28% 0px -48% 0px", threshold: [0.25, 0.5, 0.75] },
+    );
+    alvos.forEach((nodo) => observador.observe(nodo));
+    return () => observador.disconnect();
+  }, []);
+
+  function irPara(id: string) {
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  const indiceAtivo = Math.max(0, paradas.findIndex((parada) => parada.id === ativa));
+
+  return (
+    <div className="relative overflow-x-hidden bg-[#07080b] text-white [font-family:var(--font-geist-sans),Arial,sans-serif]">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-[520px] bg-[radial-gradient(ellipse_at_top,rgba(220,38,38,0.16),transparent_58%)]" />
+
+      <header className="relative mx-auto grid max-w-6xl items-end gap-10 px-5 pb-8 pt-8 md:px-8 md:pt-12 lg:grid-cols-[1.05fr_0.95fr]">
+        <div>
+          <div className="flex items-center gap-3 text-[11px] font-bold uppercase tracking-[0.22em] text-zinc-500">
+            <span className="inline-flex -skew-x-12">
+              <span className="h-3 w-1.5 bg-red-600" />
+              <span className="ml-0.5 h-3 w-1.5 bg-white" />
+            </span>
+            Para quem organiza o campeonato
+          </div>
+          <h1 className="mt-5 max-w-xl text-[2.6rem] font-black leading-[0.92] tracking-tight md:text-6xl">
+            Da vaga no celular até o ouro na TV.
           </h1>
-          
-          <p className="mt-4 md:mt-5 max-w-2xl text-[11px] md:text-sm leading-relaxed text-zinc-400 font-medium px-2">
-            Organize inscrições, pagamentos, checagem, categorias, chaves, chamada de atletas, mesários, placares, ranking e resultados em uma única plataforma para campeonatos de artes marciais.
+          <p className="mt-5 max-w-lg text-base leading-relaxed text-zinc-300 md:text-lg">
+            O atleta se inscreve, paga no Pix e acompanha a própria luta. Você vê quem pesou, quem está no tatame e quem somou ponto para a equipe. A planilha fica em casa.
           </p>
-          
-          <div className="mt-5 md:mt-6 w-full max-w-[280px] md:max-w-none">
-            <a href={whatsappLink} target="_blank" rel="noopener noreferrer" className="group relative inline-flex w-full md:w-auto h-11 md:h-12 items-center justify-center gap-2 rounded-xl bg-red-600 px-5 md:px-6 text-[10px] md:text-[11px] font-extrabold uppercase tracking-[0.16em] text-white shadow-[0_0_20px_rgba(239,68,68,0.2)] transition-all hover:bg-red-500 hover:-translate-y-0.5">
-              Falar com um Consultor <ChevronRight size={14} className="transition-transform group-hover:translate-x-1" />
+          <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <a href={whatsappLink} target="_blank" rel="noopener noreferrer" className="inline-flex h-12 items-center justify-center rounded-full bg-red-600 px-6 text-sm font-bold text-white transition hover:bg-red-500">
+              Montar o meu evento
             </a>
+            <button type="button" onClick={() => irPara("inscricao")} className="inline-flex h-12 items-center justify-center rounded-full border border-white/15 px-6 text-sm font-semibold text-zinc-200 transition hover:border-white/40">
+              Ver como o dia anda
+            </button>
           </div>
-        </div>
-
-        {/* MÉTRICAS FLUTUANTES (COMPACTAS) */}
-        <div className="relative z-10 mt-8 md:mt-10 grid grid-cols-2 md:grid-cols-4 gap-2 w-full max-w-6xl mx-auto">
-          <Metric value="Distribuída" label="Operação resiliente" tone="red" />
-          <Metric value="Automática" label="Conciliação financeira" tone="yellow" />
-          <Metric value="Inteligente" label="Chaves e filas" tone="cyan" />
-          <Metric value="Tempo Real" label="Arena sincronizada" tone="green" />
-        </div>
-      </section>
-
-      {/* 🛡️ FEATURES */}
-      <section className="relative px-4 py-8 md:px-6 md:py-16 border-b border-white/5 bg-[#050505]">
-        <div className="absolute top-0 right-0 w-[250px] h-[250px] md:w-[400px] md:h-[400px] bg-blue-600/5 blur-[80px] md:blur-[120px] rounded-full pointer-events-none"></div>
-        <div className="max-w-5xl mx-auto relative z-10">
-          <Header eyebrow="Gestão de ponta a ponta" title="Tudo o que um campeonato de luta precisa" text="O iTatame acompanha a competição desde a abertura das inscrições até o pódio, com telas claras para organização, atletas e equipe operacional." />
-          <div className="mt-6 md:mt-8 grid gap-3 md:gap-4 md:grid-cols-3">
-            <Feature icon={<WalletCards size={14} />} title="Inscrições & Financeiro" items={["Lotes e prazos automáticos", "Conciliação de pagamentos", "Visão financeira centralizada"]} />
-            <Feature icon={<Swords size={14} />} title="Chaveamento de Lutas" items={["Triangulares e eliminatórias", "Separação de atletas da mesma equipe", "Avanço seguro até as finais"]} highlight />
-            <Feature icon={<Radio size={14} />} title="Operação de Arena" items={["Check-in, Chamador e Mesário", "Placar e telão sincronizados", "Alertas de luta para o atleta"]} />
-          </div>
-        </div>
-      </section>
-
-      <section className="border-b border-white/5 bg-[#020202] px-4 py-10 md:px-6 md:py-16">
-        <div className="mx-auto grid max-w-5xl gap-6 lg:grid-cols-[0.8fr_1.2fr] lg:items-start">
-          <Header
-            eyebrow="Fluxo oficial"
-            title="Cada fase do evento fica clara"
-            text="O público vê o estado atual e o próximo passo. A organização trabalha com prazos objetivos, reduzindo dúvidas no atendimento e erros de operação."
-          />
-          <div className="grid gap-2 sm:grid-cols-2">
-            {[
-              ["01", "Inscrições abertas", "Lotes, vagas, categorias e pagamentos com prazo visível."],
-              ["02", "Checagem dos atletas", "Revisão de peso, faixa, equipe e categoria antes das chaves."],
-              ["03", "Chaveamento", "Validação dos confrontos após o encerramento das correções."],
-              ["04", "Chaves publicadas", "Atletas consultam adversários, horários e caminho até o pódio."],
-              ["05", "Lutas ao vivo", "Chamador, mesários, placares e resultados trabalham conectados."],
-              ["06", "Resultados oficiais", "Pódios e ranking permanecem disponíveis após o campeonato."],
-            ].map(([numero, titulo, texto]) => (
-              <article key={numero} className="rounded-xl border border-white/5 bg-white/[0.02] p-4">
-                <div className="mb-2 flex items-center gap-2">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-md bg-red-500/10 text-[8px] font-black text-red-400">{numero}</span>
-                  <h2 className="text-[11px] font-extrabold uppercase tracking-wide text-white">{titulo}</h2>
-                </div>
-                <p className="text-[10px] font-medium leading-relaxed text-zinc-500">{texto}</p>
-              </article>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* 📋 STEP-BY-STEP */}
-      <section className="px-4 py-8 md:px-6 md:py-16 bg-[#020202]">
-        <div className="max-w-5xl mx-auto">
-          <Header eyebrow="Implantação orientada" title="Do planejamento ao pódio" text="Um fluxo simples para quem organiza e previsível para quem compete." />
-          <div className="mt-6 md:mt-8 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 relative">
-            <div className="hidden lg:block absolute top-6 left-[10%] right-[10%] h-[1px] bg-gradient-to-r from-red-600/0 via-red-600/30 to-red-600/0"></div>
-            <Step number="01" icon={<FileText size={14} />} title="Planejamento" text="Categorias, lotes e regras." />
-            <Step number="02" icon={<CreditCard size={14} />} title="Inscrições" text="Pix e QR Code." />
-            <Step number="03" icon={<ClipboardCheck size={14} />} title="Checagem" text="Revisão dos atletas." />
-            <Step number="04" icon={<Trophy size={14} />} title="Chaveamento" text="Confrontos e cronograma." />
-            <Step number="05" icon={<MonitorDot size={14} />} title="Arena" text="Chamadas, placares e pódios." />
-          </div>
-        </div>
-      </section>
-
-      {/* 📱 MOCKS COMPACTADOS */}
-      <section className="relative px-4 py-8 md:px-6 md:py-16 border-t border-white/5 bg-[#050505] overflow-hidden">
-        <div className="max-w-5xl mx-auto relative z-10">
-          <Header eyebrow="Telas Principais" title="Controle na palma da mão" text="Ambientes focados: o organizador gerencia, a equipe opera e o atleta acompanha tudo pelo celular." />
-          <div className="mt-6 md:mt-8 grid gap-3 md:gap-4 md:grid-cols-2">
-            <Preview title="Admin Organizador" tag="Gestão Total" accent="red"><OrganizerMock /></Preview>
-            <Preview title="Mesa do Mesário" tag="Tatame Mobile" accent="cyan"><StaffMock /></Preview>
-            <Preview title="Lutas ao Vivo" tag="Display p/ TVs" accent="blue"><LiveMock /></Preview>
-            <Preview title="Perfil Atleta" tag="Alertas & QR Code" accent="green"><AthleteMock /></Preview>
-          </div>
-        </div>
-      </section>
-
-      {/* 🚀 CTA FINAL */}
-      <section className="relative px-4 py-10 md:px-6 md:py-20 overflow-hidden border-t border-white/5 bg-[#020202]">
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-2xl h-[150px] md:h-[200px] bg-red-600/10 blur-[80px] md:blur-[100px] pointer-events-none rounded-t-full"></div>
-        <div className="max-w-2xl mx-auto text-center relative z-10 flex flex-col items-center">
-          <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-red-500/10 flex items-center justify-center border border-red-500/20 mb-3 md:mb-4">
-            <Trophy size={16} className="text-red-500 md:w-5 md:h-5" />
-          </div>
-          <h2 className="text-xl md:text-4xl font-extrabold text-white uppercase tracking-tighter leading-tight mb-3 md:mb-4 px-4">
-            Profissionalize o seu próximo campeonato.
-          </h2>
-          <p className="text-zinc-400 text-[11px] md:text-sm font-medium mb-6 md:mb-8 max-w-lg px-2">
-            Conheça o fluxo completo do iTatame para campeonatos de Jiu-Jitsu, No-Gi, Judô e outras artes marciais.
+          <p className="mt-5 max-w-md text-sm leading-relaxed text-zinc-500">
+            Jiu-jitsu, no-gi e judô. Um tatame ou vários. A mesma mesa, do primeiro lote ao último ouro.
           </p>
-          <a href={whatsappLink} target="_blank" rel="noopener noreferrer" className="group inline-flex w-full max-w-[280px] md:w-auto h-11 md:h-12 items-center justify-center gap-2 rounded-xl bg-red-600 px-5 md:px-6 text-[10px] md:text-[11px] font-extrabold uppercase tracking-[0.14em] text-white shadow-[0_0_20px_rgba(239,68,68,0.2)] transition-all hover:bg-red-500 hover:-translate-y-0.5">
-            Falar com um Consultor <ChevronRight size={14} className="transition-transform group-hover:translate-x-1" />
-          </a>
         </div>
-      </section>
 
-    </main>
-  );
-}
+        <MonitorArena />
+      </header>
 
-function Header({ eyebrow, title, text }: { eyebrow: string; title: string; text: string }) {
-  return (
-    <div className="max-w-xl text-center md:text-left mx-auto md:mx-0">
-      <p className="mb-1.5 text-[8px] md:text-[9px] font-extrabold uppercase tracking-[0.2em] text-red-500 flex items-center justify-center md:justify-start gap-1.5">
-        <span className="w-2 h-[1px] bg-red-500 block"></span> {eyebrow}
-      </p>
-      <h2 className="text-xl font-extrabold uppercase leading-tight tracking-tight text-white md:text-3xl">{title}</h2>
-      <p className="mt-2 text-[11px] md:text-xs leading-relaxed text-zinc-400 font-medium px-4 md:px-0">{text}</p>
-    </div>
-  );
-}
-
-function Metric({ value, label, tone }: { value: string; label: string; tone: "red" | "yellow" | "cyan" | "green" }) {
-  const toneClass = tone === "red" ? "text-red-400 border-red-500/20 bg-red-500/5" : tone === "yellow" ? "text-yellow-400 border-yellow-500/20 bg-yellow-500/5" : tone === "cyan" ? "text-cyan-400 border-cyan-500/20 bg-cyan-500/5" : "text-emerald-400 border-emerald-500/20 bg-emerald-500/5";
-  return (
-    <div className={"rounded-lg md:rounded-xl border p-2 md:p-3 flex flex-col items-center justify-center text-center backdrop-blur-sm " + toneClass}>
-      <p className="text-[13px] md:text-lg font-extrabold uppercase text-white truncate w-full">{value}</p>
-      <p className="mt-0.5 text-[7px] md:text-[8px] font-bold uppercase tracking-[0.1em] opacity-80 truncate w-full px-1">{label}</p>
-    </div>
-  );
-}
-
-function Feature({ icon, title, items, highlight = false }: { icon: React.ReactNode; title: string; items: string[]; highlight?: boolean }) {
-  return (
-    <div className={(highlight ? "border-red-500/30 bg-red-500/5 shadow-[0_0_15px_rgba(239,68,68,0.1)]" : "border-white/5 bg-white/[0.01]") + " rounded-xl md:rounded-2xl border p-4 md:p-5 backdrop-blur-sm group hover:border-white/10 transition-colors"}>
-      <div className="flex items-center gap-3 mb-3 md:mb-4">
-        <div className={`flex h-8 w-8 items-center justify-center rounded-lg shrink-0 ${highlight ? 'bg-red-500 text-white' : 'bg-[#1a1a1f] text-zinc-300 border border-white/5 group-hover:scale-105 transition-transform'}`}>
-          {icon}
+      <div className="sticky top-[60px] z-30 border-y border-white/10 bg-[#07080b]/90 backdrop-blur-md md:top-[65px] xl:hidden">
+        <div className="flex gap-2 overflow-x-auto px-4 py-3">
+          {paradas.map((parada, indice) => (
+            <button
+              key={parada.id}
+              type="button"
+              onClick={() => irPara(parada.id)}
+              className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-bold ${ativa === parada.id ? "border-red-500 bg-red-600 text-white" : "border-white/10 text-zinc-400"}`}
+            >
+              0{indice + 1} {parada.nome}
+            </button>
+          ))}
         </div>
-        <h3 className="text-[13px] md:text-sm font-extrabold uppercase tracking-tight text-white leading-tight">{title}</h3>
+        <div className="h-px bg-white/10">
+          <div className="h-px bg-red-500 transition-all duration-500" style={{ width: `${((indiceAtivo + 1) / paradas.length) * 100}%` }} />
+        </div>
       </div>
-      <ul className="space-y-1.5 md:space-y-2 pl-1">
-        {items.map((item) => (
-          <li key={item} className="flex items-center gap-2 text-[10px] md:text-[11px] text-zinc-400 font-medium">
-            <CheckCircle2 size={10} className={`shrink-0 ${highlight ? 'text-red-400' : 'text-zinc-600'}`} /> {item}
+
+      <div className="relative mx-auto grid max-w-6xl gap-8 px-5 pb-24 md:px-8 xl:grid-cols-[210px_1fr] xl:gap-12">
+        <nav aria-label="O dia do campeonato" className="sticky top-24 hidden h-fit xl:block">
+          <p className="mb-4 font-mono text-[10px] font-bold uppercase tracking-[0.22em] text-zinc-600">O dia</p>
+          <ol className="relative space-y-1 border-l border-white/10">
+            {paradas.map((parada, indice) => {
+              const ligada = ativa === parada.id;
+              const passou = indice < indiceAtivo;
+              return (
+                <li key={parada.id}>
+                  <button type="button" onClick={() => irPara(parada.id)} className="group relative block w-full py-2.5 pl-5 text-left">
+                    <span className={`absolute -left-[5px] top-4 h-2.5 w-2.5 rounded-full border ${ligada ? "border-red-400 bg-red-500 shadow-[0_0_14px_rgba(239,68,68,0.85)]" : passou ? "border-red-900 bg-red-800" : "border-zinc-700 bg-[#07080b]"}`} />
+                    <span className={`font-mono text-[10px] font-bold tracking-[0.16em] ${ligada ? "text-red-400" : "text-zinc-600"}`}>{parada.hora}</span>
+                    <span className={`mt-0.5 block text-sm font-bold ${ligada ? "text-white" : "text-zinc-400 group-hover:text-zinc-200"}`}>{parada.nome}</span>
+                    <span className="block text-xs text-zinc-600">{parada.detalhe}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
+        </nav>
+
+        <div className="space-y-16 pt-8 xl:pt-12">
+          <Cena id="inscricao" kicker="A vaga" titulo="A inscrição fecha na vaga que você marcou.">
+            <p>
+              Você define o limite, o lote e o prazo. Na última vaga a página avisa que esgotou e a próxima pessoa não entra. Quem já está inscrito ainda consegue ajustar a ficha. O Pix confirma na hora.
+            </p>
+            <FichaInscricao />
+          </Cena>
+
+          <Cena id="pesagem" kicker="A balança" titulo="Quem não passou na checagem não aparece na chave." invertida>
+            <p>
+              Peso, kimono e presença ficam na mesma lista, com a equipe do lado do nome. A chave nasce depois disso. Desclassificado não vira luta fantasma no tatame, nem W.O. que você não pediu.
+            </p>
+            <ListaChecagem />
+          </Cena>
+
+          <Cena id="chave" kicker="A árvore" titulo="Os dois lados caminham até o centro.">
+            <p>
+              Atleta da mesma equipe cai em lados opostos. Chave de três tem baia de verdade. Até 32, a árvore fica inteira na tela. De 33 a 64, abre em 1/4, 2/4, 3/4 e 4/4. Passou de 64, viram Chave 1 e Chave 2. Ninguém fica de fora, no peso e no absoluto.
+            </p>
+            <ArvoreExemplo />
+          </Cena>
+
+          <Cena id="tatame" kicker="A mesa" titulo="Cada mesário só vê o tatame que é dele." invertida>
+            <p>
+              O acesso da mesa é o nome da área. Se a luta está no Tatame 1, a identificação é Tatame 1. Com chamador na arena, a luta espera a chamada. O placar sobe para a TV. Quando o tatame para, a tela mostra o QR das chaves para a arquibancada.
+            </p>
+            <Mesas />
+          </Cena>
+
+          <Cena id="podio" kicker="O ouro" titulo="A equipe já sabe a pontuação antes de desmontar a arena.">
+            <p>
+              Ranking de atleta e de equipe, com a logo. Peso e absoluto ficam separados quando o edital não pontua o absoluto. O resultado continua no ar depois que a luz apaga.
+            </p>
+            <Podio />
+          </Cena>
+
+          <section className="grid gap-px overflow-hidden rounded-[28px] border border-white/10 bg-white/10 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              ["Atleta", "Paga, pesa, abre a chave no celular e recebe a chamada."],
+              ["Professor", "Vê a equipe inteira e o caminho de cada aluno até a final."],
+              ["Organizador", "Controla vaga, lote, categoria, absoluto e o dia da arena."],
+              ["Mesa", "Chama, anota o placar e fecha o resultado na hora."],
+            ].map(([papel, frase]) => (
+              <div key={papel} className="bg-[#0c0e13] px-5 py-6">
+                <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-red-400">{papel}</p>
+                <p className="mt-2 text-sm leading-relaxed text-zinc-300">{frase}</p>
+              </div>
+            ))}
+          </section>
+
+          <section className="relative overflow-hidden rounded-[28px] border border-red-500/25 bg-[#12090c] px-6 py-10 md:px-10">
+            <div className="pointer-events-none absolute -right-8 top-0 h-40 w-16 -skew-x-12 bg-red-600/20" />
+            <p className="font-mono text-[11px] font-bold uppercase tracking-[0.22em] text-red-300">Próximo campeonato</p>
+            <h2 className="mt-3 max-w-xl text-3xl font-black leading-[1.02] tracking-tight md:text-5xl">Me conta o tamanho do evento. Eu te devolvo como o dia fica.</h2>
+            <p className="mt-4 max-w-lg text-base leading-relaxed text-zinc-300">
+              Quantos atletas, quantos tatames, se tem absoluto. A gente olha categoria, pesagem e a ordem das lutas com você.
+            </p>
+            <a href={whatsappLink} target="_blank" rel="noopener noreferrer" className="mt-7 inline-flex h-12 items-center justify-center rounded-full bg-white px-6 text-sm font-bold text-black transition hover:bg-zinc-200">
+              Chamar no WhatsApp
+            </a>
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Cena({ id, kicker, titulo, invertida = false, children }: { id: string; kicker: string; titulo: string; invertida?: boolean; children: React.ReactNode }) {
+  const [texto, painel] = Array.isArray(children) ? children : [children, null];
+  return (
+    <section id={id} className="scroll-mt-32">
+      <div className={`grid items-center gap-8 lg:grid-cols-2 ${invertida ? "lg:[&>*:first-child]:order-2" : ""}`}>
+        <div>
+          <p className="font-mono text-[11px] font-bold uppercase tracking-[0.22em] text-red-400">{kicker}</p>
+          <h2 className="mt-2 text-3xl font-black leading-[1.02] tracking-tight md:text-4xl">{titulo}</h2>
+          <div className="mt-4 max-w-md text-sm leading-relaxed text-zinc-300 md:text-base">{texto}</div>
+        </div>
+        <Moldura>{painel}</Moldura>
+      </div>
+    </section>
+  );
+}
+
+function Moldura({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="relative rounded-[28px] border border-white/10 bg-[#0c0e13] p-3 shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
+      <span className="pointer-events-none absolute left-3 top-3 h-3 w-3 border-l border-t border-white/30" />
+      <span className="pointer-events-none absolute right-3 top-3 h-3 w-3 border-r border-t border-white/30" />
+      <span className="pointer-events-none absolute bottom-3 left-3 h-3 w-3 border-b border-l border-white/30" />
+      <span className="pointer-events-none absolute bottom-3 right-3 h-3 w-3 border-b border-r border-white/30" />
+      {children}
+    </div>
+  );
+}
+
+function MonitorArena() {
+  return (
+    <aside className="rounded-[28px] border border-white/10 bg-[#0c0e13] p-4 shadow-[0_30px_80px_rgba(0,0,0,0.4)]">
+      <div className="mb-3 flex items-center justify-between px-1">
+        <p className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">Tela da arena</p>
+        <p className="inline-flex items-center gap-2 font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-400">
+          <RelogioArena />
+        </p>
+      </div>
+      <div className="rounded-2xl bg-black px-4 py-4">
+        <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-500">
+          <span>Tatame 1</span>
+          <span>Semifinal · Leve</span>
+        </div>
+        <div className="mt-4 grid grid-cols-[1fr_auto] items-end gap-3">
+          <div>
+            <p className="text-lg font-black leading-none">Helena Souza</p>
+            <p className="mt-1 text-[11px] font-bold uppercase tracking-widest text-zinc-500">Spartan</p>
+          </div>
+          <p className="font-mono text-4xl font-black leading-none text-white">2</p>
+        </div>
+        <div className="my-3 h-px bg-white/10" />
+        <div className="grid grid-cols-[1fr_auto] items-end gap-3">
+          <div>
+            <p className="text-lg font-black leading-none text-zinc-300">Lara Mendes</p>
+            <p className="mt-1 text-[11px] font-bold uppercase tracking-widest text-zinc-600">Alliance</p>
+          </div>
+          <p className="font-mono text-4xl font-black leading-none text-zinc-500">0</p>
+        </div>
+      </div>
+      <p className="px-1 pt-3 text-xs leading-relaxed text-zinc-500">Exemplo. No seu evento, os nomes são os atletas que se inscreveram.</p>
+    </aside>
+  );
+}
+
+function RelogioArena() {
+  const [texto, setTexto] = useState("--:--");
+  useEffect(() => {
+    const marcar = () => setTexto(new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }));
+    marcar();
+    const id = window.setInterval(marcar, 10000);
+    return () => window.clearInterval(id);
+  }, []);
+  return <span>{texto}</span>;
+}
+
+function FichaInscricao() {
+  return (
+    <div className="rounded-2xl bg-black p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-500">Spartan Open</p>
+          <p className="mt-1 text-lg font-black">Inscrições abertas</p>
+        </div>
+        <p className="rounded-full bg-red-600 px-3 py-1 text-[11px] font-bold">1º lote</p>
+      </div>
+      <div className="mt-6 flex items-end justify-between">
+        <p className="font-mono text-5xl font-black leading-none tracking-tight">84</p>
+        <p className="pb-1 text-sm text-zinc-500">de 100 vagas</p>
+      </div>
+      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10">
+        <div className="h-full w-[84%] rounded-full bg-red-500" />
+      </div>
+      <div className="mt-5 space-y-2 text-sm">
+        <Linha rotulo="Atleta" valor="Helena Souza" />
+        <Linha rotulo="Categoria" valor="Juvenil · Verde · Leve" />
+        <Linha rotulo="Equipe" valor="Spartan" />
+        <Linha rotulo="Pagamento" valor="Pix confirmado" destaque />
+      </div>
+    </div>
+  );
+}
+
+function ListaChecagem() {
+  const linhas = [
+    ["Helena Souza", "Spartan", "Pesou", "ok"],
+    ["Pedro Lima", "Alliance", "Acima do peso", "fora"],
+    ["Ana Cruz", "CheckMat", "Kimono", "fora"],
+    ["Lucas Prado", "Gracie", "Aguardando", "espera"],
+  ] as const;
+  return (
+    <div className="overflow-hidden rounded-2xl bg-black">
+      <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
+        <p className="text-sm font-bold">Checagem · Leve</p>
+        <p className="font-mono text-[10px] font-bold uppercase tracking-widest text-zinc-500">Antes da chave</p>
+      </div>
+      <ul>
+        {linhas.map(([nome, equipe, estado, tipo]) => (
+          <li key={nome} className="flex items-center justify-between gap-3 border-b border-white/5 px-5 py-3 last:border-0">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-black ${tipo === "ok" ? "bg-emerald-500/15 text-emerald-300" : tipo === "fora" ? "bg-red-500/15 text-red-300" : "bg-white/5 text-zinc-400"}`}>
+                {equipe.slice(0, 1)}
+              </span>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-bold">{nome}</p>
+                <p className="text-xs text-zinc-500">{equipe}</p>
+              </div>
+            </div>
+            <span className={`shrink-0 text-[11px] font-bold ${tipo === "ok" ? "text-emerald-300" : tipo === "fora" ? "text-red-300" : "text-zinc-500"}`}>{estado}</span>
           </li>
         ))}
       </ul>
@@ -181,49 +318,41 @@ function Feature({ icon, title, items, highlight = false }: { icon: React.ReactN
   );
 }
 
-function Step({ number, icon, title, text }: { number: string; icon: React.ReactNode; title: string; text: string }) {
+function ArvoreExemplo() {
   return (
-    <div className="relative text-center flex flex-col items-center z-10 group bg-white/[0.01] md:bg-transparent border border-white/5 md:border-transparent rounded-xl p-3 md:p-0">
-      <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-[#0a0a0e] border border-white/10 flex items-center justify-center text-zinc-400 mb-2 md:mb-3 relative group-hover:border-red-500/50 transition-colors shadow-sm">
-        {icon}
-        <div className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 md:w-4 md:h-4 rounded-full bg-red-600 border-[2px] border-[#020202] flex items-center justify-center text-white font-black text-[6px] md:text-[7px]">{number}</div>
+    <div className="rounded-2xl bg-[#07080b] p-4">
+      <div className="mb-4 flex items-center justify-between px-1">
+        <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-zinc-500">Leve · faixa verde</p>
+        <p className="font-mono text-[10px] font-bold uppercase tracking-widest text-zinc-400">Árvore inteira</p>
       </div>
-      <h4 className="text-[11px] md:text-xs font-extrabold uppercase text-white mb-0.5 md:mb-1 leading-tight">{title}</h4>
-      <p className="text-[9px] md:text-[10px] text-zinc-500 leading-tight font-medium px-1">{text}</p>
+      <div className="grid grid-cols-[1fr_88px_1fr] items-center gap-2">
+        <Lado lutas={[["Helena", "Duda"], ["Lara", "Bia"]]} avancos={["Helena", "Lara"]} rotulo="Quartas" />
+        <div className="rounded-2xl border border-red-500/40 bg-black px-2 py-3 text-center">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-red-400">Final</p>
+          <p className="mt-2 text-xs font-black text-emerald-300">Helena</p>
+          <p className="my-1 text-[10px] text-zinc-600">vs</p>
+          <p className="text-xs font-bold text-zinc-300">Lara</p>
+        </div>
+        <Lado reverso lutas={[["Caio", "Igor"], ["Enzo", "Raul"]]} avancos={["Caio", "Enzo"]} rotulo="Quartas" />
+      </div>
+      <div className="mt-3 flex flex-wrap justify-center gap-2 text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-500">
+        <span className="rounded-full border border-white/10 px-2 py-1">Até 32 · tela inteira</span>
+        <span className="rounded-full border border-white/10 px-2 py-1">33–64 · 1/4 a 4/4</span>
+        <span className="rounded-full border border-white/10 px-2 py-1">+64 · Chave 1 e 2</span>
+      </div>
     </div>
   );
 }
 
-function Preview({ title, tag, accent, children }: { title: string; tag: string; accent: "red" | "yellow" | "cyan" | "green" | "blue"; children: React.ReactNode }) {
-  const accentClass = accent === "yellow" ? "text-yellow-400 border-yellow-500/30 bg-yellow-500/10" : accent === "cyan" ? "text-cyan-400 border-cyan-500/30 bg-cyan-500/10" : accent === "green" ? "text-emerald-400 border-emerald-500/30 bg-emerald-500/10" : accent === "blue" ? "text-blue-400 border-blue-500/30 bg-blue-500/10" : "text-red-400 border-red-500/30 bg-red-500/10";
+function Lado({ lutas, avancos, reverso = false, rotulo }: { lutas: [string, string][]; avancos: string[]; reverso?: boolean; rotulo: string }) {
   return (
-    <div className="rounded-xl md:rounded-2xl border border-white/5 bg-white/[0.01] p-2.5 md:p-4 backdrop-blur-sm">
-      <div className="mb-2.5 flex items-center justify-between gap-2 px-1">
-        <h3 className="text-[11px] md:text-xs font-extrabold uppercase tracking-tight text-white truncate">{title}</h3>
-        <span className={"rounded border px-1.5 py-0.5 text-[7px] md:text-[8px] font-extrabold uppercase tracking-[0.1em] shrink-0 " + accentClass}>{tag}</span>
-      </div>
-      {children}
-    </div>
-  );
-}
-
-// MOCKS EXTREMAMENTE COMPACTOS
-function OrganizerMock() {
-  return (
-    <div className="rounded-lg border border-white/5 bg-[#050505] p-2 md:p-3 shadow-inner">
-      <div className="mb-2 md:mb-3 grid grid-cols-3 gap-1 md:gap-1.5">
-        <MockMetric label="Inscritos" value="381" />
-        <MockMetric label="Pagas" value="315" tone="green" />
-        <MockMetric label="Renda" value="R$ 31k" tone="yellow" />
-      </div>
-      <div className="space-y-1 md:space-y-1.5">
-        {["Mundial No-Gi", "Open Regional"].map((name, i) => (
-          <div key={name} className="flex items-center justify-between rounded-md md:rounded-lg bg-white/5 p-1.5 md:p-2 border border-white/5">
-            <div className="overflow-hidden pr-2">
-              <p className="text-[9px] md:text-[11px] font-extrabold text-white uppercase truncate">{name}</p>
-              <p className="text-[7px] md:text-[8px] text-zinc-600 font-bold uppercase mt-0.5 truncate">{i === 0 ? "Abertas" : "Checagem"}</p>
-            </div>
-            <span className="rounded bg-red-500 text-[7px] md:text-[8px] font-extrabold uppercase text-white px-1.5 md:px-2 py-0.5 md:py-1 shrink-0">Gerir</span>
+    <div className={reverso ? "text-right" : ""}>
+      <p className="mb-2 px-1 font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-600">{rotulo}</p>
+      <div className="space-y-2">
+        {lutas.map(([a, b]) => (
+          <div key={a} className="rounded-xl border border-white/10 bg-black/80 px-2.5 py-2">
+            <p className={`text-[11px] font-bold ${avancos.includes(a) ? "text-emerald-300" : "text-zinc-500"}`}>{a}</p>
+            <p className={`text-[11px] font-bold ${avancos.includes(b) ? "text-emerald-300" : "text-zinc-500"}`}>{b}</p>
           </div>
         ))}
       </div>
@@ -231,69 +360,70 @@ function OrganizerMock() {
   );
 }
 
-function StaffMock() {
+function Mesas() {
   return (
-    <div className="rounded-lg border border-white/5 bg-[#050505] p-2 md:p-3 shadow-inner">
-      <div className="mb-2 flex items-center justify-between border-b border-white/5 pb-1.5 md:pb-2">
-        <p className="text-[8px] md:text-[9px] font-extrabold uppercase tracking-widest text-cyan-300">Tatame 1</p>
-        <span className="rounded bg-emerald-500/20 px-1.5 py-0.5 text-[6px] md:text-[7px] font-extrabold uppercase text-emerald-300 border border-emerald-500/30 flex items-center gap-1"><span className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse"></span> Online</span>
-      </div>
-      <div className="rounded-md border border-cyan-500/30 bg-cyan-500/5 p-2 md:p-3 relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-0.5 h-full bg-cyan-500"></div>
-        <p className="text-[7px] md:text-[8px] font-extrabold uppercase text-cyan-400 mb-1 pl-1">Semifinal</p>
-        <div className="flex items-center justify-between bg-black/40 p-1.5 md:p-2 rounded border border-white/5">
-          <strong className="text-[9px] md:text-[10px] font-extrabold uppercase text-white truncate text-center w-full">A. Costa</strong>
-          <span className="text-[7px] md:text-[8px] text-zinc-600 font-black px-1 shrink-0">VS</span>
-          <strong className="text-[9px] md:text-[10px] font-extrabold uppercase text-white truncate text-center w-full">J. Vitor</strong>
+    <div className="grid gap-3 sm:grid-cols-2">
+      <article className="rounded-2xl bg-black p-4">
+        <div className="flex items-center justify-between">
+          <p className="font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-red-400">Tatame 1</p>
+          <span className="text-[11px] font-bold text-red-300">Lutando</span>
         </div>
-      </div>
-    </div>
-  );
-}
-
-function LiveMock() {
-  return (
-    <div className="rounded-lg border border-white/5 bg-[#050505] p-2 md:p-3 shadow-inner">
-      <div className="mb-2 flex items-center justify-between border-b border-white/5 pb-1.5 md:pb-2">
-        <p className="text-[8px] md:text-[9px] font-extrabold uppercase text-white flex items-center gap-1.5"><Radio size={10} className="text-red-500"/> Transmissão</p>
-        <span className="rounded bg-red-500 px-1.5 py-0.5 text-[6px] md:text-[7px] font-extrabold text-white uppercase tracking-widest">Tatame 2</span>
-      </div>
-      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1.5 md:gap-2 rounded-md bg-white/5 p-1.5 md:p-2 text-center border border-white/5">
-        <div className="overflow-hidden"><p className="text-[9px] md:text-[11px] font-extrabold uppercase text-blue-400 truncate">André</p></div>
-        <div className="bg-black/80 px-2 py-0.5 md:py-1 rounded border border-white/10 shadow-inner shrink-0"><p className="text-xs md:text-sm font-black text-white">2 x 0</p></div>
-        <div className="overflow-hidden"><p className="text-[9px] md:text-[11px] font-extrabold uppercase text-red-400 truncate">Felipe</p></div>
-      </div>
-      <div className="mt-1.5 md:mt-2 rounded border border-zinc-800 bg-black p-1 md:p-1.5 text-[7px] md:text-[8px] font-bold text-zinc-500 uppercase text-center flex items-center justify-center gap-1.5 truncate">
-        <Clock size={8}/> D. Matias x A. Rocha
-      </div>
-    </div>
-  );
-}
-
-function AthleteMock() {
-  return (
-    <div className="rounded-lg border border-white/5 bg-[#050505] p-2 md:p-3 shadow-inner">
-      <div className="flex items-center gap-2 mb-2 md:mb-3">
-        <div className="flex h-7 w-7 md:h-9 md:w-9 items-center justify-center rounded-md bg-blue-500/20 text-[10px] md:text-sm font-black text-blue-200 border border-blue-500/30 shrink-0">C</div>
-        <div className="overflow-hidden">
-          <p className="text-[10px] md:text-xs font-extrabold uppercase text-white truncate">Cauã Martins</p>
-          <p className="text-[7px] md:text-[8px] uppercase font-bold text-zinc-600 tracking-widest mt-0.5 truncate">Azul • Médio</p>
+        <p className="mt-4 text-sm font-black">Helena Souza</p>
+        <p className="text-[11px] uppercase tracking-widest text-zinc-500">Spartan</p>
+        <p className="my-3 text-center font-mono text-3xl font-black tracking-tight">2 <span className="text-zinc-600">×</span> 0</p>
+        <p className="text-sm font-black">Lara Mendes</p>
+        <p className="text-[11px] uppercase tracking-widest text-zinc-500">Alliance</p>
+        <p className="mt-4 text-xs text-zinc-500">Chamador liberou. A mesa está anotando.</p>
+      </article>
+      <article className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-white/15 bg-black px-4 py-5 text-center">
+        <p className="font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-500">Tatame 2 · parado</p>
+        <div className="mt-4 rounded-xl bg-white p-2">
+          <QRCode value={chavePublica} size={84} bgColor="#ffffff" fgColor="#111111" />
         </div>
-      </div>
-      <div className="grid grid-cols-2 gap-1 md:gap-1.5">
-        <MockMetric label="Alertas" value="ativo" tone="cyan" />
-        <MockMetric label="Acesso" value="QR" tone="green" />
+        <p className="mt-3 text-sm font-bold">QR das chaves na TV</p>
+        <p className="mt-1 text-xs leading-relaxed text-zinc-500">A arquibancada aponta o celular e acha o atleta.</p>
+      </article>
+    </div>
+  );
+}
+
+function Podio() {
+  const lugares = [
+    ["1", "Helena Souza", "Spartan", "ouro"],
+    ["2", "Lara Mendes", "Alliance", "prata"],
+    ["3", "Caio Nunes", "Gracie", "bronze"],
+  ] as const;
+  return (
+    <div className="rounded-2xl bg-black p-5">
+      <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-zinc-500">Leve · faixa verde</p>
+      <ul className="mt-4 space-y-2">
+        {lugares.map(([lugar, nome, equipe, medalha]) => (
+          <li key={lugar} className="flex items-center gap-3 rounded-xl bg-white/[0.03] px-3 py-2.5">
+            <span className={`flex h-8 w-8 items-center justify-center rounded-full font-mono text-sm font-black ${medalha === "ouro" ? "bg-yellow-400 text-black" : "bg-white/10 text-zinc-300"}`}>{lugar}</span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-black">{nome}</p>
+              <p className="text-[11px] uppercase tracking-widest text-zinc-500">{equipe}</p>
+            </div>
+            <span className="text-[11px] font-bold uppercase tracking-widest text-zinc-500">{medalha}</span>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-4 flex items-center justify-between rounded-xl border border-white/10 px-4 py-3">
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-zinc-500">Equipes</p>
+          <p className="text-sm font-black">Spartan · 18 pts</p>
+        </div>
+        <p className="text-xs text-zinc-400">Alliance 11 · Gracie 7</p>
       </div>
     </div>
   );
 }
 
-function MockMetric({ label, value, tone = "red" }: { label: string; value: string; tone?: "red" | "green" | "yellow" | "cyan" }) {
-  const color = tone === "green" ? "text-emerald-400" : tone === "yellow" ? "text-yellow-400" : tone === "cyan" ? "text-cyan-400" : "text-white";
+function Linha({ rotulo, valor, destaque = false }: { rotulo: string; valor: string; destaque?: boolean }) {
   return (
-    <div className="rounded-md border border-white/5 bg-black p-1.5 md:p-2 flex flex-col items-center justify-center text-center">
-      <p className={"text-[10px] md:text-xs font-extrabold uppercase " + color}>{value}</p>
-      <p className="mt-0.5 text-[6px] md:text-[7px] font-extrabold uppercase tracking-widest text-zinc-600 truncate w-full px-0.5">{label}</p>
+    <div className="flex items-center justify-between gap-3 border-b border-white/5 py-2">
+      <span className="text-zinc-500">{rotulo}</span>
+      <span className={destaque ? "font-bold text-emerald-300" : "font-semibold text-white"}>{valor}</span>
     </div>
   );
 }
