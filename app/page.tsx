@@ -3,9 +3,11 @@
 import Link from "next/link";
 // 1. Adicionado o useRef aqui nas importações
 import { useEffect, useMemo, useState, useRef } from "react";
-import { CalendarDays, Camera, ChevronRight, Images, MapPin, MonitorDot, Search, Trophy } from "lucide-react";
+import { CalendarDays, Camera, ChevronRight, CirclePlay, Images, MapPin, MonitorDot, Search, Trophy } from "lucide-react";
 import { supabase } from "./lib/supabase";
 import { obterEtapaEvento, type ResumoLutasEvento, type TomEtapaEvento } from "./lib/evento-etapas";
+import TutorialVideoCard from "./components/TutorialVideoCard";
+import { canalItatame, tutoriais } from "./lib/tutoriais";
 
 const estiloEtapa: Record<TomEtapaEvento, { borda: string; badge: string; barra: string; acao: string }> = {
   cyan: {
@@ -319,6 +321,40 @@ export default function Home() {
             );
           })}
         </div>
+
+        <section aria-labelledby="tutoriais-titulo" className="mt-16 border-t border-white/10 pt-12">
+          <div className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="mb-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-red-400">
+                <CirclePlay size={16} /> Aprenda com o iTatame
+              </p>
+              <h2 id="tutoriais-titulo" className="text-2xl font-black uppercase tracking-tight text-white md:text-3xl">
+                Assista aos <span className="text-red-500">tutoriais</span>
+              </h2>
+              <p className="mt-2 max-w-2xl text-xs leading-relaxed text-zinc-400 sm:text-sm">
+                Do primeiro cadastro à inscrição no campeonato: veja o passo a passo em vídeo.
+              </p>
+            </div>
+            <Link href="/tutoriais" className="inline-flex w-fit items-center gap-1 text-[10px] font-black uppercase tracking-widest text-red-400 transition hover:text-red-300">
+              Ver todos os tutoriais <ChevronRight size={16} />
+            </Link>
+          </div>
+
+          <div className="grid gap-5 md:grid-cols-2">
+            {tutoriais.slice(0, 2).map((tutorial) => <TutorialVideoCard key={tutorial.numero} tutorial={tutorial} />)}
+          </div>
+
+          <a href={canalItatame} target="_blank" rel="noopener noreferrer" className="mt-6 flex flex-col gap-4 rounded-2xl border border-white/10 bg-[#101013] p-5 transition hover:border-red-500/35 sm:flex-row sm:items-center sm:justify-between">
+            <span className="flex items-center gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-600 text-white"><CirclePlay size={21} /></span>
+              <span>
+                <strong className="block text-xs font-black text-white">Canal iTatame Sistemas</strong>
+                <small className="mt-1 block text-[11px] text-zinc-400">Novos tutoriais e dicas para usar a plataforma.</small>
+              </span>
+            </span>
+            <span className="text-[10px] font-black uppercase tracking-widest text-red-400">Acessar canal ↗</span>
+          </a>
+        </section>
 
         <a
           href={process.env.NEXT_PUBLIC_FOTOS_URL || "https://retratt.com"}
