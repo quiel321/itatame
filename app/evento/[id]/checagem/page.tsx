@@ -23,7 +23,7 @@ const ABAS: Array<{ id: AbaChecagem; rotulo: string }> = [
   { id: 'absoluto', rotulo: 'Absoluto' },
   { id: 'peso', rotulo: 'Categoria de peso' },
   { id: 'equipe', rotulo: 'Equipe' },
-  { id: 'professor', rotulo: 'Equipe e professor' },
+  { id: 'professor', rotulo: 'Academia e professor' },
 ];
 
 function LogoEquipe({ src, nome, tamanho = 'h-11 w-11' }: { src?: string | null; nome: string; tamanho?: string }) {

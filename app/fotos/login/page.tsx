@@ -214,6 +214,15 @@ export default function FotosLoginPage() {
                {!carregando && temaAtual.iconeBtn}
             </button>
 
+            {perfil === "comprador" && (
+              <Link
+                href={`/fotos/acesso${destinoManual ? `?next=${encodeURIComponent(destinoManual)}` : ""}`}
+                className="cursor-pointer mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 text-[10px] font-black uppercase tracking-widest text-zinc-300 transition-colors hover:bg-white/10 hover:text-white"
+              >
+                <Mail size={14} /> Comprou sem cadastro? Entrar com código
+              </Link>
+            )}
+
             {/* 🔥 LINK DE CADASTRO DINÂMICO ÚNICO COM MÃOZINHA! */}
             <div className="mt-8 pt-6 border-t border-white/5">
                <p className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500 text-center mb-4">Ainda não tem conta?</p>

@@ -1,13 +1,9 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
 import { liberarPedidoFotos } from "@/app/lib/fotos-pedidos";
+import { autorizarPedido } from "@/app/lib/fotos-convidado";
 
 export const runtime = "nodejs";
-
-function bearerToken(request: Request) {
-  const header = request.headers.get("authorization") || "";
-  return header.toLowerCase().startsWith("bearer ") ? header.slice(7) : null;
-}
 
 function primeiraRelacao<T>(valor: T | T[] | null | undefined) {
   return Array.isArray(valor) ? valor[0] : valor;
@@ -26,22 +22,19 @@ function notificationUrl(request: Request, pedidoId: string) {
 
 export async function POST(request: Request) {
   try {
-    const token = bearerToken(request);
-    if (!token) return NextResponse.json({ error: "Login necessário." }, { status: 401 });
-
     const supabase = createSupabaseServerClient();
-    const { data: auth, error: authError } = await supabase.auth.getUser(token);
-    if (authError || !auth.user) return NextResponse.json({ error: "Sessão inválida." }, { status: 401 });
-
-    const { pedidoId, formData } = await request.json();
+    const { pedidoId, formData, acesso } = await request.json();
     if (!pedidoId || !formData) return NextResponse.json({ error: "Dados de pagamento incompletos." }, { status: 400 });
 
-    const { data: pedido } = await supabase
+    const autorizado = await autorizarPedido(supabase, request, String(pedidoId), acesso);
+    if (!autorizado) return NextResponse.json({ error: "Sessão inválida." }, { status: 401 });
+
+    let consulta = supabase
       .from("foto_pedidos")
       .select("id, comprador_user_id, comprador_email, status, total_centavos, comissao_itatame_centavos, comissao_organizador_centavos, fotografo_id, organizador_user_id, fotografos(mp_access_token)")
-      .eq("id", pedidoId)
-      .eq("comprador_user_id", auth.user.id)
-      .maybeSingle();
+      .eq("id", pedidoId);
+    if (autorizado.userId) consulta = consulta.eq("comprador_user_id", autorizado.userId);
+    const { data: pedido } = await consulta.maybeSingle();
     if (!pedido) return NextResponse.json({ error: "Pedido não encontrado." }, { status: 404 });
     if (pedido.status === "pago") return NextResponse.json({ status: "approved", pedidoId: pedido.id });
 
@@ -49,7 +42,7 @@ export async function POST(request: Request) {
     if (!fotografo?.mp_access_token) {
       return NextResponse.json({ error: "Conta de recebimento indisponível." }, { status: 409 });
     }
-    const compradorEmail = String(auth.user.email || pedido.comprador_email || "").trim().toLowerCase();
+    const compradorEmail = String(pedido.comprador_email || "").trim().toLowerCase();
     if (!compradorEmail) {
       return NextResponse.json({ error: "Sua conta não possui um e-mail válido para o pagamento." }, { status: 400 });
     }

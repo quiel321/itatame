@@ -1,38 +1,32 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
 import { sincronizarPagamentoFotos } from "@/app/lib/fotos-mercado-pago";
-
-function bearerToken(request: Request) {
-  const header = request.headers.get("authorization") || "";
-  return header.toLowerCase().startsWith("bearer ") ? header.slice(7) : null;
-}
+import { autorizarPedido } from "@/app/lib/fotos-convidado";
 
 export async function GET(request: Request) {
-  const token = bearerToken(request);
-  if (!token) return NextResponse.json({ error: "Login necessário." }, { status: 401 });
+  const parametros = new URL(request.url).searchParams;
+  const pedidoId = parametros.get("pedido_id");
+  if (!pedidoId) return NextResponse.json({ error: "Pedido não informado." }, { status: 400 });
 
   const supabase = createSupabaseServerClient();
-  const { data: auth } = await supabase.auth.getUser(token);
-  if (!auth.user) return NextResponse.json({ error: "Sessão inválida." }, { status: 401 });
-
-  const pedidoId = new URL(request.url).searchParams.get("pedido_id");
-  if (!pedidoId) return NextResponse.json({ error: "Pedido não informado." }, { status: 400 });
+  const autorizado = await autorizarPedido(supabase, request, pedidoId, parametros.get("acesso"));
+  if (!autorizado) return NextResponse.json({ error: "Sessão inválida." }, { status: 401 });
 
   try {
     const pedido = await sincronizarPagamentoFotos(supabase, {
       pedidoId,
-      compradorUserId: auth.user.id,
+      compradorUserId: autorizado.userId,
     });
     if (!pedido) return NextResponse.json({ error: "Pedido não encontrado." }, { status: 404 });
     return NextResponse.json(pedido);
   } catch (error) {
     console.error("Consulta de pagamento Retratt:", error);
-    const { data: pedido } = await supabase
+    let consulta = supabase
       .from("foto_pedidos")
       .select("id, status, provedor_status_detail, pago_em")
-      .eq("id", pedidoId)
-      .eq("comprador_user_id", auth.user.id)
-      .maybeSingle();
+      .eq("id", pedidoId);
+    if (autorizado.userId) consulta = consulta.eq("comprador_user_id", autorizado.userId);
+    const { data: pedido } = await consulta.maybeSingle();
     if (!pedido) return NextResponse.json({ error: "Pedido não encontrado." }, { status: 404 });
     return NextResponse.json({ ...pedido, sincronizado: false });
   }

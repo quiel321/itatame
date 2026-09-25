@@ -4,13 +4,15 @@ import {
   calcularDistribuicaoFotos,
   COMISSAO_ITATAME_FOTOS_PERCENTUAL,
 } from "@/app/lib/fotos-financeiro";
+import {
+  bearerToken,
+  normalizarEmail,
+  obterOuCriarCompradorConvidado,
+  tokenAcessoPedido,
+} from "@/app/lib/fotos-convidado";
+import { consumirLimiteAuth, ipDaRequisicao } from "@/app/lib/limite-auth";
 
 export const runtime = "nodejs";
-
-function bearerToken(request: Request) {
-  const header = request.headers.get("authorization") || "";
-  return header.toLowerCase().startsWith("bearer ") ? header.slice(7) : null;
-}
 
 function primeiraRelacao<T>(valor: T | T[] | null | undefined) {
   return Array.isArray(valor) ? valor[0] : valor;
@@ -29,22 +31,38 @@ function notificationUrl(request: Request, pedidoId: string) {
 
 export async function POST(request: Request) {
   try {
-    const token = bearerToken(request);
-    if (!token) return NextResponse.json({ error: "Faça login para finalizar a compra." }, { status: 401 });
-
     const publicKey = process.env.NEXT_PUBLIC_RETRATT_MP_PUBLIC_KEY;
     if (!publicKey) return NextResponse.json({ error: "Mercado Pago não configurado." }, { status: 500 });
 
     const supabase = createSupabaseServerClient();
-    const { data: auth, error: authError } = await supabase.auth.getUser(token);
-    if (authError || !auth.user) return NextResponse.json({ error: "Sessão inválida." }, { status: 401 });
+    const body = await request.json();
+    const token = bearerToken(request);
+    let compradorUserId = "";
+    let compradorEmail = "";
+    let compradorNome = "";
+    let convidado = false;
 
-    const compradorEmail = String(auth.user.email || "").trim().toLowerCase();
-    if (!compradorEmail) {
-      return NextResponse.json({ error: "Sua conta não possui um e-mail válido para o pagamento." }, { status: 400 });
+    if (token) {
+      const { data: auth, error: authError } = await supabase.auth.getUser(token);
+      if (authError || !auth.user) return NextResponse.json({ error: "Sessão inválida." }, { status: 401 });
+      compradorUserId = auth.user.id;
+      compradorEmail = String(auth.user.email || "").trim().toLowerCase();
+      compradorNome = auth.user.user_metadata?.nome_completo || compradorEmail.split("@")[0];
+      if (!compradorEmail) {
+        return NextResponse.json({ error: "Sua conta não possui um e-mail válido para o pagamento." }, { status: 400 });
+      }
+    } else {
+      compradorEmail = normalizarEmail(body.comprador?.email);
+      compradorNome = String(body.comprador?.nome || "").trim().replace(/\s+/g, " ").slice(0, 120);
+      if (compradorNome.length < 3 || !compradorEmail) {
+        return NextResponse.json({ error: "Informe seu nome e um e-mail válido para receber os arquivos." }, { status: 400 });
+      }
+      if (!consumirLimiteAuth(`compra-convidado:${ipDaRequisicao(request)}`, 10, 10 * 60_000)) {
+        return NextResponse.json({ error: "Muitas tentativas. Aguarde alguns minutos e tente novamente." }, { status: 429 });
+      }
+      convidado = true;
     }
 
-    const body = await request.json();
     const fotoIds = [...new Set((Array.isArray(body.fotoIds) ? body.fotoIds : []).map(String))];
     if (!fotoIds.length || fotoIds.length > 50) {
       return NextResponse.json({ error: "Selecione entre 1 e 50 itens." }, { status: 400 });
@@ -109,12 +127,19 @@ export async function POST(request: Request) {
       percentualItatame: COMISSAO_ITATAME_FOTOS_PERCENTUAL,
       percentualOrganizador,
     });
+    if (convidado) {
+      ({ userId: compradorUserId } = await obterOuCriarCompradorConvidado(supabase, {
+        email: compradorEmail,
+        nome: compradorNome,
+      }));
+    }
+
     const { data: pedido, error: pedidoError } = await supabase
       .from("foto_pedidos")
       .insert({
-        comprador_user_id: auth.user.id,
+        comprador_user_id: compradorUserId,
         comprador_email: compradorEmail,
-        comprador_nome: auth.user.user_metadata?.nome_completo || compradorEmail.split("@")[0],
+        comprador_nome: compradorNome,
         evento_id: eventoId,
         fotografo_id: fotografoId,
         status: "pendente",
@@ -205,6 +230,7 @@ export async function POST(request: Request) {
       eventoNome: evento.nome || "Evento Retratt",
       total: totalCentavos / 100,
       compradorEmail,
+      acesso: convidado ? tokenAcessoPedido(pedido.id) : null,
       distribuicao: {
         comissaoItatameCentavos: distribuicao.comissaoItatameCentavos,
         royaltyOrganizadorCentavos: distribuicao.comissaoOrganizadorCentavos,

@@ -1,14 +1,10 @@
 import { NextResponse } from "next/server";
 import { createR2PresignedGetUrl } from "@/app/lib/r2";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
+import { acessoPedidoValido, bearerToken } from "@/app/lib/fotos-convidado";
 
 export const runtime = "nodejs";
 type Params = { params: Promise<{ itemId: string }> };
-
-function bearerToken(request: Request) {
-  const header = request.headers.get("authorization") || "";
-  return header.toLowerCase().startsWith("bearer ") ? header.slice(7) : null;
-}
 
 function primeiraRelacao<T>(valor: T | T[] | null | undefined) {
   return Array.isArray(valor) ? valor[0] : valor;
@@ -17,16 +13,21 @@ function primeiraRelacao<T>(valor: T | T[] | null | undefined) {
 export async function GET(request: Request, context: Params) {
   try {
     const token = bearerToken(request);
-    if (!token) return NextResponse.json({ error: "Login necessário." }, { status: 401 });
+    const acesso = new URL(request.url).searchParams.get("acesso");
+    if (!token && !acesso) return NextResponse.json({ error: "Login necessário." }, { status: 401 });
 
     const supabase = createSupabaseServerClient();
-    const { data: auth } = await supabase.auth.getUser(token);
-    if (!auth.user) return NextResponse.json({ error: "Sessão inválida." }, { status: 401 });
+    let usuarioId: string | null = null;
+    if (token) {
+      const { data: auth } = await supabase.auth.getUser(token);
+      if (!auth.user) return NextResponse.json({ error: "Sessão inválida." }, { status: 401 });
+      usuarioId = auth.user.id;
+    }
 
     const { itemId } = await context.params;
     const { data: item } = await supabase
       .from("foto_pedido_itens")
-      .select("id, download_liberado, download_expires_at, foto_pedidos(comprador_user_id, status), foto_arquivos(r2_original_key, nome_original, mime_type)")
+      .select("id, pedido_id, download_liberado, download_expires_at, foto_pedidos(comprador_user_id, status), foto_arquivos(r2_original_key, nome_original, mime_type)")
       .eq("id", itemId)
       .maybeSingle();
     if (!item) return NextResponse.json({ error: "Download não encontrado." }, { status: 404 });
@@ -34,7 +35,10 @@ export async function GET(request: Request, context: Params) {
     const pedido = primeiraRelacao(item.foto_pedidos);
     const foto = primeiraRelacao(item.foto_arquivos);
     const expirado = item.download_expires_at && new Date(item.download_expires_at) < new Date();
-    if (pedido?.comprador_user_id !== auth.user.id || pedido?.status !== "pago" || !item.download_liberado || expirado || !foto?.r2_original_key) {
+    const dono = usuarioId
+      ? pedido?.comprador_user_id === usuarioId
+      : acessoPedidoValido(String(item.pedido_id), acesso);
+    if (!dono || pedido?.status !== "pago" || !item.download_liberado || expirado || !foto?.r2_original_key) {
       return NextResponse.json({ error: "Download não autorizado ou expirado." }, { status: 403 });
     }
 
@@ -43,7 +47,7 @@ export async function GET(request: Request, context: Params) {
 
     await supabase.from("foto_downloads").insert({
       item_id: item.id,
-      user_id: auth.user.id,
+      user_id: usuarioId || pedido?.comprador_user_id || null,
       user_agent: request.headers.get("user-agent"),
     });
 

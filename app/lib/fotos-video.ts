@@ -1,7 +1,10 @@
 export const VIDEO_MAX_BYTES = 250 * 1024 * 1024;
 export const VIDEO_MAX_DURATION_SECONDS = 120;
-export const VIDEO_PREVIEW_DURATION_SECONDS = 10;
-export const VIDEO_PREVIEW_MAX_BYTES = 16 * 1024 * 1024;
+export const VIDEO_PREVIEW_DURATION_SECONDS = 6;
+export const VIDEO_PREVIEW_MAX_BYTES = 3 * 1024 * 1024;
+export const VIDEO_PREVIEW_MAX_WIDTH = 640;
+export const VIDEO_PREVIEW_FPS = 20;
+export const VIDEO_PREVIEW_BITRATE = 700_000;
 export const VIDEO_IA_FRAME_COUNT = 6;
 
 export const VIDEO_PREVIEW_CONTENT_TYPES = new Set([

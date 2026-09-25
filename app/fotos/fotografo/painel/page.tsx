@@ -12,9 +12,13 @@ import {
   VIDEO_IA_FRAME_COUNT,
   VIDEO_MAX_BYTES,
   VIDEO_MAX_DURATION_SECONDS,
+  VIDEO_PREVIEW_BITRATE,
   VIDEO_PREVIEW_DURATION_SECONDS,
+  VIDEO_PREVIEW_FPS,
   VIDEO_PREVIEW_MAX_BYTES,
+  VIDEO_PREVIEW_MAX_WIDTH,
 } from "@/app/lib/fotos-video";
+import { desenharProtecaoRetratt, gerarAmostraVideoRapida, inicioDaAmostra } from "@/app/lib/fotos-video-amostra";
 import FotosShell from "../../_components/FotosShell";
 import {
   AlertTriangle,
@@ -33,6 +37,23 @@ import {
 } from "lucide-react";
 
 type UploadStatus = "idle" | "preparando" | "enviando" | "confirmando" | "ok" | "erro";
+type EtapaUpload = "preparando" | "enviando" | "confirmando";
+
+// Vídeos entram na mesma fila, mas são processados um de cada vez para não esgotar a memória do navegador.
+const CONCORRENCIA_UPLOAD = 3;
+
+function fracaoDaEtapa(etapa: EtapaUpload, percentualEnvio = 0) {
+  if (etapa === "preparando") return 0.2;
+  if (etapa === "enviando") return 0.25 + (percentualEnvio / 100) * 0.55;
+  return 0.92;
+}
+
+async function tokenDaSessao() {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new Error("Sua sessão expirou. Faça login novamente.");
+  return token;
+}
 
 const MAX_UPLOAD_BYTES = 3 * 1024 * 1024; // 🔥 Limite alterado para 3MB
 const MAX_SOURCE_BYTES = 40 * 1024 * 1024;
@@ -40,22 +61,64 @@ const MAX_UPLOAD_FILES = 500;
 const TIPOS_FOTO = new Set(["image/jpeg", "image/png", "image/webp"]);
 const TIPOS_VIDEO = new Set(["video/mp4", "video/webm", "video/quicktime"]);
 
+const TIPO_POR_EXTENSAO: Record<string, string> = {
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+  mp4: "video/mp4",
+  m4v: "video/mp4",
+  webm: "video/webm",
+  mov: "video/quicktime",
+  qt: "video/quicktime",
+};
+
+// No Windows, .mov costuma chegar com type vazio porque o QuickTime não está registrado no sistema.
+function normalizarTipoArquivo(arquivo: File) {
+  if (TIPOS_FOTO.has(arquivo.type) || TIPOS_VIDEO.has(arquivo.type)) return arquivo;
+  const extensao = arquivo.name.split(".").pop()?.toLowerCase() || "";
+  const tipo = TIPO_POR_EXTENSAO[extensao];
+  if (!tipo) return arquivo;
+  return new File([arquivo], arquivo.name, { type: tipo, lastModified: arquivo.lastModified });
+}
+
 function arquivoEhVideo(arquivo: File) {
   return TIPOS_VIDEO.has(arquivo.type);
+}
+
+function mensagemFormatoVideo(nome: string) {
+  return `${nome}: o navegador não conseguiu ler as imagens deste vídeo (comum em HEVC/H.265 do iPhone). Exporte em MP4 (H.264) e tente novamente.`;
+}
+
+function aguardarVideo(video: HTMLVideoElement, evento: "loadedmetadata" | "loadeddata", nome: string, limiteMs = 20000) {
+  return new Promise<void>((resolve, reject) => {
+    const timeout = window.setTimeout(() => {
+      limpar();
+      reject(new Error(mensagemFormatoVideo(nome)));
+    }, limiteMs);
+    const ok = () => { limpar(); resolve(); };
+    const falha = () => { limpar(); reject(new Error(mensagemFormatoVideo(nome))); };
+    function limpar() {
+      window.clearTimeout(timeout);
+      video.removeEventListener(evento, ok);
+      video.removeEventListener("error", falha);
+    }
+    video.addEventListener(evento, ok, { once: true });
+    video.addEventListener("error", falha, { once: true });
+  });
 }
 
 async function lerDuracaoVideo(file: File) {
   const url = URL.createObjectURL(file);
   const video = document.createElement("video");
   video.preload = "metadata";
+  video.muted = true;
   video.src = url;
   try {
-    return await new Promise<number>((resolve, reject) => {
-      video.onloadedmetadata = () => Number.isFinite(video.duration) && video.duration > 0
-        ? resolve(video.duration)
-        : reject(new Error(`Não foi possível medir a duração de ${file.name}.`));
-      video.onerror = () => reject(new Error(`Não foi possível ler o vídeo ${file.name}.`));
-    });
+    await aguardarVideo(video, "loadedmetadata", file.name, 15000);
+    if (!Number.isFinite(video.duration) || video.duration <= 0) throw new Error(`Não foi possível medir a duração de ${file.name}.`);
+    if (!video.videoWidth || !video.videoHeight) throw new Error(mensagemFormatoVideo(file.name));
+    return video.duration;
   } finally {
     URL.revokeObjectURL(url);
     video.removeAttribute("src");
@@ -232,11 +295,10 @@ async function gerarAmostraProtegidaVideo(video: HTMLVideoElement) {
   const contentType = escolherTipoPreviewVideo();
   if (!contentType || typeof MediaRecorder === "undefined") return null;
 
-  const maxWidth = 960;
-  const escala = Math.min(1, maxWidth / Math.max(1, video.videoWidth));
+  const escala = Math.min(1, VIDEO_PREVIEW_MAX_WIDTH / Math.max(1, video.videoWidth));
   const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.round(video.videoWidth * escala));
-  canvas.height = Math.max(1, Math.round(video.videoHeight * escala));
+  canvas.width = Math.max(2, Math.round((video.videoWidth * escala) / 2) * 2);
+  canvas.height = Math.max(2, Math.round((video.videoHeight * escala) / 2) * 2);
   const ctx = canvas.getContext("2d");
   if (!ctx || typeof canvas.captureStream !== "function") return null;
 
@@ -248,29 +310,22 @@ async function gerarAmostraProtegidaVideo(video: HTMLVideoElement) {
   desenharProtecaoRetratt(ctxProtecao, protecao.width, protecao.height);
 
   const duracaoAmostra = Math.min(VIDEO_PREVIEW_DURATION_SECONDS, video.duration);
-  const inicio = video.duration > duracaoAmostra
-    ? Math.min(video.duration * 0.1, video.duration - duracaoAmostra)
-    : 0;
+  const inicio = inicioDaAmostra(video.duration);
   await posicionarVideo(video, inicio);
 
-  const stream = canvas.captureStream(24);
-  const videoComCaptura = video as HTMLVideoElement & {
-    captureStream?: () => MediaStream;
-    webkitCaptureStream?: () => MediaStream;
-  };
-  const streamDeAudio = videoComCaptura.captureStream?.() || videoComCaptura.webkitCaptureStream?.() || null;
-  streamDeAudio?.getAudioTracks().forEach((track) => stream.addTrack(track));
-  const recorder = new MediaRecorder(stream, { mimeType: contentType, videoBitsPerSecond: 1_600_000 });
+  // Amostra sem áudio: fica mais leve e evita capturar o som do vídeo original.
+  const stream = canvas.captureStream(VIDEO_PREVIEW_FPS);
+  const recorder = new MediaRecorder(stream, { mimeType: contentType, videoBitsPerSecond: VIDEO_PREVIEW_BITRATE });
   const partes: Blob[] = [];
   recorder.ondataavailable = (event) => {
     if (event.data.size) partes.push(event.data);
   };
 
-  let frame = 0;
+  let quadrosDesenhados = 0;
   const desenhar = () => {
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     ctx.drawImage(protecao, 0, 0);
-    frame = window.requestAnimationFrame(desenhar);
+    quadrosDesenhados += 1;
   };
 
   const finalizado = new Promise<void>((resolve, reject) => {
@@ -278,47 +333,53 @@ async function gerarAmostraProtegidaVideo(video: HTMLVideoElement) {
     recorder.onerror = () => reject(new Error("Não foi possível gerar a amostra protegida do vídeo."));
   });
 
+  let intervalo = 0;
   try {
-    recorder.start(500);
     desenhar();
+    recorder.start(1000);
+    intervalo = window.setInterval(desenhar, 1000 / VIDEO_PREVIEW_FPS);
     await video.play();
     await new Promise<void>((resolve) => {
-      const timeout = window.setTimeout(resolve, duracaoAmostra * 1000);
-      video.onended = () => {
-        window.clearTimeout(timeout);
-        resolve();
+      const fim = inicio + duracaoAmostra;
+      const limite = window.setTimeout(resolve, duracaoAmostra * 1000 + 4000);
+      const acompanhar = () => {
+        if (video.ended || video.currentTime >= fim) {
+          window.clearTimeout(limite);
+          video.removeEventListener("timeupdate", acompanhar);
+          resolve();
+        }
       };
+      video.addEventListener("timeupdate", acompanhar);
+      video.addEventListener("ended", acompanhar, { once: true });
     });
     video.pause();
     recorder.stop();
     await finalizado;
   } finally {
     video.pause();
-    if (frame) window.cancelAnimationFrame(frame);
+    window.clearInterval(intervalo);
     stream.getTracks().forEach((track) => track.stop());
-    streamDeAudio?.getTracks().forEach((track) => track.stop());
   }
 
+  // Com a aba em segundo plano o navegador pausa o vídeo; nesse caso a amostra sai congelada e é descartada.
+  const quadrosMinimos = Math.max(5, Math.round(duracaoAmostra * VIDEO_PREVIEW_FPS * 0.3));
   const blob = new Blob(partes, { type: recorder.mimeType || contentType });
-  if (!blob.size || blob.size > VIDEO_PREVIEW_MAX_BYTES) {
-    throw new Error("A amostra protegida do vídeo ficou grande demais. Tente um vídeo menor.");
-  }
+  const avancou = video.currentTime - inicio >= duracaoAmostra * 0.5;
+  if (!avancou || quadrosDesenhados < quadrosMinimos || !blob.size || blob.size > VIDEO_PREVIEW_MAX_BYTES) return null;
   return blob;
 }
 
 async function gerarDerivadosVideo(file: File) {
   const url = URL.createObjectURL(file);
   const video = document.createElement("video");
-  video.preload = "metadata";
+  video.preload = "auto";
   video.muted = true;
   video.playsInline = true;
   video.src = url;
 
   try {
-    await new Promise<void>((resolve, reject) => {
-      video.onloadeddata = () => resolve();
-      video.onerror = () => reject(new Error(`Não foi possível ler o vídeo ${file.name}.`));
-    });
+    await aguardarVideo(video, "loadeddata", file.name);
+    if (!video.videoWidth || !video.videoHeight) throw new Error(mensagemFormatoVideo(file.name));
     if (!Number.isFinite(video.duration) || video.duration <= 0) throw new Error(`Não foi possível medir a duração de ${file.name}.`);
     if (video.duration > VIDEO_MAX_DURATION_SECONDS) throw new Error(`${file.name} ultrapassa o limite de 2 minutos.`);
 
@@ -335,7 +396,12 @@ async function gerarDerivadosVideo(file: File) {
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     desenharProtecaoRetratt(ctx, canvas.width, canvas.height);
     const previewBlob = await canvasParaJpeg(canvas, 0.82);
-    const previewVideoBlob = await gerarAmostraProtegidaVideo(video);
+    const avisarFalha = (error: unknown) => {
+      console.warn(`Amostra do vídeo ${file.name} não gerada por este método.`, error);
+      return null;
+    };
+    const previewVideoBlob = await gerarAmostraVideoRapida(file).catch(avisarFalha)
+      ?? await gerarAmostraProtegidaVideo(video).catch(avisarFalha);
     return {
       duracaoSegundos: video.duration,
       miniaturaIa,
@@ -366,70 +432,6 @@ function enviarDiretoAoR2(url: string, arquivo: Blob, onProgress: (percentual: n
   });
 }
 
-function desenharProtecaoRetratt(ctx: CanvasRenderingContext2D, width: number, height: number) {
-  const passo = Math.max(58, Math.round(width / 13));
-  const segmento = Math.max(26, Math.round(passo * 0.62));
-  ctx.save();
-  ctx.lineWidth = Math.max(1.25, width / 750);
-  for (let y = -passo; y < height + passo; y += passo) {
-    for (let x = -passo; x < width + passo; x += passo) {
-      ctx.strokeStyle = "rgba(255,255,255,0.58)";
-      ctx.beginPath();
-      ctx.moveTo(x, y);
-      ctx.lineTo(x + segmento, y + segmento);
-      ctx.stroke();
-      ctx.strokeStyle = "rgba(255,90,31,0.48)";
-      ctx.beginPath();
-      ctx.moveTo(x + segmento, y);
-      ctx.lineTo(x, y + segmento);
-      ctx.stroke();
-    }
-  }
-  ctx.restore();
-
-  ctx.save();
-  ctx.globalAlpha = 0.7;
-  ctx.fillStyle = "rgba(0,0,0,0.58)";
-  ctx.font = `900 ${Math.max(14, Math.round(width / 48))}px Arial`;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.translate(width / 2, height / 2);
-  ctx.rotate(-Math.PI / 9);
-  const passoX = Math.max(220, width / 2.4);
-  const passoY = Math.max(120, height / 5);
-  for (let y = -height; y <= height; y += passoY) {
-    for (let x = -width; x <= width; x += passoX) {
-      const texto = "RETRATT • REPRODUÇÃO NÃO AUTORIZADA";
-      const larguraTexto = ctx.measureText(texto).width + 24;
-      ctx.fillRect(x - larguraTexto / 2, y - 17, larguraTexto, 34);
-      ctx.fillStyle = "rgba(255,255,255,0.95)";
-      ctx.fillText(texto, x, y);
-      ctx.fillStyle = "rgba(0,0,0,0.58)";
-    }
-  }
-  ctx.restore();
-
-  const barraAltura = Math.min(82, Math.max(58, Math.round(height * 0.1)));
-  ctx.save();
-  ctx.fillStyle = "rgba(0,0,0,0.84)";
-  ctx.fillRect(0, height - barraAltura, width, barraAltura);
-  ctx.strokeStyle = "rgba(255,90,31,0.9)";
-  ctx.lineWidth = Math.max(2, width / 600);
-  ctx.beginPath();
-  ctx.moveTo(0, height - barraAltura);
-  ctx.lineTo(width, height - barraAltura);
-  ctx.stroke();
-  ctx.fillStyle = "#ffffff";
-  ctx.font = `900 ${Math.max(15, Math.round(width / 43))}px Arial`;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText("COMPARTILHAR SEM AUTORIZAÇÃO É ILEGAL", width / 2, height - barraAltura * 0.63);
-  ctx.fillStyle = "#ff5a1f";
-  ctx.font = `800 ${Math.max(11, Math.round(width / 62))}px Arial`;
-  ctx.fillText("COMPRE O ARQUIVO ORIGINAL • VALORIZE O FOTÓGRAFO", width / 2, height - barraAltura * 0.28);
-  ctx.restore();
-}
-
 export default function PainelFotografoPage() {
   const router = useRouter();
   const [email, setEmail] = useState<string | null>(null);
@@ -453,7 +455,7 @@ export default function PainelFotografoPage() {
   const [uploadAtual, setUploadAtual] = useState(0);
   const [uploadConcluidas, setUploadConcluidas] = useState(0);
   const [uploadTotal, setUploadTotal] = useState(0);
-  const [progressoArquivo, setProgressoArquivo] = useState(0);
+  const [fracaoEmAndamento, setFracaoEmAndamento] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   function converterPrecoCentavos(valorDigitado: string, padrao: number) {
@@ -557,11 +559,10 @@ export default function PainelFotografoPage() {
       return Math.min(100, Math.round((otimizacaoAtual / otimizacaoTotal) * 100));
     }
     if (enviando && uploadTotal > 0) {
-      const avancoDaEtapa = status === "preparando" ? 0.2 : status === "enviando" ? 0.25 + (progressoArquivo / 100) * 0.55 : 0.92;
-      return Math.min(99, Math.round(((uploadConcluidas + avancoDaEtapa) / uploadTotal) * 100));
+      return Math.min(99, Math.round(((uploadConcluidas + fracaoEmAndamento) / uploadTotal) * 100));
     }
     return 0;
-  }, [enviando, otimizacaoAtual, otimizacaoTotal, otimizando, progressoArquivo, status, uploadConcluidas, uploadTotal]);
+  }, [enviando, fracaoEmAndamento, otimizacaoAtual, otimizacaoTotal, otimizando, status, uploadConcluidas, uploadTotal]);
 
   const orientacaoPrincipal = useMemo(() => {
     if (!eventoId) return "Escolha primeiro onde as fotos serão publicadas.";
@@ -590,7 +591,7 @@ export default function PainelFotografoPage() {
     setMensagem(`Preparando ${lote.length} arquivo(s) antes do envio...`);
 
     for (let index = 0; index < lote.length; index += 1) {
-      const arquivo = lote[index];
+      const arquivo = normalizarTipoArquivo(lote[index]);
       const ehVideo = arquivoEhVideo(arquivo);
       const tipoValido = TIPOS_FOTO.has(arquivo.type) || ehVideo;
       const excedeuLimite = ehVideo ? arquivo.size > VIDEO_MAX_BYTES : arquivo.size > MAX_SOURCE_BYTES;
@@ -686,15 +687,19 @@ export default function PainelFotografoPage() {
     }
   }
 
-  async function enviarUmaFoto(arquivo: File, token: string, destinoAlbumId: string) {
+  async function enviarUmaFoto(
+    arquivo: File,
+    destinoAlbumId: string,
+    onEtapa: (etapa: EtapaUpload, percentualEnvio?: number) => void,
+  ) {
     const ehVideo = arquivoEhVideo(arquivo);
-    setProgressoArquivo(0);
-    setStatus("preparando");
+    onEtapa("preparando");
     const derivadosFoto = ehVideo ? null : await gerarDerivadosFoto(arquivo);
     const derivadosVideo = ehVideo ? await gerarDerivadosVideo(arquivo) : null;
     const previewBlob = derivadosVideo?.previewBlob || derivadosFoto!.previewBlob;
     const miniaturaIa = derivadosVideo?.miniaturaIa || derivadosFoto!.miniaturaIa;
 
+    const token = await tokenDaSessao();
     const uploadResponse = await fetch("/api/fotos/upload-url", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -730,7 +735,7 @@ export default function PainelFotografoPage() {
       });
     }
 
-    setStatus("enviando");
+    onEtapa("enviando", 0);
     const iaResponse = await enviarArquivo(miniaturaIa, "ia", "image/jpeg");
     if (!iaResponse.ok) {
       const detalhe = await iaResponse.json().catch(() => null);
@@ -747,7 +752,7 @@ export default function PainelFotografoPage() {
       if (derivadosVideo?.previewVideoBlob && uploadData.videoPreviewUploadUrl) {
         await enviarDiretoAoR2(uploadData.videoPreviewUploadUrl, derivadosVideo.previewVideoBlob, () => undefined);
       }
-      await enviarDiretoAoR2(uploadData.uploadUrl, arquivo, setProgressoArquivo);
+      await enviarDiretoAoR2(uploadData.uploadUrl, arquivo, (percentual) => onEtapa("enviando", percentual));
     } else {
       const putResponse = await enviarArquivo(arquivo, "original", arquivo.type);
       if (!putResponse.ok) {
@@ -756,7 +761,7 @@ export default function PainelFotografoPage() {
       }
     }
 
-    setStatus("confirmando");
+    onEtapa("confirmando");
     const confirmarResponse = await fetch("/api/fotos/confirmar-upload", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -781,39 +786,76 @@ export default function PainelFotografoPage() {
       return;
     }
 
-    const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData.session?.access_token;
-    if (!token) {
+    try {
+      await tokenDaSessao();
+    } catch {
+      setStatus("erro");
       setMensagem("Sua sessão expirou. Faça login novamente.");
       return;
     }
 
+    const lote = [...arquivos];
+    const falhas: Array<{ arquivo: File; erro: string }> = [];
+    const progressoPorArquivo = new Map<number, number>();
+    let proximo = 0;
     let concluidas = 0;
-    try {
-      setMensagem("");
-      setUploadTotal(arquivos.length);
-      setUploadConcluidas(0);
-      for (let index = 0; index < arquivos.length; index++) {
-        setUploadAtual(index + 1);
-        setMensagem(`Preparando ${index + 1}/${arquivos.length}: ${arquivos[index].name}`);
-        await enviarUmaFoto(arquivos[index], token, destinoAlbumId);
-        concluidas += 1;
-        setUploadConcluidas(concluidas);
-      }
+    let filaVideos: Promise<unknown> = Promise.resolve();
 
+    const atualizarProgresso = (indice: number, fracao: number | null) => {
+      if (fracao === null) progressoPorArquivo.delete(indice);
+      else progressoPorArquivo.set(indice, fracao);
+      setFracaoEmAndamento([...progressoPorArquivo.values()].reduce((total, valor) => total + valor, 0));
+    };
+
+    const emSequencia = <T,>(tarefa: () => Promise<T>) => {
+      const execucao = filaVideos.then(tarefa, tarefa);
+      filaVideos = execucao.catch(() => undefined);
+      return execucao;
+    };
+
+    async function worker() {
+      while (proximo < lote.length) {
+        const indice = proximo++;
+        const arquivo = lote[indice];
+        const enviar = () => enviarUmaFoto(arquivo, destinoAlbumId, (etapa, percentual) => {
+          atualizarProgresso(indice, fracaoDaEtapa(etapa, percentual));
+        });
+        try {
+          await (arquivoEhVideo(arquivo) ? emSequencia(enviar) : enviar());
+          concluidas += 1;
+          setUploadConcluidas(concluidas);
+        } catch (error: unknown) {
+          falhas.push({ arquivo, erro: error instanceof Error ? error.message : `${arquivo.name}: erro desconhecido.` });
+        } finally {
+          atualizarProgresso(indice, null);
+          const processadas = concluidas + falhas.length;
+          setUploadAtual(processadas);
+          setMensagem(`Publicando ${processadas}/${lote.length}${falhas.length ? ` · ${falhas.length} com falha` : ""}`);
+        }
+      }
+    }
+
+    setMensagem("");
+    setStatus("enviando");
+    setUploadTotal(lote.length);
+    setUploadConcluidas(0);
+    setUploadAtual(0);
+    setFracaoEmAndamento(0);
+    await Promise.all(Array.from({ length: Math.min(CONCORRENCIA_UPLOAD, lote.length) }, () => worker()));
+    setFracaoEmAndamento(0);
+
+    if (!falhas.length) {
       setArquivos([]);
       if (fileInputRef.current) fileInputRef.current.value = "";
       setStatus("ok");
       setMensagem(`${concluidas} mídia(s) publicada(s) com sucesso. Elas já estão disponíveis na galeria.`);
-    } catch (error: unknown) {
-      let detalhe = error instanceof Error ? error.message : "Erro desconhecido ao enviar fotos.";
-      if (concluidas > 0) {
-        setArquivos((atuais) => atuais.slice(concluidas));
-        detalhe = `${concluidas} mídia(s) foram publicadas. As restantes ficaram na fila para tentar novamente. ${detalhe}`;
-      }
-      setStatus("erro");
-      setMensagem(detalhe);
+      return;
     }
+
+    const arquivosComFalha = new Set(falhas.map((falha) => falha.arquivo));
+    setArquivos(lote.filter((arquivo) => arquivosComFalha.has(arquivo)));
+    setStatus("erro");
+    setMensagem(`${concluidas} mídia(s) publicada(s). ${falhas.length} ficaram na fila para tentar novamente. ${falhas[0].erro}`);
   }
 
   async function iniciarEnvio() {
@@ -952,7 +994,8 @@ export default function PainelFotografoPage() {
               <p className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-white"><ShieldCheck size={16} className="text-emerald-400" /> Pode deixar com a gente</p>
               <div className="mt-3 space-y-2 text-xs text-zinc-400">
                 <p>✓ Fotos grandes continuam sendo otimizadas automaticamente até 3MB.</p>
-                <p>✓ Fotos e vídeos entram na busca facial; o vídeo recebe uma amostra protegida de 10 segundos.</p>
+                <p>✓ Fotos e vídeos entram na busca facial; o vídeo recebe uma amostra protegida de {VIDEO_PREVIEW_DURATION_SECONDS} segundos, leve e sem áudio.</p>
+                <p>✓ Dica: clipes curtos (10 a 30 segundos) de um momento marcante vendem mais e carregam rápido. Prefira MP4.</p>
                 <p>✓ Vídeos: até {formatarDuracaoVideo(VIDEO_MAX_DURATION_SECONDS)} e 250 MB por arquivo.</p>
                 <p>✓ O arquivo original fica reservado para a entrega após a compra.</p>
               </div>
@@ -979,7 +1022,7 @@ export default function PainelFotografoPage() {
 
             <div className="grid gap-4 lg:grid-cols-[1fr_250px]">
               <div className={`relative flex min-h-[250px] flex-col items-center justify-center rounded-2xl border-2 border-dashed bg-black p-5 text-center transition ${arquivos.length ? "border-emerald-500/30" : "border-white/10 hover:border-retratt/60 hover:bg-retratt/5"}`}>
-                <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime" multiple disabled={otimizando || enviando} onChange={(e) => void selecionarArquivos(e.target.files)} className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0 disabled:cursor-wait" />
+                <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime,.jpg,.jpeg,.png,.webp,.mp4,.m4v,.webm,.mov" multiple disabled={otimizando || enviando} onChange={(e) => void selecionarArquivos(e.target.files)} className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0 disabled:cursor-wait" />
                 <div className={`mb-3 flex h-16 w-16 items-center justify-center rounded-full ${arquivos.length ? "bg-emerald-500/10 text-emerald-400" : "bg-white/5 text-zinc-500"}`}>
                   {otimizando ? <Loader2 size={30} className="animate-spin text-retratt" /> : arquivos.length ? <CheckCircle2 size={30} /> : <CloudUpload size={30} />}
                 </div>

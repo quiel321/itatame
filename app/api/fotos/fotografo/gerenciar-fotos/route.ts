@@ -11,15 +11,18 @@ function bearerToken(request: Request) {
 }
 
 function urlDaMiniatura(foto: {
+  mime_type: string | null;
   thumb_url: string | null;
   preview_url: string | null;
   r2_thumb_key: string | null;
   r2_preview_key: string | null;
 }) {
-  const urlPublica = foto.thumb_url || foto.preview_url;
+  const ehVideo = String(foto.mime_type || "").startsWith("video/");
+  const urlPublica = ehVideo ? foto.preview_url || foto.thumb_url : foto.thumb_url || foto.preview_url;
   if (urlPublica && /^https?:\/\//.test(urlPublica)) return urlPublica;
 
-  const key = foto.r2_thumb_key || foto.r2_preview_key;
+  // Em vídeos, r2_thumb_key guarda a amostra em vídeo; a imagem de capa fica em r2_preview_key.
+  const key = ehVideo ? foto.r2_preview_key : foto.r2_thumb_key || foto.r2_preview_key;
   return key ? createR2PresignedGetUrl(key, 600) : null;
 }
 
@@ -65,7 +68,7 @@ export async function GET(request: Request) {
 
     let query = supabase
       .from("foto_arquivos")
-      .select("id, evento_id, fotografo_id, titulo, mime_type, status, thumb_url, preview_url, r2_thumb_key, r2_preview_key, created_at")
+      .select("id, evento_id, fotografo_id, titulo, mime_type, status, preco_centavos, thumb_url, preview_url, r2_thumb_key, r2_preview_key, created_at")
       .eq("evento_id", eventoId)
       .order("created_at", { ascending: false });
 
@@ -112,11 +115,13 @@ export async function GET(request: Request) {
         titulo: foto.titulo,
         mime_type: foto.mime_type,
         status: foto.status,
+        preco_centavos: foto.preco_centavos,
         situacao_pedido: situacaoPorFoto.get(foto.id) || null,
         quantidade_vendas: vendasPorFoto.get(foto.id) || 0,
         quantidade_reservas: reservasPorFoto.get(foto.id) || 0,
         created_at: foto.created_at,
         miniatura_url: urlDaMiniatura(foto),
+        sem_amostra_video: String(foto.mime_type || "").startsWith("video/") && !foto.r2_thumb_key,
       })),
     });
   } catch (error: unknown) {

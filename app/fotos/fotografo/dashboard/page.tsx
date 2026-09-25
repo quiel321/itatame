@@ -5,27 +5,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
 import FotosShell from "../../_components/FotosShell";
-import { ArrowRight, Camera, CheckCircle2, ChevronDown, CloudUpload, CreditCard, FolderOpen, ImagePlus, ShieldCheck, Wallet, LogOut, AlertCircle, Store, X, Edit, Calendar, MapPin, Image as ImageIcon, Trash2, Loader2, Check, Plus, Images, Trophy, ChartNoAxesCombined, Video } from "lucide-react";
+import { Camera, CheckCircle2, ChevronDown, CloudUpload, CreditCard, FolderOpen, ImagePlus, ShieldCheck, Wallet, LogOut, AlertCircle, Store, X, Edit, Calendar, MapPin, Trash2, Loader2, Check, Plus, Images, Trophy, ChartNoAxesCombined, Link2 } from "lucide-react";
 import MercadoPagoConnectButton from "@/app/admin/_components/MercadoPagoConnectButton";
+import GerenciadorMidias from "../_components/GerenciadorMidias";
 
 type FotografoPerfil = { id: string; nome: string | null; email: string | null; foto_url?: string | null; telefone?: string | null; documento?: string | null; cep?: string | null; endereco?: string | null; cidade?: string | null; estado?: string | null; bio?: string | null; perfil_completo?: boolean | null; status: string | null; mp_connected_at?: string | null; mp_user_id?: string | null; };
 type Totais = { fotos: number; albuns: number; eventos: number; vendas: number };
 type PerfilForm = { nome: string; telefone: string; documento: string; cep: string; endereco: string; cidade: string; estado: string; bio: string; };
 
-type GaleriaFreelancer = { id: string; nome: string; cidade?: string | null; estado?: string | null; data_evento?: string | null; preco_padrao_centavos?: number | null; capa_url?: string | null; comissao_organizador_percentual?: number | null; created_by?: string | null; };
-type FotoArquivo = {
-  id: string;
-  evento_id: string;
-  fotografo_id: string | null;
-  titulo: string | null;
-  mime_type?: string | null;
-  status: string;
-  situacao_pedido: "vendida" | "reservada" | "vinculada" | null;
-  quantidade_vendas: number;
-  quantidade_reservas: number;
-  created_at: string;
-  miniatura_url: string | null;
-};
+type GaleriaFreelancer = { id: string; nome: string; cidade?: string | null; estado?: string | null; data_evento?: string | null; preco_padrao_centavos?: number | null; capa_url?: string | null; comissao_organizador_percentual?: number | null; created_by?: string | null; desconto_combo_qtd?: number | null; desconto_combo_percentual?: number | null; };
 
 function perfilParaForm(perfil: FotografoPerfil | null, email: string | null): PerfilForm {
   return { nome: perfil?.nome || email?.split("@")[0] || "", telefone: perfil?.telefone || "", documento: perfil?.documento || "", cep: perfil?.cep || "", endereco: perfil?.endereco || "", cidade: perfil?.cidade || "", estado: perfil?.estado || "", bio: perfil?.bio || "", };
@@ -56,15 +44,13 @@ export default function FotografoDashboardPage() {
   const [minhasGalerias, setMinhasGalerias] = useState<GaleriaFreelancer[]>([]);
   const [galeriasOficiais, setGaleriasOficiais] = useState<GaleriaFreelancer[]>([]);
   const [editandoGaleria, setEditandoGaleria] = useState<GaleriaFreelancer | null>(null);
-  const [editGaleriaForm, setEditGaleriaForm] = useState({ nome: "", cidade: "", estado: "", dataEvento: "", preco: "15,00" });
+  const [editGaleriaForm, setEditGaleriaForm] = useState({ nome: "", cidade: "", estado: "", dataEvento: "", preco: "15,00", comboQtd: "3", comboPercentual: "20" });
   const [editCapaGaleria, setEditCapaGaleria] = useState<File | null>(null);
   const [salvandoEdicao, setSalvandoEdicao] = useState(false);
+  const [excluindoGaleria, setExcluindoGaleria] = useState(false);
+  const [linkCopiado, setLinkCopiado] = useState<string | null>(null);
 
   const [gerenciandoGaleria, setGerenciandoGaleria] = useState<string | null>(null);
-  const [fotosGaleria, setFotosGaleria] = useState<FotoArquivo[]>([]);
-  const [fotosSelecionadas, setFotosSelecionadas] = useState<string[]>([]);
-  const [carregandoFotos, setCarregandoFotos] = useState(false);
-  const [excluindoFotos, setExcluindoFotos] = useState(false);
 
   const nomeExibicao = useMemo(() => perfil?.nome || email?.split("@")[0] || "Fotógrafo", [perfil?.nome, email]);
   const mercadoPagoConectado = useMemo(() => Boolean(perfil?.mp_connected_at), [perfil?.mp_connected_at]);
@@ -129,7 +115,7 @@ export default function FotografoDashboardPage() {
           supabase.from("foto_arquivos").select("id", { count: "exact", head: true }).eq("fotografo_id", perfilAtual.id),
           supabase.from("foto_albuns").select("id", { count: "exact", head: true }).eq("fotografo_id", perfilAtual.id),
           supabase.from("foto_pedidos").select("id", { count: "exact", head: true }).eq("fotografo_id", perfilAtual.id).eq("status", "pago"),
-          supabase.from("foto_eventos").select("id, nome, cidade, estado, data_evento, preco_padrao_centavos, capa_url").eq("created_by", user.id).order("created_at", { ascending: false }),
+          supabase.from("foto_eventos").select("id, nome, cidade, estado, data_evento, preco_padrao_centavos, capa_url, desconto_combo_qtd, desconto_combo_percentual").eq("created_by", user.id).order("created_at", { ascending: false }),
           supabase.from("foto_evento_fotografos").select("evento_id, comissao_organizador_percentual").eq("fotografo_id", perfilAtual.id).eq("status", "ativo")
         ]);
 
@@ -182,18 +168,22 @@ export default function FotografoDashboardPage() {
   async function salvarPerfilFotografo() {
     if (!perfil?.id) return;
     setSalvandoPerfil(true);
-    const payloadCompleto = { nome: perfilForm.nome.trim(), telefone: perfilForm.telefone.trim(), documento: perfilForm.documento.trim(), cep: perfilForm.cep.trim(), endereco: perfilForm.endereco.trim(), cidade: perfilForm.cidade.trim(), estado: perfilForm.estado.trim().toUpperCase(), bio: perfilForm.bio.trim(), perfil_completo: true, status: "ativo" };
-
-    let resultado = await supabase.from("fotografos").update(payloadCompleto).eq("id", perfil.id).select("*").single();
-
-    if (resultado.error) {
-      resultado = await supabase.from("fotografos").update({ nome: payloadCompleto.nome, telefone: payloadCompleto.telefone, documento: payloadCompleto.documento, bio: payloadCompleto.bio, status: "ativo" }).eq("id", perfil.id).select("*").single();
-    }
-
-    setSalvandoPerfil(false);
-    if (!resultado.error) {
-      setPerfil({ ...(perfil || {}), ...payloadCompleto, ...(resultado.data ? (resultado.data as FotografoPerfil) : {}) });
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error("Sessão expirada. Entre novamente.");
+      const response = await fetch("/api/fotos/fotografo/perfil", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify(perfilForm),
+      });
+      const resultado = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(resultado?.error || "Não foi possível salvar o perfil.");
+      setPerfil({ ...perfil, ...(resultado.perfil as FotografoPerfil) });
       setMostrarFormularioPerfil(false);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Não foi possível salvar o perfil.");
+    } finally {
+      setSalvandoPerfil(false);
     }
   }
 
@@ -249,8 +239,13 @@ export default function FotografoDashboardPage() {
   async function desvincularMercadoPago() {
     if (!perfil?.id) return;
     if (!confirm("Tem certeza que deseja desvincular sua conta do Mercado Pago?")) return;
-    const { error } = await supabase.from("fotografos").update({ mp_access_token: null, mp_refresh_token: null, mp_public_key: null, mp_user_id: null, mp_connected_at: null, mp_token_expires_at: null }).eq("id", perfil.id);
-    if (!error) { setPerfil({ ...perfil, mp_connected_at: null, mp_user_id: null }); alert("Conta desvinculada com sucesso."); }
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) { alert("Sessão expirada. Entre novamente."); return; }
+    const response = await fetch("/api/fotos/fotografo/mercado-pago", { method: "DELETE", headers: { Authorization: `Bearer ${session.access_token}` } });
+    const resultado = await response.json().catch(() => null);
+    if (!response.ok) { alert(resultado?.error || "Não foi possível desvincular a conta."); return; }
+    setPerfil({ ...perfil, mp_connected_at: null, mp_user_id: null });
+    alert("Conta desvinculada com sucesso.");
   }
 
   function abrirEdicaoGaleria(galeria: GaleriaFreelancer) {
@@ -261,7 +256,9 @@ export default function FotografoDashboardPage() {
       cidade: galeria.cidade || "",
       estado: galeria.estado || "",
       dataEvento: galeria.data_evento || "",
-      preco: ((galeria.preco_padrao_centavos || 0) / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      preco: ((galeria.preco_padrao_centavos || 0) / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+      comboQtd: String(galeria.desconto_combo_qtd ?? 3),
+      comboPercentual: String(galeria.desconto_combo_percentual ?? 20).replace(".", ","),
     });
     setEditCapaGaleria(null);
   }
@@ -281,6 +278,10 @@ export default function FotografoDashboardPage() {
     }
 
     const precoCentavos = Math.max(0, Math.round(Number(editGaleriaForm.preco.replace(/\./g, "").replace(",", ".")) * 100));
+    const comboQtdDigitado = Math.round(Number(editGaleriaForm.comboQtd));
+    const comboPercentualDigitado = Number(editGaleriaForm.comboPercentual.replace(",", "."));
+    const comboQtd = Number.isFinite(comboQtdDigitado) ? Math.max(2, comboQtdDigitado) : 3;
+    const comboPercentual = Number.isFinite(comboPercentualDigitado) ? Math.min(90, Math.max(0, comboPercentualDigitado)) : 0;
 
     const { error } = await supabase.from("foto_eventos").update({
       nome: editGaleriaForm.nome.trim(),
@@ -288,6 +289,8 @@ export default function FotografoDashboardPage() {
       estado: editGaleriaForm.estado.trim().toUpperCase(),
       data_evento: editGaleriaForm.dataEvento || null,
       preco_padrao_centavos: precoCentavos,
+      desconto_combo_qtd: comboQtd,
+      desconto_combo_percentual: comboPercentual,
       capa_url: novaCapaUrl
     }).eq("id", editandoGaleria.id);
 
@@ -300,200 +303,55 @@ export default function FotografoDashboardPage() {
   }
 
   async function excluirGaleria(galeriaId: string) {
-    if (!confirm("Tem certeza que deseja excluir esta galeria? Atenção: Se houverem fotos vendidas nela, esta ação pode causar erros no sistema. Prossiga apenas se tiver certeza.")) return;
-    const { error } = await supabase.from("foto_eventos").delete().eq("id", galeriaId);
-    if (error) alert("Erro ao excluir galeria. Pode haver fotos vinculadas a ela.");
-    else window.location.reload();
-  }
-
-  async function abrirGerenciadorFotos(galeriaId: string) {
-    setEditandoGaleria(null);
-    if (gerenciandoGaleria === galeriaId) {
-       setGerenciandoGaleria(null);
-       return;
-    }
-
-    setGerenciandoGaleria(galeriaId);
-    setCarregandoFotos(true);
-    setFotosSelecionadas([]);
-
+    if (!confirm("Excluir esta galeria? Todas as mídias dela serão apagadas do sistema e da nuvem. Galerias com pedidos não podem ser excluídas.")) return;
+    setExcluindoGaleria(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) throw new Error("Sessao expirada. Entre novamente.");
-
-      const response = await fetch(`/api/fotos/fotografo/gerenciar-fotos?eventoId=${encodeURIComponent(galeriaId)}`, {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-        cache: "no-store",
-      });
-      const resultado = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(resultado?.error || "Nao foi possivel carregar as fotos.");
-
-      setFotosGaleria(resultado?.fotos || []);
-    } catch (error) {
-      setFotosGaleria([]);
-      alert(error instanceof Error ? error.message : "Nao foi possivel carregar as fotos.");
-    } finally {
-      setCarregandoFotos(false);
-    }
-  }
-
-  function toggleSelecaoFoto(foto: FotoArquivo) {
-    if (foto.situacao_pedido) return;
-    setFotosSelecionadas(atuais =>
-       atuais.includes(foto.id) ? atuais.filter(id => id !== foto.id) : [...atuais, foto.id]
-    );
-  }
-
-  async function excluirFotosSelecionadas() {
-    if (fotosSelecionadas.length === 0) return;
-    if (!confirm(`Tem certeza que deseja excluir ${fotosSelecionadas.length} mídia(s)? Essa ação apagará os arquivos do sistema e da nuvem.`)) return;
-
-    setExcluindoFotos(true);
-
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-
-      if (!token) throw new Error("Sessao expirada. Entre novamente.");
-
-      const response = await fetch("/api/fotos/fotografo/excluir-fotos", {
+      if (!session?.access_token) throw new Error("Sessão expirada. Entre novamente.");
+      const response = await fetch("/api/fotos/fotografo/excluir-galeria", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ fotoIds: fotosSelecionadas }),
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ galeriaId }),
       });
       const resultado = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(resultado?.error || "Nao foi possivel excluir as fotos.");
-
-      const idsExcluidos = Array.isArray(resultado?.excluidas) ? resultado.excluidas : [];
-      setFotosGaleria(atuais => atuais.filter(f => !idsExcluidos.includes(f.id)));
-      setFotosSelecionadas([]);
-      setTotais(t => ({ ...t, fotos: Math.max(0, t.fotos - idsExcluidos.length) }));
+      if (!response.ok) throw new Error(resultado?.error || "Não foi possível excluir a galeria.");
       if (resultado?.aviso) alert(resultado.aviso);
+      window.location.reload();
     } catch (error) {
-      alert(error instanceof Error ? error.message : "Houve um erro ao excluir as fotos.");
+      alert(error instanceof Error ? error.message : "Não foi possível excluir a galeria.");
     } finally {
-      setExcluindoFotos(false);
+      setExcluindoGaleria(false);
     }
   }
 
-  // 🔥 COMPONENTE FOTOCARD BLINDADO COM RASTREADOR DE ERROS
-  const FotoCard = ({ foto, isSelected, onToggle }: { foto: FotoArquivo, isSelected: boolean, onToggle: () => void }) => {
-    const [imgError, setImgError] = useState(false);
+  function abrirGerenciadorFotos(galeriaId: string) {
+    setEditandoGaleria(null);
+    setGerenciandoGaleria((atual) => atual === galeriaId ? null : galeriaId);
+  }
 
-    // Buscador universal: tenta puxar a imagem de qualquer nome de coluna provável
-    const urlImagem = foto.miniatura_url;
-    const protegida = Boolean(foto.situacao_pedido);
-    const rotuloProtecao = foto.situacao_pedido === "vendida"
-      ? `Vendida${foto.quantidade_vendas > 1 ? ` ${foto.quantidade_vendas}x` : ""}`
-      : foto.situacao_pedido === "reservada"
-        ? `Reservada${foto.quantidade_reservas > 1 ? ` ${foto.quantidade_reservas}x` : ""}`
-        : "Vinculada";
-    const corProtecao = foto.situacao_pedido === "vendida"
-      ? "border-emerald-400 shadow-[0_0_14px_rgba(52,211,153,0.38)]"
-      : foto.situacao_pedido === "reservada"
-        ? "border-retratt shadow-[0_0_14px_rgba(251,191,36,0.32)]"
-        : "border-retratt shadow-[0_0_14px_rgba(255,90,31,0.28)]";
-    const fundoProtecao = foto.situacao_pedido === "vendida"
-      ? "bg-emerald-400 text-emerald-950"
-      : foto.situacao_pedido === "reservada"
-        ? "bg-retratt text-orange-950"
-        : "bg-retratt text-black";
+  async function copiarLinkGaleria(galeriaId: string) {
+    const prefixo = window.location.pathname.startsWith("/fotos") ? "/fotos" : "";
+    const link = `${window.location.origin}${prefixo}/evento/${galeriaId}`;
+    try {
+      await navigator.clipboard.writeText(link);
+      setLinkCopiado(galeriaId);
+      window.setTimeout(() => setLinkCopiado((atual) => atual === galeriaId ? null : atual), 2000);
+    } catch {
+      prompt("Copie o link da galeria:", link);
+    }
+  }
 
-    // Se não achou pelos nomes, procura qualquer string no objeto que comece com "http"
-    return (
-       <div onClick={onToggle} title={protegida ? `${rotuloProtecao}: foto protegida contra exclusao` : "Selecionar foto"} className={`relative aspect-square rounded-xl overflow-hidden border-2 bg-zinc-900 transition-all ${protegida ? `cursor-not-allowed ${corProtecao}` : isSelected ? 'cursor-pointer border-retratt' : 'cursor-pointer border-transparent hover:border-white/20'}`}>
-
-          {urlImagem && !imgError ? (
-             <img
-                src={urlImagem}
-                alt="Foto"
-                loading="lazy"
-                onError={() => setImgError(true)}
-                className={`w-full h-full object-cover transition-opacity ${isSelected ? 'opacity-40' : protegida ? 'opacity-65' : 'opacity-100'}`}
-             />
-          ) : (
-             <div className="absolute inset-0 flex flex-col items-center justify-center p-2 text-center bg-[#0a0a0e]">
-                {foto.mime_type?.startsWith("video/") ? <Video size={20} className="mb-1 text-retratt" /> : <ImageIcon size={20} className="text-zinc-700 mb-1" />}
-                <span className="text-[7px] font-black uppercase tracking-widest text-zinc-500 mb-1">
-                   {imgError ? "Erro no Link" : "Link Ausente"}
-                </span>
-                {/* 🔎 RASTREADOR VISUAL: Se der erro, ele vai imprimir aqui na tela quais colunas vieram do banco para o desenvolvedor ver */}
-                <span className="text-[6px] text-zinc-600 leading-tight opacity-70">Miniatura indisponivel</span>
-             </div>
-          )}
-
-          {protegida && (
-             <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/20 px-1">
-                <span className={`rounded-md px-2 py-1 text-[8px] font-black uppercase tracking-[0.16em] shadow-lg ${fundoProtecao}`}>
-                   {rotuloProtecao}
-                </span>
-             </div>
-          )}
-
-          {foto.mime_type?.startsWith("video/") && <span className="pointer-events-none absolute bottom-2 left-2 rounded-md bg-black/80 px-2 py-1 text-[7px] font-black uppercase tracking-wider text-white"><Video size={9} className="mr-1 inline"/> Vídeo</span>}
-
-          <div className={`absolute top-2 right-2 w-5 h-5 rounded-md border flex items-center justify-center transition-colors ${protegida ? 'bg-black/75 border-white/30' : isSelected ? 'bg-retratt border-retratt' : 'bg-black/50 border-white/50'}`}>
-             {protegida ? <ShieldCheck size={11} className="text-white" /> : isSelected && <Check size={12} className="text-white" />}
-          </div>
-       </div>
-    );
-  };
-
-  const PainelGerenciadorFotos = ({ galeriaId }: { galeriaId: string }) => {
+  function renderizarGerenciador(galeriaId: string) {
     if (gerenciandoGaleria !== galeriaId) return null;
-    const fotosExcluiveis = fotosGaleria.filter((foto) => !foto.situacao_pedido);
-    const fotosProtegidas = fotosGaleria.length - fotosExcluiveis.length;
-    const totalVendas = fotosGaleria.reduce((total, foto) => total + foto.quantidade_vendas, 0);
-    const fotosVendidas = fotosGaleria.filter((foto) => foto.quantidade_vendas > 0).length;
-    const todasExcluiveisSelecionadas = fotosExcluiveis.length > 0 && fotosSelecionadas.length === fotosExcluiveis.length;
     return (
-      <div className="mt-4 sm:mt-6 mb-2 rounded-2xl border border-retratt/30 bg-[#050505] overflow-hidden shadow-[0_0_30px_rgba(255,90,31,0.05)] animate-in slide-in-from-top-2 fade-in duration-200">
-        <div className="flex items-center justify-between border-b border-white/5 bg-retratt/[0.02] px-4 sm:px-5 py-3 sm:py-4">
-           <div className="flex items-center gap-2">
-              <Images size={16} className="text-retratt shrink-0" />
-              <h3 className="text-xs sm:text-sm font-black uppercase tracking-tight text-white">Gerenciar Fotos</h3>
-           </div>
-           <button type="button" onClick={() => setGerenciandoGaleria(null)} className="cursor-pointer text-zinc-500 hover:text-white transition-colors p-1">
-              <X size={16} className="shrink-0" />
-           </button>
-        </div>
-
-        <div className="p-3 sm:p-4 border-b border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#0a0a0e]">
-           <p className="text-[9px] sm:text-[10px] text-zinc-400 font-bold uppercase tracking-widest">
-               {fotosGaleria.length} fotos • {fotosSelecionadas.length} selecionadas {totalVendas > 0 && `• ${totalVendas} vendas em ${fotosVendidas} fotos`} {fotosProtegidas > 0 && `• ${fotosProtegidas} protegidas`}
-           </p>
-           <div className="flex items-center gap-2 w-full sm:w-auto">
-               <button disabled={fotosExcluiveis.length === 0} onClick={() => todasExcluiveisSelecionadas ? setFotosSelecionadas([]) : setFotosSelecionadas(fotosExcluiveis.map(f => f.id))} className="cursor-pointer flex-1 sm:flex-none h-8 px-3 rounded-lg bg-white/5 text-[8px] sm:text-[9px] font-black text-white uppercase tracking-widest hover:bg-white/10 transition-colors disabled:cursor-not-allowed disabled:opacity-40">
-                  {todasExcluiveisSelecionadas ? "Desmarcar" : "Selecionar Todas"}
-              </button>
-              <button disabled={fotosSelecionadas.length === 0 || excluindoFotos} onClick={excluirFotosSelecionadas} className="cursor-pointer flex-1 sm:flex-none flex items-center justify-center gap-1.5 h-8 px-3 rounded-lg bg-retratt/10 border border-retratt/20 text-retratt text-[8px] sm:text-[9px] font-black uppercase tracking-widest hover:bg-retratt hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                 {excluindoFotos ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
-                 {excluindoFotos ? "Excluindo..." : "Excluir"}
-              </button>
-           </div>
-        </div>
-
-        <div className="p-3 sm:p-5 max-h-[400px] overflow-y-auto custom-scrollbar">
-           {carregandoFotos ? (
-              <div className="flex justify-center py-10"><Loader2 size={24} className="animate-spin text-retratt" /></div>
-           ) : fotosGaleria.length === 0 ? (
-              <p className="text-center text-[10px] text-zinc-500 font-bold uppercase tracking-widest py-10">Nenhuma foto encontrada nesta galeria.</p>
-           ) : (
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 sm:gap-3">
-                 {fotosGaleria.map(foto => (
-                    <FotoCard
-                       key={foto.id}
-                       foto={foto}
-                       isSelected={fotosSelecionadas.includes(foto.id)}
-                       onToggle={() => toggleSelecaoFoto(foto)}
-                    />
-                 ))}
-              </div>
-           )}
-        </div>
-      </div>
+      <GerenciadorMidias
+        key={galeriaId}
+        galeriaId={galeriaId}
+        onFechar={() => setGerenciandoGaleria(null)}
+        onMidiasExcluidas={(quantidade) => setTotais((atual) => ({ ...atual, fotos: Math.max(0, atual.fotos - quantidade) }))}
+      />
     );
-  };
+  }
 
   if (carregando) return <FotosShell area="fotografo"><main className="min-h-screen bg-[#050505] flex items-center justify-center"><Camera size={32} className="text-retratt animate-pulse"/></main></FotosShell>;
 
@@ -623,19 +481,22 @@ export default function FotografoDashboardPage() {
                                   </div>
                             </div>
 
-                               <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                               <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
                                   <Link href={`/fotos/fotografo/painel?evento=${galeria.id}`} className="cursor-pointer inline-flex h-10 items-center justify-center gap-1.5 rounded-xl bg-retratt px-3 text-[9px] font-black uppercase tracking-wider text-black transition-colors hover:brightness-110">
                                     <CloudUpload size={12} className="shrink-0"/> Adicionar mídias
                                   </Link>
                                   <button onClick={() => abrirGerenciadorFotos(galeria.id)} className="cursor-pointer inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-retratt/30 bg-retratt/10 px-3 text-[9px] font-black uppercase tracking-wider text-retratt transition-colors hover:bg-retratt hover:text-black">
                                     <Images size={12} className="shrink-0"/> Minhas mídias
                                   </button>
+                                  <button onClick={() => void copiarLinkGaleria(galeria.id)} className="cursor-pointer inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 text-[9px] font-black uppercase tracking-wider text-zinc-300 transition-colors hover:bg-white hover:text-black">
+                                    {linkCopiado === galeria.id ? <><Check size={12} className="shrink-0"/> Copiado</> : <><Link2 size={12} className="shrink-0"/> Copiar link</>}
+                                  </button>
                                   <Link href={`/fotos/evento/${galeria.id}`} className="cursor-pointer inline-flex h-10 items-center justify-center gap-1.5 rounded-xl bg-white/10 px-3 text-[9px] font-black uppercase tracking-wider text-white transition-colors hover:bg-white hover:text-black">
                                     Loja Oficial
                                   </Link>
                                </div>
 
-                            <PainelGerenciadorFotos galeriaId={galeria.id} />
+                            {renderizarGerenciador(galeria.id)}
                          </div>
                       ))}
                     </div>
@@ -671,7 +532,7 @@ export default function FotografoDashboardPage() {
                                   </div>
                             </div>
 
-                               <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                               <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
                                   <Link href={`/fotos/fotografo/painel?evento=${galeria.id}`} className="cursor-pointer inline-flex h-10 items-center justify-center gap-1.5 rounded-xl bg-retratt px-2 text-[8px] font-black uppercase tracking-wider text-black transition-colors hover:brightness-110 sm:text-[9px]">
                                     <CloudUpload size={12} className="shrink-0"/> Adicionar mídias
                                   </Link>
@@ -681,12 +542,15 @@ export default function FotografoDashboardPage() {
                                   <button onClick={() => abrirEdicaoGaleria(galeria)} className="cursor-pointer inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-zinc-500/30 bg-zinc-500/10 px-2 text-[8px] font-black uppercase tracking-wider text-zinc-400 transition-colors hover:bg-zinc-500 hover:text-white sm:text-[9px]">
                                     <Edit size={12} className="shrink-0"/> Editar
                                   </button>
+                                  <button onClick={() => void copiarLinkGaleria(galeria.id)} className="cursor-pointer inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-2 text-[8px] font-black uppercase tracking-wider text-zinc-300 transition-colors hover:bg-white hover:text-black sm:text-[9px]">
+                                    {linkCopiado === galeria.id ? <><Check size={12} className="shrink-0"/> Copiado</> : <><Link2 size={12} className="shrink-0"/> Link</>}
+                                  </button>
                                   <Link href={`/fotos/evento/${galeria.id}`} className="cursor-pointer inline-flex h-10 items-center justify-center gap-1.5 rounded-xl bg-white/10 px-2 text-[8px] font-black uppercase tracking-wider text-white transition-colors hover:bg-white hover:text-black sm:text-[9px]">
                                     Loja
                                   </Link>
                                </div>
 
-                            <PainelGerenciadorFotos galeriaId={galeria.id} />
+                            {renderizarGerenciador(galeria.id)}
 
                             {/* 🔥 PAINEL: EDIÇÃO DE DADOS DA GALERIA */}
                             {editandoGaleria?.id === galeria.id && (
@@ -750,6 +614,28 @@ export default function FotografoDashboardPage() {
                                       />
                                    </div>
 
+                                   <div>
+                                      <label className="mb-1.5 ml-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Combo: a partir de (mídias)</label>
+                                      <input
+                                        type="number"
+                                        min={2}
+                                        value={editGaleriaForm.comboQtd}
+                                        onChange={(e) => setEditGaleriaForm({ ...editGaleriaForm, comboQtd: e.target.value })}
+                                        className="h-11 sm:h-12 w-full rounded-xl border border-white/10 bg-black px-4 text-xs font-bold text-white outline-none focus:border-retratt focus:ring-1 focus:ring-retratt/50 transition-all"
+                                      />
+                                   </div>
+
+                                   <div>
+                                      <label className="mb-1.5 ml-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Desconto do combo (%)</label>
+                                      <input
+                                        inputMode="decimal"
+                                        value={editGaleriaForm.comboPercentual}
+                                        onChange={(e) => setEditGaleriaForm({ ...editGaleriaForm, comboPercentual: e.target.value })}
+                                        className="h-11 sm:h-12 w-full rounded-xl border border-white/10 bg-black px-4 text-xs font-bold text-white outline-none focus:border-retratt focus:ring-1 focus:ring-retratt/50 transition-all"
+                                      />
+                                      <p className="mt-1 ml-1 text-[8px] text-zinc-600">Use 0 para desativar. Máximo de 90%.</p>
+                                   </div>
+
                                    <div className="sm:col-span-2">
                                       <label className="mb-1.5 ml-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Foto de Capa</label>
                                       <label className="flex h-11 sm:h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-white/15 bg-black hover:border-retratt/50 hover:bg-retratt/5 transition-all text-[9px] font-black uppercase tracking-widest text-zinc-400 hover:text-retratt">
@@ -772,10 +658,11 @@ export default function FotografoDashboardPage() {
                                    <div className="sm:col-span-2 flex flex-col sm:flex-row items-stretch sm:items-center justify-between mt-3 sm:mt-4 pt-4 sm:pt-5 border-t border-white/5 gap-3 sm:gap-4">
                                       <button
                                         type="button"
-                                        onClick={() => excluirGaleria(galeria.id)}
-                                        className="h-11 w-full sm:w-auto cursor-pointer flex items-center justify-center gap-2 rounded-xl border border-retratt/20 bg-retratt/5 px-5 text-[10px] font-black uppercase tracking-widest text-retratt hover:bg-retratt hover:text-white transition-colors order-2 sm:order-1"
+                                        onClick={() => void excluirGaleria(galeria.id)}
+                                        disabled={excluindoGaleria}
+                                        className="h-11 w-full sm:w-auto cursor-pointer flex items-center justify-center gap-2 rounded-xl border border-retratt/20 bg-retratt/5 px-5 text-[10px] font-black uppercase tracking-widest text-retratt hover:bg-retratt hover:text-white transition-colors order-2 sm:order-1 disabled:cursor-wait disabled:opacity-50"
                                       >
-                                         <Trash2 size={14} className="shrink-0" /> Excluir Galeria
+                                         {excluindoGaleria ? <Loader2 size={14} className="animate-spin shrink-0" /> : <Trash2 size={14} className="shrink-0" />} {excluindoGaleria ? "Excluindo..." : "Excluir Galeria"}
                                       </button>
 
                                       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 order-1 sm:order-2">

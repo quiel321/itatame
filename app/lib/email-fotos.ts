@@ -1,6 +1,7 @@
 ﻿import "server-only";
 import { Resend } from "resend";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { gerarAcessoPorEmail } from "@/app/lib/fotos-convidado";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -70,7 +71,16 @@ export async function enviarEmailPedidoFotosConfirmado(supabase: SupabaseClient,
   const evento = primeiraRelacao(reservado.foto_eventos);
   const itens = reservado.foto_pedido_itens || [];
   const nome = reservado.comprador_nome || email.split("@")[0] || "Cliente";
-  const linkFotos = `${baseUrl()}/minhas-compras?pedido=${encodeURIComponent(pedidoId)}`;
+  let linkFotos = `${baseUrl()}/minhas-compras?pedido=${encodeURIComponent(pedidoId)}`;
+  try {
+    ({ link: linkFotos } = await gerarAcessoPorEmail(
+      supabase,
+      email,
+      `/fotos/minhas-compras?pedido=${encodeURIComponent(pedidoId)}`,
+    ));
+  } catch (error) {
+    console.error("Link de acesso direto do Retratt não gerado:", error);
+  }
   const remetente = process.env.FOTOS_EMAIL_FROM || "Retratt <suporte@itatame.com.br>";
 
   const { data, error } = await resend.emails.send({
@@ -94,7 +104,7 @@ export async function enviarEmailPedidoFotosConfirmado(supabase: SupabaseClient,
                 <p style="margin:12px 0 0;color:#d4d4d8;font-size:13px">${itens.length} ${itens.length === 1 ? "foto" : "fotos"} · ${escapeHtml(formatarMoeda(reservado.total_centavos))}</p>
               </div>
               <a href="${linkFotos}" style="display:block;padding:15px 18px;border-radius:10px;background:#ff5a1f;color:#fff;text-align:center;text-decoration:none;font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:1.5px">Acessar e baixar minhas fotos</a>
-              <p style="margin:18px 0 0;color:#71717a;font-size:11px;line-height:1.5;text-align:center">Entre com o mesmo e-mail usado na compra. Os downloads ficam protegidos dentro da sua conta.</p>
+              <p style="margin:18px 0 0;color:#71717a;font-size:11px;line-height:1.5;text-align:center">O botão entra direto na sua conta. Se ele expirar, acesse com o mesmo e-mail da compra e peça um código de acesso.</p>
               ${reservado.provedor_payment_id ? `<p style="margin:12px 0 0;color:#52525b;font-size:10px;text-align:center">Pagamento Mercado Pago: ${escapeHtml(reservado.provedor_payment_id)}</p>` : ""}
             </div>
           </div>
@@ -113,4 +123,33 @@ export async function enviarEmailPedidoFotosConfirmado(supabase: SupabaseClient,
   }
 
   return { success: true, data };
+}
+
+export async function enviarEmailAcessoRetratt({ email, codigo, link }: { email: string; codigo: string; link: string }) {
+  if (!process.env.RESEND_API_KEY) throw new Error("Serviço de e-mail indisponível.");
+  const remetente = process.env.FOTOS_EMAIL_FROM || "Retratt <suporte@itatame.com.br>";
+  const { error } = await resend.emails.send({
+    from: remetente,
+    to: [email],
+    subject: `${codigo} é o seu código de acesso Retratt`,
+    html: `
+      <div style="margin:0;padding:0;background:#050505;font-family:Arial,sans-serif;color:#fff">
+        <div style="max-width:620px;margin:0 auto;padding:28px 16px">
+          <div style="overflow:hidden;border:1px solid #27272a;border-radius:16px;background:#0b0b0f">
+            <div style="padding:24px;border-bottom:1px solid #27272a;background:#09090b">
+              <div style="font-size:25px;font-weight:900;letter-spacing:-1px"><span style="color:#ff5a1f">R</span>etratt</div>
+              <p style="margin:10px 0 0;color:#ff5a1f;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:2px">Acesso às suas compras</p>
+            </div>
+            <div style="padding:24px;text-align:center">
+              <p style="margin:0 0 16px;color:#d4d4d8;font-size:15px;line-height:1.6">Use este código para entrar e baixar suas fotos e vídeos:</p>
+              <p style="margin:0 0 22px;font-size:34px;font-weight:900;letter-spacing:10px;color:#fff">${escapeHtml(codigo)}</p>
+              <a href="${escapeHtml(link)}" style="display:block;padding:15px 18px;border-radius:10px;background:#ff5a1f;color:#fff;text-align:center;text-decoration:none;font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:1.5px">Entrar sem digitar o código</a>
+              <p style="margin:18px 0 0;color:#71717a;font-size:11px;line-height:1.5">O código vale por tempo limitado. Se você não pediu este acesso, ignore este e-mail.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    `,
+  });
+  if (error) throw new Error("Não foi possível enviar o e-mail agora. Tente novamente.");
 }

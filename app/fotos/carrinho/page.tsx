@@ -11,6 +11,7 @@ import {
   ArrowLeft,
   CheckCircle2,
   Copy,
+  Download,
   Gift,
   Image as ImageIcon,
   Loader2,
@@ -37,6 +38,14 @@ type CheckoutData = {
   eventoNome: string;
   total: number;
   compradorEmail: string;
+  acesso: string | null;
+};
+
+type ItemPedidoConvidado = {
+  id: string;
+  liberado: boolean;
+  titulo: string | null;
+  mimeType: string | null;
 };
 
 type ResultadoPagamento = {
@@ -71,6 +80,14 @@ function primeiraRelacao(valor: any) {
   return Array.isArray(valor) ? valor[0] : valor;
 }
 
+async function carregarItensConvidado(pedidoId: string, acesso: string): Promise<ItemPedidoConvidado[]> {
+  const params = new URLSearchParams({ pedido_id: pedidoId, acesso });
+  const response = await fetch(`/api/fotos/pedido-convidado?${params.toString()}`, { cache: "no-store" });
+  if (!response.ok) return [];
+  const pedido = await response.json();
+  return Array.isArray(pedido.itens) ? pedido.itens : [];
+}
+
 function carregarSdkMercadoPago() {
   return new Promise<void>((resolve, reject) => {
     if (window.MercadoPago) return resolve();
@@ -99,6 +116,8 @@ export default function FotosCarrinhoPage() {
   const [checkoutData, setCheckoutData] = useState<CheckoutData | null>(null);
   const [resultadoPagamento, setResultadoPagamento] = useState<ResultadoPagamento | null>(null);
   const [mensagemPagamento, setMensagemPagamento] = useState("");
+  const [comprador, setComprador] = useState({ nome: "", email: "" });
+  const [itensLiberados, setItensLiberados] = useState<ItemPedidoConvidado[]>([]);
 
   const subtotal = fotos.reduce((acc, foto) => acc + foto.precoCentavos, 0);
   const comboQtd = fotos[0]?.comboQtd || COMBO_QTD_PADRAO;
@@ -189,23 +208,34 @@ export default function FotosCarrinhoPage() {
     notificarCarrinhoAtualizado(idsRestantes);
   }
 
+  async function cabecalhoAutenticacao(): Promise<Record<string, string>> {
+    if (!userId) return {};
+    const { data: { session } } = await supabase.auth.getSession();
+    return session ? { Authorization: `Bearer ${session.access_token}` } : {};
+  }
+
   async function handleGerarPix() {
-    if (!userId) {
-      router.push("/fotos/login?perfil=comprador&next=/fotos/carrinho");
+    const nome = comprador.nome.trim();
+    const email = comprador.email.trim().toLowerCase();
+    if (!userId && (nome.length < 3 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) {
+      setMensagemPagamento("Informe seu nome e um e-mail válido. É nele que você recebe os arquivos.");
       return;
     }
     setEtapa("preparando");
     setMensagemPagamento("");
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
+    const autenticacao = await cabecalhoAutenticacao();
+    if (userId && !autenticacao.Authorization) {
       router.push("/fotos/login?perfil=comprador&next=/fotos/carrinho");
       return;
     }
 
     const response = await fetch("/api/fotos/pagamento/preparar", {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
-      body: JSON.stringify({ fotoIds: fotos.map((foto) => foto.id) }),
+      headers: { "Content-Type": "application/json", ...autenticacao },
+      body: JSON.stringify({
+        fotoIds: fotos.map((foto) => foto.id),
+        comprador: userId ? undefined : { nome, email },
+      }),
     });
     const data = await response.json();
     if (!response.ok) {
@@ -246,7 +276,6 @@ export default function FotosCarrinhoPage() {
           },
           customization: {
             paymentMethods: {
-              ticket: "all",
               bankTransfer: "all",
               creditCard: "all",
               debitCard: "all",
@@ -259,12 +288,17 @@ export default function FotosCarrinhoPage() {
             onReady: () => setMensagemPagamento(""),
             onSubmit: async ({ formData }: any) => {
               setMensagemPagamento("Processando pagamento...");
-              const { data: { session } } = await supabase.auth.getSession();
-              if (!session) throw new Error("Sessão expirada.");
+              const acesso = checkoutData!.acesso;
+              const headers: Record<string, string> = { "Content-Type": "application/json" };
+              if (!acesso) {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (!session) throw new Error("Sessão expirada.");
+                headers.Authorization = `Bearer ${session.access_token}`;
+              }
               const response = await fetch("/api/fotos/pagamento/processar", {
                 method: "POST",
-                headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
-                body: JSON.stringify({ pedidoId: checkoutData!.pedidoId, formData }),
+                headers,
+                body: JSON.stringify({ pedidoId: checkoutData!.pedidoId, formData, acesso }),
               });
               const resultado = await response.json();
               if (!response.ok) throw new Error(resultado.error || "Pagamento recusado.");
@@ -273,8 +307,9 @@ export default function FotosCarrinhoPage() {
                 localStorage.removeItem(CARRINHO_FOTOS_KEY);
                 notificarCarrinhoAtualizado([]);
                 setEtapa("pago");
-                setMensagemPagamento("Pagamento aprovado. Suas fotos foram liberadas.");
-                window.setTimeout(() => router.push("/fotos/minhas-compras"), 1200);
+                setMensagemPagamento("Pagamento aprovado. Seus arquivos foram liberados.");
+                if (acesso) setItensLiberados(await carregarItensConvidado(checkoutData!.pedidoId, acesso));
+                else window.setTimeout(() => router.push("/fotos/minhas-compras"), 1200);
               } else {
                 setMensagemPagamento("Pagamento gerado. Aguardando confirmação.");
               }
@@ -297,24 +332,31 @@ export default function FotosCarrinhoPage() {
 
   useEffect(() => {
     if (!checkoutData?.pedidoId || !resultadoPagamento?.id || resultadoPagamento.status === "approved") return;
+    const { pedidoId, acesso } = checkoutData;
     const intervalo = window.setInterval(async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
-      const response = await fetch(`/api/fotos/pagamento/status?pedido_id=${checkoutData.pedidoId}`, {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
+      const params = new URLSearchParams({ pedido_id: pedidoId });
+      const headers: Record<string, string> = {};
+      if (acesso) {
+        params.set("acesso", acesso);
+      } else {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+        headers.Authorization = `Bearer ${session.access_token}`;
+      }
+      const response = await fetch(`/api/fotos/pagamento/status?${params.toString()}`, { headers });
       const status = await response.json();
       if (status.status === "pago") {
         window.clearInterval(intervalo);
         localStorage.removeItem(CARRINHO_FOTOS_KEY);
         notificarCarrinhoAtualizado([]);
         setEtapa("pago");
-        setMensagemPagamento("Pagamento confirmado. Suas fotos foram liberadas.");
-        window.setTimeout(() => router.push("/fotos/minhas-compras"), 1200);
+        setMensagemPagamento("Pagamento confirmado. Seus arquivos foram liberados.");
+        if (acesso) setItensLiberados(await carregarItensConvidado(pedidoId, acesso));
+        else window.setTimeout(() => router.push("/fotos/minhas-compras"), 1200);
       }
     }, 5000);
     return () => window.clearInterval(intervalo);
-  }, [checkoutData?.pedidoId, resultadoPagamento?.id, resultadoPagamento?.status, router]);
+  }, [checkoutData, resultadoPagamento?.id, resultadoPagamento?.status, router]);
 
   return (
     <FotosShell>
@@ -442,6 +484,31 @@ export default function FotosCarrinhoPage() {
                     </div>
                   </div>
 
+                  {etapa === "carrinho" && !userId && (
+                    <div className="mb-4 space-y-2.5 rounded-xl border border-white/10 bg-white/[0.03] p-3.5">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-white">Compra rápida, sem cadastro</p>
+                      <p className="text-[10px] leading-relaxed text-zinc-400">Enviamos os arquivos e um código de acesso para este e-mail.</p>
+                      <input
+                        value={comprador.nome}
+                        onChange={(e) => setComprador({ ...comprador, nome: e.target.value })}
+                        autoComplete="name"
+                        placeholder="Seu nome"
+                        className="h-11 w-full cursor-text rounded-lg border border-white/10 bg-black px-3 text-xs font-bold text-white outline-none placeholder:text-zinc-600 focus:border-retratt"
+                      />
+                      <input
+                        value={comprador.email}
+                        onChange={(e) => setComprador({ ...comprador, email: e.target.value })}
+                        type="email"
+                        autoComplete="email"
+                        placeholder="Seu e-mail"
+                        className="h-11 w-full cursor-text rounded-lg border border-white/10 bg-black px-3 text-xs font-bold text-white outline-none placeholder:text-zinc-600 focus:border-retratt"
+                      />
+                      <p className="text-[9px] text-zinc-500">
+                        Já tem conta? <Link href="/fotos/login?perfil=comprador&next=/fotos/carrinho" className="font-bold text-zinc-300 hover:text-retratt">Entrar</Link>
+                      </p>
+                    </div>
+                  )}
+
                   {etapa === "carrinho" && (
                     <button onClick={handleGerarPix} className="flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-retratt text-[10px] font-black uppercase tracking-widest text-white shadow-[0_0_30px_rgba(255,90,31,0.25)] transition-all hover:scale-[1.02] hover:bg-retratt">
                       <QrCode size={16} /> Escolher forma de pagamento
@@ -468,6 +535,27 @@ export default function FotosCarrinhoPage() {
                           {copiado ? "Código copiado" : "Copiar código Pix"}
                         </button>
                       )}
+                    </div>
+                  )}
+
+                  {etapa === "pago" && checkoutData?.acesso && (
+                    <div className="space-y-2">
+                      {itensLiberados.map((item, indice) => (
+                        <a
+                          key={item.id}
+                          href={item.liberado ? `/api/fotos/download/${item.id}?acesso=${encodeURIComponent(checkoutData.acesso!)}` : undefined}
+                          className={`flex items-center justify-between gap-2 rounded-lg border p-2.5 text-[10px] font-black uppercase tracking-widest ${item.liberado ? "cursor-pointer border-retratt/30 bg-retratt/10 text-white hover:bg-retratt hover:text-black" : "border-white/5 bg-zinc-900 text-zinc-600"}`}
+                        >
+                          <span className="flex min-w-0 items-center gap-2">
+                            {item.mimeType?.startsWith("video/") ? <Video size={14} /> : <ImageIcon size={14} />}
+                            <span className="truncate">{item.titulo || `${item.mimeType?.startsWith("video/") ? "Vídeo" : "Foto"} ${indice + 1}`}</span>
+                          </span>
+                          <Download size={14} className="shrink-0" />
+                        </a>
+                      ))}
+                      <p className="pt-2 text-center text-[10px] leading-relaxed text-zinc-400">
+                        Também enviamos o acesso para <strong className="text-white">{checkoutData.compradorEmail}</strong>. Para baixar depois, use <Link href="/fotos/acesso" className="font-bold text-retratt hover:underline">entrar com código</Link>.
+                      </p>
                     </div>
                   )}
 
