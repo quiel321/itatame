@@ -403,15 +403,19 @@ export default function FotosCarrinhoPage() {
               </Link>
             </div>
           ) : (
-            <div className="grid items-start gap-6 md:gap-8 lg:grid-cols-[1fr_380px]">
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="grid items-start gap-6 md:gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
+              <div className="grid min-w-0 grid-cols-2 gap-2.5 sm:gap-4 xl:grid-cols-3">
                 {fotos.map((foto) => (
-                  <div key={foto.id} className="group relative rounded-xl border border-white/5 bg-[#0a0a0e] p-2.5 transition-all duration-300 hover:border-retratt/30 hover:bg-retratt/5 hover:shadow-[0_10px_40px_rgba(255,90,31,0.05)]">
-                    <div className="relative mb-3 aspect-square overflow-hidden rounded-lg bg-zinc-900">
-                      <img src={foto.imagem} alt="Foto" className="h-full w-full object-cover opacity-90 transition-transform duration-700 group-hover:scale-110 group-hover:opacity-100" />
+                  <div key={foto.id} className="group relative min-w-0 rounded-xl border border-white/5 bg-[#0a0a0e] p-1.5 transition-all duration-300 hover:border-retratt/30 hover:bg-retratt/5 sm:p-2.5">
+                    <div className="relative mb-2 aspect-[4/5] overflow-hidden rounded-lg bg-zinc-900 sm:mb-3">
+                      <img src={foto.imagem} alt="Prévia protegida da foto no carrinho" className="h-full w-full object-cover opacity-90" />
                       {foto.mimeType?.startsWith("video/") && <span className="absolute left-2 top-2 z-10 inline-flex items-center gap-1 rounded-full bg-black/80 px-2 py-1 text-[8px] font-black uppercase tracking-wider text-white"><Video size={10}/> Vídeo</span>}
-                      <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 transition-opacity group-hover:opacity-100">
-                        <span className="rotate-[-25deg] text-[10px] font-black uppercase tracking-[0.3em] text-white/60 mix-blend-overlay">Retratt</span>
+                      <div aria-hidden="true" className="pointer-events-none absolute inset-0 grid grid-cols-2 grid-rows-4 overflow-hidden">
+                        {Array.from({ length: 8 }, (_, indice) => (
+                          <span key={indice} className="flex -rotate-[25deg] items-center justify-center whitespace-nowrap text-[9px] font-black uppercase tracking-[0.16em] text-white/65 [text-shadow:0_1px_5px_#000,0_0_2px_#000] sm:text-xs">
+                            RETRATT
+                          </span>
+                        ))}
                       </div>
 
                       {etapa === "carrinho" && (
@@ -421,18 +425,18 @@ export default function FotosCarrinhoPage() {
                       )}
                     </div>
 
-                    <div className="flex items-end justify-between px-1">
+                    <div className="flex flex-wrap items-end justify-between gap-1 px-1">
                       <div className="min-w-0">
                         <p className="mb-1 truncate text-[8px] font-black uppercase tracking-[0.2em] text-retratt">{foto.evento}</p>
                         <p className="truncate text-xs font-bold uppercase tracking-wider text-white">{foto.fotografo}</p>
                       </div>
-                      <p className="text-sm font-black text-white">{formatarPrecoFotos(foto.precoCentavos)}</p>
+                      <p className="shrink-0 text-xs font-black text-white sm:text-sm">{formatarPrecoFotos(foto.precoCentavos)}</p>
                     </div>
                   </div>
                 ))}
               </div>
 
-              <div className="sticky top-28">
+              <div className="lg:sticky lg:top-28">
                 <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0a0a0e]/90 p-5 shadow-2xl backdrop-blur-xl md:p-6">
                   <div className="absolute left-0 top-0 h-1 w-full bg-gradient-to-r from-retratt to-orange-500" />
                   <h3 className="mb-6 flex items-center gap-2 text-sm font-black uppercase tracking-widest text-white">

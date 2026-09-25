@@ -117,6 +117,15 @@ export default function FotosMinhasComprasPage() {
   }
 
   const fotosLiberadas = pedidos.reduce( (total, pedido) => total + (pedido.foto_pedido_itens || []).filter((item) => item.download_liberado).length, 0, );
+  const arquivosLiberados = pedidos.flatMap((pedido) => (pedido.foto_pedido_itens || [])
+    .filter((item) => item.download_liberado)
+    .map((item) => ({ item, foto: Array.isArray(item.foto_arquivos) ? item.foto_arquivos[0] : item.foto_arquivos })));
+
+  useEffect(() => {
+    if (!carregando && window.location.hash === "#downloads") {
+      document.getElementById("downloads")?.scrollIntoView();
+    }
+  }, [carregando]);
 
   async function baixarFoto(itemId: string) {
     setBaixandoItem(itemId);
@@ -210,23 +219,23 @@ export default function FotosMinhasComprasPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-6">
-              <div className="rounded-xl border border-white/5 bg-[#0a0a0e]/80 backdrop-blur-sm p-4 flex flex-col justify-between hover:border-white/10 transition-colors">
-                <div className="flex items-center justify-between mb-2">
+            <div className="mt-4 grid grid-cols-3 gap-2 md:mt-6 md:gap-3">
+              <div className="flex min-w-0 flex-col justify-between rounded-xl border border-white/5 bg-[#0a0a0e]/80 p-2.5 md:p-4">
+                <div className="mb-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                   <p className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-zinc-500"><ShoppingCart size={12} /> Carrinho</p>
                   <p className="text-2xl font-black text-retratt leading-none">{itensCarrinho}</p>
                 </div>
                 <Link href="/fotos/carrinho" className="cursor-pointer mt-1 inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-retratt hover:text-orange-300">Ver Sacola <ArrowRight size={10} /></Link>
               </div>
-              <div className="rounded-xl border border-white/5 bg-[#0a0a0e]/80 backdrop-blur-sm p-4 flex flex-col justify-between hover:border-white/10 transition-colors">
-                <div className="flex items-center justify-between mb-2">
+              <div className="flex min-w-0 flex-col justify-between rounded-xl border border-white/5 bg-[#0a0a0e]/80 p-2.5 md:p-4">
+                <div className="mb-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                   <p className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-zinc-500"><History size={12} /> Pedidos</p>
                   <p className="text-2xl font-black text-white leading-none">{carregando ? "-" : pedidos.length}</p>
                 </div>
                 <p className="mt-1 text-[9px] font-bold uppercase tracking-widest text-zinc-600">Histórico de compras</p>
               </div>
-              <div className="rounded-xl border border-white/5 bg-[#0a0a0e]/80 backdrop-blur-sm p-4 flex flex-col justify-between hover:border-white/10 transition-colors">
-                <div className="flex items-center justify-between mb-2">
+              <div className="flex min-w-0 flex-col justify-between rounded-xl border border-white/5 bg-[#0a0a0e]/80 p-2.5 md:p-4">
+                <div className="mb-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                   <p className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-zinc-500"><Download size={12} /> Liberadas</p>
                   <p className="text-2xl font-black text-retratt leading-none">{fotosLiberadas}</p>
                 </div>
@@ -236,7 +245,7 @@ export default function FotosMinhasComprasPage() {
           </div>
         </section>
 
-        <section className="mx-auto max-w-6xl px-4 py-6 md:px-6">
+        <section className="mx-auto max-w-6xl px-4 py-4 md:px-6 md:py-6">
           {mensagemPagamento && (
             <p className="mb-4 rounded-xl border border-retratt/20 bg-retratt/10 p-3 text-xs font-bold text-orange-200">
               {mensagemPagamento}
@@ -261,8 +270,31 @@ export default function FotosMinhasComprasPage() {
             </div>
           )}
 
+          <div id="downloads" className="mb-4 scroll-mt-20 rounded-xl border border-retratt/20 bg-[#0a0a0e] p-3 md:mb-5 md:p-5">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h2 className="flex items-center gap-2 text-sm font-black uppercase text-white"><Download size={16} className="text-retratt" /> Fotos para baixar</h2>
+              <span className="text-xs font-bold text-retratt">{fotosLiberadas}</span>
+            </div>
+            {arquivosLiberados.length ? (
+              <div className="grid gap-2 md:grid-cols-2">
+                {arquivosLiberados.map(({ item, foto }) => (
+                  <div key={item.id} className="flex min-w-0 items-center gap-2 rounded-lg border border-white/5 bg-[#050505] p-2">
+                    <div className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-md bg-zinc-900">
+                      {foto?.mime_type?.startsWith("video/") ? <Video size={16} className="text-retratt" /> : <ImageIcon size={16} className="text-zinc-600" />}
+                      {foto?.id && <img src={`/api/fotos/arquivo/${foto.id}?tipo=thumb`} alt="" loading="lazy" onError={(event) => { event.currentTarget.style.display = "none"; }} className="absolute inset-0 h-full w-full object-cover" />}
+                    </div>
+                    <span className="min-w-0 flex-1 truncate text-xs font-bold text-white">{foto?.titulo || (foto?.mime_type?.startsWith("video/") ? "Vídeo" : "Foto")}</span>
+                    <button type="button" disabled={baixandoItem === item.id} onClick={() => baixarFoto(item.id)} className="inline-flex h-10 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg bg-retratt px-3 text-[10px] font-black uppercase text-black disabled:cursor-wait disabled:opacity-60">
+                      <Download size={14} /> {baixandoItem === item.id ? "Abrindo..." : "Baixar"}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : <p className="text-xs text-zinc-400">Nenhum arquivo liberado no momento.</p>}
+          </div>
+
           <div className="grid gap-5 lg:grid-cols-[280px_1fr]">
-            <div className="space-y-4">
+            <div className="hidden space-y-4 lg:block">
               <div className="rounded-2xl border border-white/5 bg-[#0a0a0e] p-5 shadow-sm">
                 <h2 className="flex items-center gap-1.5 text-xs font-black uppercase text-white mb-4"><UserRound size={14} className="text-retratt" /> Meu Perfil</h2>
                 <div className="space-y-2">

@@ -106,6 +106,7 @@ async function carregarPedidos(fotografoId: string) {
       .from("foto_pedidos")
       .select("id, evento_id, status, total_centavos, comissao_itatame_centavos, comissao_organizador_centavos, provedor_payment_id, pago_em, created_at, foto_eventos(id, nome), foto_pedido_itens(id)")
       .eq("fotografo_id", fotografoId)
+      .eq("modelo_recebimento", "royalty")
       .in("status", ["pago", "reembolsado"])
       .order("created_at", { ascending: false })
       .range(inicio, inicio + tamanhoPagina - 1);

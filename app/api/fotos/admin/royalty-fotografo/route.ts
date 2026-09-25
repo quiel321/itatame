@@ -4,6 +4,7 @@ import {
   COMISSAO_ITATAME_FOTOS_PERCENTUAL,
   LIMITE_ROYALTY_ORGANIZADOR_PERCENTUAL,
 } from "@/app/lib/fotos-financeiro";
+import { obterRecebedorFotos } from "@/app/lib/fotos-recebedor";
 
 export const runtime = "nodejs";
 
@@ -24,11 +25,12 @@ export async function POST(request: Request) {
     const body = await request.json();
     const eventoId = String(body.eventoId || "");
     const fotografoId = String(body.fotografoId || "");
+    const modeloRecebimento = body.modeloRecebimento === "diaria_organizador" ? "diaria_organizador" : "royalty";
     const percentual = Number(String(body.percentual ?? "0").replace(",", "."));
     if (!eventoId || !fotografoId || !Number.isFinite(percentual)) {
       return NextResponse.json({ error: "Galeria, fotógrafo e percentual são obrigatórios." }, { status: 400 });
     }
-    if (percentual < 0 || percentual > LIMITE_ROYALTY_ORGANIZADOR_PERCENTUAL) {
+    if (modeloRecebimento === "royalty" && (percentual < 0 || percentual > LIMITE_ROYALTY_ORGANIZADOR_PERCENTUAL)) {
       return NextResponse.json(
         {
           error: `O royalty deve ficar entre 0% e ${LIMITE_ROYALTY_ORGANIZADOR_PERCENTUAL}%. A comissão de ${COMISSAO_ITATAME_FOTOS_PERCENTUAL}% do Itatame é preservada em toda venda.`,
@@ -47,13 +49,26 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Você não administra esta galeria." }, { status: 403 });
     }
 
+    if (modeloRecebimento === "diaria_organizador") {
+      const recebedor = await obterRecebedorFotos(supabase, request, {
+        modelo_recebimento: modeloRecebimento,
+        organizador_user_id: auth.user.id,
+      });
+      if (!recebedor?.publicKey) {
+        return NextResponse.json({ error: "Conecte a conta Mercado Pago da Retratt para receber as vendas da opção de diária." }, { status: 409 });
+      }
+    }
+
     const { data: vinculo, error } = await supabase
       .from("foto_evento_fotografos")
-      .update({ comissao_organizador_percentual: percentual })
+      .update({
+        comissao_organizador_percentual: modeloRecebimento === "royalty" ? percentual : 0,
+        modelo_recebimento: modeloRecebimento,
+      })
       .eq("evento_id", eventoId)
       .eq("fotografo_id", fotografoId)
       .eq("status", "ativo")
-      .select("evento_id, fotografo_id, comissao_organizador_percentual")
+      .select("evento_id, fotografo_id, comissao_organizador_percentual, modelo_recebimento")
       .maybeSingle();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     if (!vinculo) return NextResponse.json({ error: "Fotógrafo não está credenciado nesta galeria." }, { status: 404 });

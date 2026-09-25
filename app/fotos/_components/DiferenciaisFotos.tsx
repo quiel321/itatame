@@ -37,7 +37,7 @@ const conteudo = {
     itens: [
       { icon: Trophy, titulo: "Integração opcional com iTatame Eventos", texto: "Organizadores que usam o sistema de gestão podem transformar seus eventos em galerias oficiais sem refazer o cadastro." },
       { icon: Users, titulo: "Equipe credenciada", texto: "Cada fotógrafo publica e administra somente os próprios arquivos, preservando o trabalho dos demais profissionais." },
-      { icon: CreditCard, titulo: "Royalty por fotógrafo", texto: "Defina de 0% a 15% para cada credenciado. O percentual fica registrado em cada nova venda, separado da taxa da Retratt." },
+      { icon: CreditCard, titulo: "Royalty ou diária", texto: "Defina de 0% a 50% de royalty para cada credenciado ou receba as vendas na sua conta ao contratar o fotógrafo por diária." },
       { icon: ShieldCheck, titulo: "Rastreabilidade financeira", texto: "Pedidos, fotos vendidas e royalties são registrados para acompanhamento e repasse após a liberação financeira." },
       { icon: BrainCircuit, titulo: "IA que reduz a procura", texto: "A pessoa usa uma selfie, recebe resultados ordenados por semelhança e pode selecionar várias fotos direto para o carrinho." },
       { icon: Sparkles, titulo: "Página pública profissional", texto: "Capa, perfil, eventos publicados e compartilhamento em uma apresentação limpa, rápida e focada em conversão." },
@@ -77,7 +77,7 @@ export default function DiferenciaisFotos({ publico }: { publico: keyof typeof c
         <div className="mt-8 flex flex-col items-center justify-between gap-5 rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-center sm:flex-row sm:text-left md:p-7">
           <div>
             <p className="text-sm font-black uppercase text-white md:text-base">Tecnologia de ponta com cobrança transparente.</p>
-            <p className="mt-1 text-[10px] font-medium text-zinc-500 md:text-xs">9,5% por venda, sem mensalidade. Consulte as condições e exemplos de distribuição.</p>
+            <p className="mt-1 text-[10px] font-medium text-zinc-500 md:text-xs">5% por venda, sem mensalidade. A tarifa do Mercado Pago é descontada da conta do fotógrafo.</p>
           </div>
           <Link href="/fotos/precos" className={`inline-flex h-11 w-full shrink-0 items-center justify-center gap-2 rounded-xl px-6 text-[9px] font-black uppercase tracking-widest text-black transition-colors sm:w-auto ${corBotao}`}>
             Ver preços e condições <ArrowRight size={14} />

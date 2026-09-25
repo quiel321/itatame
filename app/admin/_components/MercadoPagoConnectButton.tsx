@@ -6,7 +6,7 @@ import { supabase } from "@/app/lib/supabase";
 type Props = {
   conectado: boolean;
   returnTo?: string;
-  perfil?: "organizador" | "fotografo";
+  perfil?: "organizador" | "fotografo" | "organizador_fotos";
   className?: string;
   compacto?: boolean;
 };

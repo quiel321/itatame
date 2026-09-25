@@ -43,20 +43,24 @@ const tecnologia = [
 
 const perguntas = [
   {
-    pergunta: "A Retratt recebe 9,5% em qualquer tipo de galeria?",
-    resposta: "Sim. A comissão de 9,5% é aplicada a toda venda futura, tanto em galerias freelancer quanto em galerias oficiais de organizadores.",
+    pergunta: "A Retratt recebe 5% em qualquer tipo de galeria?",
+    resposta: "Sim. A comissão de 5% é aplicada às novas vendas, tanto em galerias freelancer quanto em galerias oficiais de organizadores.",
   },
   {
     pergunta: "O royalty do organizador substitui a taxa da Retratt?",
-    resposta: "Não. O royalty é adicional e pode variar de 0% a 15% por fotógrafo credenciado. A comissão de 9,5% da Retratt é preservada em todas as vendas.",
+    resposta: "Não. O royalty é adicional e pode variar de 0% a 50% por fotógrafo credenciado. A comissão de 5% da Retratt é preservada em todas as novas vendas.",
   },
   {
     pergunta: "Existe mensalidade ou cobrança por upload?",
     resposta: "No modelo atual não há mensalidade nem cobrança individual por upload. Armazenamento e processamento seguem uma política de uso justo e viabilidade da galeria.",
   },
   {
-    pergunta: "A tarifa do meio de pagamento está dentro dos 9,5%?",
-    resposta: "Não. Os 9,5% correspondem ao serviço da Retratt. Tarifas financeiras podem ser descontadas separadamente conforme o método escolhido e o prazo de recebimento disponibilizado pela instituição de pagamento.",
+    pergunta: "Quem paga a tarifa do meio de pagamento?",
+    resposta: "Na venda com royalty, o fotógrafo é o vendedor na conta conectada ao Mercado Pago. A tarifa do pagamento é descontada do valor recebido por ele, conforme o método e o prazo de recebimento.",
+  },
+  {
+    pergunta: "E quando o fotógrafo recebe uma diária?",
+    resposta: "O organizador pode escolher receber as vendas na própria conta Mercado Pago conectada à Retratt. Nesse modelo, a Retratt retém 5% e o organizador recebe 95% antes da tarifa do Mercado Pago. A diária do fotógrafo é acertada fora da plataforma.",
   },
   {
     pergunta: "Quando o organizador recebe o royalty?",
@@ -86,7 +90,7 @@ export default function FotosPrecosPage() {
               Você só paga quando <span className="text-retratt">vende.</span>
             </h1>
             <p className="mx-auto mt-5 max-w-2xl text-xs font-medium leading-relaxed text-zinc-400 md:text-base">
-              Um único modelo para começar: 9,5% sobre cada venda, sem mensalidade. Busca facial, proteção, armazenamento, checkout e entrega já fazem parte da operação.
+              A Retratt recebe 5% sobre cada nova venda, sem mensalidade. Busca facial, proteção, armazenamento, checkout e entrega já fazem parte da operação.
             </p>
             <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
               <Link href="/fotos/cadastro?perfil=fotografo" className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-retratt px-7 text-[10px] font-black uppercase tracking-widest text-white transition-colors hover:bg-retratt">
@@ -99,7 +103,7 @@ export default function FotosPrecosPage() {
 
             <div className="mt-12 grid overflow-hidden rounded-2xl border border-white/10 bg-black/50 sm:grid-cols-3">
               {[
-                ["9,5%", "por venda"],
+                ["5%", "por venda"],
                 ["R$ 0", "de mensalidade"],
                 ["R$ 0", "por upload no modelo atual"],
               ].map(([valor, rotulo], index) => (
@@ -123,7 +127,7 @@ export default function FotosPrecosPage() {
                 <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-retratt/20 bg-retratt/10 text-retratt"><Camera size={22} /></div>
               </div>
               <div className="mt-8 flex items-end gap-2">
-                <span className="text-6xl font-black tracking-tighter text-retratt md:text-7xl">9,5%</span>
+                <span className="text-6xl font-black tracking-tighter text-retratt md:text-7xl">5%</span>
                 <span className="mb-2 text-[9px] font-black uppercase tracking-widest text-zinc-500">por venda</span>
               </div>
               <p className="mt-5 text-xs font-medium leading-relaxed text-zinc-400 md:text-sm">Crie a sua galeria, escolha o preço e publique. Se não houver venda, não existe comissão da Retratt.</p>
@@ -131,8 +135,8 @@ export default function FotosPrecosPage() {
               <div className="mt-7 rounded-2xl border border-white/10 bg-black/60 p-5">
                 <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Exemplo — R$ 100 em vendas</p>
                 <div className="mt-4 space-y-3 text-xs">
-                  <div className="flex justify-between gap-3 text-zinc-400"><span>Retratt (9,5%)</span><Dinheiro>R$ 9,50</Dinheiro></div>
-                  <div className="flex justify-between gap-3 text-zinc-400"><span>Fotógrafo, antes da tarifa de pagamento</span><Dinheiro>R$ 90,50</Dinheiro></div>
+                  <div className="flex justify-between gap-3 text-zinc-400"><span>Retratt (5%)</span><Dinheiro>R$ 5,00</Dinheiro></div>
+                  <div className="flex justify-between gap-3 text-zinc-400"><span>Fotógrafo, antes da tarifa de pagamento</span><Dinheiro>R$ 95,00</Dinheiro></div>
                 </div>
               </div>
             </article>
@@ -159,7 +163,7 @@ export default function FotosPrecosPage() {
             <div className="mx-auto max-w-3xl text-center">
               <span className="text-[9px] font-black uppercase tracking-[0.22em] text-retratt">Eventos oficiais e equipes credenciadas</span>
               <h2 className="mt-3 text-2xl font-black uppercase tracking-tight md:text-5xl">O organizador ganha sem esconder o custo do fotógrafo.</h2>
-              <p className="mx-auto mt-4 max-w-2xl text-xs font-medium leading-relaxed text-zinc-400 md:text-sm">A comissão da Retratt permanece em 9,5%. O organizador pode definir um royalty adicional de 0% a 15% para cada fotógrafo credenciado.</p>
+              <p className="mx-auto mt-4 max-w-2xl text-xs font-medium leading-relaxed text-zinc-400 md:text-sm">A comissão da Retratt é de 5%. O organizador pode definir um royalty adicional de 0% a 50% para cada fotógrafo credenciado.</p>
             </div>
 
             <div className="mt-10 grid gap-5 lg:grid-cols-2">
@@ -167,9 +171,9 @@ export default function FotosPrecosPage() {
                 <div className="flex items-center gap-3"><Users className="text-retratt" size={22} /><h3 className="text-lg font-black uppercase md:text-2xl">Como é distribuído</h3></div>
                 <div className="mt-6 space-y-4">
                   {[
-                    ["Retratt", "9,5% fixos"],
-                    ["Organizador", "0% a 15%"],
-                    ["Fotógrafo", "90,5% menos o royalty"],
+                    ["Retratt", "5% fixos"],
+                    ["Organizador", "0% a 50%"],
+                    ["Fotógrafo", "95% menos o royalty e a tarifa do pagamento"],
                   ].map(([nome, valor]) => (
                     <div key={nome} className="flex items-center justify-between gap-4 rounded-xl border border-white/5 bg-black/50 p-4">
                       <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">{nome}</span>
@@ -182,10 +186,10 @@ export default function FotosPrecosPage() {
               <article className="rounded-3xl border border-white/10 bg-black/60 p-6 md:p-8">
                 <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Exemplo — R$ 100 em vendas e royalty de 5%</p>
                 <div className="mt-6 space-y-4 text-xs">
-                  <div className="flex justify-between gap-3 text-zinc-400"><span>Retratt</span><Dinheiro>R$ 9,50</Dinheiro></div>
+                  <div className="flex justify-between gap-3 text-zinc-400"><span>Retratt</span><Dinheiro>R$ 5,00</Dinheiro></div>
                   <div className="flex justify-between gap-3 text-zinc-400"><span>Royalty do organizador</span><Dinheiro>R$ 5,00</Dinheiro></div>
                   <div className="h-px bg-white/10" />
-                  <div className="flex justify-between gap-3 text-zinc-300"><span>Fotógrafo, antes da tarifa de pagamento</span><span className="text-lg font-black text-emerald-400">R$ 85,50</span></div>
+                  <div className="flex justify-between gap-3 text-zinc-300"><span>Fotógrafo, antes da tarifa de pagamento</span><span className="text-lg font-black text-emerald-400">R$ 90,00</span></div>
                 </div>
                 <p className="mt-6 rounded-xl border border-retratt/20 bg-retratt/5 p-4 text-[10px] font-medium leading-relaxed text-orange-100/70">O royalty é registrado quando a venda é paga e fica disponível para repasse após a liberação financeira. Ele não é prometido como depósito instantâneo em uma terceira conta.</p>
               </article>
@@ -220,7 +224,7 @@ export default function FotosPrecosPage() {
             </div>
             <div className="mt-10 grid gap-4 md:grid-cols-2">
               {[
-                { icon: CreditCard, titulo: "Meio de pagamento", texto: "Pix, cartão, boleto e demais opções dependem da disponibilidade e das regras da conta conectada à instituição de pagamento. As tarifas financeiras são separadas dos 9,5%." },
+                { icon: CreditCard, titulo: "Meio de pagamento", texto: "Pix, cartão, boleto e demais opções dependem da conta conectada ao Mercado Pago. Na venda com royalty, a tarifa financeira é descontada da conta do fotógrafo, além dos 5% da Retratt." },
                 { icon: ReceiptText, titulo: "Responsabilidade fiscal", texto: "Fotógrafos e organizadores continuam responsáveis por suas obrigações fiscais, documentos e emissão de notas conforme o enquadramento de cada operação." },
                 { icon: ShieldCheck, titulo: "Pedidos e estornos", texto: "Fotos vinculadas a pedidos ficam protegidas contra exclusão. Cancelamentos, contestações e estornos podem ajustar os valores das partes envolvidas." },
                 { icon: Images, titulo: "Uso justo", texto: "O upload não tem cobrança individual no modelo atual. Galerias podem ser revisadas quando armazenamento e processamento forem incompatíveis com sua atividade comercial." },

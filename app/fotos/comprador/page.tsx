@@ -73,9 +73,9 @@ export default function FotosCompradorPage() {
 
         {/* 🚀 HERO SECTION (Cabeçalho Premium Red - Tamanhos Padronizados) */}
         <section className="border-b border-white/5 bg-[radial-gradient(circle_at_15%_0%,rgba(255,90,31,0.12),transparent_40%),linear-gradient(180deg,#101014,#050505)] w-full">
-          <div className="mx-auto max-w-6xl px-4 py-6 md:px-6 md:py-8">
+          <div className="mx-auto max-w-6xl px-4 py-5 md:px-6 md:py-8">
 
-            <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between mb-4">
+            <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
               <div className="min-w-0">
                 <p className="inline-flex items-center gap-1.5 rounded-md border border-retratt/20 bg-retratt/10 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.2em] text-retratt mb-2 shadow-sm">
                   <UserRound size={12} /> Painel do Cliente
@@ -83,9 +83,7 @@ export default function FotosCompradorPage() {
                 <h1 className="text-2xl font-black uppercase tracking-tight md:text-4xl drop-shadow-sm truncate">
                   {carregando ? "Carregando..." : `Olá, ${primeiroNome}!`}
                 </h1>
-                <p className="mt-1 text-xs text-zinc-400 font-medium max-w-md">
-                  Acompanhe suas compras, pague pedidos pendentes e baixe suas fotos.
-                </p>
+                <p className="mt-1 max-w-md text-xs font-medium text-zinc-400">Suas compras e fotos em um só lugar.</p>
               </div>
 
               {/* Botões Menores e Alinhados para Mobile/Desktop */}
@@ -100,31 +98,31 @@ export default function FotosCompradorPage() {
             </div>
 
             {/* 📊 GRID DE RESUMO (Glassmorphism Padronizado) */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6">
+            <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-4 md:gap-3">
 
-              <div className="rounded-xl border border-retratt/20 bg-retratt/5 backdrop-blur-sm p-4 flex flex-col justify-between hover:border-retratt/30 transition-colors">
-                <div className="flex items-center justify-between mb-2">
+              <Link href="/fotos/carrinho" className="flex items-center justify-between rounded-xl border border-retratt/20 bg-retratt/5 p-3 transition-colors hover:bg-retratt/10 md:block md:p-4">
+                <div className="flex items-center justify-between md:mb-2">
                   <p className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-zinc-400"><ShoppingCart size={12} className="text-retratt" /> Carrinho</p>
                 </div>
                 <p className="text-2xl font-black text-retratt leading-none">{carregando ? "-" : itensCarrinho}</p>
-              </div>
+              </Link>
 
-              <div className="rounded-xl border border-white/5 bg-[#0a0a0e]/80 backdrop-blur-sm p-4 flex flex-col justify-between hover:border-white/10 transition-colors">
-                <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center justify-between rounded-xl border border-white/5 bg-[#0a0a0e]/80 p-3 md:block md:p-4">
+                <div className="flex items-center justify-between md:mb-2">
                   <p className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-zinc-500"><History size={12} /> Pedidos</p>
                 </div>
                 <p className="text-2xl font-black text-white leading-none">{carregando ? "-" : resumo.pedidos}</p>
               </div>
 
-              <div className="rounded-xl border border-white/5 bg-[#0a0a0e]/80 backdrop-blur-sm p-4 flex flex-col justify-between hover:border-white/10 transition-colors">
-                <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center justify-between rounded-xl border border-white/5 bg-[#0a0a0e]/80 p-3 md:block md:p-4">
+                <div className="flex items-center justify-between md:mb-2">
                   <p className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-zinc-500"><AlertCircle size={12} className="text-retratt" /> Aguardando</p>
                 </div>
                 <p className="text-2xl font-black text-retratt leading-none">{carregando ? "-" : resumo.pendentes}</p>
               </div>
 
-              <div className="rounded-xl border border-white/5 bg-[#0a0a0e]/80 backdrop-blur-sm p-4 flex flex-col justify-between hover:border-white/10 transition-colors">
-                <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center justify-between rounded-xl border border-white/5 bg-[#0a0a0e]/80 p-3 md:block md:p-4">
+                <div className="flex items-center justify-between md:mb-2">
                   <p className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-zinc-500"><Download size={12} className="text-retratt" /> Liberadas</p>
                 </div>
                 <p className="text-2xl font-black text-retratt leading-none">{carregando ? "-" : resumo.fotosLiberadas}</p>
@@ -134,32 +132,22 @@ export default function FotosCompradorPage() {
           </div>
         </section>
 
-        <section className="mx-auto max-w-6xl px-4 py-6 md:px-6 space-y-5">
+        <section className="mx-auto max-w-6xl space-y-3 px-4 py-4 md:space-y-5 md:px-6 md:py-6">
 
           {/* ⚡ ATALHOS RÁPIDOS */}
-          <div className="grid gap-3 sm:gap-4 md:grid-cols-2">
+          <div className="grid gap-2 sm:gap-4 md:grid-cols-2">
 
-            <Link href="/fotos/minhas-compras" className="group flex flex-col cursor-pointer rounded-2xl border border-white/5 bg-[#0a0a0e] p-5 transition-all hover:border-white/10 hover:bg-[#111] shadow-sm">
-              <div className="w-10 h-10 rounded-lg bg-white/5 flex items-center justify-center text-white mb-4 border border-white/10 group-hover:scale-110 transition-transform">
-                <History size={16} />
-              </div>
-              <h2 className="text-base font-black uppercase tracking-tight text-white mb-1.5">Histórico de Compras</h2>
-              <p className="text-[11px] leading-relaxed text-zinc-400 mb-5 flex-1">Acesse seus pedidos anteriores, confirme pagamentos pendentes e faça o download dos arquivos originais comprados.</p>
-              <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-zinc-500 group-hover:text-white transition-colors mt-auto">
-                Ver meus pedidos <ArrowRight size={12} className="transition-transform group-hover:translate-x-1" />
-              </div>
-            </Link>
+             <Link href="/fotos/minhas-compras#downloads" className="group flex min-h-16 cursor-pointer items-center gap-3 rounded-xl border border-retratt/30 bg-retratt/10 p-3 transition-colors hover:bg-retratt/15 md:p-4">
+               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-retratt/15 text-retratt"><Download size={18} /></div>
+               <div className="min-w-0 flex-1"><h2 className="text-sm font-black uppercase text-white">Baixar minhas fotos</h2><p className="text-[11px] text-zinc-400">{resumo.fotosLiberadas} {resumo.fotosLiberadas === 1 ? "arquivo liberado" : "arquivos liberados"}</p></div>
+               <ArrowRight size={16} className="shrink-0 text-retratt" />
+             </Link>
 
-            <Link href="/fotos/carrinho" className="group flex flex-col cursor-pointer rounded-2xl border border-retratt/20 bg-retratt/[0.02] p-5 transition-all hover:border-retratt/30 hover:bg-retratt/[0.04] shadow-sm">
-              <div className="w-10 h-10 rounded-lg bg-retratt/10 flex items-center justify-center text-retratt mb-4 border border-retratt/20 group-hover:scale-110 transition-transform">
-                <ShoppingCart size={16} />
-              </div>
-              <h2 className="text-base font-black uppercase tracking-tight text-white mb-1.5">Seu Carrinho</h2>
-              <p className="text-[11px] leading-relaxed text-zinc-400 mb-5 flex-1">Revise as fotos que você separou, aproveite os descontos de combo e finalize sua nova compra com segurança.</p>
-              <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-retratt group-hover:text-retratt transition-colors mt-auto">
-                Abrir sacola <ArrowRight size={12} className="transition-transform group-hover:translate-x-1" />
-              </div>
-            </Link>
+             <Link href="/fotos/minhas-compras" className="group flex min-h-16 cursor-pointer items-center gap-3 rounded-xl border border-white/10 bg-[#0a0a0e] p-3 transition-colors hover:bg-[#111] md:p-4">
+               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/5 text-white"><History size={18} /></div>
+               <div className="min-w-0 flex-1"><h2 className="text-sm font-black uppercase text-white">Pedidos e pagamentos</h2><p className="text-[11px] text-zinc-400">Acompanhe seu histórico</p></div>
+               <ArrowRight size={16} className="shrink-0 text-zinc-500" />
+             </Link>
 
           </div>
 

@@ -325,7 +325,7 @@ export default function SuperAdminFotosPage() {
               </div>
 
               <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-[9px] leading-relaxed text-amber-100/70">
-                O valor total será devolvido pela conta conectada do fotógrafo. Novos downloads serão bloqueados e qualquer royalty do organizador será estornado. Arquivos já baixados no dispositivo do comprador não podem ser recolhidos.
+                O valor total será devolvido pela conta que recebeu a venda: fotógrafo no modelo de royalty ou organizador no modelo de diária. Novos downloads serão bloqueados e qualquer royalty do organizador será estornado. Arquivos já baixados no dispositivo do comprador não podem ser recolhidos.
               </div>
 
               {feedback?.tipo === "erro" && <p className="rounded-xl border border-red-500/20 bg-red-500/5 p-3 text-[9px] font-bold text-red-300">{feedback.texto}</p>}

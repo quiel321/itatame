@@ -14,7 +14,7 @@ type FotografoPerfil = { id: string; nome: string | null; email: string | null; 
 type Totais = { fotos: number; albuns: number; eventos: number; vendas: number };
 type PerfilForm = { nome: string; telefone: string; documento: string; cep: string; endereco: string; cidade: string; estado: string; bio: string; };
 
-type GaleriaFreelancer = { id: string; nome: string; cidade?: string | null; estado?: string | null; data_evento?: string | null; preco_padrao_centavos?: number | null; capa_url?: string | null; comissao_organizador_percentual?: number | null; created_by?: string | null; desconto_combo_qtd?: number | null; desconto_combo_percentual?: number | null; };
+type GaleriaFreelancer = { id: string; nome: string; cidade?: string | null; estado?: string | null; data_evento?: string | null; preco_padrao_centavos?: number | null; capa_url?: string | null; comissao_organizador_percentual?: number | null; modelo_recebimento?: "royalty" | "diaria_organizador"; created_by?: string | null; desconto_combo_qtd?: number | null; desconto_combo_percentual?: number | null; };
 
 function perfilParaForm(perfil: FotografoPerfil | null, email: string | null): PerfilForm {
   return { nome: perfil?.nome || email?.split("@")[0] || "", telefone: perfil?.telefone || "", documento: perfil?.documento || "", cep: perfil?.cep || "", endereco: perfil?.endereco || "", cidade: perfil?.cidade || "", estado: perfil?.estado || "", bio: perfil?.bio || "", };
@@ -117,7 +117,7 @@ export default function FotografoDashboardPage() {
           supabase.from("foto_albuns").select("id", { count: "exact", head: true }).eq("fotografo_id", perfilAtual.id),
           supabase.from("foto_pedidos").select("id", { count: "exact", head: true }).eq("fotografo_id", perfilAtual.id).eq("status", "pago"),
           supabase.from("foto_eventos").select("id, nome, cidade, estado, data_evento, preco_padrao_centavos, capa_url, desconto_combo_qtd, desconto_combo_percentual").eq("created_by", user.id).order("created_at", { ascending: false }),
-          supabase.from("foto_evento_fotografos").select("evento_id, comissao_organizador_percentual").eq("fotografo_id", perfilAtual.id).eq("status", "ativo")
+           supabase.from("foto_evento_fotografos").select("evento_id, comissao_organizador_percentual, modelo_recebimento").eq("fotografo_id", perfilAtual.id).eq("status", "ativo")
         ]);
 
         setMinhasGalerias(galeriasDb.data || []);
@@ -132,17 +132,22 @@ export default function FotografoDashboardPage() {
               .in("id", eventosPermitidos)
               .order("created_at", { ascending: false });
 
-           const royaltyPorEvento = new Map(
+            const royaltyPorEvento = new Map(
              (credenciais.data || []).map((item) => [
                String(item.evento_id),
                Number(item.comissao_organizador_percentual || 0),
              ] as const),
-           );
+            );
+            const modeloPorEvento = new Map((credenciais.data || []).map((item) => [
+              String(item.evento_id),
+              item.modelo_recebimento === "diaria_organizador" ? "diaria_organizador" : "royalty",
+            ] as const));
            oficiaisDb = (data || [])
              .filter((galeria) => galeria.created_by !== user.id)
              .map((galeria) => ({
                ...galeria,
-               comissao_organizador_percentual: royaltyPorEvento.get(String(galeria.id)) || 0,
+                comissao_organizador_percentual: royaltyPorEvento.get(String(galeria.id)) || 0,
+                modelo_recebimento: modeloPorEvento.get(String(galeria.id)) || "royalty",
              }));
         }
 
@@ -474,11 +479,12 @@ export default function FotografoDashboardPage() {
                                          <span className="flex min-w-0 items-center gap-1"><MapPin size={10} className="shrink-0"/> <span className="truncate">{galeria.cidade || "Local"} / {galeria.estado || "UF"}</span></span>
                                       </div>
                                       <div className="mt-3 flex flex-wrap gap-1.5 text-[8px] font-black uppercase tracking-wider">
-                                        <span className="rounded-full bg-retratt/10 px-2 py-1 text-retratt">Retratt 9,5%</span>
-                                        <span className="rounded-full bg-amber-400/10 px-2 py-1 text-amber-300">Organizador {Number(galeria.comissao_organizador_percentual || 0).toLocaleString("pt-BR")}%</span>
-                                        <span className="rounded-full bg-emerald-400/10 px-2 py-1 text-emerald-300">Você {(90.5 - Number(galeria.comissao_organizador_percentual || 0)).toLocaleString("pt-BR")}%*</span>
+                                        <span className="rounded-full bg-retratt/10 px-2 py-1 text-retratt">Retratt 5%</span>
+                                         {galeria.modelo_recebimento === "diaria_organizador" ? (
+                                           <span className="rounded-full bg-amber-400/10 px-2 py-1 text-amber-300">Diária: organizador recebe as vendas</span>
+                                         ) : <><span className="rounded-full bg-amber-400/10 px-2 py-1 text-amber-300">Organizador {Number(galeria.comissao_organizador_percentual || 0).toLocaleString("pt-BR")}%</span><span className="rounded-full bg-emerald-400/10 px-2 py-1 text-emerald-300">Você {(95 - Number(galeria.comissao_organizador_percentual || 0)).toLocaleString("pt-BR")}%*</span></>}
                                       </div>
-                                      <p className="mt-2 text-[8px] leading-relaxed text-zinc-600">*Antes da tarifa do meio de pagamento.</p>
+                                       <p className="mt-2 text-[8px] leading-relaxed text-zinc-600">{galeria.modelo_recebimento === "diaria_organizador" ? "Sua diária é combinada com o organizador fora da Retratt. A tarifa do pagamento sai da conta dele." : "*Antes da tarifa do meio de pagamento, descontada da sua conta."}</p>
                                   </div>
                             </div>
 
@@ -527,7 +533,7 @@ export default function FotografoDashboardPage() {
                                      </div>
                                       <div className="mt-3 flex flex-wrap gap-1.5 text-[8px] font-black uppercase tracking-wider">
                                         <span className="rounded-full bg-retratt/10 px-2 py-1 text-retratt">R$ {((galeria.preco_padrao_centavos || 0) / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 })} por foto</span>
-                                        <span className="rounded-full bg-emerald-400/10 px-2 py-1 text-emerald-300">Você recebe 90,5%*</span>
+                                        <span className="rounded-full bg-emerald-400/10 px-2 py-1 text-emerald-300">Você recebe 95%*</span>
                                       </div>
                                       <p className="mt-2 text-[8px] leading-relaxed text-zinc-600">*Antes da tarifa do meio de pagamento.</p>
                                   </div>
@@ -713,7 +719,7 @@ export default function FotografoDashboardPage() {
                   {mostrarCriarGaleria && (
                     <div className="px-5 pb-5 md:px-8 md:pb-8 border-t border-white/5 pt-5 sm:pt-6 animate-in slide-in-from-top-4 fade-in duration-300 bg-black/20">
                        <p className="mb-2 text-[10px] leading-relaxed text-zinc-400">Use quando o trabalho não estiver vinculado a um organizador. A galeria e o álbum Geral ficarão sob sua conta.</p>
-                       <p className="mb-6 rounded-xl border border-retratt/20 bg-retratt/5 p-3 text-[9px] font-bold leading-relaxed text-orange-100">Em cada venda, o Retratt retém 9,5%. Você recebe 90,5% antes da tarifa do meio de pagamento.</p>
+                       <p className="mb-6 rounded-xl border border-retratt/20 bg-retratt/5 p-3 text-[9px] font-bold leading-relaxed text-orange-100">Em cada venda, a Retratt retém 5%. Você recebe 95% menos o royalty do organizador e a tarifa do Mercado Pago, descontada da sua conta.</p>
 
                        <div className="grid gap-3 sm:grid-cols-2">
                          <div className="sm:col-span-2">

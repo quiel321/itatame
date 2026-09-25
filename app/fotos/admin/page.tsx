@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
 import { comprimirAvatar, comprimirCapa } from "@/app/lib/comprimir-avatar";
 import FotosShell from "../_components/FotosShell";
+import MercadoPagoConnectButton from "@/app/admin/_components/MercadoPagoConnectButton";
 import { ArrowRight, BarChart3, Camera, CheckCircle2, FolderPlus, ImagePlus, Pencil, Store, Trophy, Wallet, LogOut, Check, AlertCircle, ShieldCheck, UploadCloud, Loader2, X, Trash2, Plus } from "lucide-react";
 import { formatarDocumento } from '@/app/lib/formatar-documento';
 import { formatarTelefone } from '@/app/lib/formatar-telefone';
@@ -24,6 +25,7 @@ type FotografoCredenciado = {
   email: string | null;
   foto_url: string | null;
   comissao_organizador_percentual: number;
+  modelo_recebimento: "royalty" | "diaria_organizador";
 };
 
 function chaveRoyalty(eventoId: string, fotografoId: string) {
@@ -68,8 +70,12 @@ export default function FotosAdminPage() {
   const [vendasPorGaleria, setVendasPorGaleria] = useState<Record<string, number>>({});
   const [royaltiesPorGaleria, setRoyaltiesPorGaleria] = useState<Record<string, number>>({});
   const [royaltiesTotalCentavos, setRoyaltiesTotalCentavos] = useState(0);
+  const [receitaDiretaTotalCentavos, setReceitaDiretaTotalCentavos] = useState(0);
+  const [receitaDiretaPorGaleria, setReceitaDiretaPorGaleria] = useState<Record<string, number>>({});
+  const [mercadoPagoOrganizadorConectado, setMercadoPagoOrganizadorConectado] = useState(false);
   const [fotografosPorGaleria, setFotografosPorGaleria] = useState<Record<string, FotografoCredenciado[]>>({});
   const [royaltyForm, setRoyaltyForm] = useState<Record<string, string>>({});
+  const [modeloForm, setModeloForm] = useState<Record<string, "royalty" | "diaria_organizador">>({});
   const [salvandoRoyalty, setSalvandoRoyalty] = useState<string | null>(null);
 
   const [mensagem, setMensagem] = useState("");
@@ -162,9 +168,15 @@ export default function FotosAdminPage() {
             const resumo = await resumoResponse.json();
             setVendasPorGaleria(resumo.vendasPorGaleria || {});
             setRoyaltiesPorGaleria(resumo.royaltiesPorGaleria || {});
-            setRoyaltiesTotalCentavos(Number(resumo.royaltiesTotalCentavos || 0));
+             setRoyaltiesTotalCentavos(Number(resumo.royaltiesTotalCentavos || 0));
+             setReceitaDiretaTotalCentavos(Number(resumo.receitaDiretaTotalCentavos || 0));
+             setReceitaDiretaPorGaleria(resumo.receitaDiretaPorGaleria || {});
+             setMercadoPagoOrganizadorConectado(Boolean(resumo.mercadoPagoOrganizadorConectado));
             const fotografosResumo = (resumo.fotografosPorGaleria || {}) as Record<string, FotografoCredenciado[]>;
-            setFotografosPorGaleria(fotografosResumo);
+             setFotografosPorGaleria(fotografosResumo);
+             setModeloForm(Object.fromEntries(Object.entries(fotografosResumo).flatMap(([eventoId, fotografos]) =>
+               fotografos.map((fotografo) => [chaveRoyalty(eventoId, fotografo.id), fotografo.modelo_recebimento || "royalty"]),
+             )));
             setRoyaltyForm(Object.fromEntries(
               Object.entries(fotografosResumo).flatMap(([eventoId, fotografos]) =>
                 fotografos.map((fotografo) => [
@@ -359,8 +371,9 @@ export default function FotosAdminPage() {
 
   async function salvarRoyaltyFotografo(eventoId: string, fotografoId: string) {
     const chave = chaveRoyalty(eventoId, fotografoId);
+    const modeloRecebimento = modeloForm[chave] || "royalty";
     const percentual = Number(String(royaltyForm[chave] || "0").replace(",", "."));
-    if (!Number.isFinite(percentual) || percentual < 0) {
+    if (modeloRecebimento === "royalty" && (!Number.isFinite(percentual) || percentual < 0 || percentual > 50)) {
       setMensagem("Informe um percentual de royalty válido.");
       return;
     }
@@ -376,7 +389,7 @@ export default function FotosAdminPage() {
     const response = await fetch("/api/fotos/admin/royalty-fotografo", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
-      body: JSON.stringify({ eventoId, fotografoId, percentual }),
+      body: JSON.stringify({ eventoId, fotografoId, percentual, modeloRecebimento }),
     });
     const resultado = await response.json();
     setSalvandoRoyalty(null);
@@ -387,16 +400,18 @@ export default function FotosAdminPage() {
     }
 
     const salvo = Number(resultado.vinculo.comissao_organizador_percentual || 0);
+    const modeloSalvo = resultado.vinculo.modelo_recebimento === "diaria_organizador" ? "diaria_organizador" : "royalty";
     setRoyaltyForm((atual) => ({ ...atual, [chave]: String(salvo) }));
+    setModeloForm((atual) => ({ ...atual, [chave]: modeloSalvo }));
     setFotografosPorGaleria((atual) => ({
       ...atual,
       [eventoId]: (atual[eventoId] || []).map((fotografo) =>
         fotografo.id === fotografoId
-          ? { ...fotografo, comissao_organizador_percentual: salvo }
+          ? { ...fotografo, comissao_organizador_percentual: salvo, modelo_recebimento: modeloSalvo }
           : fotografo,
       ),
     }));
-    setMensagem(`Royalty de ${salvo}% salvo. A nova taxa vale somente para as próximas vendas.`);
+    setMensagem(modeloSalvo === "diaria_organizador" ? "Modelo de diária salvo. As próximas vendas entrarão na sua conta Mercado Pago da Retratt." : `Royalty de ${salvo}% salvo. A nova taxa vale somente para as próximas vendas.`);
   }
 
   async function salvarPerfilOrganizador() {
@@ -820,13 +835,23 @@ export default function FotosAdminPage() {
                                     </div>
                                   </div>
                                   <div>
-                                    <label className="mb-1.5 block text-[8px] font-black uppercase tracking-widest text-retratt">Seu royalty nas próximas vendas (0% a 15%)</label>
+                                    <label className="mb-1.5 block text-[8px] font-black uppercase tracking-widest text-retratt">Modelo de recebimento</label>
+                                    <select
+                                      value={modeloForm[chave] ?? fotografo.modelo_recebimento ?? "royalty"}
+                                      onChange={(e) => setModeloForm((atual) => ({ ...atual, [chave]: e.target.value as "royalty" | "diaria_organizador" }))}
+                                      aria-label={`Modelo de recebimento de ${fotografo.nome || "fotógrafo"}`}
+                                      className="mb-2 h-10 w-full rounded-lg border border-retratt/20 bg-black px-2 text-[10px] font-bold text-white"
+                                    >
+                                      <option value="royalty">Royalty: fotógrafo recebe a venda</option>
+                                      <option value="diaria_organizador">Diária: organizador recebe a venda</option>
+                                    </select>
+                                    {(modeloForm[chave] ?? fotografo.modelo_recebimento ?? "royalty") === "royalty" && <label className="mb-1.5 block text-[8px] font-black uppercase tracking-widest text-retratt">Seu royalty nas próximas vendas (0% a 50%)</label>}
                                     <div className="flex gap-2">
-                                      <div className="relative min-w-0 flex-1">
+                                      {(modeloForm[chave] ?? fotografo.modelo_recebimento ?? "royalty") === "royalty" && <div className="relative min-w-0 flex-1">
                                         <input
                                           type="number"
                                           min="0"
-                                          max="15"
+                                          max="50"
                                           step="0.1"
                                           value={royaltyForm[chave] ?? String(fotografo.comissao_organizador_percentual || 0)}
                                           onChange={(e) => setRoyaltyForm((atual) => ({ ...atual, [chave]: e.target.value }))}
@@ -835,7 +860,7 @@ export default function FotosAdminPage() {
                                           className="h-11 w-full rounded-xl border border-retratt/20 bg-black px-3 pr-7 text-[11px] font-black text-white outline-none focus:border-retratt"
                                         />
                                         <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-black text-zinc-500">%</span>
-                                      </div>
+                                      </div>}
                                       <button
                                         type="button"
                                         onClick={() => salvarRoyaltyFotografo(evento.id, fotografo.id)}
@@ -845,7 +870,7 @@ export default function FotosAdminPage() {
                                         {salvandoRoyalty === chave ? "Salvando" : "Salvar"}
                                       </button>
                                     </div>
-                                    <p className="mt-1.5 text-[7px] leading-relaxed text-zinc-500">A Retratt retém 9,5% em toda venda. Este royalty é adicional e será mostrado ao fotógrafo.</p>
+                                    <p className="mt-1.5 text-[8px] leading-relaxed text-zinc-400">{(modeloForm[chave] ?? fotografo.modelo_recebimento ?? "royalty") === "royalty" ? "A Retratt retém 5%, o fotógrafo recebe o restante menos seu royalty e a tarifa do Mercado Pago." : "O organizador recebe 95% antes da tarifa do Mercado Pago. A diária do fotógrafo é combinada e paga fora da Retratt."}</p>
                                   </div>
                                 </div>
                               );
@@ -983,19 +1008,29 @@ export default function FotosAdminPage() {
             <div className="rounded-3xl border border-white/5 bg-[#0a0a0e] p-5 sm:p-6 md:p-8 shadow-xl mt-6">
               <div className="flex items-center gap-3 mb-5 sm:mb-6 border-b border-white/5 pb-4">
                  <Wallet size={20} className="text-retratt shrink-0" />
-                 <h2 className="text-lg font-black uppercase tracking-tight text-white truncate">Royalties</h2>
+                  <h2 className="text-lg font-black uppercase tracking-tight text-white truncate">Receitas de fotos</h2>
               </div>
 
-              <div className="space-y-4">
-                <div className="rounded-2xl border border-retratt/20 bg-retratt/5 p-4 sm:p-5">
+               <div className="space-y-4">
+                 <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/40 p-4">
+                   <div><p className="text-xs font-black text-white">Receber vendas de fotógrafos por diária</p><p className="mt-1 text-[10px] text-zinc-400">Conecte sua conta Mercado Pago à Retratt para ativar essa opção.</p></div>
+                   <MercadoPagoConnectButton conectado={mercadoPagoOrganizadorConectado} perfil="organizador_fotos" returnTo="/fotos/admin" className="rounded-lg bg-retratt px-4 py-2.5 text-[9px] font-black uppercase text-black" />
+                 </div>
+                 <div className="rounded-2xl border border-retratt/20 bg-retratt/5 p-4 sm:p-5">
                   <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Royalties gerados nas vendas pagas</p>
                   <p className="mt-2 text-3xl font-black text-retratt">{formatarMoeda(royaltiesTotalCentavos)}</p>
                   <p className="mt-3 text-[10px] leading-relaxed text-zinc-400">
                     Cada venda continua sendo processada na conta do fotógrafo. Seu royalty é separado junto da comissão da Retratt e fica registrado para repasse após a liberação financeira.
                   </p>
-                </div>
+                 </div>
 
-                <div className="rounded-2xl border border-white/5 bg-black/40 p-4 sm:p-5">
+                 <div className="rounded-2xl border border-white/10 bg-black/40 p-4 sm:p-5">
+                   <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Vendas recebidas diretamente</p>
+                   <p className="mt-2 text-3xl font-black text-white">{formatarMoeda(receitaDiretaTotalCentavos)}</p>
+                   <p className="mt-2 text-[10px] leading-relaxed text-zinc-400">Valor antes da tarifa do Mercado Pago, em galerias com fotógrafo contratado por diária. O fotógrafo é pago fora da plataforma.</p>
+                 </div>
+
+                 <div className="rounded-2xl border border-white/5 bg-black/40 p-4 sm:p-5">
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Controle por galeria</p>
                     <span className="text-[8px] font-black uppercase tracking-widest text-retratt">Somente vendas pagas</span>
@@ -1006,7 +1041,7 @@ export default function FotosAdminPage() {
                         <div key={evento.id} className="flex items-center justify-between gap-4 rounded-xl border border-white/5 bg-white/[0.02] px-3 py-3">
                           <div className="min-w-0">
                             <p className="truncate text-[10px] font-black text-white">{evento.nome}</p>
-                            <p className="mt-0.5 text-[8px] font-bold uppercase tracking-widest text-zinc-600">Royalty acumulado</p>
+                             <p className="mt-0.5 text-[8px] font-bold uppercase tracking-widest text-zinc-600">Royalty {formatarMoeda(royaltiesPorGaleria[evento.id] || 0)} · Direto {formatarMoeda(receitaDiretaPorGaleria[evento.id] || 0)}</p>
                           </div>
                           <span className="shrink-0 text-xs font-black text-retratt">{formatarMoeda(royaltiesPorGaleria[evento.id] || 0)}</span>
                         </div>
@@ -1015,13 +1050,14 @@ export default function FotosAdminPage() {
                   ) : (
                     <p className="text-[9px] leading-relaxed text-zinc-600">Crie uma galeria para iniciar o acompanhamento financeiro.</p>
                   )}
-                  <p className="mt-3 text-[8px] leading-relaxed text-zinc-600">A alteração do percentual vale para as próximas compras. Vendas anteriores preservam o royalty registrado no momento do pedido.</p>
+                   <p className="mt-3 text-[8px] leading-relaxed text-zinc-600">A alteração do modelo ou percentual vale para as próximas compras. Os pedidos anteriores mantêm a distribuição registrada.</p>
                 </div>
 
                 <div className="flex items-center justify-center gap-2 text-[9px] font-black uppercase tracking-widest text-zinc-600 mt-6 pt-4 border-t border-white/5">
-                   <ShieldCheck size={14} className="shrink-0" /> <span className="truncate">Fotógrafo permanece como recebedor</span>
-                </div>
-              </div>
+                    <ShieldCheck size={14} className="shrink-0" /> <span className="truncate">Recebedor definido por fotógrafo e por galeria</span>
+                  </div>
+                 </div>
+
             </div>
           </div>
         </section>

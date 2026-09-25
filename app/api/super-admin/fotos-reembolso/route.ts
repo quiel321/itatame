@@ -2,16 +2,13 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
 import { estornarRoyaltyOrganizador } from "@/app/lib/fotos-pedidos";
+import { obterRecebedorFotos } from "@/app/lib/fotos-recebedor";
 
 export const runtime = "nodejs";
 
 function bearerToken(request: Request) {
   const header = request.headers.get("authorization") || "";
   return header.toLowerCase().startsWith("bearer ") ? header.slice(7) : null;
-}
-
-function primeiraRelacao<T>(valor: T | T[] | null | undefined) {
-  return Array.isArray(valor) ? valor[0] : valor;
 }
 
 export async function POST(request: Request) {
@@ -49,7 +46,7 @@ export async function POST(request: Request) {
 
     const { data: pedido, error: pedidoError } = await supabase
       .from("foto_pedidos")
-      .select("id, status, total_centavos, provedor_payment_id, fotografo_id, fotografos(mp_access_token)")
+      .select("id, status, total_centavos, provedor_payment_id, fotografo_id, organizador_user_id, modelo_recebimento")
       .eq("id", pedidoId)
       .maybeSingle();
     if (pedidoError) throw new Error(pedidoError.message);
@@ -62,13 +59,13 @@ export async function POST(request: Request) {
     }
 
     const paymentId = String(pedido.provedor_payment_id || "");
-    const fotografo = primeiraRelacao(pedido.fotografos);
-    if (!paymentId || !fotografo?.mp_access_token) {
+    const recebedor = await obterRecebedorFotos(supabase, request, pedido);
+    if (!paymentId || !recebedor) {
       return NextResponse.json({ error: "A transação ou a conta recebedora não está disponível para reembolso." }, { status: 409 });
     }
 
     const consultaResponse = await fetch(`https://api.mercadopago.com/v1/payments/${encodeURIComponent(paymentId)}`, {
-      headers: { Authorization: `Bearer ${fotografo.mp_access_token}` },
+      headers: { Authorization: `Bearer ${recebedor.accessToken}` },
       cache: "no-store",
     });
     const pagamento = await consultaResponse.json();
@@ -94,7 +91,7 @@ export async function POST(request: Request) {
     const refundResponse = await fetch(`https://api.mercadopago.com/v1/payments/${encodeURIComponent(paymentId)}/refunds`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${fotografo.mp_access_token}`,
+        Authorization: `Bearer ${recebedor.accessToken}`,
         "Content-Type": "application/json",
         "X-Idempotency-Key": `itatame-fotos-reembolso-${pedido.id}`,
       },

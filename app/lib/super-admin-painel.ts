@@ -115,7 +115,7 @@ function dinheiro(valor: number) {
   return Number(valor.toFixed(2));
 }
 
-export function valorInscricao(item: { valor_total?: unknown; valor_inscricao?: unknown; estorno_valor?: unknown; estorno_status?: string | null }) {
+export function valorInscricao(item: { valor_total?: unknown; valor_inscricao?: unknown; estorno_valor?: unknown; estorno_status?: string | null; pagamento_ok?: boolean | null }) {
   if (item.estorno_status === "estornado") {
     const estorno = Number(item.estorno_valor);
     if (Number.isFinite(estorno) && estorno > 0) return estorno;

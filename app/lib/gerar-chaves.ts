@@ -19,25 +19,43 @@ function ehByeParticipante(atleta?: Participante | null) {
   return !atleta || nome === 'BYE' || nome === 'TBD';
 }
 
+type PontuacaoConfronto = { equipe: number; academia: number; distanciaPeso: number };
+
+function pesoDeclarado(atleta: Participante) {
+  const peso = Number(String(atleta.peso ?? '').replace(',', '.'));
+  return Number.isFinite(peso) && peso > 0 ? peso : null;
+}
+
+function somarPontuacoes(a: PontuacaoConfronto, b: PontuacaoConfronto): PontuacaoConfronto {
+  return { equipe: a.equipe + b.equipe, academia: a.academia + b.academia, distanciaPeso: a.distanciaPeso + b.distanciaPeso };
+}
+
+function compararPontuacoes(a: PontuacaoConfronto, b: PontuacaoConfronto) {
+  return a.equipe - b.equipe || a.academia - b.academia || a.distanciaPeso - b.distanciaPeso;
+}
+
 function conflitoPrimeiraLuta(a: Participante, b: Participante) {
-  if (ehByeParticipante(a) || ehByeParticipante(b)) return 0;
-  let score = 0;
-  if (a.equipe_chave && a.equipe_chave === b.equipe_chave) score += 2;
+  if (ehByeParticipante(a) || ehByeParticipante(b)) return { equipe: 0, academia: 0, distanciaPeso: 0 };
   const academiaA = chaveAcademia(a);
   const academiaB = chaveAcademia(b);
-  if (academiaA && academiaB && academiaA === academiaB) score += 1;
-  return score;
+  const pesoA = pesoDeclarado(a);
+  const pesoB = pesoDeclarado(b);
+  return {
+    equipe: a.equipe_chave && a.equipe_chave === b.equipe_chave ? 1 : 0,
+    academia: academiaA && academiaB && academiaA === academiaB ? 1 : 0,
+    distanciaPeso: pesoA !== null && pesoB !== null ? Math.abs(pesoA - pesoB) : 1000,
+  };
 }
 
 function ordenarTrio(atletas: Participante[]) {
   const trio = atletas.slice(0, 3);
   let melhor = trio;
-  let melhorScore = Infinity;
+  let melhorScore: PontuacaoConfronto | null = null;
   for (let i = 0; i < 3; i++) {
     for (let j = i + 1; j < 3; j++) {
       const k = [0, 1, 2].find(indice => indice !== i && indice !== j) as number;
       const score = conflitoPrimeiraLuta(trio[i], trio[j]);
-      if (score < melhorScore) {
+      if (!melhorScore || compararPontuacoes(score, melhorScore) < 0) {
         melhorScore = score;
         melhor = [trio[i], trio[j], trio[k]];
       }
@@ -67,13 +85,13 @@ function combinacoes(tamanho: number, escolha: number) {
 function dividirDoisTrios(atletas: Participante[]) {
   const lista = atletas.slice(0, 6);
   let melhor: { esquerda: Participante[]; direita: Participante[] } | null = null;
-  let melhorScore = Infinity;
+  let melhorScore: (PontuacaoConfronto & { ladosCompartilhados: number }) | null = null;
   for (const indices of combinacoes(lista.length, 3)) {
     const esquerdaBruta = indices.map(indice => lista[indice]);
     const direitaBruta = lista.filter((_, indice) => !indices.includes(indice));
     const esquerda = ordenarTrio(esquerdaBruta);
     const direita = ordenarTrio(direitaBruta);
-    const conflito = conflitoPrimeiraLuta(esquerda[0], esquerda[1]) + conflitoPrimeiraLuta(direita[0], direita[1]);
+    const conflito = somarPontuacoes(conflitoPrimeiraLuta(esquerda[0], esquerda[1]), conflitoPrimeiraLuta(direita[0], direita[1]));
     const equipesEsquerda = new Set(esquerda.map(atleta => atleta.equipe_chave));
     const equipesDireita = new Set(direita.map(atleta => atleta.equipe_chave));
     const academiasEsquerda = new Set(esquerda.map(chaveAcademia).filter(Boolean));
@@ -81,8 +99,13 @@ function dividirDoisTrios(atletas: Participante[]) {
     let ladosCompartilhados = 0;
     equipesEsquerda.forEach(equipe => { if (equipesDireita.has(equipe)) ladosCompartilhados += 1; });
     academiasEsquerda.forEach(academia => { if (academiasDireita.has(academia)) ladosCompartilhados += 1; });
-    const score = conflito * 10 - ladosCompartilhados;
-    if (score < melhorScore) {
+    const score = { ...conflito, ladosCompartilhados };
+    const comparacao = melhorScore
+      ? score.equipe - melhorScore.equipe || score.academia - melhorScore.academia
+        || melhorScore.ladosCompartilhados - score.ladosCompartilhados
+        || score.distanciaPeso - melhorScore.distanciaPeso
+      : -1;
+    if (comparacao < 0) {
       melhorScore = score;
       melhor = { esquerda, direita };
     }
@@ -98,33 +121,102 @@ function dadosAtleta(atleta?: Participante) {
   };
 }
 
+function otimizarMetadeExata(porSeed: Participante[], indices: number[]) {
+  const pares = Array.from({ length: indices.length / 2 }, (_, i) => [indices[i * 2], indices[i * 2 + 1]]);
+  const atletas = indices.filter(indice => !ehByeParticipante(porSeed[indice])).map(indice => porSeed[indice]);
+  const vagas = pares.map(par => par.filter(indice => !ehByeParticipante(porSeed[indice])));
+  const vagasIndividuais = vagas.filter(posicoes => posicoes.length === 1).length;
+  const memo = new Map<number, { pontuacao: PontuacaoConfronto; parceiro: number }>();
+  const vazia = { equipe: 0, academia: 0, distanciaPeso: 0 };
+
+  const resolver = (restantes: number, individuais: number): PontuacaoConfronto | null => {
+    if (!restantes) return individuais === 0 ? vazia : null;
+    const chave = restantes * (vagasIndividuais + 1) + individuais;
+    const guardado = memo.get(chave);
+    if (guardado) return guardado.pontuacao;
+    const primeiro = atletas.findIndex((_, indice) => Boolean(restantes & (1 << indice)));
+    const semPrimeiro = restantes ^ (1 << primeiro);
+    let melhor: PontuacaoConfronto | null = null;
+    let parceiro = -1;
+    if (individuais > 0) melhor = resolver(semPrimeiro, individuais - 1);
+    for (let segundo = primeiro + 1; segundo < atletas.length; segundo++) {
+      if (!(semPrimeiro & (1 << segundo))) continue;
+      const restante = resolver(semPrimeiro ^ (1 << segundo), individuais);
+      if (!restante) continue;
+      const pontuacao = somarPontuacoes(conflitoPrimeiraLuta(atletas[primeiro], atletas[segundo]), restante);
+      if (!melhor || compararPontuacoes(pontuacao, melhor) < 0) {
+        melhor = pontuacao;
+        parceiro = segundo;
+      }
+    }
+    if (melhor) memo.set(chave, { pontuacao: melhor, parceiro });
+    return melhor;
+  };
+
+  let restantes = (1 << atletas.length) - 1;
+  let individuais = vagasIndividuais;
+  if (!resolver(restantes, individuais)) throw new Error('Não foi possível distribuir os atletas na primeira rodada.');
+  const duplas: Participante[][] = [];
+  const sozinhos: Participante[] = [];
+  while (restantes) {
+    const primeiro = atletas.findIndex((_, indice) => Boolean(restantes & (1 << indice)));
+    const passo = memo.get(restantes * (vagasIndividuais + 1) + individuais);
+    if (!passo) throw new Error('Não foi possível reconstruir a primeira rodada.');
+    const parceiro = passo.parceiro;
+    restantes ^= 1 << primeiro;
+    if (parceiro < 0) {
+      sozinhos.push(atletas[primeiro]);
+      individuais--;
+    } else {
+      duplas.push([atletas[primeiro], atletas[parceiro]]);
+      restantes ^= 1 << parceiro;
+    }
+  }
+  const mediaPeso = (grupo: Participante[]) => grupo.reduce((total, atleta) => total + (pesoDeclarado(atleta) ?? 0), 0) / grupo.length;
+  duplas.sort((a, b) => mediaPeso(a) - mediaPeso(b));
+  sozinhos.sort((a, b) => (pesoDeclarado(a) ?? Infinity) - (pesoDeclarado(b) ?? Infinity));
+  vagas.forEach(posicoes => {
+    const escolhidos = posicoes.length === 2 ? duplas.shift() : posicoes.length === 1 ? [sozinhos.shift()] : [];
+    posicoes.forEach((indice, posicao) => {
+      if (!escolhidos?.[posicao]) throw new Error('Faltou atleta ao montar a primeira rodada.');
+      porSeed[indice] = escolhidos[posicao];
+    });
+  });
+}
+
 function priorizarConfrontosDiversos(porSeed: Participante[], posicoes: number[], tamanho: number) {
   const capacidade = tamanho / 2;
   const otimizarMetade = (seeds: number[]) => {
     const indices = seeds.map(seed => seed - 1);
+    if (indices.length < 2) return;
+    if (indices.length <= 16) {
+      otimizarMetadeExata(porSeed, indices);
+      return;
+    }
     const pares: Array<[number, number]> = [];
     for (let i = 0; i < indices.length; i += 2) pares.push([indices[i], indices[i + 1]]);
-    const score = () => pares.reduce((acc, [a, b]) => acc + conflitoPrimeiraLuta(porSeed[a], porSeed[b]), 0);
+    const score = () => pares.reduce((acc, [a, b]) => somarPontuacoes(acc, conflitoPrimeiraLuta(porSeed[a], porSeed[b])), { equipe: 0, academia: 0, distanciaPeso: 0 });
     let atual = score();
-    if (atual === 0) return;
-    for (let rodada = 0; rodada < 8 && atual > 0; rodada++) {
-      let melhorou = false;
+    for (let rodada = 0; rodada < indices.length * 2; rodada++) {
+      let melhorTroca: [number, number] | null = null;
+      let melhorScore = atual;
       for (let i = 0; i < indices.length; i++) {
         if (ehByeParticipante(porSeed[indices[i]])) continue;
         for (let j = i + 1; j < indices.length; j++) {
           if (ehByeParticipante(porSeed[indices[j]])) continue;
           [porSeed[indices[i]], porSeed[indices[j]]] = [porSeed[indices[j]], porSeed[indices[i]]];
           const novo = score();
-          if (novo < atual) {
-            atual = novo;
-            melhorou = true;
-            if (atual === 0) return;
-          } else {
-            [porSeed[indices[i]], porSeed[indices[j]]] = [porSeed[indices[j]], porSeed[indices[i]]];
+          [porSeed[indices[i]], porSeed[indices[j]]] = [porSeed[indices[j]], porSeed[indices[i]]];
+          if (compararPontuacoes(novo, melhorScore) < 0) {
+            melhorScore = novo;
+            melhorTroca = [indices[i], indices[j]];
           }
         }
       }
-      if (!melhorou) break;
+      if (!melhorTroca) break;
+      const [a, b] = melhorTroca;
+      [porSeed[a], porSeed[b]] = [porSeed[b], porSeed[a]];
+      atual = melhorScore;
     }
   };
   otimizarMetade(posicoes.slice(0, capacidade));
@@ -231,7 +323,13 @@ function dividirGruposAcimaDe64(
     const capacidade = tamanho / 2;
     const gruposOrdenados = Array.from(grupos.values())
       .map((grupo) => embaralhar([...grupo]))
-      .sort((a, b) => b.length - a.length);
+      .sort((a, b) => {
+        const mediaPeso = (grupo: Participante[]) => {
+          const pesos = grupo.map(pesoDeclarado).filter((peso): peso is number => peso !== null);
+          return pesos.length ? pesos.reduce((total, peso) => total + peso, 0) / pesos.length : Infinity;
+        };
+        return b.length - a.length || mediaPeso(a) - mediaPeso(b);
+      });
 
     // Escolhe globalmente quantos atletas de cada equipe irão para cada metade.
     // Para dois atletas da mesma equipe, a única distribuição possível é 1 + 1,
@@ -265,8 +363,55 @@ function dividirGruposAcimaDe64(
       direita.push(...grupo.slice(quantidadeEsquerda));
     });
 
-    embaralhar(esquerda);
-    embaralhar(direita);
+    const excessoPorChave = (lista: Participante[], chave: (atleta: Participante) => string) => {
+      const contagem = new Map<string, number>();
+      lista.forEach(atleta => {
+        const valor = chave(atleta);
+        if (valor) contagem.set(valor, (contagem.get(valor) || 0) + 1);
+      });
+      return Math.max(0, ...Array.from(contagem.values()).map(total => total - Math.ceil(lista.length / 2)));
+    };
+    const pontuacaoLados = () => ({
+      equipe: excessoPorChave(esquerda, atleta => atleta.equipe_chave) + excessoPorChave(direita, atleta => atleta.equipe_chave),
+      academia: excessoPorChave(esquerda, chaveAcademia) + excessoPorChave(direita, chaveAcademia),
+    });
+    const totaisEquipe = new Map<string, number>();
+    atletas.forEach(atleta => totaisEquipe.set(atleta.equipe_chave, (totaisEquipe.get(atleta.equipe_chave) || 0) + 1));
+    let pontuacaoAtual = pontuacaoLados();
+    for (let rodada = 0; rodada < capacidade; rodada++) {
+      let melhorTroca: [number, number] | null = null;
+      let melhor = pontuacaoAtual;
+      for (let i = 0; i < esquerda.length; i++) {
+        for (let j = 0; j < direita.length; j++) {
+          const a = esquerda[i];
+          const b = direita[j];
+          const totalA = totaisEquipe.get(a.equipe_chave) || 1;
+          const totalB = totaisEquipe.get(b.equipe_chave) || 1;
+          const esquerdaA = esquerda.filter(atleta => atleta.equipe_chave === a.equipe_chave).length;
+          const esquerdaB = esquerda.filter(atleta => atleta.equipe_chave === b.equipe_chave).length;
+          if (a.equipe_chave !== b.equipe_chave &&
+            (esquerdaA - 1 < Math.floor(totalA / 2) || esquerdaB + 1 > Math.ceil(totalB / 2))) continue;
+          [esquerda[i], direita[j]] = [b, a];
+          const nova = pontuacaoLados();
+          [esquerda[i], direita[j]] = [a, b];
+          if (nova.equipe < melhor.equipe || (nova.equipe === melhor.equipe && nova.academia < melhor.academia)) {
+            melhor = nova;
+            melhorTroca = [i, j];
+          }
+        }
+      }
+      if (!melhorTroca) break;
+      const [i, j] = melhorTroca;
+      [esquerda[i], direita[j]] = [direita[j], esquerda[i]];
+      pontuacaoAtual = melhor;
+    }
+
+    const ordenarPorPeso = (lista: Participante[]) => {
+      embaralhar(lista);
+      lista.sort((a, b) => (pesoDeclarado(a) ?? Infinity) - (pesoDeclarado(b) ?? Infinity));
+    };
+    ordenarPorPeso(esquerda);
+    ordenarPorPeso(direita);
     const bye = () => ({ atleta: 'BYE', nome: 'BYE', equipe_atleta: '', equipe_chave: `BYE:${Math.random()}` } as Participante);
     while (esquerda.length < capacidade) esquerda.push(bye());
     while (direita.length < capacidade) direita.push(bye());

@@ -17,7 +17,7 @@ import {
 
 const metricas = [
   { valor: "Royalties", rotulo: "Por cada foto vendida" },
-  { valor: "9,5%", rotulo: "Taxa Retratt em toda venda" },
+  { valor: "5%", rotulo: "Taxa Retratt em toda venda" },
   { valor: "Zero", rotulo: "Mensalidade" },
 ];
 
@@ -89,7 +89,7 @@ export default function FotosOrganizadorPage() {
               </h1>
 
               <p className="text-zinc-400 text-[11px] sm:text-xs md:text-sm font-medium leading-relaxed mb-6 md:mb-8 max-w-md pr-2 md:pr-0">
-                Crie a galeria oficial do evento, credencie fotógrafos e defina um royalty de até 15%. A Retratt cobra 9,5% em toda venda, registra a distribuição e entrega as fotos com Inteligência Artificial.
+                Crie a galeria oficial do evento, credencie fotógrafos e defina um royalty de até 50% ou contrate por diária e receba as vendas na sua conta. A Retratt cobra 5% em toda venda.
               </p>
 
               <div className="flex flex-col sm:flex-row gap-3 md:gap-4 w-full sm:w-auto mb-8 md:mb-10">
@@ -156,7 +156,7 @@ export default function FotosOrganizadorPage() {
                 Um painel central para<br className="hidden md:block"/> acompanhar <span className="text-zinc-500">o faturamento.</span>
               </h2>
               <p className="text-zinc-400 text-[11px] md:text-sm font-medium leading-relaxed mb-6 md:mb-8 max-w-lg mx-auto md:mx-0 px-2 md:px-0">
-                Esqueça as planilhas e a cobrança manual aos fotógrafos. A venda é processada na conta conectada do fotógrafo; os 9,5% da Retratt e o seu royalty são calculados separadamente. O royalty fica registrado para repasse após a liberação financeira.
+                Com royalty, a venda é processada na conta conectada do fotógrafo, que paga a tarifa do Mercado Pago. Com fotógrafo contratado por diária, a venda entra na conta conectada do organizador, que paga essa tarifa. Em ambos os modelos, a Retratt retém 5%.
               </p>
 
               <ul className="space-y-3 md:space-y-4 mb-8 text-left max-w-md mx-auto md:mx-0 px-2 md:px-0">

@@ -7,7 +7,7 @@ import {
 import { autenticarRequest } from "@/app/lib/api-auth";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
 
-type PerfilMercadoPago = "organizador" | "fotografo";
+type PerfilMercadoPago = "organizador" | "fotografo" | "organizador_fotos";
 
 type OAuthState = {
   integracao: MercadoPagoIntegracao;
@@ -18,13 +18,14 @@ type OAuthState = {
 };
 
 function perfilValido(valor: string | null): PerfilMercadoPago {
+  if (valor === "organizador_fotos") return "organizador_fotos";
   return valor === "fotografo" ? "fotografo" : "organizador";
 }
 
 function returnToSeguro(valor: string | null, perfil: PerfilMercadoPago, legadoAdmin: boolean) {
   if (valor && valor.startsWith("/") && !valor.startsWith("//")) return valor;
   if (legadoAdmin) return "/admin";
-  return perfil === "fotografo" ? "/fotos/fotografo/dashboard" : "/fotos/admin";
+  return perfil === "fotografo" ? "/fotos/fotografo/dashboard" : perfil === "organizador_fotos" ? "/fotos/admin" : "/fotos/admin";
 }
 
 function assinarState(payload: OAuthState, secret: string) {
@@ -51,11 +52,12 @@ export async function POST(request: Request) {
   const perfil = perfilValido(body.perfil || null);
 
   const supabase = createSupabaseServerClient();
-  const tabelaPerfil = perfil === "fotografo" ? "fotografos" : "organizadores";
-  const { data: registroPerfil } = await supabase.from(tabelaPerfil).select("id").eq("user_id", usuario.id).maybeSingle();
+  const tabelaPerfil = perfil === "fotografo" ? "fotografos" : perfil === "organizador_fotos" ? "foto_organizadores" : "organizadores";
+  const colunaUsuario = perfil === "organizador_fotos" ? "id" : "user_id";
+  const { data: registroPerfil } = await supabase.from(tabelaPerfil).select("id").eq(colunaUsuario, usuario.id).maybeSingle();
   if (!registroPerfil) return NextResponse.json({ error: `${perfil === "fotografo" ? "Fotógrafo" : "Organizador"} não encontrado.` }, { status: 403 });
 
-  const integracao: MercadoPagoIntegracao = perfil === "fotografo" ? "retratt" : "itatame";
+  const integracao: MercadoPagoIntegracao = perfil === "organizador" ? "itatame" : "retratt";
   const config = obterConfigMercadoPago(request, integracao);
   if (!config.clientId || !config.clientSecret || !config.stateSecret) {
     return NextResponse.json({ error: "Integração Mercado Pago não configurada." }, { status: 500 });

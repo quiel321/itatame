@@ -2,12 +2,9 @@ import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
 import { liberarPedidoFotos } from "@/app/lib/fotos-pedidos";
 import { autorizarPedido } from "@/app/lib/fotos-convidado";
+import { obterRecebedorFotos } from "@/app/lib/fotos-recebedor";
 
 export const runtime = "nodejs";
-
-function primeiraRelacao<T>(valor: T | T[] | null | undefined) {
-  return Array.isArray(valor) ? valor[0] : valor;
-}
 
 function baseUrl(_request: Request) {
   return process.env.NEXT_PUBLIC_FOTOS_URL || "https://retratt.com";
@@ -31,15 +28,15 @@ export async function POST(request: Request) {
 
     let consulta = supabase
       .from("foto_pedidos")
-      .select("id, comprador_user_id, comprador_email, status, total_centavos, comissao_itatame_centavos, comissao_organizador_centavos, fotografo_id, organizador_user_id, fotografos(mp_access_token)")
+      .select("id, comprador_user_id, comprador_email, status, total_centavos, comissao_itatame_centavos, comissao_organizador_centavos, fotografo_id, organizador_user_id, modelo_recebimento")
       .eq("id", pedidoId);
     if (autorizado.userId) consulta = consulta.eq("comprador_user_id", autorizado.userId);
     const { data: pedido } = await consulta.maybeSingle();
     if (!pedido) return NextResponse.json({ error: "Pedido não encontrado." }, { status: 404 });
     if (pedido.status === "pago") return NextResponse.json({ status: "approved", pedidoId: pedido.id });
 
-    const fotografo = primeiraRelacao(pedido.fotografos);
-    if (!fotografo?.mp_access_token) {
+    const recebedor = await obterRecebedorFotos(supabase, request, pedido);
+    if (!recebedor) {
       return NextResponse.json({ error: "Conta de recebimento indisponível." }, { status: 409 });
     }
     const compradorEmail = String(pedido.comprador_email || "").trim().toLowerCase();
@@ -74,7 +71,7 @@ export async function POST(request: Request) {
       headers: {
         accept: "application/json",
         "content-type": "application/json",
-        Authorization: `Bearer ${fotografo.mp_access_token}`,
+        Authorization: `Bearer ${recebedor.accessToken}`,
         "X-Idempotency-Key": `foto-pedido-${pedido.id}`,
       },
       body: JSON.stringify(payload),

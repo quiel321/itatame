@@ -8,12 +8,39 @@ import {
   formatarDataHoraEvento,
   obterEtapaEvento,
   obterLinhaDoTempoEvento,
+  type EventoComEtapas,
   type ResumoLutasEvento,
   type TomEtapaEvento,
 } from "@/app/lib/evento-etapas";
 import Link from "next/link";
-import { formatarValorInscricao, idadeMaxInfantil, valorAbsolutoAvulso, valorAddonAbsoluto, valorComboPesoAbsoluto, valorInfantilLote } from "@/app/lib/valor-inscricao";
+import { formatarValorInscricao, idadeMaxInfantil, valorAbsolutoAvulso, valorAddonAbsoluto, valorComboPesoAbsoluto, valorInfantilLote, type EventoValoresInscricao, type RegrasValoresInscricao } from "@/app/lib/valor-inscricao";
 import { ChatEvento } from "@/app/components/ChatEvento";
+import type { InscricaoCompeticao } from "@/app/lib/categorias-competicao";
+
+type EventoDetalhes = EventoComEtapas & Omit<EventoValoresInscricao, "regras_pontuacao_equipes"> & {
+  id: string;
+  nome: string;
+  descricao?: string | null;
+  cidade?: string | null;
+  local?: string | null;
+  organizador_id?: string | null;
+  banner_url?: string | null;
+  link_inscricao?: string | null;
+  regulamento_url?: string | null;
+  tabela_peso_pdf_url?: string | null;
+  sobre_evento?: string | null;
+  valores_lotes?: string | null;
+  regras_pesagem?: string | null;
+  limite_vagas?: number | string | null;
+  regras_pontuacao_equipes?: (RegrasValoresInscricao & {
+    ouro?: number;
+    prata?: number;
+    bronze?: number;
+    vitoria?: number;
+    wo_pontua?: boolean;
+    absoluto_pontua?: boolean;
+  }) | null;
+};
 
 const estiloEtapa: Record<TomEtapaEvento, { badge: string; aviso: string; ponto: string }> = {
   cyan: { badge: "border-cyan-400/30 bg-cyan-500/15 text-cyan-300", aviso: "border-cyan-500/25 bg-cyan-500/[0.07]", ponto: "bg-cyan-400" },
@@ -27,10 +54,10 @@ const estiloEtapa: Record<TomEtapaEvento, { badge: string; aviso: string; ponto:
 
 export default function EventoDetalhesPage() {
   const params = useParams();
-  const [evento, setEvento] = useState<any>(null);
+  const [evento, setEvento] = useState<EventoDetalhes | null>(null);
   const [organizador, setOrganizador] = useState<{ nome: string; foto_url: string | null } | null>(null);
   const [loading, setLoading] = useState(true);
-  const [inscricoes, setInscricoes] = useState<any[]>([]);
+  const [inscricoes, setInscricoes] = useState<Pick<InscricaoCompeticao, "atleta" | "nome" | "equipe" | "faixa" | "categoria">[]>([]);
   const [resumoLutas, setResumoLutas] = useState<ResumoLutasEvento>({ total: 0, concluidas: 0, emAndamento: 0, pendentes: 0 });
   const [abaAtiva, setAbaAtiva] = useState("sobre");
 
@@ -95,13 +122,13 @@ export default function EventoDetalhesPage() {
   if (loading) return <div className="min-h-screen bg-[#050505] flex items-center justify-center text-zinc-500 font-bold uppercase tracking-widest text-xs">Carregando evento...</div>;
   if (!evento) return <div className="min-h-screen bg-[#050505] flex items-center justify-center text-white font-bold text-sm">Evento não encontrado.</div>;
 
-  const formatarData = (dataStr: string) => {
+  const formatarData = (dataStr?: string | null) => {
     if (!dataStr) return "A definir";
     const [ano, mes, dia] = dataStr.split("-");
     return `${dia}/${mes}/${ano}`;
   };
 
-  const formatarDataHora = (dataISO: string) => formatarDataHoraEvento(dataISO, false, evento.estado);
+  const formatarDataHora = (dataISO?: string | null) => formatarDataHoraEvento(dataISO, false, evento.estado);
 
   const totalInscritos = inscricoes.length;
   const limiteVagas = Math.max(1, Number(evento.limite_vagas) || 500);
@@ -230,6 +257,11 @@ export default function EventoDetalhesPage() {
                   <Link href={`/ranking?evento=${evento.id}`} className="bg-white/5 hover:bg-white/10 border border-white/10 text-white font-black uppercase tracking-widest text-[10px] md:text-xs px-3 py-2.5 md:px-6 md:py-3.5 rounded-lg text-center flex-1 md:flex-none">
                     Ver ranking do campeonato
                   </Link>
+                  {evento.tabela_peso_pdf_url ? (
+                    <a href={evento.tabela_peso_pdf_url} target="_blank" rel="noopener noreferrer" className="bg-white/5 hover:bg-white/10 border border-white/10 text-white font-black uppercase tracking-widest text-[10px] md:text-xs px-3 py-2.5 md:px-6 md:py-3.5 rounded-lg text-center flex-1 md:flex-none">Tabela de Peso (PDF)</a>
+                  ) : (
+                    <button type="button" disabled title="Tabela de peso ainda não cadastrada" className="bg-zinc-800 text-zinc-500 font-black uppercase tracking-widest text-[10px] md:text-xs px-3 py-2.5 md:px-6 md:py-3.5 rounded-lg text-center flex-1 md:flex-none cursor-not-allowed">Tabela de Peso (PDF)</button>
+                  )}
                   <ChatEvento eventoId={evento.id} compacto />
                 </>
               ) : (
@@ -270,6 +302,12 @@ export default function EventoDetalhesPage() {
               <Link href={`/evento/${evento.id}/publico`} className="bg-white/5 hover:bg-white/10 border border-white/10 text-white font-bold uppercase tracking-widest text-[10px] md:text-xs px-3 py-2.5 md:px-6 md:py-3.5 rounded-lg transition-all text-center flex-1 md:flex-none">
                 Chaves e Resultados
               </Link>
+
+              {evento.tabela_peso_pdf_url ? (
+                <a href={evento.tabela_peso_pdf_url} target="_blank" rel="noopener noreferrer" className="bg-white/5 hover:bg-white/10 border border-white/10 text-white font-bold uppercase tracking-widest text-[10px] md:text-xs px-3 py-2.5 md:px-6 md:py-3.5 rounded-lg transition-all text-center flex-1 md:flex-none">Tabela de Peso (PDF)</a>
+              ) : (
+                <button type="button" disabled title="Tabela de peso ainda não cadastrada" className="bg-zinc-800 text-zinc-500 font-bold uppercase tracking-widest text-[10px] md:text-xs px-3 py-2.5 md:px-6 md:py-3.5 rounded-lg text-center flex-1 md:flex-none cursor-not-allowed">Tabela de Peso (PDF)</button>
+              )}
 
               <ChatEvento eventoId={evento.id} compacto />
               

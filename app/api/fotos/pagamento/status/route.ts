@@ -16,7 +16,7 @@ export async function GET(request: Request) {
     const pedido = await sincronizarPagamentoFotos(supabase, {
       pedidoId,
       compradorUserId: autorizado.userId,
-    });
+    }, request);
     if (!pedido) return NextResponse.json({ error: "Pedido não encontrado." }, { status: 404 });
     return NextResponse.json(pedido);
   } catch (error) {

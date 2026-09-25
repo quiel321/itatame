@@ -1,6 +1,6 @@
 export const LIMITE_COMISSOES_PERCENTUAL = 90;
-export const COMISSAO_ITATAME_FOTOS_PERCENTUAL = 9.5;
-export const LIMITE_ROYALTY_ORGANIZADOR_PERCENTUAL = 15;
+export const COMISSAO_ITATAME_FOTOS_PERCENTUAL = 5;
+export const LIMITE_ROYALTY_ORGANIZADOR_PERCENTUAL = 50;
 
 function percentualSeguro(valor: unknown) {
   const numero = Number(valor);
@@ -38,5 +38,19 @@ export function calcularDistribuicaoFotos({
     comissaoOrganizadorCentavos,
     comissaoMarketplaceCentavos,
     fotografoAntesDaTarifaCentavos: total - comissaoMarketplaceCentavos,
+    receitaDiretaOrganizadorCentavos: 0,
+  };
+}
+
+export function calcularDistribuicaoDiariaFotos(totalCentavos: number) {
+  const distribuicao = calcularDistribuicaoFotos({
+    totalCentavos,
+    percentualItatame: COMISSAO_ITATAME_FOTOS_PERCENTUAL,
+    percentualOrganizador: 0,
+  });
+  return {
+    ...distribuicao,
+    receitaDiretaOrganizadorCentavos: distribuicao.fotografoAntesDaTarifaCentavos,
+    fotografoAntesDaTarifaCentavos: 0,
   };
 }

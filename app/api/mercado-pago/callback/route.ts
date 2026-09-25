@@ -7,7 +7,17 @@ import {
   type MercadoPagoIntegracao,
 } from "@/app/lib/mercado-pago-integracao";
 
-type PerfilMercadoPago = "organizador" | "fotografo";
+type PerfilMercadoPago = "organizador" | "fotografo" | "organizador_fotos";
+
+type TokenMercadoPago = {
+  access_token?: string;
+  refresh_token?: string | null;
+  public_key?: string | null;
+  user_id?: string | number | null;
+  expires_in?: number | null;
+  scope?: string | null;
+  live_mode?: boolean;
+};
 
 type OAuthState = {
   integracao?: MercadoPagoIntegracao;
@@ -20,7 +30,7 @@ type OAuthState = {
 
 function returnToSeguro(valor: string | null | undefined, perfil: PerfilMercadoPago) {
   if (valor && valor.startsWith("/") && !valor.startsWith("//")) return valor;
-  return perfil === "fotografo" ? "/fotos/fotografo/dashboard" : "/admin";
+  return perfil === "fotografo" ? "/fotos/fotografo/dashboard" : perfil === "organizador_fotos" ? "/fotos/admin" : "/admin";
 }
 
 function lerState(state: string | null, request: Request): OAuthState | null {
@@ -52,7 +62,7 @@ function lerState(state: string | null, request: Request): OAuthState | null {
   }
 }
 
-function credenciaisMercadoPago(tokenData: any, expiresAt: string | null) {
+function credenciaisMercadoPago(tokenData: TokenMercadoPago, expiresAt: string | null) {
   return {
     mp_access_token: tokenData.access_token,
     mp_refresh_token: tokenData.refresh_token || null,
@@ -74,7 +84,7 @@ export async function GET(request: Request) {
   const integracao = state?.integracao || detectarIntegracaoMercadoPago(request);
   const config = obterConfigMercadoPago(request, integracao);
   const baseUrl = config.baseUrl;
-  const perfil = state?.perfil === "fotografo" ? "fotografo" : "organizador";
+  const perfil = state?.perfil === "fotografo" ? "fotografo" : state?.perfil === "organizador_fotos" ? "organizador_fotos" : "organizador";
   const userId = state?.userId || state?.organizadorUserId || "";
   const returnTo = returnToSeguro(state?.returnTo, perfil);
 
@@ -103,7 +113,7 @@ export async function GET(request: Request) {
     }),
   });
 
-  const tokenData = await tokenResponse.json();
+  const tokenData = await tokenResponse.json() as TokenMercadoPago;
 
   if (!tokenResponse.ok || !tokenData.access_token) {
     console.error("Erro OAuth Mercado Pago:", tokenData);
@@ -131,6 +141,16 @@ export async function GET(request: Request) {
 
     if (resultado.error) {
       console.error("Erro ao salvar Mercado Pago do fotógrafo:", resultado.error);
+      return NextResponse.redirect(`${baseUrl}${returnTo}?mp=erro&motivo=banco`);
+    }
+  } else if (perfil === "organizador_fotos") {
+    const { error: dbError } = await supabase.from("foto_mp_organizadores").upsert({
+      user_id: userId,
+      ...credenciais,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "user_id" });
+    if (dbError) {
+      console.error("Erro ao salvar Mercado Pago do organizador Retratt:", dbError);
       return NextResponse.redirect(`${baseUrl}${returnTo}?mp=erro&motivo=banco`);
     }
   } else {

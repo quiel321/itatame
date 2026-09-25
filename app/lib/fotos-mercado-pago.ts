@@ -6,10 +6,7 @@ import {
   liberarPedidoFotos,
 } from "@/app/lib/fotos-pedidos";
 import { enviarEmailPedidoFotosConfirmado } from "@/app/lib/email-fotos";
-
-function primeiraRelacao<T>(valor: T | T[] | null | undefined) {
-  return Array.isArray(valor) ? valor[0] : valor;
-}
+import { obterRecebedorFotos } from "@/app/lib/fotos-recebedor";
 
 type SincronizarPagamentoParams = {
   pedidoId?: string | null;
@@ -20,10 +17,11 @@ type SincronizarPagamentoParams = {
 export async function sincronizarPagamentoFotos(
   supabase: SupabaseClient,
   { pedidoId, paymentId, compradorUserId }: SincronizarPagamentoParams,
+  request: Request,
 ) {
   let consulta = supabase
     .from("foto_pedidos")
-    .select("id, total_centavos, status, provedor_payment_id, fotografo_id, fotografos(mp_access_token)");
+    .select("id, total_centavos, status, provedor_payment_id, fotografo_id, organizador_user_id, modelo_recebimento");
 
   if (pedidoId) consulta = consulta.eq("id", pedidoId);
   else if (paymentId) consulta = consulta.eq("provedor_payment_id", paymentId);
@@ -34,13 +32,13 @@ export async function sincronizarPagamentoFotos(
   if (pedidoError || !pedido) return null;
 
   const idPagamento = String(paymentId || pedido.provedor_payment_id || "");
-  const fotografo = primeiraRelacao(pedido.fotografos);
-  if (!idPagamento || !fotografo?.mp_access_token) {
+  const recebedor = await obterRecebedorFotos(supabase, request, pedido);
+  if (!idPagamento || !recebedor) {
     return { id: pedido.id, status: pedido.status, sincronizado: false };
   }
 
   const response = await fetch(`https://api.mercadopago.com/v1/payments/${encodeURIComponent(idPagamento)}`, {
-    headers: { Authorization: `Bearer ${fotografo.mp_access_token}` },
+    headers: { Authorization: `Bearer ${recebedor.accessToken}` },
     cache: "no-store",
   });
   const payment = await response.json();

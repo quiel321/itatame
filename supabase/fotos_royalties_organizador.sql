@@ -6,7 +6,7 @@
 alter table public.foto_pedidos
   add column if not exists organizador_user_id uuid references auth.users(id) on delete set null,
   add column if not exists comissao_organizador_percentual numeric(5,2) not null default 0
-    check (comissao_organizador_percentual between 0 and 15),
+    check (comissao_organizador_percentual between 0 and 50),
   add column if not exists comissao_organizador_centavos integer not null default 0
     check (comissao_organizador_centavos >= 0),
   add column if not exists repasse_organizador_status text not null default 'nao_aplicavel'
@@ -23,12 +23,12 @@ begin
   if not exists (
     select 1
     from pg_constraint
-    where conname = 'foto_evento_fotografos_royalty_lte_15'
+    where conname = 'foto_evento_fotografos_royalty_lte_50'
       and conrelid = 'public.foto_evento_fotografos'::regclass
   ) then
     alter table public.foto_evento_fotografos
-      add constraint foto_evento_fotografos_royalty_lte_15
-      check (comissao_organizador_percentual between 0 and 15);
+      add constraint foto_evento_fotografos_royalty_lte_50
+      check (comissao_organizador_percentual between 0 and 50);
   end if;
 end
 $$;
@@ -39,7 +39,7 @@ create table if not exists public.foto_royalties_organizador (
   evento_id uuid references public.foto_eventos(id) on delete set null,
   fotografo_id uuid references public.fotografos(id) on delete set null,
   organizador_user_id uuid not null references auth.users(id) on delete restrict,
-  percentual numeric(5,2) not null check (percentual > 0 and percentual <= 15),
+  percentual numeric(5,2) not null check (percentual > 0 and percentual <= 50),
   valor_centavos integer not null check (valor_centavos > 0),
   status text not null default 'pendente'
     check (status in ('pendente', 'aguardando_liberacao', 'disponivel', 'pago', 'estornado')),

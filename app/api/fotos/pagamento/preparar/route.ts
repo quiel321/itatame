@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
 import {
   calcularDistribuicaoFotos,
+  calcularDistribuicaoDiariaFotos,
   COMISSAO_ITATAME_FOTOS_PERCENTUAL,
 } from "@/app/lib/fotos-financeiro";
 import {
@@ -11,6 +12,7 @@ import {
   tokenAcessoPedido,
 } from "@/app/lib/fotos-convidado";
 import { consumirLimiteAuth, ipDaRequisicao } from "@/app/lib/limite-auth";
+import { modeloRecebimentoFotos, obterRecebedorFotos } from "@/app/lib/fotos-recebedor";
 
 export const runtime = "nodejs";
 
@@ -31,9 +33,6 @@ function notificationUrl(request: Request, pedidoId: string) {
 
 export async function POST(request: Request) {
   try {
-    const publicKey = process.env.NEXT_PUBLIC_RETRATT_MP_PUBLIC_KEY;
-    if (!publicKey) return NextResponse.json({ error: "Mercado Pago não configurado." }, { status: 500 });
-
     const supabase = createSupabaseServerClient();
     const body = await request.json();
     const token = bearerToken(request);
@@ -95,8 +94,8 @@ export async function POST(request: Request) {
     if (evento.vendas_ate && new Date(evento.vendas_ate) < new Date()) {
       return NextResponse.json({ error: "O prazo de compra desta galeria terminou." }, { status: 409 });
     }
-    if (!fotografo?.mp_access_token || fotografo.status !== "ativo") {
-      return NextResponse.json({ error: "O fotógrafo ainda não conectou a conta de recebimento." }, { status: 409 });
+    if (fotografo?.status !== "ativo") {
+      return NextResponse.json({ error: "O fotógrafo desta galeria não está ativo." }, { status: 409 });
     }
 
     const subtotalCentavos = fotos.reduce((total, foto) => total + Math.max(0, Number(foto.preco_centavos || 0)), 0);
@@ -109,24 +108,39 @@ export async function POST(request: Request) {
     if (totalCentavos <= 0) return NextResponse.json({ error: "Total do pedido inválido." }, { status: 409 });
 
     let percentualOrganizador = 0;
+    let modeloRecebimento = modeloRecebimentoFotos(null);
     const organizadorUserId = evento.organizador_user_id ? String(evento.organizador_user_id) : null;
     if (organizadorUserId) {
       const { data: vinculo, error: vinculoError } = await supabase
         .from("foto_evento_fotografos")
-        .select("comissao_organizador_percentual")
+        .select("comissao_organizador_percentual, modelo_recebimento")
         .eq("evento_id", eventoId)
         .eq("fotografo_id", fotografoId)
         .eq("status", "ativo")
         .maybeSingle();
       if (vinculoError) throw new Error(vinculoError.message);
       percentualOrganizador = Number(vinculo?.comissao_organizador_percentual || 0);
+      modeloRecebimento = modeloRecebimentoFotos(vinculo?.modelo_recebimento);
     }
 
-    const distribuicao = calcularDistribuicaoFotos({
-      totalCentavos,
-      percentualItatame: COMISSAO_ITATAME_FOTOS_PERCENTUAL,
-      percentualOrganizador,
+    const recebedor = await obterRecebedorFotos(supabase, request, {
+      modelo_recebimento: modeloRecebimento,
+      fotografo_id: fotografoId,
+      organizador_user_id: organizadorUserId,
     });
+    if (!recebedor) {
+      return NextResponse.json({ error: modeloRecebimento === "diaria_organizador" ? "O organizador precisa conectar a conta Mercado Pago da Retratt." : "O fotógrafo ainda não conectou a conta de recebimento." }, { status: 409 });
+    }
+    const publicKey = recebedor.publicKey || (modeloRecebimento === "royalty" ? process.env.NEXT_PUBLIC_RETRATT_MP_PUBLIC_KEY : null);
+    if (!publicKey) return NextResponse.json({ error: "Chave pública da conta recebedora indisponível." }, { status: 409 });
+
+    const distribuicao = modeloRecebimento === "diaria_organizador"
+      ? calcularDistribuicaoDiariaFotos(totalCentavos)
+      : calcularDistribuicaoFotos({
+        totalCentavos,
+        percentualItatame: COMISSAO_ITATAME_FOTOS_PERCENTUAL,
+        percentualOrganizador,
+      });
     if (convidado) {
       ({ userId: compradorUserId } = await obterOuCriarCompradorConvidado(supabase, {
         email: compradorEmail,
@@ -147,6 +161,8 @@ export async function POST(request: Request) {
         desconto_centavos: descontoCentavos,
         total_centavos: totalCentavos,
         organizador_user_id: organizadorUserId,
+        modelo_recebimento: modeloRecebimento,
+        receita_direta_organizador_centavos: modeloRecebimento === "diaria_organizador" ? distribuicao.receitaDiretaOrganizadorCentavos : 0,
         comissao_itatame_centavos: distribuicao.comissaoItatameCentavos,
         comissao_organizador_percentual: distribuicao.percentualOrganizador,
         comissao_organizador_centavos: distribuicao.comissaoOrganizadorCentavos,
@@ -169,7 +185,7 @@ export async function POST(request: Request) {
       throw new Error(itensError.message);
     }
 
-    if (organizadorUserId && distribuicao.comissaoOrganizadorCentavos > 0) {
+    if (modeloRecebimento === "royalty" && organizadorUserId && distribuicao.comissaoOrganizadorCentavos > 0) {
       const { error: royaltyError } = await supabase.from("foto_royalties_organizador").insert({
         pedido_id: pedido.id,
         evento_id: eventoId,
@@ -189,7 +205,7 @@ export async function POST(request: Request) {
     const preferenceResponse = await fetch("https://api.mercadopago.com/checkout/preferences", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${fotografo.mp_access_token}`,
+        Authorization: `Bearer ${recebedor.accessToken}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -235,6 +251,7 @@ export async function POST(request: Request) {
         comissaoItatameCentavos: distribuicao.comissaoItatameCentavos,
         royaltyOrganizadorCentavos: distribuicao.comissaoOrganizadorCentavos,
         fotografoAntesDaTarifaCentavos: distribuicao.fotografoAntesDaTarifaCentavos,
+        receitaDiretaOrganizadorCentavos: distribuicao.receitaDiretaOrganizadorCentavos,
       },
     });
   } catch (error: unknown) {

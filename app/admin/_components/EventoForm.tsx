@@ -135,9 +135,11 @@ export default function EventoForm({ modo, eventoId }: EventoFormProps) {
 
   const [bannerAtualUrl, setBannerAtualUrl] = useState("");
   const [regulamentoAtualUrl, setRegulamentoAtualUrl] = useState("");
+  const [tabelaPesoAtualUrl, setTabelaPesoAtualUrl] = useState("");
   const [bannerFile, setBannerFile] = useState<File | null>(null);
   const [bannerPreview, setBannerPreview] = useState("");
   const [regulamentoFile, setRegulamentoFile] = useState<File | null>(null);
+  const [tabelaPesoFile, setTabelaPesoFile] = useState<File | null>(null);
 
   useEffect(() => {
     async function carregarEvento() {
@@ -225,8 +227,9 @@ export default function EventoForm({ modo, eventoId }: EventoFormProps) {
 
         setBannerAtualUrl(evento.banner_url || "");
         setRegulamentoAtualUrl(evento.regulamento_url || "");
-      } catch (err: any) {
-        alert(err.message);
+        setTabelaPesoAtualUrl(evento.tabela_peso_pdf_url || "");
+      } catch (err: unknown) {
+        alert(err instanceof Error ? err.message : "Não foi possível carregar o evento.");
         router.push("/admin");
       } finally {
         setCarregandoInicial(false);
@@ -282,6 +285,12 @@ export default function EventoForm({ modo, eventoId }: EventoFormProps) {
       return;
     }
 
+    if (tabelaPesoFile && tabelaPesoFile.type !== "application/pdf") {
+      setErro("A tabela de peso deve ser um arquivo PDF.");
+      setSalvando(false);
+      return;
+    }
+
     const lote1Numero = valorDigitado(lote1Valor);
     const lote2Numero = valorDigitado(lote2Valor);
     const lote3Numero = valorDigitado(lote3Valor);
@@ -333,6 +342,7 @@ export default function EventoForm({ modo, eventoId }: EventoFormProps) {
 
       let finalBannerUrl = bannerAtualUrl;
       let finalRegulamentoUrl = regulamentoAtualUrl;
+      let finalTabelaPesoUrl = tabelaPesoAtualUrl;
 
       if (bannerFile) {
         const fileExt = bannerFile.type.split("/")[1] || "webp";
@@ -352,6 +362,15 @@ export default function EventoForm({ modo, eventoId }: EventoFormProps) {
         const { error: uploadError } = await supabase.storage.from("eventos").upload(filePath, regulamentoFile, { upsert: false });
         if (uploadError) throw new Error("Erro no upload do regulamento: " + uploadError.message);
         finalRegulamentoUrl = supabase.storage.from("eventos").getPublicUrl(filePath).data.publicUrl;
+      }
+
+      if (tabelaPesoFile) {
+        const filePath = editando
+          ? "regulamentos/tabela-peso-" + eventoId + "-" + Date.now() + ".pdf"
+          : "regulamentos/tabela-peso-" + Date.now() + ".pdf";
+        const { error: uploadError } = await supabase.storage.from("eventos").upload(filePath, tabelaPesoFile, { contentType: "application/pdf", upsert: false });
+        if (uploadError) throw new Error("Erro no upload da tabela de peso: " + uploadError.message);
+        finalTabelaPesoUrl = supabase.storage.from("eventos").getPublicUrl(filePath).data.publicUrl;
       }
 
       const regrasPontuacaoEquipes: RegrasPontuacao = {
@@ -385,6 +404,7 @@ export default function EventoForm({ modo, eventoId }: EventoFormProps) {
         regras_pesagem: regrasPesagem,
         banner_url: finalBannerUrl,
         regulamento_url: finalRegulamentoUrl,
+        tabela_peso_pdf_url: finalTabelaPesoUrl || null,
         limite_vagas: limiteVagas,
         lote1_valor: lote1Numero,
         lote1_data_fim: dataHoraLocalParaIso(lote1DataFim, estado),
@@ -427,8 +447,8 @@ export default function EventoForm({ modo, eventoId }: EventoFormProps) {
       if (error) throw new Error(error.message);
       setSucesso(true);
       setTimeout(() => router.push("/admin"), 900);
-    } catch (err: any) {
-      setErro(err.message || "Não foi possível salvar o evento.");
+    } catch (err: unknown) {
+      setErro(err instanceof Error ? err.message : "Não foi possível salvar o evento.");
     } finally {
       setSalvando(false);
     }
@@ -563,12 +583,14 @@ export default function EventoForm({ modo, eventoId }: EventoFormProps) {
             </div>
 
             <div className={cardClass}>
-              <SectionTitle icon={<ImagePlus size={16} />} title="Arquivos" subtitle="Banner do evento e regulamento em PDF." />
-              <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <SectionTitle icon={<ImagePlus size={16} />} title="Arquivos" subtitle="Banner, regulamento e tabela de peso em PDF." />
+              <div className="mt-4 grid gap-3 md:grid-cols-3">
                 <Field label="Banner"><input type="file" accept="image/*" onChange={handleBannerChange} className="block w-full text-xs text-zinc-400 file:mr-3 file:rounded-lg file:border-0 file:bg-white file:px-4 file:py-2 file:text-xs file:font-black file:uppercase file:tracking-widest file:text-black" /></Field>
                 <Field label="Regulamento"><input type="file" accept="application/pdf" onChange={(e) => setRegulamentoFile(e.target.files?.[0] || null)} className="block w-full text-xs text-zinc-400 file:mr-3 file:rounded-lg file:border-0 file:bg-white file:px-4 file:py-2 file:text-xs file:font-black file:uppercase file:tracking-widest file:text-black" /></Field>
+                <Field label="Tabela de Peso (PDF)"><input type="file" accept="application/pdf,.pdf" onChange={(e) => setTabelaPesoFile(e.target.files?.[0] || null)} className="block w-full text-xs text-zinc-400 file:mr-3 file:rounded-lg file:border-0 file:bg-white file:px-4 file:py-2 file:text-xs file:font-black file:uppercase file:tracking-widest file:text-black" /></Field>
               </div>
               {regulamentoAtualUrl && <a href={regulamentoAtualUrl} target="_blank" className="mt-3 inline-flex text-xs font-bold text-cyan-300 hover:text-cyan-200">Regulamento atual cadastrado</a>}
+              {tabelaPesoAtualUrl && <a href={tabelaPesoAtualUrl} target="_blank" rel="noopener noreferrer" className="mt-3 ml-4 inline-flex text-xs font-bold text-cyan-300 hover:text-cyan-200">Tabela de peso atual cadastrada</a>}
             </div>
           </section>
 

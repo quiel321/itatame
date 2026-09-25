@@ -38,7 +38,7 @@ export async function POST(request: Request) {
     const resultado = await sincronizarPagamentoFotos(supabase, {
       pedidoId: url.searchParams.get("pedido_id"),
       paymentId,
-    });
+    }, request);
 
     if (!resultado) return NextResponse.json({ success: true, message: "Pedido não localizado." });
     return NextResponse.json({ success: true, status: resultado.status });

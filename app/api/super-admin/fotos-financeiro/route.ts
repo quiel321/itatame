@@ -16,6 +16,8 @@ type Pedido = {
   comissao_itatame_centavos: number | null;
   comissao_organizador_centavos: number | null;
   comissao_organizador_percentual: number | null;
+  receita_direta_organizador_centavos: number | null;
+  modelo_recebimento: string | null;
   repasse_organizador_status: string | null;
   pago_em: string | null;
   created_at: string;
@@ -63,6 +65,7 @@ function resumoVazio() {
     royaltyAguardandoCentavos: 0,
     royaltyDisponivelCentavos: 0,
     royaltyPagoCentavos: 0,
+    receitaDiretaOrganizadorCentavos: 0,
     fotografoAntesTarifaCentavos: 0,
     pedidosPagos: 0,
     fotosVendidas: 0,
@@ -73,11 +76,13 @@ function adicionarPedido(resumo: ReturnType<typeof resumoVazio>, pedido: Pedido)
   const total = Number(pedido.total_centavos || 0);
   const itatame = Number(pedido.comissao_itatame_centavos || 0);
   const royalty = Number(pedido.comissao_organizador_centavos || 0);
+  const receitaDireta = Number(pedido.receita_direta_organizador_centavos || 0);
   const statusRepasse = pedido.repasse_organizador_status || (royalty > 0 ? "pendente" : "nao_aplicavel");
 
   resumo.faturamentoCentavos += total;
   resumo.comissaoItatameCentavos += itatame;
-  resumo.fotografoAntesTarifaCentavos += Math.max(0, total - itatame - royalty);
+  resumo.fotografoAntesTarifaCentavos += pedido.modelo_recebimento === "diaria_organizador" ? 0 : Math.max(0, total - itatame - royalty);
+  resumo.receitaDiretaOrganizadorCentavos += receitaDireta;
   resumo.pedidosPagos += 1;
   resumo.fotosVendidas += pedido.foto_pedido_itens?.length || 0;
 
@@ -119,7 +124,7 @@ export async function GET(request: Request) {
       carregarEmPaginas<Pedido>(async (inicio, fim) => {
         const resultado = await supabase
           .from("foto_pedidos")
-          .select("id, evento_id, fotografo_id, organizador_user_id, status, total_centavos, comissao_itatame_centavos, comissao_organizador_centavos, comissao_organizador_percentual, repasse_organizador_status, pago_em, created_at, foto_pedido_itens(id)")
+          .select("id, evento_id, fotografo_id, organizador_user_id, status, total_centavos, comissao_itatame_centavos, comissao_organizador_centavos, comissao_organizador_percentual, receita_direta_organizador_centavos, modelo_recebimento, repasse_organizador_status, pago_em, created_at, foto_pedido_itens(id)")
           .order("created_at", { ascending: false })
           .range(inicio, fim);
         return { data: resultado.data as Pedido[] | null, error: resultado.error };
@@ -236,6 +241,8 @@ export async function GET(request: Request) {
       comissaoItatameCentavos: Number(pedido.comissao_itatame_centavos || 0),
       royaltyCentavos: Number(pedido.comissao_organizador_centavos || 0),
       royaltyPercentual: Number(pedido.comissao_organizador_percentual || 0),
+      receitaDiretaOrganizadorCentavos: Number(pedido.receita_direta_organizador_centavos || 0),
+      modeloRecebimento: pedido.modelo_recebimento || "royalty",
       repasseStatus: pedido.repasse_organizador_status || "nao_aplicavel",
       fotos: pedido.foto_pedido_itens?.length || 0,
     }));

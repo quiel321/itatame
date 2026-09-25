@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 
 const metricas = [
-  { valor: "9,5%", rotulo: "Taxa Retratt por venda" },
+  { valor: "5%", rotulo: "Taxa Retratt por venda" },
   { valor: "IA", rotulo: "Busca Facial Ativa" },
   { valor: "Zero", rotulo: "Mensalidade" },
 ];
