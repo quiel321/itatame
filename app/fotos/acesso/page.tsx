@@ -113,15 +113,15 @@ export default function FotosAcessoPage() {
                 <KeyRound size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-600" />
                 <input
                   value={codigo}
-                  onChange={(e) => setCodigo(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  onChange={(e) => setCodigo(e.target.value.replace(/\D/g, "").slice(0, 8))}
                   inputMode="numeric"
                   autoComplete="one-time-code"
                   required
-                  placeholder="Código de 6 dígitos"
+                  placeholder="Código recebido no e-mail"
                   className={`${campo} tracking-[0.4em]`}
                 />
               </div>
-              <button disabled={carregando || codigo.length !== 6} className="flex h-14 w-full cursor-pointer items-center justify-center gap-2 rounded-2xl bg-retratt text-[10px] font-black uppercase tracking-widest text-white transition-all hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60">
+              <button disabled={carregando || codigo.length < 6} className="flex h-14 w-full cursor-pointer items-center justify-center gap-2 rounded-2xl bg-retratt text-[10px] font-black uppercase tracking-widest text-white transition-all hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60">
                 {carregando ? <Loader2 size={16} className="animate-spin" /> : <KeyRound size={16} />} Entrar
               </button>
               <button type="button" onClick={() => { setEtapa("email"); setCodigo(""); setMensagem(""); }} className="w-full cursor-pointer text-[10px] font-bold uppercase tracking-widest text-zinc-500 hover:text-white">

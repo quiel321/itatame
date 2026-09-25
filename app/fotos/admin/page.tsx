@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
+import { comprimirAvatar, comprimirCapa } from "@/app/lib/comprimir-avatar";
 import FotosShell from "../_components/FotosShell";
 import { ArrowRight, BarChart3, Camera, CheckCircle2, FolderPlus, ImagePlus, Pencil, Store, Trophy, Wallet, LogOut, Check, AlertCircle, ShieldCheck, UploadCloud, Loader2, X, Trash2, Plus } from "lucide-react";
 import { formatarDocumento } from '@/app/lib/formatar-documento';
@@ -216,9 +217,9 @@ export default function FotosAdminPage() {
     if (!file || !userId) return;
     try {
       setFazendoUpload(tipo);
-      const extensao = file.name.split(".").pop()?.toLowerCase() || "jpg";
-      const caminho = `fotos-organizadores/${userId}/${tipo}-${Date.now()}.${extensao}`;
-      const { error: uploadError } = await supabase.storage.from("avatars").upload(caminho, file, { upsert: false });
+      const leve = tipo === "avatar" ? await comprimirAvatar(file) : await comprimirCapa(file);
+      const caminho = `fotos-organizadores/${userId}/${tipo}-${Date.now()}.webp`;
+      const { error: uploadError } = await supabase.storage.from("avatars").upload(caminho, leve, { contentType: "image/webp", upsert: false });
       if (uploadError) throw uploadError;
       const url = supabase.storage.from("avatars").getPublicUrl(caminho).data.publicUrl;
       const coluna = tipo === "avatar" ? "avatar_url" : "capa_url";

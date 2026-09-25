@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createR2PresignedGetUrl } from "@/app/lib/r2";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
-import { acessoPedidoValido, bearerToken } from "@/app/lib/fotos-convidado";
+import { acessoPedidoValido, bearerToken, downloadItemValido, linkDownloadItem } from "@/app/lib/fotos-convidado";
 
 export const runtime = "nodejs";
 type Params = { params: Promise<{ itemId: string }> };
@@ -13,8 +13,10 @@ function primeiraRelacao<T>(valor: T | T[] | null | undefined) {
 export async function GET(request: Request, context: Params) {
   try {
     const token = bearerToken(request);
-    const acesso = new URL(request.url).searchParams.get("acesso");
-    if (!token && !acesso) return NextResponse.json({ error: "Login necessário." }, { status: 401 });
+    const parametros = new URL(request.url).searchParams;
+    const acesso = parametros.get("acesso");
+    const assinatura = parametros.get("assinatura");
+    if (!token && !acesso && !assinatura) return NextResponse.json({ error: "Login necessário." }, { status: 401 });
 
     const supabase = createSupabaseServerClient();
     let usuarioId: string | null = null;
@@ -37,9 +39,15 @@ export async function GET(request: Request, context: Params) {
     const expirado = item.download_expires_at && new Date(item.download_expires_at) < new Date();
     const dono = usuarioId
       ? pedido?.comprador_user_id === usuarioId
-      : acessoPedidoValido(String(item.pedido_id), acesso);
+      : assinatura
+        ? downloadItemValido(String(item.id), parametros.get("exp"), assinatura)
+        : acessoPedidoValido(String(item.pedido_id), acesso);
     if (!dono || pedido?.status !== "pago" || !item.download_liberado || expirado || !foto?.r2_original_key) {
       return NextResponse.json({ error: "Download não autorizado ou expirado." }, { status: 403 });
+    }
+
+    if (usuarioId && parametros.get("link") === "1") {
+      return NextResponse.json({ url: linkDownloadItem(String(item.id)) }, { headers: { "Cache-Control": "private, no-store" } });
     }
 
     const arquivo = await fetch(createR2PresignedGetUrl(foto.r2_original_key, 120), { cache: "no-store" });

@@ -30,6 +30,25 @@ export function acessoPedidoValido(pedidoId: string, token: unknown) {
   return esperado.length === recebido.length && crypto.timingSafeEqual(esperado, recebido);
 }
 
+/** Link curto de download para o comprador logado: o navegador baixa direto, sem carregar o arquivo na memória. */
+export function assinaturaDownloadItem(itemId: string, expira: number) {
+  return crypto.createHmac("sha256", segredoAcesso()).update(`foto_download:${itemId}:${expira}`).digest("base64url");
+}
+
+export function linkDownloadItem(itemId: string, validadeSegundos = 300) {
+  const expira = Math.floor(Date.now() / 1000) + validadeSegundos;
+  const params = new URLSearchParams({ exp: String(expira), assinatura: assinaturaDownloadItem(itemId, expira) });
+  return `/api/fotos/download/${itemId}?${params.toString()}`;
+}
+
+export function downloadItemValido(itemId: string, exp: string | null, assinatura: string | null) {
+  const expira = Number(exp);
+  if (!assinatura || !Number.isFinite(expira) || expira < Date.now() / 1000) return false;
+  const esperado = Buffer.from(assinaturaDownloadItem(itemId, expira));
+  const recebido = Buffer.from(assinatura);
+  return esperado.length === recebido.length && crypto.timingSafeEqual(esperado, recebido);
+}
+
 /** Resolve quem pode operar um pedido: o usuário logado dono dele ou o portador do token do pedido. */
 export async function autorizarPedido(
   supabase: SupabaseClient,

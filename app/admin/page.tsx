@@ -4,6 +4,7 @@ import { obterEventoOrganizador, guardarEventoOrganizador } from '@/app/lib/even
 
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "../lib/supabase";
+import { comprimirAvatar } from "../lib/comprimir-avatar";
 import { getPlanoComercial } from "../lib/planos-comerciais";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -319,11 +320,11 @@ export default function AdminPage() {
       let fotoUrlFinal = fotoUrl;
 
       if (novaFoto && currentUserId) {
-        const fileExt = novaFoto.name.split('.').pop();
-        const fileName = `${currentUserId}-${Date.now()}.${fileExt}`;
+        const leve = await comprimirAvatar(novaFoto);
+        const fileName = `${currentUserId}-${Date.now()}.webp`;
         const filePath = `organizadores/${fileName}`;
 
-        const { error: uploadError } = await supabase.storage.from('avatars').upload(filePath, novaFoto);
+        const { error: uploadError } = await supabase.storage.from('avatars').upload(filePath, leve, { contentType: 'image/webp' });
         if (uploadError) throw uploadError;
 
         const { data: publicUrlData } = supabase.storage.from('avatars').getPublicUrl(filePath);

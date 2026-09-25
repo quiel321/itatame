@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { supabase } from "../lib/supabase"; 
+import { comprimirAvatar } from "../lib/comprimir-avatar";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import imageCompression from 'browser-image-compression';
@@ -188,7 +189,7 @@ export default function LoginOrganizadorPage() {
       cadastro.set("nome", nomeCompleto);
       cadastro.set("telefone", telefone);
       cadastro.set("academia", nomeAcademia);
-      if (foto) cadastro.set("foto", foto);
+      if (foto) cadastro.set("foto", await comprimirAvatar(foto));
 
       const response = await fetch("/api/cadastro", { method: "POST", body: cadastro });
       const resultado = await response.json();

@@ -122,18 +122,18 @@ export default function FotosMinhasComprasPage() {
     setBaixandoItem(itemId);
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) { router.push("/fotos/login?perfil=comprador&next=/fotos/minhas-compras"); return; }
-    const response = await fetch(`/api/fotos/download/${itemId}`, { headers: { Authorization: `Bearer ${session.access_token}` }, });
+    const response = await fetch(`/api/fotos/download/${itemId}?link=1`, { headers: { Authorization: `Bearer ${session.access_token}` }, });
+    const resultado = await response.json().catch(() => null);
     setBaixandoItem(null);
-    if (!response.ok) return;
-    const blob = await response.blob();
-    const url = URL.createObjectURL(blob);
+    if (!response.ok || !resultado?.url) {
+      setMensagemPagamento(resultado?.error || "Não foi possível iniciar o download. Tente novamente.");
+      return;
+    }
     const link = document.createElement("a");
-    link.href = url;
-    const contentType = response.headers.get("content-type") || blob.type;
-    const extensao = contentType.includes("mp4") ? "mp4" : contentType.includes("webm") ? "webm" : contentType.includes("quicktime") ? "mov" : "jpg";
-    link.download = `retratt-arquivo.${extensao}`;
+    link.href = resultado.url;
+    document.body.appendChild(link);
     link.click();
-    URL.revokeObjectURL(url);
+    link.remove();
   }
 
   async function verificarPagamento(pedidoId: string) {

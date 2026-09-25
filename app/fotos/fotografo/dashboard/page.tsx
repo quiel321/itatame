@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
+import { comprimirAvatar } from "@/app/lib/comprimir-avatar";
 import FotosShell from "../../_components/FotosShell";
 import { Camera, CheckCircle2, ChevronDown, CloudUpload, CreditCard, FolderOpen, ImagePlus, ShieldCheck, Wallet, LogOut, AlertCircle, Store, X, Edit, Calendar, MapPin, Trash2, Loader2, Check, Plus, Images, Trophy, ChartNoAxesCombined, Link2 } from "lucide-react";
 import MercadoPagoConnectButton from "@/app/admin/_components/MercadoPagoConnectButton";
@@ -192,9 +193,9 @@ export default function FotografoDashboardPage() {
     if (!file || !perfil?.id || !userId) return;
     setEnviandoFoto(true);
     try {
-      const extensao = file.name.split(".").pop()?.toLowerCase() || "jpg";
-      const caminho = `fotos-fotografos/${userId}/perfil-${Date.now()}.${extensao}`;
-      const { error: uploadError } = await supabase.storage.from("avatars").upload(caminho, file, { upsert: false });
+      const leve = await comprimirAvatar(file);
+      const caminho = `fotos-fotografos/${userId}/perfil-${Date.now()}.webp`;
+      const { error: uploadError } = await supabase.storage.from("avatars").upload(caminho, leve, { contentType: "image/webp", upsert: false });
       if (uploadError) throw uploadError;
       const fotoUrl = supabase.storage.from("avatars").getPublicUrl(caminho).data.publicUrl;
       const { error } = await supabase.from("fotografos").update({ foto_url: fotoUrl }).eq("id", perfil.id).eq("user_id", userId);
