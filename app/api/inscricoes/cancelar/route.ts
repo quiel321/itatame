@@ -16,7 +16,13 @@ export async function DELETE(request: Request) {
   if ((inscricao.pagamento_ok && !inscricao.cortesia) || inscricao.mp_payment_id || inscricao.estorno_status) {
     return NextResponse.json({ error: 'Esta inscrição possui pagamento. Solicite o cancelamento com estorno.' }, { status: 409 });
   }
-  const { error: erroExclusao } = await supabase.from('inscricoes').delete().eq('id', inscricao.id).eq('user_id', inscricao.user_id);
+  const impedimentoAtual = await conferirCancelamentoInscricao(supabase, usuario.id, inscricao);
+  if (impedimentoAtual) return NextResponse.json({ error: impedimentoAtual }, { status: 409 });
+  let exclusao = supabase.from('inscricoes').delete().eq('id', inscricao.id).eq('user_id', inscricao.user_id)
+    .is('mp_payment_id', null).is('estorno_status', null);
+  exclusao = inscricao.cortesia ? exclusao.eq('cortesia', true) : exclusao.eq('pagamento_ok', false);
+  const { data: excluidas, error: erroExclusao } = await exclusao.select('id');
   if (erroExclusao) return NextResponse.json({ error: erroExclusao.message }, { status: 500 });
+  if (!excluidas?.length) return NextResponse.json({ error: 'O pagamento ou o estado da inscrição mudou. Atualize a página antes de tentar novamente.' }, { status: 409 });
   return NextResponse.json({ success: true });
 }

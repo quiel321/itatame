@@ -175,6 +175,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: `A transação está com status ${pagamento.status || "desconhecido"} e não permite estorno integral por este botão.` }, { status: 409 });
   }
 
+  // A consulta ao Mercado Pago pode demorar; confira o prazo novamente antes do estorno.
+  if (papel === "atleta") {
+    const impedimento = await conferirCancelamentoInscricao(supabase, usuario.id, inscricao);
+    if (impedimento) return NextResponse.json({ error: impedimento }, { status: 409 });
+  }
+
   await registrarAuditoria("processando", { mp_status: pagamento.status, erro: null });
   const { error: marcarProcessandoError } = await supabase.from("inscricoes").update({ estorno_status: "processando", estorno_motivo: motivo }).eq("id", inscricao.id);
   if (marcarProcessandoError) throw new Error(marcarProcessandoError.message);
