@@ -24,7 +24,10 @@ export async function POST(request: Request) {
     const secret = process.env.RETRATT_MP_WEBHOOK_SECRET;
     const xSignature = request.headers.get("x-signature");
     const xRequestId = request.headers.get("x-request-id");
-    if (secret && xSignature && xRequestId) {
+    if (secret) {
+      if (!xSignature || !xRequestId) {
+        return NextResponse.json({ success: false }, { status: 401 });
+      }
       WebhookSignatureValidator.validate({
         xSignature,
         xRequestId,

@@ -435,7 +435,7 @@ export default function EventoGaleriaCliente() {
             </div>
           </div>
 
-          <div className="mb-6 rounded-3xl bg-gradient-to-r from-[#18100c] via-orange-950/20 to-[#0a0a0e] border border-retratt/20 p-5 md:p-6 flex flex-col md:flex-row items-center justify-between gap-5 shadow-lg shadow-orange-950/10">
+          {Number(evento?.desconto_combo_percentual || 0) > 0 && <div className="mb-6 rounded-3xl bg-gradient-to-r from-[#18100c] via-orange-950/20 to-[#0a0a0e] border border-retratt/20 p-5 md:p-6 flex flex-col md:flex-row items-center justify-between gap-5 shadow-lg shadow-orange-950/10">
              <div className="flex items-center gap-4 text-center md:text-left">
                 <div className="hidden sm:flex w-12 h-12 rounded-full bg-retratt/10 text-retratt items-center justify-center shrink-0 border border-retratt/20">
                    <Percent size={24} />
@@ -445,21 +445,17 @@ export default function EventoGaleriaCliente() {
                       Leve mais, <span className="text-retratt">Pague menos</span>
                    </h3>
                    <p className="text-[11px] text-zinc-400 font-medium uppercase tracking-widest">
-                      Economize até 20% comprando pacotes no carrinho.
+                      {Number(evento.desconto_combo_percentual)}% de desconto a partir de {Number(evento.desconto_combo_qtd || 3)} mídias da mesma galeria e fotógrafo.
                    </p>
                 </div>
              </div>
              <div className="flex gap-3 w-full md:w-auto">
-                <div className="flex-1 md:flex-none bg-black/40 border border-white/5 rounded-2xl px-5 py-3 text-center">
-                   <p className="text-xl font-black text-white">10<span className="text-xs text-zinc-500">%</span></p>
-                   <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500 mt-1">2 fotos</p>
-                </div>
                 <div className="flex-1 md:flex-none bg-retratt/10 border border-retratt/30 rounded-2xl px-5 py-3 text-center shadow-[0_0_15px_rgba(255,90,31,0.1)]">
-                   <p className="text-xl font-black text-retratt">20<span className="text-xs text-retratt/50">%</span></p>
-                   <p className="text-[9px] font-black uppercase tracking-widest text-retratt mt-1">3+ fotos</p>
+                   <p className="text-xl font-black text-retratt">{Number(evento.desconto_combo_percentual)}<span className="text-xs text-retratt/50">%</span></p>
+                   <p className="text-[9px] font-black uppercase tracking-widest text-retratt mt-1">{Number(evento.desconto_combo_qtd || 3)}+ mídias</p>
                 </div>
              </div>
-          </div>
+          </div>}
 
           {!carregando && totalFotos > 0 && totalVideos > 0 && (
             <div className="mb-5 grid grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-[#0a0a0e] p-1.5 sm:inline-grid sm:min-w-[360px]" role="tablist" aria-label="Tipo de mídia">

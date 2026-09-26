@@ -116,9 +116,9 @@ export async function POST(request: Request) {
         .select("comissao_organizador_percentual, modelo_recebimento")
         .eq("evento_id", eventoId)
         .eq("fotografo_id", fotografoId)
-        .eq("status", "ativo")
         .maybeSingle();
       if (vinculoError) throw new Error(vinculoError.message);
+      if (!vinculo) return NextResponse.json({ error: "Fotógrafo sem regra de recebimento nesta galeria." }, { status: 409 });
       percentualOrganizador = Number(vinculo?.comissao_organizador_percentual || 0);
       modeloRecebimento = modeloRecebimentoFotos(vinculo?.modelo_recebimento);
     }

@@ -5,7 +5,6 @@ import {
   estornarRoyaltyOrganizador,
   liberarPedidoFotos,
 } from "@/app/lib/fotos-pedidos";
-import { enviarEmailPedidoFotosConfirmado } from "@/app/lib/email-fotos";
 import { obterRecebedorFotos } from "@/app/lib/fotos-recebedor";
 
 type SincronizarPagamentoParams = {
@@ -57,7 +56,6 @@ export async function sincronizarPagamentoFotos(
     await liberarPedidoFotos(supabase, pedido.id, idPagamento, payment.status_detail);
   } else if (payment.status === "approved") {
     await confirmarRoyaltyOrganizador(supabase, pedido.id, idPagamento);
-    await enviarEmailPedidoFotosConfirmado(supabase, pedido.id);
   } else if (["cancelled", "refunded", "charged_back"].includes(String(payment.status))) {
     const statusPedido = payment.status === "cancelled" ? "cancelado" : "reembolsado";
     await supabase.from("foto_pedidos").update({ status: statusPedido }).eq("id", pedido.id);

@@ -77,6 +77,7 @@ export default function FotosAdminPage() {
   const [royaltyForm, setRoyaltyForm] = useState<Record<string, string>>({});
   const [modeloForm, setModeloForm] = useState<Record<string, "royalty" | "diaria_organizador">>({});
   const [salvandoRoyalty, setSalvandoRoyalty] = useState<string | null>(null);
+  const [removendoFotografo, setRemovendoFotografo] = useState<string | null>(null);
 
   const [mensagem, setMensagem] = useState("");
   const [salvandoPerfil, setSalvandoPerfil] = useState(false);
@@ -230,17 +231,22 @@ export default function FotosAdminPage() {
     try {
       setFazendoUpload(tipo);
       const leve = tipo === "avatar" ? await comprimirAvatar(file) : await comprimirCapa(file);
-      const caminho = `fotos-organizadores/${userId}/${tipo}-${Date.now()}.webp`;
-      const { error: uploadError } = await supabase.storage.from("avatars").upload(caminho, leve, { contentType: "image/webp", upsert: false });
-      if (uploadError) throw uploadError;
-      const url = supabase.storage.from("avatars").getPublicUrl(caminho).data.publicUrl;
-      const coluna = tipo === "avatar" ? "avatar_url" : "capa_url";
-      const { error: updateError } = await supabase.from("foto_organizadores").update({ [coluna]: url }).eq("id", userId);
-      if (updateError) throw updateError;
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Sessão expirada. Faça login novamente.");
+      const form = new FormData();
+      form.append("file", leve);
+      form.append("tipo", tipo);
+      const response = await fetch("/api/fotos/admin/imagem-perfil", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        body: form,
+      });
+      const resultado = await response.json().catch(() => null);
+      if (!response.ok || !resultado?.publicUrl) throw new Error(resultado?.error || "Não foi possível salvar a imagem.");
       setMensagem(tipo === "avatar" ? "Foto de perfil atualizada." : "Capa pública atualizada.");
     } catch (error) {
       console.error("Upload do perfil do organizador:", error);
-      setMensagem("Não foi possível enviar a imagem.");
+      setMensagem(error instanceof Error ? error.message : "Não foi possível enviar a imagem.");
     } finally {
       setFazendoUpload(null);
       event.target.value = "";
@@ -343,8 +349,18 @@ export default function FotosAdminPage() {
     const qtd = Number.isFinite(Number(regra.qtd)) ? Math.max(2, Math.round(Number(regra.qtd))) : 3;
     const percentual = Number.isFinite(Number(regra.percentual.replace(",", "."))) ? Math.min(90, Math.max(0, Number(regra.percentual.replace(",", ".")))) : 20;
 
-    await supabase.from("foto_eventos").update({ desconto_combo_qtd: qtd, desconto_combo_percentual: percentual }).eq("id", eventoId).eq("organizador_user_id", userId);
-    window.location.reload();
+    const { data, error } = await supabase.from("foto_eventos")
+      .update({ desconto_combo_qtd: qtd, desconto_combo_percentual: percentual })
+      .eq("id", eventoId).eq("organizador_user_id", userId)
+      .select("id, desconto_combo_qtd, desconto_combo_percentual").maybeSingle();
+    if (error || !data) {
+      setMensagem(error?.message || "Não foi possível atualizar o combo desta galeria.");
+      return;
+    }
+    setFotoEventos((atuais) => atuais.map((item) => item.id === eventoId
+      ? { ...item, desconto_combo_qtd: data.desconto_combo_qtd, desconto_combo_percentual: data.desconto_combo_percentual }
+      : item));
+    setMensagem(`Combo atualizado: ${qtd} mídias com ${percentual}% de desconto.`);
   }
 
   async function credenciarFotografo(eventoId: string) {
@@ -367,6 +383,27 @@ export default function FotosAdminPage() {
     setEmailFotografo((atual) => ({ ...atual, [eventoId]: "" }));
     setMensagem(`${resultado.fotografo.nome} foi credenciado com sucesso.`);
     window.location.reload();
+  }
+
+  async function descredenciarFotografo(eventoId: string, fotografo: FotografoCredenciado) {
+    if (!window.confirm(`Remover ${fotografo.nome || "este fotógrafo"} dos credenciados? Novos uploads serão bloqueados. Fotos já publicadas e pedidos anteriores permanecem na galeria.`)) return;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) { setMensagem("Sessão expirada. Faça login novamente."); return; }
+    const chave = chaveRoyalty(eventoId, fotografo.id);
+    setRemovendoFotografo(chave);
+    const response = await fetch("/api/fotos/admin/descredenciar-fotografo", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ eventoId, fotografoId: fotografo.id }),
+    });
+    const resultado = await response.json().catch(() => null);
+    setRemovendoFotografo(null);
+    if (!response.ok) { setMensagem(resultado?.error || "Não foi possível remover o credenciamento."); return; }
+    setFotografosPorGaleria((atual) => ({
+      ...atual,
+      [eventoId]: (atual[eventoId] || []).filter((item) => item.id !== fotografo.id),
+    }));
+    setMensagem(`${fotografo.nome || "Fotógrafo"} removido dos credenciados. As fotos já publicadas continuam à venda com a divisão configurada.`);
   }
 
   async function salvarRoyaltyFotografo(eventoId: string, fotografoId: string) {
@@ -832,6 +869,9 @@ export default function FotosAdminPage() {
                                     <div className="min-w-0">
                                       <p className="truncate text-[11px] font-black text-white md:text-xs">{fotografo.nome || "Fotógrafo"}</p>
                                       <p className="mt-1 truncate text-[9px] text-zinc-500">{fotografo.email || "E-mail não informado"}</p>
+                                      <button type="button" onClick={() => descredenciarFotografo(evento.id, fotografo)} disabled={removendoFotografo === chave} className="mt-2 cursor-pointer text-[9px] font-bold text-red-300 hover:text-red-200 disabled:opacity-50">
+                                        {removendoFotografo === chave ? "Removendo..." : "Remover credenciamento"}
+                                      </button>
                                     </div>
                                   </div>
                                   <div>

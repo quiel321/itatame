@@ -575,7 +575,13 @@ export default function PainelFotografoPage() {
   async function selecionarArquivos(lista: FileList | null) {
     if (!lista) return;
     const recebidos = Array.from(lista);
-    const lote = recebidos.slice(0, MAX_UPLOAD_FILES);
+    const capacidade = MAX_UPLOAD_FILES - arquivos.length;
+    if (capacidade <= 0) {
+      setMensagem(`O limite é de ${MAX_UPLOAD_FILES} mídias por lote. Publique ou limpe a lista antes de adicionar outras.`);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+    const lote = recebidos.slice(0, capacidade);
     const aceitos: File[] = [];
     const motivosRecusa: string[] = [];
     let otimizadas = 0;
@@ -623,7 +629,7 @@ export default function PainelFotografoPage() {
       setOtimizacaoAtual(index + 1);
     }
 
-    setArquivos(aceitos);
+    setArquivos((atuais) => [...atuais, ...aceitos]);
     setStatus("idle");
     setUploadAtual(0);
     setOtimizando(false);
@@ -631,12 +637,13 @@ export default function PainelFotografoPage() {
     setOtimizacaoTotal(0);
     if (fileInputRef.current) fileInputRef.current.value = "";
 
+    const totalPronto = arquivos.length + aceitos.length;
     if (recusados > 0) {
-      setMensagem(`${aceitos.length} mídia(s) pronta(s). ${otimizadas} foto(s) foram otimizadas e ${recusados} arquivo(s) ficaram fora. ${motivosRecusa[0] || "Revise formato, tamanho e duração."}`);
+      setMensagem(`${totalPronto} mídia(s) pronta(s). ${otimizadas} foto(s) foram otimizadas e ${recusados} arquivo(s) ficaram fora. ${motivosRecusa[0] || "Revise formato, tamanho e duração."}`);
     } else if (otimizadas > 0) {
-      setMensagem(`${aceitos.length} mídia(s) pronta(s). ${otimizadas} foto(s) foram otimizadas automaticamente para até 3MB.`);
+      setMensagem(`${totalPronto} mídia(s) pronta(s). ${otimizadas} foto(s) foram otimizadas automaticamente para até 3MB.`);
     } else {
-      setMensagem(`${aceitos.length} mídia(s) pronta(s) para publicação.`);
+      setMensagem(`${totalPronto} mídia(s) pronta(s) para publicação.`);
     }
   }
 
@@ -1030,7 +1037,7 @@ export default function PainelFotografoPage() {
                   {otimizando ? `Preparando ${otimizacaoAtual} de ${otimizacaoTotal}` : arquivos.length ? `${arquivos.length} mídia(s) pronta(s)` : "Clique ou arraste fotos e vídeos"}
                 </p>
                 <p className="mt-2 max-w-sm text-xs leading-5 text-zinc-500">
-                  {arquivos.length ? "Clique novamente para trocar o lote ou revise a lista logo abaixo." : "Escolha fotos e vídeos. Você verá o andamento de cada etapa antes da publicação."}
+                  {arquivos.length ? "Clique novamente para adicionar mais mídias ou revise a lista logo abaixo." : "Escolha fotos e vídeos. Você verá o andamento de cada etapa antes da publicação."}
                 </p>
                 <p className="mt-3 text-[10px] font-black uppercase tracking-wider text-retratt">Fotos: JPG, PNG ou WebP · Vídeos: MP4, WebM ou MOV · Até {formatarDuracaoVideo(VIDEO_MAX_DURATION_SECONDS)} / 250 MB</p>
               </div>
