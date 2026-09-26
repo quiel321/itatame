@@ -11,6 +11,7 @@ import { rotuloLuta } from '../../lib/lutas-rotulos';
 import { garantirVinculoStaff } from '../../lib/staff-sessao';
 import { ordemOperacionalChaveTriangular, textoAguardandoChaveDeTres } from '@/app/lib/chave-de-tres';
 import { semFaixaDuplicada } from '@/app/lib/categorias-competicao';
+import { sugestoesCategoriaPorTatame } from '@/app/lib/sugestao-categoria-tatame';
 import { alertaProximaLuta, corrigirResultadoLuta, METODOS_RESULTADO, rotuloMetodo, type MetodoResultado } from '@/app/lib/corrigir-resultado';
 
 type StaffSession = {
@@ -742,6 +743,7 @@ export default function PainelMesario() {
       </header>
 
       <div className="mx-auto w-full max-w-7xl min-w-0 space-y-4 p-3 md:p-6">
+        {lutas.length > 0 && (() => { const sugestao = sugestoesCategoriaPorTatame(lutas)[0]; return sugestao && <section className="rounded-2xl border border-cyan-500/25 bg-cyan-500/5 p-4"><h2 className="text-xs font-black uppercase text-cyan-200">Próxima categoria neste tatame</h2><p className="mt-1 text-sm font-bold text-white">{tituloCategoria(sugestao.proxima)}</p><p className="mt-1 text-[10px] text-zinc-400">{sugestao.aguardarHorario ? `Aguardar início previsto: ${formatarHorario(sugestao.proxima.horario_estimado)}` : sugestao.proxima.iniciada_em ? 'Luta chamada; aguardando início no placar' : `Próxima na ordem definida · ${formatarHorario(sugestao.proxima.horario_estimado)}`}</p></section>; })()}
         <section className="grid min-w-0 grid-cols-2 gap-2 md:grid-cols-4 md:gap-3">
           <button type="button" onClick={() => setAbaAtiva('fila')} className="min-w-0 overflow-hidden rounded-xl border border-white/10 bg-[#0b0b10] px-2 py-3 text-left md:rounded-2xl md:p-4">
             <span className="block truncate text-[8px] font-black uppercase tracking-widest text-zinc-500 md:text-[9px]">Na fila</span>

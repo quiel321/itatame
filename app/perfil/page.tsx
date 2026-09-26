@@ -13,6 +13,14 @@ import { ChatEvento, BotaoChatInscricao, useMensagensNaoLidas, SeloNaoLidas } fr
 import { comprimirAvatar } from '@/app/lib/comprimir-avatar';
 import { academiasDaEquipe, equipesOficiais, nomeOficial } from '@/app/lib/vinculo-equipe';
 import CampoNomeOficial from '@/app/components/CampoNomeOficial';
+import { dataOperacionalEvento } from '@/app/lib/evento-datas';
+
+type InscricaoCancelavel = {
+  id: number;
+  pagamento_ok?: boolean;
+  cortesia?: boolean;
+  eventos?: { data_fim_inscricoes?: string | null; lote1_data_fim?: string | null; lote2_data_fim?: string | null; lote3_data_fim?: string | null; estado?: string | null } | null;
+};
 
 export default function PerfilPage() {
   const [perfilId, setPerfilId] = useState<number | null>(null);
@@ -71,6 +79,7 @@ export default function PerfilPage() {
   const chatNaoLidas = useMensagensNaoLidas(minhasInscricoes.map(insc => insc.evento_id));
   const [editandoInscricao, setEditandoInscricao] = useState<any>(null);
   const [salvandoInscricao, setSalvandoInscricao] = useState(false);
+  const [cancelandoInscricaoId, setCancelandoInscricaoId] = useState<number | null>(null);
   const [minhaEquipe, setMinhaEquipe] = useState<any[]>([]);
 
   const [dependentes, setDependentes] = useState<any[]>([]);
@@ -222,10 +231,10 @@ export default function PerfilPage() {
 
     const { data: inscricoesData } = await supabase
       .from("inscricoes")
-      .select(`id, evento_id, user_id, categoria, categoria_id, idade, sexo, faixa, modalidade, peso, absoluto, pagamento_ok, pesagem_ok, eventos (nome, data_evento, data_inicio_checagem, data_fim_checagem, data_divulgacao_chaves)`)
+      .select(`id, evento_id, user_id, categoria, categoria_id, idade, sexo, faixa, modalidade, peso, absoluto, pagamento_ok, pesagem_ok, mp_payment_id, cortesia, estorno_status, eventos (nome, data_evento, data_inicio_checagem, data_fim_checagem, data_divulgacao_chaves, data_fim_inscricoes, lote1_data_fim, lote2_data_fim, lote3_data_fim, estado)`)
       .in("user_id", idsFamilia);
 
-    if (inscricoesData) setMinhasInscricoes(inscricoesData);
+    if (inscricoesData) setMinhasInscricoes(inscricoesData.filter((insc) => insc.estorno_status !== 'estornado'));
 
     let totalEventosParticipados = 0;
     if (inscricoesData) {
@@ -299,8 +308,8 @@ export default function PerfilPage() {
           let inscricoesAlunos: any[] = [];
 
           if (alunosIds.length > 0) {
-            const { data: inscData } = await supabase.from("inscricoes").select(`id, evento_id, user_id, categoria, categoria_id, idade, sexo, faixa, modalidade, peso, absoluto, pagamento_ok, pesagem_ok, eventos (nome, data_evento, data_inicio_checagem, data_fim_checagem, data_divulgacao_chaves)`).in("user_id", alunosIds);
-            if (inscData) inscricoesAlunos = inscData;
+            const { data: inscData } = await supabase.from("inscricoes").select(`id, evento_id, user_id, categoria, categoria_id, idade, sexo, faixa, modalidade, peso, absoluto, pagamento_ok, pesagem_ok, mp_payment_id, cortesia, estorno_status, eventos (nome, data_evento, data_inicio_checagem, data_fim_checagem, data_divulgacao_chaves, data_fim_inscricoes, lote1_data_fim, lote2_data_fim, lote3_data_fim, estado)`).in("user_id", alunosIds);
+            if (inscData) inscricoesAlunos = inscData.filter((insc) => insc.estorno_status !== 'estornado');
           }
 
           const equipeComInscricoes = alunosData.map(aluno => ({
@@ -676,6 +685,40 @@ export default function PerfilPage() {
         setEditandoInscricao(null);
     }, 2000);
     setSalvandoInscricao(false);
+  }
+
+  function prazoCancelamentoAberto(insc: InscricaoCancelavel) {
+    const evento = insc.eventos;
+    const fim = evento?.data_fim_inscricoes || evento?.lote3_data_fim || evento?.lote2_data_fim || evento?.lote1_data_fim;
+    if (!fim) return false;
+    const limite = dataOperacionalEvento(fim, true, evento?.estado);
+    return Boolean(limite && Date.now() <= limite.getTime());
+  }
+
+  async function cancelarInscricao(insc: InscricaoCancelavel) {
+    const pago = Boolean(insc.pagamento_ok && !insc.cortesia);
+    const aviso = pago ? 'Cancelar esta inscrição e solicitar o estorno integral do pagamento?' : 'Excluir esta inscrição?';
+    if (!window.confirm(aviso)) return;
+    setCancelandoInscricaoId(insc.id);
+    setErro('');
+    setMensagem('');
+    try {
+      const { data: sessao } = await supabase.auth.getSession();
+      const resposta = await fetch(pago ? '/api/inscricoes/estorno' : `/api/inscricoes/cancelar?id=${encodeURIComponent(insc.id)}`, {
+        method: pago ? 'POST' : 'DELETE',
+        headers: { Authorization: `Bearer ${sessao.session?.access_token || ''}`, ...(pago ? { 'Content-Type': 'application/json' } : {}) },
+        ...(pago ? { body: JSON.stringify({ inscricaoId: insc.id, motivo: 'Cancelamento solicitado pelo atleta dentro do prazo', confirmacao: 'CANCELAR' }) } : {}),
+      });
+      const resultado = await resposta.json().catch(() => ({}));
+      if (!resposta.ok) throw new Error(resultado.error || 'Não foi possível cancelar a inscrição.');
+      setMinhasInscricoes((atual) => atual.filter((item) => item.id !== insc.id));
+      setDependentes((atual) => atual.map((dep) => ({ ...dep, inscricoes: dep.inscricoes?.filter((item: { id: number }) => item.id !== insc.id) })));
+      setMensagem(pago ? 'Inscrição cancelada e estorno solicitado com sucesso.' : 'Inscrição cancelada com sucesso.');
+    } catch (falha) {
+      setErro(falha instanceof Error ? falha.message : 'Não foi possível cancelar a inscrição.');
+    } finally {
+      setCancelandoInscricaoId(null);
+    }
   }
 
   function urlCarteira() {
@@ -1463,6 +1506,7 @@ export default function PerfilPage() {
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
                           Editar Inscrição
                         </button>
+                        {prazoCancelamentoAberto(insc) ? <button onClick={() => cancelarInscricao(insc)} disabled={cancelandoInscricaoId === insc.id} className="w-full rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-[9px] font-black uppercase tracking-widest text-red-300 disabled:opacity-50">{cancelandoInscricaoId === insc.id ? 'Cancelando...' : 'Cancelar inscrição'}</button> : <p className="text-center text-[10px] text-zinc-500">Prazo encerrado. Fale com o organizador para cancelar.</p>}
 
                         {!insc.pagamento_ok ? (
                           <>
@@ -1587,6 +1631,7 @@ export default function PerfilPage() {
                                   <button onClick={() => window.location.href = `/evento/${insc.evento_id}/ao-vivo`} className="cursor-pointer bg-red-600 hover:bg-red-500 border border-red-400/30 text-white px-2 py-1 rounded text-[8px] font-black uppercase tracking-widest transition-colors">
                                     Ao vivo
                                   </button>
+                                  {prazoCancelamentoAberto(insc) && <button onClick={() => cancelarInscricao(insc)} disabled={cancelandoInscricaoId === insc.id} className="rounded border border-red-500/30 px-2 py-1 text-[8px] font-black uppercase text-red-300 disabled:opacity-50">Cancelar</button>}
                                 </div>
                               </div>
                             ))}

@@ -4,6 +4,7 @@ import { createSupabaseServerClient } from "@/app/lib/supabase-server";
 import { autenticarRequest } from "@/app/lib/api-auth";
 import { obterAccessTokenOrganizador } from "@/app/lib/mercado-pago-integracao";
 import { enviarEmailEstorno } from "@/app/lib/email-estorno";
+import { conferirCancelamentoInscricao } from "@/app/lib/cancelamento-inscricao";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -62,13 +63,12 @@ export async function POST(request: Request) {
   if (motivo.length < 8 || motivo.length > 300) {
     return NextResponse.json({ error: "Informe um motivo entre 8 e 300 caracteres." }, { status: 400 });
   }
-  if (confirmacao !== "ESTORNAR") {
-    return NextResponse.json({ error: "Digite ESTORNAR para confirmar a devolução integral." }, { status: 400 });
+  if (confirmacao !== "ESTORNAR" && confirmacao !== "CANCELAR") {
+    return NextResponse.json({ error: "Confirme a devolução integral para continuar." }, { status: 400 });
   }
 
   const supabase = createSupabaseServerClient();
-  const papel = await papelDoUsuario(usuario.id);
-  if (!papel) return NextResponse.json({ error: "Usuário sem permissão financeira." }, { status: 403 });
+  const papel = (await papelDoUsuario(usuario.id)) || "atleta";
 
   const { data: inscricao, error: inscricaoError } = await supabase
     .from("inscricoes")
@@ -81,6 +81,13 @@ export async function POST(request: Request) {
   if (!evento?.organizador_id) return NextResponse.json({ error: "Evento sem organizador vinculado." }, { status: 409 });
   if (papel === "organizador" && evento.organizador_id !== usuario.id) {
     return NextResponse.json({ error: "Você só pode estornar inscrições dos seus eventos." }, { status: 403 });
+  }
+  if (papel === "atleta") {
+    if (confirmacao !== "CANCELAR") return NextResponse.json({ error: "Confirme o cancelamento da inscrição." }, { status: 400 });
+    const impedimento = await conferirCancelamentoInscricao(supabase, usuario.id, inscricao);
+    if (impedimento) return NextResponse.json({ error: impedimento }, { status: 409 });
+  } else if (confirmacao !== "ESTORNAR") {
+    return NextResponse.json({ error: "Digite ESTORNAR para confirmar a devolução integral." }, { status: 400 });
   }
   if (inscricao.cortesia || !inscricao.mp_payment_id) {
     return NextResponse.json({ error: "Cortesias e inscrições sem transação não possuem valor para estornar." }, { status: 409 });

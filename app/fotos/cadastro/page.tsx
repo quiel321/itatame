@@ -1,11 +1,10 @@
 ﻿"use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, type FormEvent } from "react";
 import { supabase } from "@/app/lib/supabase";
 import FotosShell from "../_components/FotosShell";
-import { Camera, Images, ShieldCheck, Users, Lock, Mail, ArrowRight, User } from "lucide-react";
+import { Camera, Images, ShieldCheck, Users, Lock, Mail, ArrowRight, User, Eye, EyeOff, type LucideIcon } from "lucide-react";
 
 type Perfil = "comprador" | "fotografo" | "organizador";
 
@@ -31,7 +30,7 @@ const perfis = {
     textoLogin: "Já tenho conta de Organizador",
     icon: Users,
   },
-} satisfies Record<Perfil, { titulo: string; texto: string; destino: string; textoLogin: string; icon: any }>;
+} satisfies Record<Perfil, { titulo: string; texto: string; destino: string; textoLogin: string; icon: LucideIcon }>;
 
 // 🔥 TEMAS DINÂMICOS
 const temas = {
@@ -68,13 +67,14 @@ const temas = {
 };
 
 export default function FotosCadastroPage() {
-  const router = useRouter();
   const [perfil, setPerfil] = useState<Perfil>("comprador");
   const [destinoManual, setDestinoManual] = useState<string | null>(null);
 
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
+  const [mostrarSenha, setMostrarSenha] = useState(false);
+  const [aguardandoConfirmacao, setAguardandoConfirmacao] = useState(false);
 
   const [erro, setErro] = useState("");
   const [carregando, setCarregando] = useState(false);
@@ -82,11 +82,12 @@ export default function FotosCadastroPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const perfilParam = params.get("perfil") as Perfil | null;
-    if (perfilParam && perfilParam in perfis) setPerfil(perfilParam);
-    setDestinoManual(params.get("next"));
+    queueMicrotask(() => {
+      if (perfilParam && perfilParam in perfis) setPerfil(perfilParam);
+      setDestinoManual(params.get("next"));
+    });
   }, []);
 
-  const destino = useMemo(() => destinoManual || perfis[perfil].destino, [destinoManual, perfil]);
   const perfilAtual = perfis[perfil];
   const temaAtual = temas[perfil];
 
@@ -95,20 +96,37 @@ export default function FotosCadastroPage() {
     setErro("");
     setCarregando(true);
 
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password: senha,
-      options: { data: { nome_completo: nome, foto_perfil: perfil } }
-    });
-
-    if (error || !data.user) {
+    try {
+      const response = await fetch("/api/fotos/cadastro", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nome, email, password: senha, perfil, next: destinoManual }),
+      });
+      const resultado = await response.json().catch(() => null);
+      if (!response.ok) {
+        setErro(resultado?.error || "Não foi possível criar a conta agora.");
+        return;
+      }
+      setAguardandoConfirmacao(true);
+    } catch {
+      setErro("Falha de conexão. Tente novamente.");
+    } finally {
       setCarregando(false);
-      setErro("Erro ao criar conta. Este e-mail já pode estar em uso.");
-      return;
     }
+  }
 
+  async function reenviarConfirmacao() {
+    setErro("");
+    setCarregando(true);
+    const params = new URLSearchParams({ perfil, email_confirmado: "1" });
+    if (destinoManual) params.set("next", destinoManual);
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email: email.trim().toLowerCase(),
+      options: { emailRedirectTo: `${window.location.origin}/fotos/login?${params.toString()}` },
+    });
     setCarregando(false);
-    router.push(destino);
+    setErro(error ? "Não foi possível reenviar agora. Tente novamente em alguns minutos." : "Se o cadastro estiver pendente, enviamos um novo link de confirmação.");
   }
 
   return (
@@ -164,7 +182,14 @@ export default function FotosCadastroPage() {
                <p className="text-[10px] text-zinc-500 uppercase tracking-widest mt-1">Como {perfilAtual.titulo}</p>
             </div>
 
-            <div className="space-y-4">
+            {aguardandoConfirmacao ? (
+              <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-5 text-center text-xs text-emerald-100">
+                <Mail className="mx-auto mb-3" size={24} />
+                Confirme o link enviado para <strong>{email.trim().toLowerCase()}</strong> antes de entrar.
+                <button type="button" onClick={reenviarConfirmacao} disabled={carregando} className="mt-4 block w-full text-[10px] font-black uppercase underline disabled:opacity-50">Reenviar confirmação</button>
+                <Link href={`/fotos/login?perfil=${perfil}${destinoManual ? `&next=${encodeURIComponent(destinoManual)}` : ""}`} className="mt-3 block text-[10px] font-black uppercase underline">Ir para o login</Link>
+              </div>
+            ) : <div className="space-y-4">
                <div>
                  <label className="block text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500 ml-1 mb-1.5">Seu Nome Completo</label>
                  <div className="relative">
@@ -185,10 +210,11 @@ export default function FotosCadastroPage() {
                  <label className="block text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500 ml-1 mb-1.5">Criar Senha</label>
                  <div className="relative">
                    <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-600" />
-                   <input value={senha} onChange={(e) => setSenha(e.target.value)} type="password" required placeholder="Mínimo 6 caracteres" minLength={6} className={`h-14 w-full cursor-text rounded-2xl border border-white/5 bg-[#050505] pl-11 pr-4 text-xs font-bold text-white outline-none transition-all placeholder:text-zinc-700 focus:ring-1 ${temaAtual.focus}`} />
+                   <input value={senha} onChange={(e) => setSenha(e.target.value)} type={mostrarSenha ? "text" : "password"} required placeholder="Mínimo 6 caracteres" minLength={6} className={`h-14 w-full cursor-text rounded-2xl border border-white/5 bg-[#050505] pl-11 pr-12 text-xs font-bold text-white outline-none transition-all placeholder:text-zinc-700 focus:ring-1 ${temaAtual.focus}`} />
+                   <button type="button" onClick={() => setMostrarSenha(!mostrarSenha)} aria-label={mostrarSenha ? "Ocultar senha" : "Mostrar senha"} className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white">{mostrarSenha ? <EyeOff size={17} /> : <Eye size={17} />}</button>
                  </div>
                </div>
-            </div>
+            </div>}
 
             {erro && (
                <div className="mt-5 rounded-xl border border-retratt/30 bg-retratt/10 p-3 text-[11px] font-bold text-retratt text-center flex items-center justify-center gap-2">
@@ -196,10 +222,10 @@ export default function FotosCadastroPage() {
                </div>
             )}
 
-            <button disabled={carregando} className={`cursor-pointer mt-8 h-14 w-full rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${temaAtual.button}`}>
+            {!aguardandoConfirmacao && <button disabled={carregando} className={`cursor-pointer mt-8 h-14 w-full rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${temaAtual.button}`}>
                {carregando ? "A criar conta..." : "Completar Cadastro"}
                {!carregando && temaAtual.iconeBtn}
-            </button>
+            </button>}
 
             <div className="mt-8 pt-6 border-t border-white/5">
                <p className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500 text-center mb-4">Já tem uma conta?</p>

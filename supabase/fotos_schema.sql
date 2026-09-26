@@ -52,6 +52,8 @@ create table if not exists public.foto_eventos (
   capa_url text,
   status text not null default 'rascunho' check (status in ('rascunho', 'publicado', 'arquivado')),
   preco_padrao_centavos integer not null default 1500 check (preco_padrao_centavos >= 0),
+  preco_video_centavos integer not null default 2500 check (preco_video_centavos >= 0),
+  preco_bloqueado boolean not null default false,
   permite_download_gratis boolean not null default false,
   vendas_ate timestamptz,
   desconto_combo_qtd integer not null default 3 check (desconto_combo_qtd >= 2),

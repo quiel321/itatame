@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     const { data: auth, error: authError } = await supabase.auth.getUser(token);
     if (authError || !auth.user) return NextResponse.json({ error: "Sessao invalida." }, { status: 401 });
 
-    const { eventoId, precoCentavos, descontoComboQtd, descontoComboPercentual } = await request.json();
+    const { eventoId, precoCentavos, precoVideoCentavos, precoBloqueado, descontoComboQtd, descontoComboPercentual } = await request.json();
     if (!eventoId) return NextResponse.json({ error: "Selecione um evento." }, { status: 400 });
 
     const { data: evento, error: eventoError } = await supabase
@@ -44,6 +44,7 @@ export async function POST(request: Request) {
     if (existente) return NextResponse.json({ error: "Esse evento já possui galeria de fotos." }, { status: 409 });
 
     const preco = Number.isFinite(Number(precoCentavos)) ? Math.max(0, Number(precoCentavos)) : 1500;
+    const precoVideo = Number.isFinite(Number(precoVideoCentavos)) ? Math.max(0, Number(precoVideoCentavos)) : 2500;
     const comboQtd = Number.isFinite(Number(descontoComboQtd)) ? Math.max(2, Math.round(Number(descontoComboQtd))) : 3;
     const comboPercentual = Number.isFinite(Number(descontoComboPercentual)) ? Math.min(90, Math.max(0, Number(descontoComboPercentual))) : 20;
     const { data: galeria, error: galeriaError } = await supabase
@@ -59,6 +60,8 @@ export async function POST(request: Request) {
         capa_url: evento.banner_url,
         status: "publicado",
         preco_padrao_centavos: preco,
+        preco_video_centavos: precoVideo,
+        preco_bloqueado: precoBloqueado === true,
         desconto_combo_qtd: comboQtd,
         desconto_combo_percentual: comboPercentual,
         created_by: auth.user.id,

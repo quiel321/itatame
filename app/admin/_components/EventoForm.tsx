@@ -634,6 +634,9 @@ export default function EventoForm({ modo, eventoId }: EventoFormProps) {
               </div>
             </div>
           </aside>
+          <div className="lg:col-span-2 flex justify-end border-t border-white/10 pt-5">
+            <button type="submit" disabled={salvando || comprimindo} className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-red-600 px-5 text-xs font-black uppercase tracking-[0.16em] text-white hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"><Save size={16} />{salvando ? "Salvando..." : "Salvar evento"}</button>
+          </div>
         </form>
       </div>
     </main>

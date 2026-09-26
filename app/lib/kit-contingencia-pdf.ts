@@ -225,7 +225,7 @@ function desenharOperacaoPorTatame(doc: jsPDF, lutas: LutaKitContingencia[], cod
           `${formatarHorario(luta.horario_estimado)}\n${codigo.get(String(luta.id)) || "-"}`,
           `V: ${nomeReal(luta.atleta_1)}\nA: ${nomeReal(luta.atleta_2)}\n${grupoDaLuta(luta)}`,
           concluida ? "FEITA" : "V [ ]\nA [ ]",
-          concluida ? "-" : "1ª ____:____\n2ª ____:____",
+          concluida ? "-" : "1ª ____:____\n2ª ____:____\n3ª ____:____",
           concluida
             ? `${texto(luta.vencedor)}\n${metodoDaLuta(luta)} · ${placarDaLuta(luta)}`
             : "Vencedor: __________\nMétodo/placar: ________",
@@ -325,10 +325,11 @@ function desenharChamador(doc: jsPDF, lutas: LutaKitContingencia[], codigo: Map<
     novaPagina(doc, `Chamador e baia · ${tatame}`, "Marque presença somente quando o atleta estiver fisicamente na baia. Uma linha acompanha cada luta pendente.");
     autoTable(doc, {
       startY: 56,
-      head: [["Código / hora", "Atletas", "1ª chamada", "2ª chamada", "Na baia", "Liberada", "W.O. / obs."]],
+      head: [["Código / hora", "Atletas", "1ª chamada", "2ª chamada", "3ª chamada", "Na baia", "Liberada", "W.O. / obs."]],
       body: pendentes.map((luta) => [
         `${codigo.get(String(luta.id)) || "-"}\n${formatarHorario(luta.horario_estimado)}`,
         `V: ${nomeReal(luta.atleta_1)}\nA: ${nomeReal(luta.atleta_2)}`,
+        "____:____",
         "____:____",
         "____:____",
         "V [ ]  A [ ]",
@@ -339,7 +340,7 @@ function desenharChamador(doc: jsPDF, lutas: LutaKitContingencia[], codigo: Map<
       styles: { fontSize: 7, cellPadding: 3, valign: "middle" },
       headStyles: { fillColor: [8, 145, 178], textColor: [255, 255, 255], fontStyle: "bold" },
       alternateRowStyles: { fillColor: [240, 249, 255] },
-      columnStyles: { 0: { cellWidth: 24, fontStyle: "bold" }, 1: { cellWidth: 57 }, 2: { cellWidth: 19 }, 3: { cellWidth: 19 }, 4: { cellWidth: 18 }, 5: { cellWidth: 20 }, 6: { cellWidth: 25 } },
+      columnStyles: { 0: { cellWidth: 22, fontStyle: "bold" }, 1: { cellWidth: 49 }, 2: { cellWidth: 17 }, 3: { cellWidth: 17 }, 4: { cellWidth: 17 }, 5: { cellWidth: 17 }, 6: { cellWidth: 18 }, 7: { cellWidth: 25 } },
       margin: { top: TOPO, bottom: RODAPE, left: 14, right: 14 },
       showHead: "everyPage",
       rowPageBreak: "avoid",

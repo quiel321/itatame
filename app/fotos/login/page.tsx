@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
 import { podeAcessarPerfilFotos } from "@/app/lib/fotos-acesso";
 import FotosShell from "../_components/FotosShell";
-import { Camera, Images, ShieldCheck, Users, Lock, Mail, ArrowRight, type LucideIcon } from "lucide-react";
+import { Camera, Images, ShieldCheck, Users, Lock, Mail, ArrowRight, Eye, EyeOff, type LucideIcon } from "lucide-react";
 
 type Perfil = "comprador" | "fotografo" | "organizador";
 
@@ -74,6 +74,8 @@ export default function FotosLoginPage() {
   const [destinoManual, setDestinoManual] = useState<string | null>(null);
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
+  const [mostrarSenha, setMostrarSenha] = useState(false);
+  const [emailConfirmado, setEmailConfirmado] = useState(false);
   const [erro, setErro] = useState("");
   const [carregando, setCarregando] = useState(false);
 
@@ -83,6 +85,7 @@ export default function FotosLoginPage() {
     queueMicrotask(() => {
       if (perfilParam && perfilParam in perfis) setPerfil(perfilParam);
       setDestinoManual(params.get("next"));
+      setEmailConfirmado(params.get("email_confirmado") === "1");
     });
     if (params.get("trocar") === "1") void supabase.auth.signOut();
   }, []);
@@ -98,7 +101,7 @@ export default function FotosLoginPage() {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
     if (error) {
       setCarregando(false);
-      setErro("E-mail ou senha inválidos. Tente novamente.");
+      setErro(error.code === "email_not_confirmed" ? "Confirme seu e-mail pelo link recebido antes de entrar." : "E-mail ou senha inválidos. Tente novamente.");
       return;
     }
     const autorizado = data.user ? await podeAcessarPerfilFotos(supabase, data.user, perfil) : false;
@@ -191,15 +194,17 @@ export default function FotosLoginPage() {
                    <input
                      value={senha}
                      onChange={(e) => setSenha(e.target.value)}
-                     type="password"
+                     type={mostrarSenha ? "text" : "password"}
                      required
                      placeholder="••••••••"
-                     className={`cursor-text h-14 w-full rounded-2xl border border-white/5 bg-[#050505] pl-11 pr-4 text-xs font-bold text-white outline-none transition-all placeholder:text-zinc-700 focus:ring-1 ${temaAtual.focus}`}
+                     className={`cursor-text h-14 w-full rounded-2xl border border-white/5 bg-[#050505] pl-11 pr-12 text-xs font-bold text-white outline-none transition-all placeholder:text-zinc-700 focus:ring-1 ${temaAtual.focus}`}
                    />
+                   <button type="button" onClick={() => setMostrarSenha(!mostrarSenha)} aria-label={mostrarSenha ? "Ocultar senha" : "Mostrar senha"} className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white">{mostrarSenha ? <EyeOff size={17} /> : <Eye size={17} />}</button>
                  </div>
                </div>
             </div>
 
+            {emailConfirmado && !erro && <div className="mt-5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-center text-[11px] font-bold text-emerald-300">E-mail confirmado. Entre com sua senha.</div>}
             {erro && (
                <div className="mt-5 rounded-xl border border-retratt/30 bg-retratt/10 p-3 text-[11px] font-bold text-retratt text-center flex items-center justify-center gap-2">
                   {erro}

@@ -14,7 +14,7 @@ type FotografoPerfil = { id: string; nome: string | null; email: string | null; 
 type Totais = { fotos: number; albuns: number; eventos: number; vendas: number };
 type PerfilForm = { nome: string; telefone: string; documento: string; cep: string; endereco: string; cidade: string; estado: string; bio: string; };
 
-type GaleriaFreelancer = { id: string; nome: string; cidade?: string | null; estado?: string | null; data_evento?: string | null; preco_padrao_centavos?: number | null; capa_url?: string | null; comissao_organizador_percentual?: number | null; modelo_recebimento?: "royalty" | "diaria_organizador"; created_by?: string | null; desconto_combo_qtd?: number | null; desconto_combo_percentual?: number | null; };
+type GaleriaFreelancer = { id: string; nome: string; cidade?: string | null; estado?: string | null; data_evento?: string | null; preco_padrao_centavos?: number | null; preco_bloqueado?: boolean; capa_url?: string | null; comissao_organizador_percentual?: number | null; modelo_recebimento?: "royalty" | "diaria_organizador"; created_by?: string | null; desconto_combo_qtd?: number | null; desconto_combo_percentual?: number | null; };
 
 function perfilParaForm(perfil: FotografoPerfil | null, email: string | null): PerfilForm {
   return { nome: perfil?.nome || email?.split("@")[0] || "", telefone: perfil?.telefone || "", documento: perfil?.documento || "", cep: perfil?.cep || "", endereco: perfil?.endereco || "", cidade: perfil?.cidade || "", estado: perfil?.estado || "", bio: perfil?.bio || "", };
@@ -116,7 +116,7 @@ export default function FotografoDashboardPage() {
           supabase.from("foto_arquivos").select("id", { count: "exact", head: true }).eq("fotografo_id", perfilAtual.id),
           supabase.from("foto_albuns").select("id", { count: "exact", head: true }).eq("fotografo_id", perfilAtual.id),
           supabase.from("foto_pedidos").select("id", { count: "exact", head: true }).eq("fotografo_id", perfilAtual.id).eq("status", "pago"),
-          supabase.from("foto_eventos").select("id, nome, cidade, estado, data_evento, preco_padrao_centavos, capa_url, desconto_combo_qtd, desconto_combo_percentual").eq("created_by", user.id).order("created_at", { ascending: false }),
+          supabase.from("foto_eventos").select("id, nome, cidade, estado, data_evento, preco_padrao_centavos, preco_bloqueado, capa_url, desconto_combo_qtd, desconto_combo_percentual").eq("created_by", user.id).order("created_at", { ascending: false }),
            supabase.from("foto_evento_fotografos").select("evento_id, comissao_organizador_percentual, modelo_recebimento").eq("fotografo_id", perfilAtual.id).eq("status", "ativo")
         ]);
 
@@ -128,7 +128,7 @@ export default function FotografoDashboardPage() {
         if (eventosPermitidos.length > 0) {
            const { data } = await supabase
               .from("foto_eventos")
-              .select("id, nome, cidade, estado, data_evento, preco_padrao_centavos, capa_url, created_by")
+              .select("id, nome, cidade, estado, data_evento, preco_padrao_centavos, preco_bloqueado, capa_url, created_by")
               .in("id", eventosPermitidos)
               .order("created_at", { ascending: false });
 
@@ -353,6 +353,7 @@ export default function FotografoDashboardPage() {
       <GerenciadorMidias
         key={galeriaId}
         galeriaId={galeriaId}
+        precoBloqueado={[...minhasGalerias, ...galeriasOficiais].find((galeria) => galeria.id === galeriaId)?.preco_bloqueado === true}
         onFechar={() => setGerenciandoGaleria(null)}
         onMidiasExcluidas={(quantidade) => setTotais((atual) => ({ ...atual, fotos: Math.max(0, atual.fotos - quantidade) }))}
       />
@@ -719,7 +720,7 @@ export default function FotografoDashboardPage() {
                   {mostrarCriarGaleria && (
                     <div className="px-5 pb-5 md:px-8 md:pb-8 border-t border-white/5 pt-5 sm:pt-6 animate-in slide-in-from-top-4 fade-in duration-300 bg-black/20">
                        <p className="mb-2 text-[10px] leading-relaxed text-zinc-400">Use quando o trabalho não estiver vinculado a um organizador. A galeria e o álbum Geral ficarão sob sua conta.</p>
-                       <p className="mb-6 rounded-xl border border-retratt/20 bg-retratt/5 p-3 text-[9px] font-bold leading-relaxed text-orange-100">Em cada venda, a Retratt retém 5%. Você recebe 95% menos o royalty do organizador e a tarifa do Mercado Pago, descontada da sua conta.</p>
+                       <p className="mb-6 rounded-xl border border-retratt/20 bg-retratt/5 p-3 text-[9px] font-bold leading-relaxed text-orange-100">Em galerias freelancer não há comissão de organizador. Em cada venda, a Retratt retém 5%; você recebe 95% menos a tarifa do Mercado Pago, descontada da sua conta.</p>
 
                        <div className="grid gap-3 sm:grid-cols-2">
                          <div className="sm:col-span-2">

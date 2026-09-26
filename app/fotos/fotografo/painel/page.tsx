@@ -494,7 +494,7 @@ export default function PainelFotografoPage() {
       const { data } = eventosPermitidos.length
         ? await supabase
             .from("foto_eventos")
-            .select("id, nome, slug, local, cidade, estado, data_evento, capa_url, status")
+            .select("id, nome, slug, local, cidade, estado, data_evento, capa_url, status, preco_padrao_centavos, preco_video_centavos, preco_bloqueado")
             .in("id", eventosPermitidos)
             .eq("status", "publicado")
             .order("data_evento", { ascending: false })
@@ -548,8 +548,8 @@ export default function PainelFotografoPage() {
 
   const eventoSelecionado = useMemo(() => eventos.find((evento) => evento.id === eventoId), [eventos, eventoId]);
   const albumSelecionado = useMemo(() => albuns.find((album) => album.id === albumId), [albuns, albumId]);
-  const valorFotoAtual = formatarPrecoFotos(converterPrecoCentavos(precoFoto, 1500));
-  const valorVideoAtual = formatarPrecoFotos(converterPrecoCentavos(precoVideo, 2500));
+  const valorFotoAtual = formatarPrecoFotos(eventoSelecionado?.preco_bloqueado ? Number(eventoSelecionado.preco_padrao_centavos || 0) : converterPrecoCentavos(precoFoto, 1500));
+  const valorVideoAtual = formatarPrecoFotos(eventoSelecionado?.preco_bloqueado ? Number(eventoSelecionado.preco_video_centavos || 0) : converterPrecoCentavos(precoVideo, 2500));
   const enviando = ["preparando", "enviando", "confirmando"].includes(status);
   const uploadBloqueado = !eventoId || carregandoAlbuns || enviando || otimizando || criandoAlbum;
   const totalBytes = arquivos.reduce((total, arquivo) => total + arquivo.size, 0);
@@ -1049,7 +1049,7 @@ export default function PainelFotografoPage() {
                     <span className="text-[9px] font-black uppercase tracking-wider text-zinc-500">Cada foto</span>
                     <div className="relative mt-1">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-zinc-500">R$</span>
-                      <input value={precoFoto} onChange={(e) => setPrecoFoto(e.target.value)} inputMode="decimal" className="h-12 w-full rounded-lg border border-white/10 bg-zinc-950 pl-9 pr-3 text-lg font-black outline-none focus:border-retratt" />
+                      <input value={eventoSelecionado?.preco_bloqueado ? ((eventoSelecionado.preco_padrao_centavos || 0) / 100).toFixed(2).replace(".", ",") : precoFoto} onChange={(e) => setPrecoFoto(e.target.value)} disabled={eventoSelecionado?.preco_bloqueado} inputMode="decimal" className="h-12 w-full rounded-lg border border-white/10 bg-zinc-950 pl-9 pr-3 text-lg font-black outline-none focus:border-retratt disabled:opacity-50" />
                     </div>
                     <span className="mt-1 block text-[10px] font-bold text-emerald-300">{valorFotoAtual}</span>
                   </label>
@@ -1057,11 +1057,12 @@ export default function PainelFotografoPage() {
                     <span className="text-[9px] font-black uppercase tracking-wider text-zinc-500">Cada vídeo</span>
                     <div className="relative mt-1">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-zinc-500">R$</span>
-                      <input value={precoVideo} onChange={(e) => setPrecoVideo(e.target.value)} inputMode="decimal" className="h-12 w-full rounded-lg border border-white/10 bg-zinc-950 pl-9 pr-3 text-lg font-black outline-none focus:border-retratt" />
+                      <input value={eventoSelecionado?.preco_bloqueado ? ((eventoSelecionado.preco_video_centavos || 0) / 100).toFixed(2).replace(".", ",") : precoVideo} onChange={(e) => setPrecoVideo(e.target.value)} disabled={eventoSelecionado?.preco_bloqueado} inputMode="decimal" className="h-12 w-full rounded-lg border border-white/10 bg-zinc-950 pl-9 pr-3 text-lg font-black outline-none focus:border-retratt disabled:opacity-50" />
                     </div>
                     <span className="mt-1 block text-[10px] font-bold text-emerald-300">{valorVideoAtual}</span>
                   </label>
                 </div>
+                {eventoSelecionado?.preco_bloqueado && <p className="mt-2 text-xs text-amber-300">O organizador definiu os preços das fotos e vídeos desta galeria.</p>}
                 <p className="mt-3 text-xs text-zinc-500">Lote atual: <span className="font-bold text-white">{arquivos.length}</span> mídia(s) · {formatarTamanho(totalBytes)}</p>
 
                 <button type="button" onClick={() => void iniciarEnvio()} disabled={uploadBloqueado} className="mt-4 inline-flex min-h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-retratt px-3 py-3 text-center text-xs font-black uppercase tracking-wider text-black shadow-[0_0_24px_rgba(255,90,31,0.18)] transition hover:bg-retratt disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500">

@@ -8,6 +8,7 @@ import { processarAvancosAutomaticosChaves, propagarResultadoChave } from '../..
 import { obterTempoRegulamentar } from '../../lib/cronograma';
 import { rotuloLuta } from '../../lib/lutas-rotulos';
 import { semFaixaDuplicada } from '@/app/lib/categorias-competicao';
+import { sugestoesCategoriaPorTatame } from '@/app/lib/sugestao-categoria-tatame';
 import { ordemOperacionalChaveTriangular, placeholderSlotChaveDeTres, textoAguardandoChaveDeTres } from '@/app/lib/chave-de-tres';
 
 type StaffSession = {
@@ -81,7 +82,7 @@ function controleChamador(luta: Luta, lado: 1 | 2) {
   const dados = (lado === 1 ? luta.pontuacao_atleta_1 : luta.pontuacao_atleta_2) || {};
   return {
     presente: Boolean(dados.chamador_presente),
-    chamadas: Math.max(0, Math.min(2, Number(dados.chamador_chamadas || 0))),
+    chamadas: Math.max(0, Math.min(3, Number(dados.chamador_chamadas || 0))),
   };
 }
 
@@ -215,6 +216,7 @@ export default function PainelChamador() {
   const prontas = useMemo(() => lutasVisiveis.filter((luta) => luta.status_luta !== 'em_andamento' && !luta.iniciada_em && checkinAprovado(luta) && ambosPresentes(luta)), [lutasVisiveis]);
   const aguardandoCheckin = useMemo(() => lutasVisiveis.filter((luta) => atletaReal(luta.atleta_1) && atletaReal(luta.atleta_2) && luta.status_luta !== 'em_andamento' && !luta.iniciada_em && (!checkinAprovado(luta) || !ambosPresentes(luta))), [lutasVisiveis]);
   const categoriasChamada = useMemo(() => Array.from(new Map(lutas.map((luta) => [`${luta.categoria}__${luta.faixa || ''}`, luta])).values()), [lutas]);
+  const sugestoes = useMemo(() => sugestoesCategoriaPorTatame(lutas), [lutas]);
 
   useEffect(() => {
     if (!sessao || lutas.length === 0) return;
@@ -317,14 +319,14 @@ export default function PainelChamador() {
     const base = (lado === 1 ? luta.pontuacao_atleta_1 : luta.pontuacao_atleta_2) || {};
     const novo = acao === 'presenca'
       ? { ...base, chamador_presente: !atual.presente, chamador_chamadas: atual.chamadas }
-      : { ...base, chamador_presente: atual.presente, chamador_chamadas: Math.min(2, atual.chamadas + 1) };
+      : { ...base, chamador_presente: atual.presente, chamador_chamadas: Math.min(3, atual.chamadas + 1) };
 
     setAcaoId(`${luta.id}-${lado}`);
     const { error } = await supabase.from('chaves').update({ [campo]: novo }).eq('id', luta.id).eq('evento_id', sessao.evento_id);
     if (error) setToast({ mensagem: `Não foi possível registrar: ${error.message}`, tipo: 'erro' });
     else {
       if (acao === 'chamada' && atletaId) {
-        const numero = Math.min(2, atual.chamadas + 1);
+        const numero = Math.min(3, atual.chamadas + 1);
         await fetch('/api/notificar', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ atleta_id: atletaId, titulo: `${numero}ª chamada da categoria`, mensagem: `${texto(nome)}, apresente-se ao Chamador para ${luta.categoria} · ${luta.faixa || 'faixa não informada'}.`, url: `/evento/${sessao.evento_id}/ao-vivo` }),
@@ -337,6 +339,10 @@ export default function PainelChamador() {
   };
 
   const confirmarWo = async (luta: Luta, ladoAusente: 1 | 2) => {
+    if (controleChamador(luta, ladoAusente).chamadas < 3 || controleChamador(luta, ladoAusente).presente) {
+      setToast({ mensagem: 'Registre três chamadas sem presença antes de declarar ausência.', tipo: 'erro' });
+      return;
+    }
     if (!sessao || !window.confirm('Confirmar ausência? Esta ação encerra a luta e avança o atleta presente, sem registrar vitória por W.O. no ranking.')) return;
     const ladoVencedor = ladoAusente === 1 ? 2 : 1;
     const nomeVencedor = ladoVencedor === 1 ? luta.atleta_1 : luta.atleta_2;
@@ -459,9 +465,9 @@ export default function PainelChamador() {
               </div>
               {tipo !== 'chamada' && <div className="mt-1.5 grid min-w-0 grid-cols-2 gap-1 md:mt-3 md:gap-2">
                 <button onClick={() => atualizarControle(luta, atleta.lado, 'presenca')} disabled={acaoId === `${luta.id}-${atleta.lado}`} className={`h-9 min-w-0 w-full truncate rounded-lg border px-1 text-[8px] font-black uppercase tracking-normal md:px-2 ${controleChamador(luta, atleta.lado).presente ? 'border-emerald-400 bg-emerald-500 text-black' : 'border-white/10 bg-white/5 text-zinc-300'}`}>{controleChamador(luta, atleta.lado).presente ? 'Na baia' : 'Presença'}</button>
-                <button onClick={() => atualizarControle(luta, atleta.lado, 'chamada')} disabled={controleChamador(luta, atleta.lado).chamadas >= 2 || acaoId === `${luta.id}-${atleta.lado}`} className="h-9 min-w-0 w-full truncate rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-1 text-[8px] font-black uppercase tracking-normal text-yellow-200 disabled:opacity-40 md:px-2">{controleChamador(luta, atleta.lado).chamadas >= 2 ? '2ª ok' : <><span className="md:hidden">{controleChamador(luta, atleta.lado).chamadas + 1}ª</span><span className="hidden md:inline">{controleChamador(luta, atleta.lado).chamadas + 1}ª chamada</span></>}</button>
+                <button onClick={() => atualizarControle(luta, atleta.lado, 'chamada')} disabled={controleChamador(luta, atleta.lado).chamadas >= 3 || acaoId === `${luta.id}-${atleta.lado}`} className="h-9 min-w-0 w-full truncate rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-1 text-[8px] font-black uppercase tracking-normal text-yellow-200 disabled:opacity-40 md:px-2">{controleChamador(luta, atleta.lado).chamadas >= 3 ? '3ª ok' : <><span className="md:hidden">{controleChamador(luta, atleta.lado).chamadas + 1}ª</span><span className="hidden md:inline">{controleChamador(luta, atleta.lado).chamadas + 1}ª chamada</span></>}</button>
               </div>}
-              {tipo !== 'chamada' && controleChamador(luta, atleta.lado).chamadas >= 2 && !controleChamador(luta, atleta.lado).presente && controleChamador(luta, atleta.lado === 1 ? 2 : 1).presente && <button onClick={() => confirmarWo(luta, atleta.lado)} className="mt-1.5 h-9 w-full rounded-lg border border-red-500/30 bg-red-500/10 px-2 text-[8px] font-black uppercase text-red-300">Ausência</button>}
+              {tipo !== 'chamada' && controleChamador(luta, atleta.lado).chamadas >= 3 && !controleChamador(luta, atleta.lado).presente && controleChamador(luta, atleta.lado === 1 ? 2 : 1).presente && <button onClick={() => confirmarWo(luta, atleta.lado)} className="mt-1.5 h-9 w-full rounded-lg border border-red-500/30 bg-red-500/10 px-2 text-[8px] font-black uppercase text-red-300">Ausência</button>}
             </> : (
               <p className="break-words text-[10px] font-black uppercase leading-tight text-cyan-200">
                 {placeholderSlotChaveDeTres(luta, atleta.lado) || 'Aguardando oponente'}
@@ -511,6 +517,7 @@ export default function PainelChamador() {
       </header>
 
       <div className="mx-auto w-full max-w-7xl min-w-0 space-y-4 p-3 md:space-y-6 md:p-6">
+        {sugestoes.length > 0 && <section className="rounded-2xl border border-cyan-500/25 bg-cyan-500/5 p-4"><h2 className="text-xs font-black uppercase text-cyan-200">Próxima categoria por tatame</h2><p className="mt-1 text-[10px] text-zinc-400">Sugestão baseada na ordem e no horário definidos em Tatames.</p><div className="mt-3 grid gap-2 md:grid-cols-2 lg:grid-cols-3">{sugestoes.map(({ tatame, proxima, aguardarHorario }) => <div key={tatame} className="rounded-xl border border-white/10 bg-black/40 p-3 text-xs"><strong className="block text-white">{tatame} · {tituloCategoria(proxima)}</strong><span className={aguardarHorario ? 'text-yellow-300' : 'text-cyan-300'}>{aguardarHorario ? `Aguardar início previsto: ${hora(proxima.horario_estimado)}` : proxima.iniciada_em ? 'Luta chamada; aguardar mesário' : `Próxima na ordem · ${hora(proxima.horario_estimado)}`}</span></div>)}</div></section>}
         {categoriasChamada.length > 0 && <section className="min-w-0"><div className="mb-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-yellow-300 md:mb-3 md:text-xs"><ShieldCheck size={14} /> Categorias</div><div className="flex max-w-full gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"><button onClick={() => setCategoriaAtiva('')} className={`shrink-0 rounded-lg border px-3 py-2 text-[8px] font-black uppercase md:rounded-xl md:px-4 md:py-3 md:text-[9px] ${!categoriaAtiva ? 'border-yellow-400 bg-yellow-400 text-black' : 'border-white/10 bg-white/5 text-zinc-400'}`}>Todas</button>{categoriasChamada.map((luta) => { const chave = `${luta.categoria}__${luta.faixa || ''}`; return <div key={chave} className={`flex max-w-[220px] shrink-0 overflow-hidden rounded-lg border md:max-w-none md:rounded-xl ${categoriaAtiva === chave ? 'border-yellow-400 bg-yellow-500/10' : 'border-yellow-500/20 bg-yellow-500/5'}`}><button onClick={() => setCategoriaAtiva(chave)} className="min-w-0 px-3 py-2 text-left md:px-4 md:py-3"><strong className="block truncate text-[9px] uppercase text-white md:text-[10px]">{tituloCategoria(luta)}</strong><span className="mt-0.5 block truncate text-[7px] font-bold uppercase tracking-widest text-zinc-500 md:text-[8px]">{luta.faixa || 'Faixa'}</span></button><button onClick={() => anunciarCategoria(luta)} title="Texto para o locutor" className="shrink-0 border-l border-yellow-500/20 px-2.5 text-yellow-300 md:px-3"><Megaphone size={14} /></button></div>})}</div></section>}
 
         <section className="grid min-w-0 grid-cols-5 gap-1 md:gap-3">

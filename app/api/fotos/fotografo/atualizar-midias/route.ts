@@ -54,10 +54,13 @@ export async function POST(request: Request) {
     const eventoIds = Array.from(new Set(fotos.map((foto) => foto.evento_id)));
     const { data: galerias, error: galeriasError } = await supabase
       .from("foto_eventos")
-      .select("id, created_by, organizador_user_id")
+      .select("id, created_by, organizador_user_id, preco_bloqueado")
       .in("id", eventoIds);
     if (galeriasError) throw new Error(galeriasError.message);
     const galeriasPorId = new Map((galerias || []).map((galeria) => [galeria.id, galeria]));
+    if (acao === "preco" && fotos.some((foto) => galeriasPorId.get(foto.evento_id)?.preco_bloqueado)) {
+      return NextResponse.json({ error: "O organizador bloqueou o preço desta galeria." }, { status: 403 });
+    }
 
     const naoAutorizadas = fotos.filter((foto) => {
       const galeria = galeriasPorId.get(foto.evento_id);

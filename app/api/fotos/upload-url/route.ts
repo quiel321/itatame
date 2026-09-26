@@ -49,7 +49,7 @@ export async function POST(request: Request) {
     const contentType = String(body.contentType || "");
     const size = Number(body.size || 0);
     const titulo = String(body.titulo || fileName).trim();
-    const precoCentavos = Number(body.precoCentavos || 1500);
+    const precoCentavos = Number(body.precoCentavos);
     const duracaoSegundos = Number(body.duracaoSegundos || 0);
     const videoPreviewContentType = String(body.videoPreviewContentType || "").toLowerCase();
 
@@ -70,7 +70,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Perfil de fotógrafo não encontrado ou inativo." }, { status: 403 });
     }
 
-    const { data: evento } = await supabase.from("foto_eventos").select("id, preco_padrao_centavos").eq("id", eventoId).maybeSingle();
+    const { data: evento } = await supabase.from("foto_eventos").select("id, preco_padrao_centavos, preco_video_centavos, preco_bloqueado").eq("id", eventoId).maybeSingle();
     if (!evento) return NextResponse.json({ error: "Evento de fotos não encontrado." }, { status: 404 });
 
     if (!(await fotografoPodePublicarNoEvento(supabase, eventoId, fotografo.id))) {
@@ -89,7 +89,10 @@ export async function POST(request: Request) {
     const videoPreviewKey = ehVideo && videoPreviewContentType
       ? fotoStoragePath(eventoId, albumId, `${fotoId}-amostra`, `amostra.${extensaoPreviewVideo(videoPreviewContentType)}`)
       : null;
-    const precoFinal = Number.isFinite(precoCentavos) && precoCentavos >= 0 ? precoCentavos : Number(evento.preco_padrao_centavos || 1500);
+    const precoPadrao = ehVideo ? Number(evento.preco_video_centavos ?? 2500) : Number(evento.preco_padrao_centavos ?? 1500);
+    const precoFinal = evento.preco_bloqueado
+      ? precoPadrao
+      : Number.isFinite(precoCentavos) && precoCentavos >= 0 ? precoCentavos : precoPadrao;
 
     const { error: insertError } = await supabase.from("foto_arquivos").insert({
       id: fotoId,

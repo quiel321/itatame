@@ -169,10 +169,12 @@ function CartaoMidia({
 
 export default function GerenciadorMidias({
   galeriaId,
+  precoBloqueado,
   onFechar,
   onMidiasExcluidas,
 }: {
   galeriaId: string;
+  precoBloqueado?: boolean;
   onFechar: () => void;
   onMidiasExcluidas?: (quantidade: number) => void;
 }) {
@@ -396,7 +398,7 @@ export default function GerenciadorMidias({
           <button type="button" disabled={!selecionadasExcluiveis.length || Boolean(processando)} onClick={() => void excluir()} className={`${botaoAcao} border border-retratt/20 bg-retratt/10 text-retratt hover:bg-retratt hover:text-white`}>
             {processando === "excluir" ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />} Excluir{selecionadasExcluiveis.length ? ` (${selecionadasExcluiveis.length})` : ""}
           </button>
-          <div className="col-span-2 flex items-center gap-2 sm:ml-auto">
+          {!precoBloqueado && <div className="col-span-2 flex items-center gap-2 sm:ml-auto">
             <div className="relative flex-1 sm:w-28 sm:flex-none">
               <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-zinc-500">R$</span>
               <input value={novoPreco} onChange={(e) => setNovoPreco(e.target.value)} inputMode="decimal" placeholder="0,00" className="h-8 w-full rounded-lg border border-white/10 bg-black pl-8 pr-2 text-xs font-bold text-white outline-none focus:border-retratt" />
@@ -404,7 +406,7 @@ export default function GerenciadorMidias({
             <button type="button" disabled={!selecionadas.length || !novoPreco.trim() || Boolean(processando)} onClick={() => void atualizar("preco")} className={`${botaoAcao} bg-retratt text-black hover:brightness-110`}>
               {processando === "preco" ? <Loader2 size={12} className="animate-spin" /> : <Tag size={12} />} Aplicar preço
             </button>
-          </div>
+          </div>}
         </div>
 
         {mensagem && <p className="rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-[10px] font-bold text-zinc-300">{mensagem}</p>}
