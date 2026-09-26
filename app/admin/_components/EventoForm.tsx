@@ -592,6 +592,11 @@ export default function EventoForm({ modo, eventoId }: EventoFormProps) {
               {regulamentoAtualUrl && <a href={regulamentoAtualUrl} target="_blank" className="mt-3 inline-flex text-xs font-bold text-cyan-300 hover:text-cyan-200">Regulamento atual cadastrado</a>}
               {tabelaPesoAtualUrl && <a href={tabelaPesoAtualUrl} target="_blank" rel="noopener noreferrer" className="mt-3 ml-4 inline-flex text-xs font-bold text-cyan-300 hover:text-cyan-200">Tabela de peso atual cadastrada</a>}
             </div>
+            <div className="flex justify-end border-t border-white/10 pt-5">
+              <button type="submit" data-testid="salvar-evento-final" disabled={salvando || comprimindo} className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-red-600 px-5 text-xs font-black uppercase tracking-[0.16em] text-white shadow-[0_0_24px_rgba(239,68,68,0.25)] transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto">
+                <Save size={16} />{salvando ? "Salvando..." : "Salvar evento"}
+              </button>
+            </div>
           </section>
 
           <aside className="space-y-4 lg:sticky lg:top-6 lg:self-start">
@@ -634,9 +639,6 @@ export default function EventoForm({ modo, eventoId }: EventoFormProps) {
               </div>
             </div>
           </aside>
-          <div className="lg:col-span-2 flex justify-end border-t border-white/10 pt-5">
-            <button type="submit" disabled={salvando || comprimindo} className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-red-600 px-5 text-xs font-black uppercase tracking-[0.16em] text-white hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"><Save size={16} />{salvando ? "Salvando..." : "Salvar evento"}</button>
-          </div>
         </form>
       </div>
     </main>
