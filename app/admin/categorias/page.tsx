@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/app/lib/supabase';
-import { FAIXA_TODAS_AS_FAIXAS, faixaEhLivre, faixasDaCategoria, rotuloCategoria, serializarFaixasCategoria, validarCategoria, type CategoriaCompeticao } from '@/app/lib/categorias-competicao';
+import { FAIXA_TODAS_AS_FAIXAS, categoriaAbsolutoCompativel, faixaEhLivre, faixasDaCategoria, rotuloCategoria, serializarFaixasCategoria, validarCategoria, type CategoriaCompeticao } from '@/app/lib/categorias-competicao';
 import { faixasCadastradas, fonteCategoriasIBJJF, modelosPesoIBJJF } from '@/app/lib/categorias-ibjjf';
 import { CompeticaoShell, campoCompeticao as campo, useEventoCompeticao } from '../_components/CompeticaoShell';
 
@@ -40,15 +40,20 @@ function Editor({ eventoId }: { eventoId: string }) {
       const [categoriasResposta, eventosResposta, inscricoesResposta, chavesResposta] = await Promise.all([
         supabase.from('categorias_evento').select('*').eq('evento_id', eventoId).order('idade_min'),
         authData.user ? supabase.from('eventos').select('id,nome').eq('organizador_id', authData.user.id).neq('id', eventoId).order('id', { ascending: false }) : Promise.resolve({ data: [] }),
-        supabase.from('inscricoes').select('categoria_id').eq('evento_id', eventoId).not('categoria_id', 'is', null),
+        supabase.from('inscricoes').select('categoria_id,absoluto,idade,sexo,faixa,modalidade,peso').eq('evento_id', eventoId),
         supabase.from('chaves').select('categoria_id').eq('evento_id', eventoId).not('categoria_id', 'is', null),
       ]);
       if (!ativo) return;
-      setCategorias(categoriasResposta.data || []);
+      const categoriasEvento = categoriasResposta.data || [];
+      const inscricoesEvento = inscricoesResposta.data || [];
+      setCategorias(categoriasEvento);
       setEventos((eventosResposta.data || []) as EventoOpcao[]);
       setCategoriasEmUso(new Set([
-        ...(inscricoesResposta.data || []).map(item => String(item.categoria_id)),
+        ...inscricoesEvento.filter(item => item.categoria_id).map(item => String(item.categoria_id)),
         ...(chavesResposta.data || []).map(item => String(item.categoria_id)),
+        ...categoriasEvento.filter(categoria => categoria.tipo === 'absoluto' && inscricoesEvento.some(inscricao =>
+          inscricao.absoluto && categoriaAbsolutoCompativel({ ...categoria, ativa: true }, inscricao)
+        )).map(categoria => categoria.id),
       ]));
       if (categoriasResposta.error) setMensagem('Não foi possível carregar as categorias deste campeonato.');
       setCarregando(false);
