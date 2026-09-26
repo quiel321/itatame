@@ -7,66 +7,33 @@ import {
 } from "@/app/lib/fotos-video";
 
 export function desenharProtecaoRetratt(ctx: CanvasRenderingContext2D, width: number, height: number) {
-  const passo = Math.max(58, Math.round(width / 13));
-  const segmento = Math.max(26, Math.round(passo * 0.62));
+  const escala = Math.min(width, height);
+  const tamanhoMarca = Math.max(32, Math.round(escala * 0.105));
+  const tamanhoSecundario = Math.max(13, Math.round(tamanhoMarca * 0.25));
+  const barraAltura = Math.max(32, Math.round(escala * 0.055));
   ctx.save();
-  ctx.lineWidth = Math.max(1.25, width / 750);
-  for (let y = -passo; y < height + passo; y += passo) {
-    for (let x = -passo; x < width + passo; x += passo) {
-      ctx.strokeStyle = "rgba(255,255,255,0.58)";
-      ctx.beginPath();
-      ctx.moveTo(x, y);
-      ctx.lineTo(x + segmento, y + segmento);
-      ctx.stroke();
-      ctx.strokeStyle = "rgba(255,90,31,0.48)";
-      ctx.beginPath();
-      ctx.moveTo(x + segmento, y);
-      ctx.lineTo(x, y + segmento);
-      ctx.stroke();
-    }
-  }
-  ctx.restore();
-
-  ctx.save();
-  ctx.globalAlpha = 0.7;
-  ctx.fillStyle = "rgba(0,0,0,0.58)";
-  ctx.font = `900 ${Math.max(14, Math.round(width / 48))}px Arial`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.translate(width / 2, height / 2);
-  ctx.rotate(-Math.PI / 9);
-  const passoX = Math.max(220, width / 2.4);
-  const passoY = Math.max(120, height / 5);
-  for (let y = -height; y <= height; y += passoY) {
-    for (let x = -width; x <= width; x += passoX) {
-      const texto = "RETRATT • REPRODUÇÃO NÃO AUTORIZADA";
-      const larguraTexto = ctx.measureText(texto).width + 24;
-      ctx.fillRect(x - larguraTexto / 2, y - 17, larguraTexto, 34);
-      ctx.fillStyle = "rgba(255,255,255,0.95)";
-      ctx.fillText(texto, x, y);
-      ctx.fillStyle = "rgba(0,0,0,0.58)";
+  ctx.font = `800 ${tamanhoSecundario}px Arial`;
+  ctx.fillStyle = "rgba(255,255,255,0.18)";
+  for (const y of [0.2, 0.5, 0.8]) {
+    for (const x of [0.25, 0.75]) {
+      ctx.fillText("RETRATT", width * x, height * y);
     }
   }
-  ctx.restore();
-
-  const barraAltura = Math.min(82, Math.max(58, Math.round(height * 0.1)));
-  ctx.save();
-  ctx.fillStyle = "rgba(0,0,0,0.84)";
+  ctx.font = `900 ${tamanhoMarca}px Arial`;
+  ctx.lineWidth = Math.max(2, Math.round(escala * 0.005));
+  ctx.strokeStyle = "rgba(0,0,0,0.35)";
+  ctx.fillStyle = "rgba(255,255,255,0.48)";
+  ctx.strokeText("RETRATT", width / 2, height / 2);
+  ctx.fillText("RETRATT", width / 2, height / 2);
+  ctx.fillStyle = "rgba(0,0,0,0.65)";
   ctx.fillRect(0, height - barraAltura, width, barraAltura);
-  ctx.strokeStyle = "rgba(255,90,31,0.9)";
-  ctx.lineWidth = Math.max(2, width / 600);
-  ctx.beginPath();
-  ctx.moveTo(0, height - barraAltura);
-  ctx.lineTo(width, height - barraAltura);
-  ctx.stroke();
-  ctx.fillStyle = "#ffffff";
-  ctx.font = `900 ${Math.max(15, Math.round(width / 43))}px Arial`;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText("COMPARTILHAR SEM AUTORIZAÇÃO É ILEGAL", width / 2, height - barraAltura * 0.63);
-  ctx.fillStyle = "#ff5a1f";
-  ctx.font = `800 ${Math.max(11, Math.round(width / 62))}px Arial`;
-  ctx.fillText("COMPRE O ARQUIVO ORIGINAL • VALORIZE O FOTÓGRAFO", width / 2, height - barraAltura * 0.28);
+  ctx.fillStyle = "rgba(255,90,31,0.8)";
+  ctx.fillRect(0, height - barraAltura, width, 2);
+  ctx.fillStyle = "rgba(255,255,255,0.9)";
+  ctx.font = `700 ${Math.max(11, Math.round(escala * 0.019))}px Arial`;
+  ctx.fillText("PRÉVIA PROTEGIDA · RETRATT", width / 2, height - barraAltura / 2);
   ctx.restore();
 }
 
