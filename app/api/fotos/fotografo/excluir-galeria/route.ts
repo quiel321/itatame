@@ -72,10 +72,23 @@ export async function POST(request: Request) {
       .eq("evento_id", galeriaId);
     if (pedidosError) throw new Error(pedidosError.message);
     if (pedidos) {
-      return NextResponse.json(
-        { error: "Esta galeria já tem pedidos e não pode ser excluída. Oculte as mídias para parar as vendas." },
-        { status: 409 },
-      );
+      const { data: arquivada, error: arquivarError } = await supabase
+        .from("foto_eventos")
+        .update({ status: "arquivado" })
+        .eq("id", galeriaId)
+        .eq("created_by", auth.user.id)
+        .is("organizador_user_id", null)
+        .select("id")
+        .maybeSingle();
+      if (arquivarError) throw new Error(arquivarError.message);
+      if (!arquivada) return NextResponse.json({ error: "Não foi possível arquivar a galeria." }, { status: 409 });
+      const { error: ocultarError } = await supabase
+        .from("foto_arquivos")
+        .update({ status: "oculta" })
+        .eq("evento_id", galeriaId)
+        .eq("status", "publicada");
+      if (ocultarError) throw new Error(ocultarError.message);
+      return NextResponse.json({ arquivada: true, aviso: "Galeria retirada da loja. Pedidos e arquivos comprados foram preservados." });
     }
 
     const fotos: FotoGaleria[] = [];

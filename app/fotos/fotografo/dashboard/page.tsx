@@ -49,6 +49,7 @@ export default function FotografoDashboardPage() {
   const [editCapaGaleria, setEditCapaGaleria] = useState<File | null>(null);
   const [salvandoEdicao, setSalvandoEdicao] = useState(false);
   const [excluindoGaleria, setExcluindoGaleria] = useState(false);
+  const [excluindoConta, setExcluindoConta] = useState(false);
   const [linkCopiado, setLinkCopiado] = useState<string | null>(null);
 
   const [gerenciandoGaleria, setGerenciandoGaleria] = useState<string | null>(null);
@@ -116,7 +117,7 @@ export default function FotografoDashboardPage() {
           supabase.from("foto_arquivos").select("id", { count: "exact", head: true }).eq("fotografo_id", perfilAtual.id),
           supabase.from("foto_albuns").select("id", { count: "exact", head: true }).eq("fotografo_id", perfilAtual.id),
           supabase.from("foto_pedidos").select("id", { count: "exact", head: true }).eq("fotografo_id", perfilAtual.id).eq("status", "pago"),
-          supabase.from("foto_eventos").select("id, nome, cidade, estado, data_evento, preco_padrao_centavos, preco_bloqueado, capa_url, desconto_combo_qtd, desconto_combo_percentual").eq("created_by", user.id).order("created_at", { ascending: false }),
+          supabase.from("foto_eventos").select("id, nome, cidade, estado, data_evento, preco_padrao_centavos, preco_bloqueado, capa_url, desconto_combo_qtd, desconto_combo_percentual").eq("created_by", user.id).neq("status", "arquivado").order("created_at", { ascending: false }),
            supabase.from("foto_evento_fotografos").select("evento_id, comissao_organizador_percentual, modelo_recebimento").eq("fotografo_id", perfilAtual.id).eq("status", "ativo")
         ]);
 
@@ -309,7 +310,7 @@ export default function FotografoDashboardPage() {
   }
 
   async function excluirGaleria(galeriaId: string) {
-    if (!confirm("Excluir esta galeria? Todas as mídias dela serão apagadas do sistema e da nuvem. Galerias com pedidos não podem ser excluídas.")) return;
+    if (!confirm("Remover esta galeria da loja? Se houver pedidos, ela será arquivada e os arquivos dos compradores serão preservados. Sem pedidos, a galeria e as mídias serão excluídas.")) return;
     setExcluindoGaleria(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -327,6 +328,31 @@ export default function FotografoDashboardPage() {
       alert(error instanceof Error ? error.message : "Não foi possível excluir a galeria.");
     } finally {
       setExcluindoGaleria(false);
+    }
+  }
+
+  async function excluirContaFotografo() {
+    if (!email || !confirm("Excluir definitivamente sua conta de fotógrafo? Galerias arquivadas e registros de pedidos serão preservados. Esta ação não pode ser desfeita.")) return;
+    const confirmacao = prompt(`Digite seu e-mail (${email}) para confirmar a exclusão da conta de fotógrafo:`);
+    if (confirmacao?.trim().toLowerCase() !== email.toLowerCase()) return;
+    setExcluindoConta(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error("Sessão expirada. Entre novamente.");
+      const response = await fetch("/api/fotos/fotografo/conta", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ email: confirmacao }),
+      });
+      const resultado = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(resultado?.error || "Não foi possível excluir a conta.");
+      await supabase.auth.signOut();
+      alert(resultado?.aviso || (resultado?.contaCompartilhada ? "Perfil de fotógrafo excluído. Sua conta de acesso aos outros serviços foi preservada." : "Conta de fotógrafo excluída."));
+      router.replace("/fotos");
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Não foi possível excluir a conta.");
+    } finally {
+      setExcluindoConta(false);
     }
   }
 
@@ -803,6 +829,15 @@ export default function FotografoDashboardPage() {
                    </>
                  )}
                </div>
+            )}
+            {userId && (
+              <div className="rounded-3xl border border-red-500/20 bg-[#0a0a0e] p-5">
+                <h2 className="text-sm font-black text-white">Excluir conta de fotógrafo</h2>
+                <p className="mt-2 text-[10px] leading-relaxed text-zinc-400">A exclusão é definitiva. Galerias com pedidos ficam arquivadas, e os registros e arquivos necessários aos compradores são preservados. Pagamentos pendentes precisam ser resolvidos antes.</p>
+                <button type="button" onClick={() => void excluirContaFotografo()} disabled={excluindoConta} className="mt-4 inline-flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-4 text-[9px] font-black uppercase tracking-widest text-red-300 hover:bg-red-500/20 disabled:cursor-wait disabled:opacity-50">
+                  <Trash2 size={13} /> {excluindoConta ? "Excluindo..." : "Excluir conta definitivamente"}
+                </button>
+              </div>
             )}
           </div>
         </section>

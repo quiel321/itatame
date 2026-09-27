@@ -148,6 +148,14 @@ export default function EventoGaleriaCliente() {
         supabase.from("foto_arquivos").select("id, evento_id, album_id, fotografo_id, titulo, mime_type, r2_original_key, r2_preview_key, r2_thumb_key, preview_url, thumb_url, preco_centavos, status, tags, fotografo_dados:fotografos!fotografo_id(nome, foto_url)").eq("evento_id", eventoId).eq("status", "publicada").order("created_at", { ascending: false }),
       ]);
 
+      if (!eventoData || eventoData.status !== "publicado") {
+        setEvento(null);
+        setAlbuns([]);
+        setFotos([]);
+        setCarregando(false);
+        return;
+      }
+
       // 2. 🔥 INTELIGÊNCIA DO BANNER CORRIGIDA
       let autorNome = "Organizador";
       let autorSlug = "";
@@ -307,6 +315,10 @@ export default function EventoGaleriaCliente() {
     const [ano, mes, dia] = dataStr.slice(0, 10).split("-");
     return `${dia}/${mes}/${ano}`;
   };
+
+  if (!carregando && !evento) {
+    return <FotosShell><main className="flex min-h-[70vh] flex-col items-center justify-center gap-4 bg-[#020202] px-4 text-center text-white"><h1 className="text-2xl font-black">Galeria indisponível</h1><p className="text-sm text-zinc-400">Esta galeria não está mais publicada.</p><Link href="/fotos" className="rounded-xl bg-retratt px-5 py-3 text-xs font-black text-black">Ver galerias</Link></main></FotosShell>;
+  }
 
   return (
     <FotosShell>
