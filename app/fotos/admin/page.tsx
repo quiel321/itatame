@@ -47,6 +47,7 @@ export default function FotosAdminPage() {
   const [fotoEventos, setFotoEventos] = useState<FotoEventoAdmin[]>([]);
 
   const [organizador, setOrganizador] = useState<OrganizadorFinanceiro | null>(null);
+  const [temOrganizadorItatame, setTemOrganizadorItatame] = useState(false);
   const [slugPublico, setSlugPublico] = useState<string | null>(null);
   const [orgForm, setOrgForm] = useState({ nome: "", email: "", telefone: "", documento: "", tipo_entidade: "empresa", academia: "", cidade: "", estado: "" });
 
@@ -118,16 +119,20 @@ export default function FotosAdminPage() {
       setUserId(user.id);
       setEmail(user.email || null);
 
-      const org = await supabase.from("organizadores").select("nome, email, telefone, documento, tipo_entidade, academia, perfil_completo").eq("user_id", user.id).maybeSingle();
+      const [org, fotoOrg, dadosPrivados] = await Promise.all([
+        supabase.from("organizadores").select("nome, email, telefone, documento, tipo_entidade, academia, perfil_completo").eq("user_id", user.id).maybeSingle(),
+        supabase.from("foto_organizadores").select("nome, slug, localizacao, avatar_url, capa_url").eq("id", user.id).maybeSingle(),
+        supabase.from("foto_organizadores_privado").select("email, telefone, documento, tipo_entidade, academia, perfil_completo").eq("id", user.id).maybeSingle(),
+      ]);
 
-      if (!org.data) {
+      if (!org.data && !fotoOrg.data) {
         setContaNaoExiste(true);
         setCarregando(false);
         return;
       }
 
-      const orgData = org.data as OrganizadorFinanceiro;
-      const fotoOrg = await supabase.from("foto_organizadores").select("slug, localizacao, avatar_url, capa_url").eq("id", user.id).maybeSingle();
+      setTemOrganizadorItatame(Boolean(org.data));
+      const orgData = { ...org.data, ...dadosPrivados.data, nome: fotoOrg.data?.nome || org.data?.nome } as OrganizadorFinanceiro;
       const locParts = (fotoOrg.data?.localizacao || "").split(",");
       const cid = locParts[0]?.trim() || "";
       const est = locParts[1]?.trim() || "";
@@ -210,11 +215,13 @@ export default function FotosAdminPage() {
     if (!auth.user) return;
 
     const nomeMetadata = auth.user.user_metadata?.nome_completo || auth.user.user_metadata?.nome || auth.user.email?.split("@")[0] || "Organizador";
-    await supabase.from("organizadores").insert({ user_id: auth.user.id, nome: nomeMetadata, email: auth.user.email, status: "ativo" });
-
     const slugFormatado = nomeMetadata.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') + '-' + Math.floor(Math.random() * 1000);
-    await supabase.from("foto_organizadores").insert({ id: auth.user.id, nome: nomeMetadata, slug: slugFormatado });
-
+    const { error } = await supabase.from("foto_organizadores").upsert({ id: auth.user.id, nome: nomeMetadata, slug: slugFormatado }, { onConflict: "id" });
+    if (error) {
+      setMensagem(`Não foi possível criar o perfil: ${error.message}`);
+      setCarregando(false);
+      return;
+    }
     window.location.reload();
   }
 
@@ -478,20 +485,25 @@ export default function FotosAdminPage() {
     const payloadFinanceiro = { nome: orgForm.nome.trim(), email: orgForm.email.trim(), telefone: orgForm.telefone.trim(), documento: orgForm.documento.trim(), tipo_entidade: orgForm.tipo_entidade, academia: orgForm.academia.trim(), perfil_completo: true, };
 
     try {
-      const { data, error } = await supabase.from("organizadores").update(payloadFinanceiro).eq("user_id", userId).select("*").maybeSingle();
-      if (!data && !error) { await supabase.from("organizadores").insert({ user_id: userId, status: "ativo", ...payloadFinanceiro }); }
+      const { error: erroPrivado } = await supabase.from("foto_organizadores_privado").upsert({ id: userId, email: payloadFinanceiro.email, telefone: payloadFinanceiro.telefone, documento: payloadFinanceiro.documento, tipo_entidade: payloadFinanceiro.tipo_entidade, academia: payloadFinanceiro.academia, perfil_completo: true }, { onConflict: "id" });
+      if (erroPrivado) throw erroPrivado;
+      if (temOrganizadorItatame) {
+        const { error } = await supabase.from("organizadores").update(payloadFinanceiro).eq("user_id", userId);
+        if (error) throw error;
+      }
 
       const slugFormatado = orgForm.nome.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
       const { data: existeSlug } = await supabase.from('foto_organizadores').select('id').eq('slug', slugFormatado).maybeSingle();
       let slugFinal = slugFormatado;
       if(existeSlug && existeSlug.id !== userId) { slugFinal = `${slugFormatado}-${Math.floor(Math.random() * 1000)}`; }
 
-      await supabase.from("foto_organizadores").upsert({ id: userId, nome: payloadFinanceiro.nome, slug: slugFinal, localizacao: `${orgForm.cidade.trim()}, ${orgForm.estado.trim()}` });
+      const { error: erroPublico } = await supabase.from("foto_organizadores").upsert({ id: userId, nome: payloadFinanceiro.nome, slug: slugFinal, localizacao: `${orgForm.cidade.trim()}, ${orgForm.estado.trim()}` });
+      if (erroPublico) throw erroPublico;
 
       setOrganizador({ ...(organizador || {}), ...payloadFinanceiro });
       setSlugPublico(slugFinal);
       setMostrarFormularioPerfil(false);
-    } catch (err) { console.error("Erro interno ao salvar:", err); } finally { setSalvandoPerfil(false); }
+    } catch (err) { console.error("Erro interno ao salvar:", err); setMensagem("Não foi possível salvar o perfil. Tente novamente."); } finally { setSalvandoPerfil(false); }
   }
 
   async function excluirGaleria(galeriaId: string) {

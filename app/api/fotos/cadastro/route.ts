@@ -41,16 +41,16 @@ export async function POST(request: Request) {
     }
 
     try {
-      const destino = new URLSearchParams({ perfil, email_confirmado: "1" });
-      if (next.startsWith("/") && !next.startsWith("//")) destino.set("next", next);
-      const redirectTo = `${new URL(request.url).origin}/fotos/login?${destino.toString()}`;
       const { data: confirmacao, error: linkError } = await supabase.auth.admin.generateLink({
-        type: "signup", email, password, options: { redirectTo },
+        type: "signup", email, password,
       });
-      const link = confirmacao?.properties?.action_link;
-      if (linkError || !link || confirmacao.user.id !== data.user.id) throw linkError || new Error("Link inválido.");
-      const url = new URL(link);
-      if (url.protocol !== "https:" || url.hostname !== new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).hostname) throw new Error("Link inválido.");
+      const tokenHash = confirmacao?.properties?.hashed_token;
+      if (linkError || !tokenHash || confirmacao.user.id !== data.user.id) throw linkError || new Error("Link inválido.");
+      const destino = next.startsWith("/fotos/") && !next.startsWith("//") ? next : perfil === "organizador" ? "/fotos/admin" : perfil === "fotografo" ? "/fotos/fotografo" : "/fotos/minhas-compras";
+      const url = new URL("/fotos/acesso", process.env.NEXT_PUBLIC_FOTOS_URL || "https://retratt.com");
+      url.search = new URLSearchParams({ token_hash: tokenHash, type: "signup", next: destino }).toString();
+      if (url.protocol !== "https:") throw new Error("URL de confirmação inválida.");
+      const link = url.toString();
       const { error: envioError } = await new Resend(process.env.RESEND_API_KEY).emails.send({
         from: "Retratt <suporte@itatame.com.br>",
         to: [email],

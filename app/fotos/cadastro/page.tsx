@@ -123,7 +123,7 @@ export default function FotosCadastroPage() {
     const { error } = await supabase.auth.resend({
       type: "signup",
       email: email.trim().toLowerCase(),
-      options: { emailRedirectTo: `${window.location.origin}/fotos/login?${params.toString()}` },
+      options: { emailRedirectTo: `${process.env.NEXT_PUBLIC_FOTOS_URL || "https://retratt.com"}/fotos/login?${params.toString()}` },
     });
     setCarregando(false);
     setErro(error ? "Não foi possível reenviar agora. Tente novamente em alguns minutos." : "Se o cadastro estiver pendente, enviamos um novo link de confirmação.");

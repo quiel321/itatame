@@ -27,7 +27,8 @@ export default function FotosAcessoPage() {
       const proximo = destinoSeguro(parametros.get("next"));
       const tokenHash = parametros.get("token_hash");
       if (tokenHash) {
-        const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: "magiclink" });
+        const type = parametros.get("type") === "signup" ? "signup" : "magiclink";
+        const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type });
         if (!error) {
           router.replace(proximo);
           return;

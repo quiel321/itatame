@@ -67,6 +67,7 @@ export default function PagamentoPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [inscricoes, setInscricoes] = useState<any[]>([]);
+  const [erroInscricoes, setErroInscricoes] = useState(false);
   const [abaAtiva, setAbaAtiva] = useState<"pendentes" | "pagas">("pendentes");
   const [inscricaoSelecionada, setInscricaoSelecionada] = useState<any>(null);
   const [processandoPagamento, setProcessandoPagamento] = useState(false);
@@ -95,6 +96,7 @@ export default function PagamentoPage() {
     }
 
     setPrecisaEntrar(false);
+    setErroInscricoes(false);
 
     try {
       const { data: depsData, error: depsError } = await supabase
@@ -122,7 +124,6 @@ export default function PagamentoPage() {
             lote2_valor,
             lote2_data_fim,
             lote3_valor,
-            valor_absoluto,
             regras_pontuacao_equipes
           )
         `)
@@ -139,6 +140,7 @@ export default function PagamentoPage() {
       }
     } catch (error: any) {
       console.error("Erro ao carregar pagamentos:", error.message || error);
+      setErroInscricoes(true);
     } finally {
       setLoading(false);
     }
@@ -480,7 +482,9 @@ export default function PagamentoPage() {
         </div>
 
         <div className="space-y-4">
-          {(abaAtiva === "pendentes" ? pendentes : pagas).length === 0 ? (
+          {erroInscricoes ? (
+            <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-6 text-center text-sm text-red-200">Não foi possível carregar as inscrições. Atualize a página e tente novamente.</div>
+          ) : (abaAtiva === "pendentes" ? pendentes : pagas).length === 0 ? (
             <div className="bg-[#0e0e12] border border-dashed border-white/10 rounded-3xl p-12 text-center">
               <h3 className="text-white font-bold text-lg mb-2">Nenhuma inscrição encontrada aqui.</h3>
               <p className="text-zinc-500 text-sm">Explore os próximos campeonatos e garanta sua vaga.</p>
