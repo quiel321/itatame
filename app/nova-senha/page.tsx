@@ -20,15 +20,28 @@ export default function NovaSenha() {
   const [erro, setErro] = useState("");
   const [destinoAposRecuperacao, setDestinoAposRecuperacao] = useState("/perfil");
   const [recuperacaoFotos, setRecuperacaoFotos] = useState(false);
+  const [linkValidado, setLinkValidado] = useState(false);
 
   useEffect(() => {
     const parametros = new URLSearchParams(window.location.search);
     const origemFotos = parametros.get("origem") === "fotos";
     const perfilFotos = normalizarPerfilFotos(parametros.get("perfil"));
+    const tokenHash = parametros.get("token_hash");
     queueMicrotask(() => {
       setRecuperacaoFotos(origemFotos);
       setDestinoAposRecuperacao(origemFotos ? `/fotos/login?perfil=${perfilFotos}` : "/login");
     });
+
+    if (origemFotos) {
+      if (!tokenHash) {
+        queueMicrotask(() => setErro("Link de recuperação inválido. Solicite um novo no Retratt."));
+      } else {
+        void supabase.auth.verifyOtp({ token_hash: tokenHash, type: "recovery" }).then(({ error }) => {
+          if (error) setErro("Este link expirou ou já foi utilizado. Solicite um novo no Retratt.");
+          else setLinkValidado(true);
+        });
+      }
+    }
 
     const { data } = supabase.auth.onAuthStateChange(async (event) => {
       if (event === "PASSWORD_RECOVERY") {
@@ -40,6 +53,7 @@ export default function NovaSenha() {
 
   const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (recuperacaoFotos && !linkValidado) return;
     setLoading(true);
     setErro("");
 
@@ -100,7 +114,7 @@ export default function NovaSenha() {
 
           <button 
             type="submit" 
-            disabled={loading}
+            disabled={loading || (recuperacaoFotos && !linkValidado)}
             className="cursor-pointer w-full bg-cyan-600 hover:bg-cyan-500 text-white font-black py-3.5 rounded-xl uppercase tracking-widest text-xs transition-all disabled:opacity-50 mt-2 shadow-[0_0_15px_rgba(6,182,212,0.2)]"
           >
             {loading ? "Salvando..." : "Salvar nova senha"}

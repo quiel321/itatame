@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "@/app/lib/supabase";
 import { useRouter } from "next/navigation";
 import FotosShell from "@/app/fotos/_components/FotosShell";
 
@@ -40,12 +39,12 @@ export default function RecuperarSenha() {
     const recuperacaoFotos = parametros.get("origem") === "fotos";
     const perfilRecuperacao = normalizarPerfilFotos(parametros.get("perfil"));
     if (recuperacaoFotos) {
-      const destinoNovaSenha = new URL('/nova-senha', window.location.origin);
-      destinoNovaSenha.searchParams.set('origem', 'fotos');
-      destinoNovaSenha.searchParams.set('perfil', perfilRecuperacao);
-      const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: destinoNovaSenha.toString() });
-      if (error) setErro('Não foi possível solicitar a recuperação agora. Tente novamente mais tarde.');
-      else { setMensagem('Se este e-mail estiver cadastrado, você receberá um link para criar outra senha.'); setEmail(''); }
+      try {
+        const response = await fetch('/api/fotos/recuperar-senha', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, perfil: perfilRecuperacao }) });
+        const result = await response.json();
+        if (!response.ok) setErro(result.error || 'Não foi possível solicitar a recuperação agora.');
+        else { setMensagem(result.message); setEmail(''); }
+      } catch { setErro('Não foi possível solicitar a recuperação agora. Tente novamente.'); }
     } else {
       try {
         const response = await fetch('/api/auth/recuperar-senha', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
