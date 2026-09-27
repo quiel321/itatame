@@ -68,7 +68,7 @@ export default function FotosHomePage() {
       <main className="min-h-screen bg-[#050505] text-white font-sans selection:bg-retratt/30 pb-24 md:pb-20 overflow-hidden relative">
 
         {/* 🚀 HERO SECTION IMERSIVA COM MOSAICO (MAIS VISÍVEL E COMPACTA) */}
-        <section className="relative w-full pt-16 pb-12 md:pt-24 md:pb-16 overflow-hidden border-b border-white/5 bg-black">
+        <section className="relative w-full pt-8 pb-6 md:pt-12 md:pb-10 overflow-hidden border-b border-white/5 bg-black">
 
           {/* Fundo Mosaico Tecnológico */}
           <div className="absolute inset-0 z-0 flex items-center justify-center pointer-events-none overflow-hidden">
@@ -96,7 +96,7 @@ export default function FotosHomePage() {
 
           <div className="relative z-30 max-w-4xl mx-auto px-4 md:px-6 flex flex-col items-center text-center">
 
-            <span className="inline-flex items-center gap-1.5 bg-retratt/10 border border-retratt/20 text-retratt px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-[0.2em] mb-4 shadow-[0_0_20px_rgba(255,90,31,0.15)]">
+            <span className="inline-flex items-center gap-1.5 bg-retratt/10 border border-retratt/20 text-retratt px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-[0.2em] mb-3 shadow-[0_0_20px_rgba(255,90,31,0.15)]">
               <Camera size={12} /> Uma plataforma, todos os seus momentos
             </span>
 
@@ -106,7 +106,7 @@ export default function FotosHomePage() {
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-retratt to-orange-300 drop-shadow-md">Reviva seus momentos.</span>
             </h1>
 
-            <p className="text-zinc-300 text-xs font-medium max-w-xl mx-auto leading-relaxed mb-8 px-2 drop-shadow-md">
+            <p className="text-zinc-300 text-xs font-medium max-w-xl mx-auto leading-relaxed mb-5 px-2 drop-shadow-md">
               Dos esportes às celebrações: encontre seu evento ou use uma selfie para localizar suas fotos em segundos.
             </p>
 
@@ -127,7 +127,7 @@ export default function FotosHomePage() {
               <BuscaPorNumero />
             </div>
 
-            <div className="mt-4 flex max-w-2xl flex-wrap items-center justify-center gap-2">
+            <div className="mt-3 hidden max-w-2xl flex-wrap items-center justify-center gap-2 md:flex">
               {categorias.map((categoria) => (
                 <span key={categoria} className="rounded-full border border-white/10 bg-black/40 px-3 py-1.5 text-[8px] font-black uppercase tracking-widest text-zinc-400 backdrop-blur-md">
                   {categoria}
@@ -139,7 +139,7 @@ export default function FotosHomePage() {
         </section>
 
         {/* 🏆 EVENTOS RECENTES (GRID COMPACTO) */}
-        <section className="relative z-20 max-w-7xl mx-auto px-4 md:px-6 py-12 md:py-16">
+        <section className="relative z-20 max-w-7xl mx-auto px-4 md:px-6 py-6 md:py-10">
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-3 mb-6 md:mb-8">
             <div>
               <h2 className="text-xl md:text-2xl font-black uppercase tracking-tight flex items-center gap-2">
@@ -174,9 +174,9 @@ export default function FotosHomePage() {
                     <img
                       src={evento.capa_url || "https://images.unsplash.com/photo-1599552375109-6bc228b3a728?q=80&w=800&auto=format&fit=crop"}
                       alt={evento.nome}
-                      className="w-full h-full object-cover opacity-50 group-hover:scale-105 group-hover:opacity-40 transition-all duration-700"
+                      className="w-full h-full object-cover opacity-85 md:opacity-60 group-hover:scale-105 group-hover:opacity-95 md:group-hover:opacity-70 transition-all duration-700"
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-transparent"></div>
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-transparent md:from-black/95 md:via-black/40"></div>
                   </div>
 
                   <div className="relative z-10 flex flex-col h-full p-4 md:p-5">

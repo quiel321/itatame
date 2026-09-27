@@ -38,9 +38,10 @@ export default function RecuperarSenha() {
     const parametros = new URLSearchParams(window.location.search);
     const recuperacaoFotos = parametros.get("origem") === "fotos";
     const perfilRecuperacao = normalizarPerfilFotos(parametros.get("perfil"));
+    const next = parametros.get("next");
     if (recuperacaoFotos) {
       try {
-        const response = await fetch('/api/fotos/recuperar-senha', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, perfil: perfilRecuperacao }) });
+        const response = await fetch('/api/fotos/recuperar-senha', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, perfil: perfilRecuperacao, next }) });
         const result = await response.json();
         if (!response.ok) setErro(result.error || 'Não foi possível solicitar a recuperação agora.');
         else { setMensagem(result.message); setEmail(''); }
@@ -90,7 +91,7 @@ export default function RecuperarSenha() {
         </form>
 
         <div className="mt-6 text-center">
-          <button onClick={() => router.push(origemFotos ? `/fotos/login?perfil=${perfilFotos}` : origemOrganizador ? '/login-organizador' : "/login")} className="cursor-pointer text-zinc-500 hover:text-white text-[10px] font-bold uppercase tracking-widest transition-colors">
+          <button onClick={() => { const next = new URLSearchParams(window.location.search).get("next"); router.push(origemFotos ? `/fotos/login?perfil=${perfilFotos}${next?.startsWith("/fotos/") && !next.startsWith("//") ? `&next=${encodeURIComponent(next)}` : ""}` : origemOrganizador ? '/login-organizador' : "/login"); }} className="cursor-pointer text-zinc-500 hover:text-white text-[10px] font-bold uppercase tracking-widest transition-colors">
             {origemFotos ? "Voltar ao login do Fotos" : "Voltar para o Login"}
           </button>
         </div>

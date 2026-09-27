@@ -26,10 +26,11 @@ export default function NovaSenha() {
     const parametros = new URLSearchParams(window.location.search);
     const origemFotos = parametros.get("origem") === "fotos";
     const perfilFotos = normalizarPerfilFotos(parametros.get("perfil"));
+    const next = parametros.get("next");
     const tokenHash = parametros.get("token_hash");
     queueMicrotask(() => {
       setRecuperacaoFotos(origemFotos);
-      setDestinoAposRecuperacao(origemFotos ? `/fotos/login?perfil=${perfilFotos}` : "/login");
+      setDestinoAposRecuperacao(origemFotos ? `/fotos/login?perfil=${perfilFotos}${next?.startsWith("/fotos/") && !next.startsWith("//") ? `&next=${encodeURIComponent(next)}` : ""}` : "/login");
     });
 
     if (origemFotos) {

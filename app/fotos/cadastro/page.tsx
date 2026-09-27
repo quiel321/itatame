@@ -77,6 +77,7 @@ export default function FotosCadastroPage() {
   const [aguardandoConfirmacao, setAguardandoConfirmacao] = useState(false);
 
   const [erro, setErro] = useState("");
+  const [emailJaExiste, setEmailJaExiste] = useState(false);
   const [carregando, setCarregando] = useState(false);
 
   useEffect(() => {
@@ -90,10 +91,13 @@ export default function FotosCadastroPage() {
 
   const perfilAtual = perfis[perfil];
   const temaAtual = temas[perfil];
+  const destinoSeguro = destinoManual?.startsWith("/fotos/") && !destinoManual.startsWith("//") ? destinoManual : null;
+  const destinoQuery = destinoSeguro ? `&next=${encodeURIComponent(destinoSeguro)}` : "";
 
   async function cadastrar(e: FormEvent) {
     e.preventDefault();
     setErro("");
+    setEmailJaExiste(false);
     setCarregando(true);
 
     try {
@@ -105,6 +109,7 @@ export default function FotosCadastroPage() {
       const resultado = await response.json().catch(() => null);
       if (!response.ok) {
         setErro(resultado?.error || "Não foi possível criar a conta agora.");
+        setEmailJaExiste(resultado?.code === "email_exists");
         return;
       }
       setAguardandoConfirmacao(true);
@@ -161,7 +166,7 @@ export default function FotosCadastroPage() {
                   <button
                     key={key}
                     type="button"
-                    onClick={() => { setPerfil(key); setDestinoManual(null); }}
+                    onClick={() => { if (key !== perfil) setDestinoManual(null); setPerfil(key); }}
                     className={`cursor-pointer rounded-3xl border p-5 text-left transition-all duration-300 transform ${ativo ? `${temaBotao.activeCard} md:-translate-y-2 shadow-xl` : "border-white/5 bg-[#111] hover:bg-white/5"}`}
                   >
                     <Icon size={24} className={ativo ? temaBotao.activeIcon : "text-zinc-600"} />
@@ -202,7 +207,7 @@ export default function FotosCadastroPage() {
                  <label className="block text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500 ml-1 mb-1.5">E-mail</label>
                  <div className="relative">
                    <Mail size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-600" />
-                   <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" required placeholder="seu@email.com" className={`h-14 w-full cursor-text rounded-2xl border border-white/5 bg-[#050505] pl-11 pr-4 text-xs font-bold text-white outline-none transition-all placeholder:text-zinc-700 focus:ring-1 ${temaAtual.focus}`} />
+                   <input value={email} onChange={(e) => { setEmail(e.target.value); setEmailJaExiste(false); }} type="email" required placeholder="seu@email.com" className={`h-14 w-full cursor-text rounded-2xl border border-white/5 bg-[#050505] pl-11 pr-4 text-xs font-bold text-white outline-none transition-all placeholder:text-zinc-700 focus:ring-1 ${temaAtual.focus}`} />
                  </div>
                </div>
 
@@ -221,6 +226,13 @@ export default function FotosCadastroPage() {
                   {erro}
                </div>
             )}
+            {emailJaExiste && (
+              <div className="mt-3 rounded-xl border border-white/10 bg-white/5 p-4 text-center text-xs text-zinc-200">
+                Você já pode usar sua conta do iTatame no Retratt, com o mesmo e-mail e senha.
+                <Link href={`/fotos/login?perfil=${perfil}${destinoQuery}`} className="mt-3 block rounded-lg bg-retratt px-4 py-3 font-black uppercase text-black">Entrar com minha conta</Link>
+                <Link href={`/recuperar-senha?origem=fotos&perfil=${perfil}${destinoQuery}`} className="mt-3 block text-[10px] font-bold text-zinc-300 underline">Esqueci minha senha</Link>
+              </div>
+            )}
 
             {!aguardandoConfirmacao && <button disabled={carregando} className={`cursor-pointer mt-8 h-14 w-full rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${temaAtual.button}`}>
                {carregando ? "A criar conta..." : "Completar Cadastro"}
@@ -228,8 +240,9 @@ export default function FotosCadastroPage() {
             </button>}
 
             <div className="mt-8 pt-6 border-t border-white/5">
+               {perfil === "comprador" && <p className="mb-4 text-center text-[10px] leading-relaxed text-zinc-400">Já usa o iTatame? Entre com o mesmo e-mail e senha. Você também pode comprar fotos sem criar conta.</p>}
                <p className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500 text-center mb-4">Já tem uma conta?</p>
-               <Link href={`/fotos/login?perfil=${perfil}`} className={`cursor-pointer h-14 flex items-center justify-center rounded-2xl border bg-[#050505] text-[10px] font-black uppercase tracking-widest transition-all ${temaAtual.hoverLink}`}>
+               <Link href={`/fotos/login?perfil=${perfil}${destinoQuery}`} className={`cursor-pointer h-14 flex items-center justify-center rounded-2xl border bg-[#050505] text-[10px] font-black uppercase tracking-widest transition-all ${temaAtual.hoverLink}`}>
                  {perfilAtual.textoLogin}
                </Link>
             </div>

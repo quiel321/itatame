@@ -10,10 +10,12 @@ const resposta = "Se este e-mail estiver cadastrado, você receberá um link par
 export async function POST(request: Request) {
   let email: string;
   let perfil: string;
+  let next: string;
   try {
     const body = await request.json();
     email = String(body.email || "").trim().toLowerCase();
     perfil = ["comprador", "fotografo", "organizador"].includes(body.perfil) ? body.perfil : "comprador";
+    next = typeof body.next === "string" && body.next.startsWith("/fotos/") && !body.next.startsWith("//") ? body.next : "";
   } catch {
     return NextResponse.json({ error: "Informe um e-mail válido." }, { status: 400 });
   }
@@ -33,7 +35,7 @@ export async function POST(request: Request) {
   if (error || !data?.properties?.hashed_token) return NextResponse.json({ message: resposta });
 
   const url = new URL("/nova-senha", process.env.NEXT_PUBLIC_FOTOS_URL || "https://retratt.com");
-  url.search = new URLSearchParams({ origem: "fotos", perfil, token_hash: data.properties.hashed_token }).toString();
+  url.search = new URLSearchParams({ origem: "fotos", perfil, token_hash: data.properties.hashed_token, ...(next ? { next } : {}) }).toString();
   if (url.protocol !== "https:") return NextResponse.json({ error: "Recuperação indisponível no momento." }, { status: 503 });
   const link = url.toString().replace(/&/g, "&amp;").replace(/"/g, "&quot;");
 

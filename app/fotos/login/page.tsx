@@ -84,13 +84,15 @@ export default function FotosLoginPage() {
     const perfilParam = params.get("perfil") as Perfil | null;
     queueMicrotask(() => {
       if (perfilParam && perfilParam in perfis) setPerfil(perfilParam);
-      setDestinoManual(params.get("next"));
+      const next = params.get("next");
+      setDestinoManual(next?.startsWith("/fotos/") && !next.startsWith("//") ? next : null);
       setEmailConfirmado(params.get("email_confirmado") === "1");
     });
     if (params.get("trocar") === "1") void supabase.auth.signOut();
   }, []);
 
   const destino = useMemo(() => destinoManual || perfis[perfil].destino, [destinoManual, perfil]);
+  const destinoQuery = destinoManual?.startsWith("/fotos/") && !destinoManual.startsWith("//") ? `&next=${encodeURIComponent(destinoManual)}` : "";
   const perfilAtual = perfis[perfil];
   const temaAtual = temas[perfil];
 
@@ -147,7 +149,7 @@ export default function FotosLoginPage() {
                   <button
                     key={key}
                     type="button"
-                    onClick={() => { setPerfil(key); setDestinoManual(null); }}
+                    onClick={() => { if (key !== perfil) setDestinoManual(null); setPerfil(key); }}
                     className={`cursor-pointer rounded-3xl border p-5 text-left transition-all duration-300 transform ${ativo ? `${temaBotao.activeCard} md:-translate-y-2 shadow-xl` : "border-white/5 bg-[#111] hover:bg-white/5"}`}
                   >
                     <Icon size={24} className={ativo ? temaBotao.activeIcon : "text-zinc-600"} />
@@ -187,7 +189,7 @@ export default function FotosLoginPage() {
                <div>
                  <div className="flex items-center justify-between ml-1 mb-1.5">
                     <label className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500">Senha</label>
-                    <Link href={`/recuperar-senha?origem=fotos&perfil=${perfil}`} className="cursor-pointer text-[9px] font-bold text-zinc-500 hover:text-white transition-colors">Esqueceu?</Link>
+                    <Link href={`/recuperar-senha?origem=fotos&perfil=${perfil}${destinoQuery}`} className="cursor-pointer text-[9px] font-bold text-zinc-500 hover:text-white transition-colors">Esqueceu?</Link>
                  </div>
                  <div className="relative">
                    <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-600" />
@@ -230,9 +232,9 @@ export default function FotosLoginPage() {
 
             {/* 🔥 LINK DE CADASTRO DINÂMICO ÚNICO COM MÃOZINHA! */}
             <div className="mt-8 pt-6 border-t border-white/5">
-               <p className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500 text-center mb-4">Ainda não tem conta?</p>
+               <p className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500 text-center mb-4">{perfil === "comprador" ? "Já usa o iTatame? Entre aqui com a mesma senha." : "Ainda não tem conta?"}</p>
                <Link
-                 href={`/fotos/cadastro?perfil=${perfil}`}
+                 href={`/fotos/cadastro?perfil=${perfil}${destinoQuery}`}
                  className={`cursor-pointer h-14 flex items-center justify-center rounded-2xl border bg-[#050505] text-[10px] font-black uppercase tracking-widest transition-all ${temaAtual.hoverLink}`}
                >
                  {perfilAtual.textoCadastro}

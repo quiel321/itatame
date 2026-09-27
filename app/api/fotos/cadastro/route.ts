@@ -37,7 +37,10 @@ export async function POST(request: Request) {
       user_metadata: { nome_completo: nome, foto_perfil: perfil },
     });
     if (error || !data.user) {
-      return NextResponse.json({ error: "Não foi possível criar a conta. Se este e-mail já estiver em uso, entre ou recupere a senha." }, { status: 400 });
+      return NextResponse.json({
+        error: "Não foi possível criar a conta. Se este e-mail já estiver em uso, entre ou recupere a senha.",
+        code: error?.code === "email_exists" || error?.code === "user_already_exists" ? "email_exists" : undefined,
+      }, { status: 400 });
     }
 
     try {

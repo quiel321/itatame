@@ -491,7 +491,7 @@ export default function FotosCarrinhoPage() {
                   {etapa === "carrinho" && !userId && (
                     <div className="mb-4 space-y-2.5 rounded-xl border border-white/10 bg-white/[0.03] p-3.5">
                       <p className="text-[10px] font-black uppercase tracking-widest text-white">Compra rápida, sem cadastro</p>
-                      <p className="text-[10px] leading-relaxed text-zinc-400">Enviamos os arquivos e um código de acesso para este e-mail.</p>
+                      <p className="text-[10px] leading-relaxed text-zinc-400">Pode usar o mesmo e-mail do iTatame. Seu pedido ficará vinculado à conta existente e você receberá o acesso às fotos por e-mail.</p>
                       <input
                         value={comprador.nome}
                         onChange={(e) => setComprador({ ...comprador, nome: e.target.value })}
@@ -508,7 +508,7 @@ export default function FotosCarrinhoPage() {
                         className="h-11 w-full cursor-text rounded-lg border border-white/10 bg-black px-3 text-xs font-bold text-white outline-none placeholder:text-zinc-600 focus:border-retratt"
                       />
                       <p className="text-[9px] text-zinc-500">
-                        Já tem conta? <Link href="/fotos/login?perfil=comprador&next=/fotos/carrinho" className="font-bold text-zinc-300 hover:text-retratt">Entrar</Link>
+                        Já tem conta iTatame ou Retratt? <Link href="/fotos/login?perfil=comprador&next=/fotos/carrinho" className="font-bold text-zinc-300 hover:text-retratt">Entrar com a mesma senha</Link>
                       </p>
                     </div>
                   )}
