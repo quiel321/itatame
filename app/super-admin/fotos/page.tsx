@@ -59,6 +59,7 @@ type FinanceiroFotos = {
     repasseStatus: string;
     fotos: number;
   }>;
+  pedidosPendentes: Array<{ id: string; data: string; galeria: string; fotografo: string; totalCentavos: number; paymentId: string | null; detalhe: string | null }>;
 };
 
 type PedidoRecente = FinanceiroFotos["pedidosRecentes"][number];
@@ -93,6 +94,10 @@ export default function SuperAdminFotosPage() {
   const [motivoReembolso, setMotivoReembolso] = useState("");
   const [confirmacaoReembolso, setConfirmacaoReembolso] = useState("");
   const [reembolsando, setReembolsando] = useState(false);
+  const [resolvendoPedido, setResolvendoPedido] = useState<string | null>(null);
+  const [pedidoCancelar, setPedidoCancelar] = useState<FinanceiroFotos["pedidosPendentes"][number] | null>(null);
+  const [motivoCancelamento, setMotivoCancelamento] = useState("");
+  const [confirmacaoCancelamento, setConfirmacaoCancelamento] = useState("");
   const [feedback, setFeedback] = useState<{ tipo: "sucesso" | "erro"; texto: string } | null>(null);
 
   const carregar = useCallback(async () => {
@@ -121,7 +126,7 @@ export default function SuperAdminFotosPage() {
   }, []);
 
   useEffect(() => {
-    carregar();
+    void Promise.resolve().then(carregar);
   }, [carregar]);
 
   const termo = busca.trim().toLowerCase();
@@ -171,6 +176,35 @@ export default function SuperAdminFotosPage() {
       setFeedback({ tipo: "erro", texto: error instanceof Error ? error.message : "Não foi possível concluir o reembolso." });
     } finally {
       setReembolsando(false);
+    }
+  }
+
+  async function resolverPendente(pedidoId: string, acao: "consultar" | "cancelar") {
+    setResolvendoPedido(pedidoId);
+    setFeedback(null);
+    try {
+      const { data: sessao } = await supabase.auth.getSession();
+      const token = sessao.session?.access_token;
+      if (!token) throw new Error("Sessão expirada. Entre novamente no Super Admin.");
+      const response = await fetch("/api/super-admin/fotos-pendentes", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ pedidoId, acao, motivo: motivoCancelamento.trim(), confirmacao: confirmacaoCancelamento.trim() }),
+      });
+      const resultado = await response.json();
+      if (!response.ok) {
+        if (resultado.resultado?.status && resultado.resultado.status !== "pendente") await carregar();
+        throw new Error(resultado.error || "Não foi possível consultar o pagamento.");
+      }
+      setPedidoCancelar(null);
+      setMotivoCancelamento("");
+      setConfirmacaoCancelamento("");
+      setFeedback({ tipo: "sucesso", texto: resultado.status === "pendente" ? `O pagamento continua ${resultado.provedor_status || "pendente"} no Mercado Pago.` : `Pedido atualizado para ${resultado.status}.` });
+      await carregar();
+    } catch (error) {
+      setFeedback({ tipo: "erro", texto: error instanceof Error ? error.message : "Não foi possível resolver o pagamento." });
+    } finally {
+      setResolvendoPedido(null);
     }
   }
 
@@ -243,6 +277,19 @@ export default function SuperAdminFotosPage() {
                 </div>
                 <p className="mt-4 text-[9px] leading-relaxed text-zinc-600">O valor do fotógrafo é exibido antes da tarifa da instituição de pagamento. Essa tarifa não é receita do Itatame.</p>
               </article>
+            </section>
+
+            <section className="mt-6 rounded-3xl border border-amber-500/15 bg-[#0a0a0e] p-4 md:p-6">
+              <div className="mb-4 flex items-center gap-3"><Clock3 size={20} className="text-amber-400" /><div><h2 className="text-sm font-black uppercase">Pedidos pendentes</h2><p className="mt-1 text-[9px] text-zinc-500">Consulte o Mercado Pago antes de decidir. Cancele apenas cobranças ainda não aprovadas.</p></div></div>
+              <div className="space-y-2">
+                {dados.pedidosPendentes.map((pedido) => (
+                  <div key={pedido.id} className="flex flex-col gap-3 rounded-xl border border-white/5 bg-black/40 p-4 md:flex-row md:items-center md:justify-between">
+                    <div className="min-w-0"><p className="truncate text-[10px] font-black text-white">{pedido.galeria}</p><p className="mt-1 text-[9px] text-zinc-500">{pedido.fotografo} • {dataCurta(pedido.data)} • {moeda(pedido.totalCentavos)}</p><p className="mt-1 break-all text-[8px] text-zinc-600">Pedido {pedido.id} • MP {pedido.paymentId || "não iniciado"}{pedido.detalhe ? ` • ${pedido.detalhe}` : ""}</p></div>
+                    <div className="flex shrink-0 flex-wrap gap-2"><button type="button" onClick={() => void resolverPendente(pedido.id, "consultar")} disabled={!pedido.paymentId || resolvendoPedido === pedido.id} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-cyan-500/20 bg-cyan-500/10 px-3 text-[8px] font-black uppercase text-cyan-300 disabled:opacity-40"><RefreshCw size={12} className={resolvendoPedido === pedido.id ? "animate-spin" : ""} /> Consultar MP</button><button type="button" onClick={() => { setPedidoCancelar(pedido); setMotivoCancelamento(""); setConfirmacaoCancelamento(""); }} disabled={!pedido.paymentId || resolvendoPedido === pedido.id} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-red-500/20 bg-red-500/10 px-3 text-[8px] font-black uppercase text-red-300 disabled:opacity-40"><X size={12} /> Cancelar cobrança</button></div>
+                  </div>
+                ))}
+                {!dados.pedidosPendentes.length && <p className="rounded-xl border border-dashed border-white/10 p-6 text-center text-[10px] font-bold text-zinc-500">Nenhum pedido pendente.</p>}
+              </div>
             </section>
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -349,6 +396,18 @@ export default function SuperAdminFotosPage() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+      {pedidoCancelar && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/90 p-4 backdrop-blur-md">
+          <div role="dialog" aria-modal="true" aria-labelledby="titulo-cancelamento" className="w-full max-w-lg rounded-3xl border border-red-500/25 bg-[#0a0a0e] p-5 md:p-6">
+            <h2 id="titulo-cancelamento" className="text-lg font-black uppercase">Cancelar cobrança pendente</h2>
+            <p className="mt-3 text-[10px] leading-relaxed text-zinc-400">{pedidoCancelar.galeria} • {moeda(pedidoCancelar.totalCentavos)}. O sistema consultará o Mercado Pago. Se o pagamento já tiver sido aprovado, o cancelamento será bloqueado.</p>
+            <label className="mt-5 block text-[9px] font-bold text-zinc-400">Motivo administrativo</label><textarea value={motivoCancelamento} onChange={(event) => setMotivoCancelamento(event.target.value)} maxLength={300} rows={3} className="mt-2 w-full rounded-xl border border-white/10 bg-black p-3 text-xs text-white" />
+            <label className="mt-4 block text-[9px] font-bold text-zinc-400">Digite CANCELAR para confirmar</label><input value={confirmacaoCancelamento} onChange={(event) => setConfirmacaoCancelamento(event.target.value.toUpperCase())} autoComplete="off" className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-black px-3 text-xs text-white" />
+            {feedback?.tipo === "erro" && <p className="mt-3 text-xs text-red-300">{feedback.texto}</p>}
+            <div className="mt-5 grid grid-cols-2 gap-2"><button type="button" onClick={() => setPedidoCancelar(null)} disabled={Boolean(resolvendoPedido)} className="h-11 rounded-xl border border-white/10 text-xs font-bold text-white">Voltar</button><button type="button" onClick={() => void resolverPendente(pedidoCancelar.id, "cancelar")} disabled={Boolean(resolvendoPedido) || motivoCancelamento.trim().length < 8 || confirmacaoCancelamento !== "CANCELAR"} className="h-11 rounded-xl bg-red-600 text-xs font-black text-white disabled:opacity-40">{resolvendoPedido ? "Consultando..." : "Confirmar cancelamento"}</button></div>
           </div>
         </div>
       )}

@@ -20,6 +20,8 @@ type Pedido = {
   modelo_recebimento: string | null;
   repasse_organizador_status: string | null;
   pago_em: string | null;
+  provedor_payment_id: string | null;
+  provedor_status_detail: string | null;
   created_at: string;
   foto_pedido_itens?: Array<{ id: string }> | null;
 };
@@ -124,7 +126,7 @@ export async function GET(request: Request) {
       carregarEmPaginas<Pedido>(async (inicio, fim) => {
         const resultado = await supabase
           .from("foto_pedidos")
-          .select("id, evento_id, fotografo_id, organizador_user_id, status, total_centavos, comissao_itatame_centavos, comissao_organizador_centavos, comissao_organizador_percentual, receita_direta_organizador_centavos, modelo_recebimento, repasse_organizador_status, pago_em, created_at, foto_pedido_itens(id)")
+          .select("id, evento_id, fotografo_id, organizador_user_id, status, total_centavos, comissao_itatame_centavos, comissao_organizador_centavos, comissao_organizador_percentual, receita_direta_organizador_centavos, modelo_recebimento, repasse_organizador_status, pago_em, created_at, provedor_payment_id, provedor_status_detail, foto_pedido_itens(id)")
           .order("created_at", { ascending: false })
           .range(inicio, fim);
         return { data: resultado.data as Pedido[] | null, error: resultado.error };
@@ -247,6 +249,16 @@ export async function GET(request: Request) {
       fotos: pedido.foto_pedido_itens?.length || 0,
     }));
 
+    const pendentes = pedidos.filter((pedido) => pedido.status === "pendente").map((pedido) => ({
+      id: pedido.id,
+      data: pedido.created_at,
+      galeria: pedido.evento_id ? (galeriaPorId.get(pedido.evento_id)?.nome || "Galeria não localizada") : "Sem galeria",
+      fotografo: pedido.fotografo_id ? (fotografoPorId.get(pedido.fotografo_id)?.nome || "Fotógrafo") : "Fotógrafo não localizado",
+      totalCentavos: Number(pedido.total_centavos || 0),
+      paymentId: pedido.provedor_payment_id,
+      detalhe: pedido.provedor_status_detail,
+    }));
+
     return NextResponse.json({
       atualizadoEm: new Date().toISOString(),
       geral: {
@@ -260,6 +272,7 @@ export async function GET(request: Request) {
       organizadores: [...porOrganizador.values()].sort((a, b) => b.royaltyEmAbertoCentavos - a.royaltyEmAbertoCentavos || b.faturamentoCentavos - a.faturamentoCentavos),
       galerias: [...porGaleria.values()].sort((a, b) => b.faturamentoCentavos - a.faturamentoCentavos),
       pedidosRecentes: recentes,
+      pedidosPendentes: pendentes,
     }, { headers: { "Cache-Control": "private, no-store, max-age=0" } });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Não foi possível montar o financeiro da Retratt.";

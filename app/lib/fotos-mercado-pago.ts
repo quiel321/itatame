@@ -56,9 +56,10 @@ export async function sincronizarPagamentoFotos(
     await liberarPedidoFotos(supabase, pedido.id, idPagamento, payment.status_detail);
   } else if (payment.status === "approved") {
     await confirmarRoyaltyOrganizador(supabase, pedido.id, idPagamento);
-  } else if (["cancelled", "refunded", "charged_back"].includes(String(payment.status))) {
-    const statusPedido = payment.status === "cancelled" ? "cancelado" : "reembolsado";
-    await supabase.from("foto_pedidos").update({ status: statusPedido }).eq("id", pedido.id);
+  } else if (["cancelled", "rejected", "refunded", "charged_back"].includes(String(payment.status))) {
+    const statusPedido = payment.status === "cancelled" || payment.status === "rejected" ? "cancelado" : "reembolsado";
+    const { error: atualizarError } = await supabase.from("foto_pedidos").update({ status: statusPedido }).eq("id", pedido.id);
+    if (atualizarError) throw new Error(atualizarError.message);
     await estornarRoyaltyOrganizador(supabase, pedido.id);
   }
 
@@ -66,7 +67,7 @@ export async function sincronizarPagamentoFotos(
     id: pedido.id,
     status: payment.status === "approved"
       ? "pago"
-      : (["refunded", "charged_back"].includes(String(payment.status)) ? "reembolsado" : payment.status === "cancelled" ? "cancelado" : pedido.status),
+      : (["refunded", "charged_back"].includes(String(payment.status)) ? "reembolsado" : ["cancelled", "rejected"].includes(String(payment.status)) ? "cancelado" : pedido.status),
     provedor_status: payment.status,
     provedor_status_detail: payment.status_detail || null,
     sincronizado: true,
