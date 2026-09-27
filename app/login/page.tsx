@@ -95,7 +95,7 @@ function FormularioLogin() {
 
         if (atletaError || !atleta) {
           await supabase.auth.signOut();
-          setErro("Não encontramos um cadastro de atleta vinculado a este e-mail. Crie seu cadastro antes de acessar a plataforma.");
+          setErro("Esta conta ainda não tem perfil de atleta. Abra Criar Cadastro e, se você já usa o Retratt, informe o mesmo e-mail e senha.");
           setLoading(false);
           return;
         }
@@ -211,7 +211,7 @@ function FormularioLogin() {
 
         {!erro && cadastroNaoEncontrado && (
           <div className="mb-5 rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3 text-[10px] font-bold leading-relaxed text-yellow-100 md:text-xs">
-            Não encontramos um cadastro de atleta para esta conta. Faça um cadastro explícito abaixo para continuar.
+            Não encontramos um perfil de atleta para esta conta. Abra Criar Cadastro; se já usa o Retratt, informe o mesmo e-mail e senha.
           </div>
         )}
         

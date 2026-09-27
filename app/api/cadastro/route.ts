@@ -110,6 +110,45 @@ export async function POST(request: Request) {
       user_metadata: { role: perfil, cpf: cpf || undefined, nome: nome || undefined },
     });
     if (signUpError) {
+      if (perfil === "atleta" && emailJaExiste(signUpError)) {
+        const conta = await confirmarSenhaDaConta(email, password);
+        if ("erro" in conta) {
+          if (conta.erro === "indisponivel") return NextResponse.json({ error: "Cadastro temporariamente indisponível." }, { status: 503 });
+          if (conta.erro === "nao-confirmado") return NextResponse.json({ error: "Confirme o e-mail da conta Retratt antes de criar o perfil de atleta." }, { status: 409 });
+          return NextResponse.json({ error: "Este e-mail já tem conta no Retratt. Use a mesma senha ou recupere-a antes de concluir o cadastro de atleta." }, { status: 409 });
+        }
+
+        const [atletaExistente, comprador, fotografo, organizadorFotos] = await Promise.all([
+          supabase.from("atletas").select("id").eq("user_id", conta.userId).maybeSingle(),
+          supabase.from("foto_compradores").select("user_id").eq("user_id", conta.userId).maybeSingle(),
+          supabase.from("fotografos").select("user_id").eq("user_id", conta.userId).maybeSingle(),
+          supabase.from("foto_organizadores").select("id").eq("id", conta.userId).maybeSingle(),
+        ]);
+        if (atletaExistente.error || comprador.error || fotografo.error || organizadorFotos.error) {
+          return NextResponse.json({ error: "Não foi possível validar a conta agora. Tente novamente." }, { status: 503 });
+        }
+        if (atletaExistente.data) return NextResponse.json({ error: "Este e-mail já possui cadastro de atleta. Entre na conta existente." }, { status: 409 });
+        if (!comprador.data && !fotografo.data && !organizadorFotos.data) {
+          return NextResponse.json({ error: "Este e-mail já possui outra conta no iTatame. Entre na conta existente ou recupere a senha." }, { status: 409 });
+        }
+
+        const vinculo = await supabase.from("atletas").insert({
+          user_id: conta.userId,
+          email,
+          cpf,
+          telefone,
+          role: "atleta",
+          nome: "",
+          equipe: "Independente",
+          professor: "",
+          faixa: "",
+          cidade: "",
+          modalidade: "Jiu-Jitsu",
+          ...(nascimento && nascimento.ok ? { nascimento: nascimento.iso } : {}),
+        });
+        if (vinculo.error) return NextResponse.json({ error: erroIdentidade(vinculo.error) }, { status: 400 });
+        return NextResponse.json({ success: true, requiresEmailConfirmation: false, message: "Perfil de atleta vinculado à sua conta Retratt. Entre no iTatame com o mesmo e-mail e senha." });
+      }
       if (perfil === "professor" && emailJaExiste(signUpError)) {
         const senha = await confirmarSenhaDaConta(email, password);
         if ("erro" in senha) {
