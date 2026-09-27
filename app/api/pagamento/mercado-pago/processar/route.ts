@@ -98,14 +98,17 @@ export async function POST(request: Request) {
           lote2_valor,
           lote2_data_fim,
           lote3_valor,
-          valor_absoluto,
           regras_pontuacao_equipes
         )
       `)
       .eq("id", inscricaoId)
       .maybeSingle();
 
-    if (inscricaoError || !inscricao) {
+    if (inscricaoError) {
+      console.error("Erro ao consultar inscricao para processar pagamento Mercado Pago:", inscricaoError);
+      return NextResponse.json({ error: "Falha ao consultar a inscrição." }, { status: 500 });
+    }
+    if (!inscricao) {
       return NextResponse.json({ error: "Inscricao nao encontrada." }, { status: 404 });
     }
     if (!(await usuarioGerenciaInscricao(supabase, usuario.id, inscricao.user_id))) {
