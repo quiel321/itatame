@@ -57,7 +57,8 @@ async function tokenDaSessao() {
 
 const MAX_UPLOAD_BYTES = 3 * 1024 * 1024; // 🔥 Limite alterado para 3MB
 const MAX_SOURCE_BYTES = 40 * 1024 * 1024;
-const MAX_UPLOAD_FILES = 500;
+const MAX_UPLOAD_FILES = 5000;
+const MAX_ARQUIVOS_VISIVEIS = 100;
 const TIPOS_FOTO = new Set(["image/jpeg", "image/png", "image/webp"]);
 const TIPOS_VIDEO = new Set(["video/mp4", "video/webm", "video/quicktime"]);
 
@@ -106,24 +107,6 @@ function aguardarVideo(video: HTMLVideoElement, evento: "loadedmetadata" | "load
     video.addEventListener(evento, ok, { once: true });
     video.addEventListener("error", falha, { once: true });
   });
-}
-
-async function lerDuracaoVideo(file: File) {
-  const url = URL.createObjectURL(file);
-  const video = document.createElement("video");
-  video.preload = "metadata";
-  video.muted = true;
-  video.src = url;
-  try {
-    await aguardarVideo(video, "loadedmetadata", file.name, 15000);
-    if (!Number.isFinite(video.duration) || video.duration <= 0) throw new Error(`Não foi possível medir a duração de ${file.name}.`);
-    if (!video.videoWidth || !video.videoHeight) throw new Error(mensagemFormatoVideo(file.name));
-    return video.duration;
-  } finally {
-    URL.revokeObjectURL(url);
-    video.removeAttribute("src");
-    video.load();
-  }
 }
 
 function formatarTamanho(bytes: number) {
@@ -442,6 +425,7 @@ export default function PainelFotografoPage() {
   const [albumId, setAlbumId] = useState("");
   const [novoAlbum, setNovoAlbum] = useState("Geral");
   const [arquivos, setArquivos] = useState<File[]>([]);
+  const [buscaArquivo, setBuscaArquivo] = useState("");
   const [precoFoto, setPrecoFoto] = useState("15,00");
   const [precoVideo, setPrecoVideo] = useState("25,00");
   const [status, setStatus] = useState<UploadStatus>("idle");
@@ -449,9 +433,6 @@ export default function PainelFotografoPage() {
   const [carregando, setCarregando] = useState(true);
   const [carregandoAlbuns, setCarregandoAlbuns] = useState(false);
   const [criandoAlbum, setCriandoAlbum] = useState(false);
-  const [otimizando, setOtimizando] = useState(false);
-  const [otimizacaoAtual, setOtimizacaoAtual] = useState(0);
-  const [otimizacaoTotal, setOtimizacaoTotal] = useState(0);
   const [uploadAtual, setUploadAtual] = useState(0);
   const [uploadConcluidas, setUploadConcluidas] = useState(0);
   const [uploadTotal, setUploadTotal] = useState(0);
@@ -551,18 +532,18 @@ export default function PainelFotografoPage() {
   const valorFotoAtual = formatarPrecoFotos(eventoSelecionado?.preco_bloqueado ? Number(eventoSelecionado.preco_padrao_centavos || 0) : converterPrecoCentavos(precoFoto, 1500));
   const valorVideoAtual = formatarPrecoFotos(eventoSelecionado?.preco_bloqueado ? Number(eventoSelecionado.preco_video_centavos || 0) : converterPrecoCentavos(precoVideo, 2500));
   const enviando = ["preparando", "enviando", "confirmando"].includes(status);
-  const uploadBloqueado = !eventoId || carregandoAlbuns || enviando || otimizando || criandoAlbum;
-  const totalBytes = arquivos.reduce((total, arquivo) => total + arquivo.size, 0);
+  const uploadBloqueado = !eventoId || carregandoAlbuns || enviando || criandoAlbum;
+  const totalBytes = useMemo(() => arquivos.reduce((total, arquivo) => total + arquivo.size, 0), [arquivos]);
+  const arquivosFiltrados = useMemo(() => arquivos
+    .map((arquivo, index) => ({ arquivo, index }))
+    .filter(({ arquivo }) => arquivo.name.toLowerCase().includes(buscaArquivo.trim().toLowerCase())), [arquivos, buscaArquivo]);
   const progressoPercentual = useMemo(() => {
     if (status === "ok") return 100;
-    if (otimizando && otimizacaoTotal > 0) {
-      return Math.min(100, Math.round((otimizacaoAtual / otimizacaoTotal) * 100));
-    }
     if (enviando && uploadTotal > 0) {
       return Math.min(99, Math.round(((uploadConcluidas + fracaoEmAndamento) / uploadTotal) * 100));
     }
     return 0;
-  }, [enviando, fracaoEmAndamento, otimizacaoAtual, otimizacaoTotal, otimizando, status, uploadConcluidas, uploadTotal]);
+  }, [enviando, fracaoEmAndamento, status, uploadConcluidas, uploadTotal]);
 
   const orientacaoPrincipal = useMemo(() => {
     if (!eventoId) return "Escolha primeiro onde as fotos serão publicadas.";
@@ -572,7 +553,16 @@ export default function PainelFotografoPage() {
     return `${arquivos.length} mídia(s) pronta(s) para o álbum “${albumSelecionado?.titulo || novoAlbum.trim() || "Geral"}”.`;
   }, [albumId, albumSelecionado?.titulo, arquivos.length, carregandoAlbuns, eventoId, novoAlbum]);
 
-  async function selecionarArquivos(lista: FileList | null) {
+  useEffect(() => {
+    if (!enviando) return;
+    const avisarSaida = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+    };
+    window.addEventListener("beforeunload", avisarSaida);
+    return () => window.removeEventListener("beforeunload", avisarSaida);
+  }, [enviando]);
+
+  function selecionarArquivos(lista: FileList | null) {
     if (!lista) return;
     const recebidos = Array.from(lista);
     const capacidade = MAX_UPLOAD_FILES - arquivos.length;
@@ -584,17 +574,12 @@ export default function PainelFotografoPage() {
     const lote = recebidos.slice(0, capacidade);
     const aceitos: File[] = [];
     const motivosRecusa: string[] = [];
-    let otimizadas = 0;
     let recusados = recebidos.length - lote.length;
 
-    setOtimizando(true);
-    setOtimizacaoAtual(0);
-    setOtimizacaoTotal(lote.length);
     setStatus("idle");
     setUploadAtual(0);
     setUploadConcluidas(0);
     setUploadTotal(0);
-    setMensagem(`Preparando ${lote.length} arquivo(s) antes do envio...`);
 
     for (let index = 0; index < lote.length; index += 1) {
       const arquivo = normalizarTipoArquivo(lote[index]);
@@ -606,44 +591,19 @@ export default function PainelFotografoPage() {
         motivosRecusa.push(!tipoValido
           ? `${arquivo.name}: formato não aceito.`
           : `${arquivo.name}: ultrapassa ${ehVideo ? "250 MB" : "40 MB antes da otimização"}.`);
-        setOtimizacaoAtual(index + 1);
         continue;
       }
-
-      try {
-        if (ehVideo) {
-          const duracao = await lerDuracaoVideo(arquivo);
-          if (duracao > VIDEO_MAX_DURATION_SECONDS) {
-            throw new Error(`${arquivo.name} ultrapassa o limite de 2 minutos.`);
-          }
-          aceitos.push(arquivo);
-        } else {
-          const resultado = await otimizarFotoParaUpload(arquivo);
-          aceitos.push(resultado.file);
-          if (resultado.otimizada) otimizadas += 1;
-        }
-      } catch (error: unknown) {
-        recusados += 1;
-        motivosRecusa.push(error instanceof Error ? error.message : `${arquivo.name}: não foi possível preparar o arquivo.`);
-      }
-      setOtimizacaoAtual(index + 1);
+      aceitos.push(arquivo);
     }
 
     setArquivos((atuais) => [...atuais, ...aceitos]);
-    setStatus("idle");
-    setUploadAtual(0);
-    setOtimizando(false);
-    setOtimizacaoAtual(0);
-    setOtimizacaoTotal(0);
     if (fileInputRef.current) fileInputRef.current.value = "";
 
     const totalPronto = arquivos.length + aceitos.length;
     if (recusados > 0) {
-      setMensagem(`${totalPronto} mídia(s) pronta(s). ${otimizadas} foto(s) foram otimizadas e ${recusados} arquivo(s) ficaram fora. ${motivosRecusa[0] || "Revise formato, tamanho e duração."}`);
-    } else if (otimizadas > 0) {
-      setMensagem(`${totalPronto} mídia(s) pronta(s). ${otimizadas} foto(s) foram otimizadas automaticamente para até 3MB.`);
+      setMensagem(`${totalPronto} mídia(s) na fila. ${recusados} arquivo(s) ficaram fora. ${motivosRecusa[0] || "Revise formato e tamanho."}`);
     } else {
-      setMensagem(`${totalPronto} mídia(s) pronta(s) para publicação.`);
+      setMensagem(`${totalPronto} mídia(s) na fila. Cada arquivo será preparado quando chegar sua vez de envio.`);
     }
   }
 
@@ -701,7 +661,8 @@ export default function PainelFotografoPage() {
   ) {
     const ehVideo = arquivoEhVideo(arquivo);
     onEtapa("preparando");
-    const derivadosFoto = ehVideo ? null : await gerarDerivadosFoto(arquivo);
+    const arquivoPronto = ehVideo ? arquivo : (await otimizarFotoParaUpload(arquivo)).file;
+    const derivadosFoto = ehVideo ? null : await gerarDerivadosFoto(arquivoPronto);
     const derivadosVideo = ehVideo ? await gerarDerivadosVideo(arquivo) : null;
     const previewBlob = derivadosVideo?.previewBlob || derivadosFoto!.previewBlob;
     const miniaturaIa = derivadosVideo?.miniaturaIa || derivadosFoto!.miniaturaIa;
@@ -713,10 +674,10 @@ export default function PainelFotografoPage() {
       body: JSON.stringify({
         eventoId,
         albumId: destinoAlbumId,
-        fileName: arquivo.name,
-        contentType: arquivo.type,
-        size: arquivo.size,
-        titulo: arquivo.name.replace(/\.[^.]+$/, ""),
+        fileName: arquivoPronto.name,
+        contentType: arquivoPronto.type,
+        size: arquivoPronto.size,
+        titulo: arquivoPronto.name.replace(/\.[^.]+$/, ""),
         precoCentavos: ehVideo
           ? converterPrecoCentavos(precoVideo, 2500)
           : converterPrecoCentavos(precoFoto, 1500),
@@ -759,9 +720,9 @@ export default function PainelFotografoPage() {
       if (derivadosVideo?.previewVideoBlob && uploadData.videoPreviewUploadUrl) {
         await enviarDiretoAoR2(uploadData.videoPreviewUploadUrl, derivadosVideo.previewVideoBlob, () => undefined);
       }
-      await enviarDiretoAoR2(uploadData.uploadUrl, arquivo, (percentual) => onEtapa("enviando", percentual));
+      await enviarDiretoAoR2(uploadData.uploadUrl, arquivoPronto, (percentual) => onEtapa("enviando", percentual));
     } else {
-      const putResponse = await enviarArquivo(arquivo, "original", arquivo.type);
+      const putResponse = await enviarArquivo(arquivoPronto, "original", arquivoPronto.type);
       if (!putResponse.ok) {
         const detalhe = await putResponse.json().catch(() => null);
         throw new Error(detalhe?.error || "Falha ao enviar a foto original para o armazenamento.");
@@ -1029,17 +990,18 @@ export default function PainelFotografoPage() {
 
             <div className="grid gap-4 lg:grid-cols-[1fr_250px]">
               <div className={`relative flex min-h-[250px] flex-col items-center justify-center rounded-2xl border-2 border-dashed bg-black p-5 text-center transition ${arquivos.length ? "border-emerald-500/30" : "border-white/10 hover:border-retratt/60 hover:bg-retratt/5"}`}>
-                <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime,.jpg,.jpeg,.png,.webp,.mp4,.m4v,.webm,.mov" multiple disabled={otimizando || enviando} onChange={(e) => void selecionarArquivos(e.target.files)} className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0 disabled:cursor-wait" />
+                <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime,.jpg,.jpeg,.png,.webp,.mp4,.m4v,.webm,.mov" multiple disabled={enviando} onChange={(e) => selecionarArquivos(e.target.files)} className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0 disabled:cursor-wait" />
                 <div className={`mb-3 flex h-16 w-16 items-center justify-center rounded-full ${arquivos.length ? "bg-emerald-500/10 text-emerald-400" : "bg-white/5 text-zinc-500"}`}>
-                  {otimizando ? <Loader2 size={30} className="animate-spin text-retratt" /> : arquivos.length ? <CheckCircle2 size={30} /> : <CloudUpload size={30} />}
+                  {arquivos.length ? <CheckCircle2 size={30} /> : <CloudUpload size={30} />}
                 </div>
                 <p className="text-sm font-black uppercase tracking-wider text-white">
-                  {otimizando ? `Preparando ${otimizacaoAtual} de ${otimizacaoTotal}` : arquivos.length ? `${arquivos.length} mídia(s) pronta(s)` : "Clique ou arraste fotos e vídeos"}
+                  {arquivos.length ? `${arquivos.length} mídia(s) na fila` : "Clique ou arraste fotos e vídeos"}
                 </p>
                 <p className="mt-2 max-w-sm text-xs leading-5 text-zinc-500">
                   {arquivos.length ? "Clique novamente para adicionar mais mídias ou revise a lista logo abaixo." : "Escolha fotos e vídeos. Você verá o andamento de cada etapa antes da publicação."}
                 </p>
                 <p className="mt-3 text-[10px] font-black uppercase tracking-wider text-retratt">Fotos: JPG, PNG ou WebP · Vídeos: MP4, WebM ou MOV · Até {formatarDuracaoVideo(VIDEO_MAX_DURATION_SECONDS)} / 250 MB</p>
+                <p className="mt-2 text-[10px] text-zinc-500">Até {MAX_UPLOAD_FILES.toLocaleString("pt-BR")} mídias por lote. Mantenha esta aba aberta durante o envio.</p>
               </div>
 
               <div className="rounded-2xl border border-white/10 bg-black p-4">
@@ -1066,13 +1028,13 @@ export default function PainelFotografoPage() {
                 <p className="mt-3 text-xs text-zinc-500">Lote atual: <span className="font-bold text-white">{arquivos.length}</span> mídia(s) · {formatarTamanho(totalBytes)}</p>
 
                 <button type="button" onClick={() => void iniciarEnvio()} disabled={uploadBloqueado} className="mt-4 inline-flex min-h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-retratt px-3 py-3 text-center text-xs font-black uppercase tracking-wider text-black shadow-[0_0_24px_rgba(255,90,31,0.18)] transition hover:bg-retratt disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500">
-                  {criandoAlbum ? <><Loader2 size={16} className="animate-spin" /> Criando álbum</> : otimizando ? <><Loader2 size={16} className="animate-spin" /> Preparando {otimizacaoAtual}/{otimizacaoTotal}</> : enviando ? <><Loader2 size={16} className="animate-spin" /> Publicando {uploadAtual}/{uploadTotal}</> : !arquivos.length ? <><ImagePlus size={16} /> Escolher mídias</> : !albumId ? <><FolderPlus size={16} /> Criar álbum e publicar</> : <><CloudUpload size={16} /> Publicar {arquivos.length} mídia(s)</>}
+                  {criandoAlbum ? <><Loader2 size={16} className="animate-spin" /> Criando álbum</> : enviando ? <><Loader2 size={16} className="animate-spin" /> Publicando {uploadAtual}/{uploadTotal}</> : !arquivos.length ? <><ImagePlus size={16} /> Escolher mídias</> : !albumId ? <><FolderPlus size={16} /> Criar álbum e publicar</> : <><CloudUpload size={16} /> Publicar {arquivos.length} mídia(s)</>}
                 </button>
 
-                {(otimizando || enviando || status === "ok") && (
+                {(enviando || status === "ok") && (
                   <div className="mt-4">
                     <div className="mb-2 flex items-center justify-between text-[10px] font-bold">
-                      <span className="text-zinc-400">{otimizando ? "Preparando imagens" : status === "ok" ? "Publicação concluída" : status === "preparando" ? "Criando prévias" : status === "enviando" ? "Enviando com segurança" : "Finalizando publicação"}</span>
+                      <span className="text-zinc-400">{status === "ok" ? "Publicação concluída" : status === "preparando" ? "Criando prévias" : status === "enviando" ? "Enviando com segurança" : "Finalizando publicação"}</span>
                       <span className={status === "ok" ? "text-emerald-300" : "text-retratt"}>{progressoPercentual}%</span>
                     </div>
                     <div className="h-2 overflow-hidden rounded-full bg-white/5">
@@ -1095,8 +1057,10 @@ export default function PainelFotografoPage() {
                   <p className="text-[10px] font-black uppercase tracking-[0.22em] text-zinc-500">Mídias selecionadas</p>
                   <button type="button" onClick={() => setArquivos([])} className="cursor-pointer text-[10px] font-black uppercase tracking-wider text-retratt hover:text-orange-300">Limpar</button>
                 </div>
+                <input value={buscaArquivo} onChange={(e) => setBuscaArquivo(e.target.value)} placeholder="Buscar arquivo pelo nome" aria-label="Buscar arquivo pelo nome" className="mb-2 h-9 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 text-xs text-white outline-none focus:border-retratt" />
+                {arquivosFiltrados.length > MAX_ARQUIVOS_VISIVEIS && <p className="mb-2 text-[10px] text-zinc-500">Exibindo {MAX_ARQUIVOS_VISIVEIS} de {arquivosFiltrados.length} arquivos. Busque pelo nome para revisar os demais.</p>}
                 <div className="max-h-52 space-y-2 overflow-y-auto pr-1">
-                  {arquivos.map((arquivo, index) => (
+                  {arquivosFiltrados.slice(0, MAX_ARQUIVOS_VISIVEIS).map(({ arquivo, index }) => (
                     <div key={`${arquivo.name}-${index}`} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-zinc-950 px-3 py-2">
                       <div className="min-w-0 flex items-center gap-3">
                         {arquivoEhVideo(arquivo) ? <Video size={16} className="shrink-0 text-retratt" /> : <ImagePlus size={16} className="shrink-0 text-retratt" />}
