@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 import { Cookie, Download, Share, ShieldCheck, Smartphone, X } from "lucide-react";
+import RetrattInstallPrompt from "./RetrattInstallPrompt";
 
 type InstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -12,6 +13,11 @@ type InstallPromptEvent = Event & {
 const CONSENT_KEY = "itatame_cookie_consent";
 const INSTALL_DISMISSED_KEY = "itatame_install_dismissed_at";
 const INSTALL_DELAY_DAYS = 14;
+const RETRATT_HOSTS = new Set(["retratt.com", "www.retratt.com", "retratt.com.br", "www.retratt.com.br", "retratt.localhost"]);
+
+function estaNoRetratt() {
+  return typeof window !== "undefined" && RETRATT_HOSTS.has(window.location.hostname.toLowerCase());
+}
 
 function registrarConsentimento(valor: "all" | "necessary") {
   localStorage.setItem(CONSENT_KEY, valor);
@@ -26,6 +32,7 @@ function estaInstalado() {
 
 export default function SiteConsentAndInstall() {
   const pathname = usePathname();
+  const ehRetratt = estaNoRetratt();
   const [mostrarCookies, setMostrarCookies] = useState(false);
   const [consentimentoDefinido, setConsentimentoDefinido] = useState(false);
   const [instalacao, setInstalacao] = useState<InstallPromptEvent | null>(null);
@@ -39,7 +46,7 @@ export default function SiteConsentAndInstall() {
   }, [pathname]);
 
   useEffect(() => {
-    if ("serviceWorker" in navigator) {
+    if (!estaNoRetratt() && "serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").catch(() => undefined);
     }
 
@@ -52,6 +59,7 @@ export default function SiteConsentAndInstall() {
   }, []);
 
   useEffect(() => {
+    if (estaNoRetratt()) return;
     const userAgent = navigator.userAgent;
     const ios = /iPad|iPhone|iPod/.test(userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
     const safari = /Safari/i.test(userAgent) && !/Chrome|CriOS|Chromium|Edg|OPR|FxiOS/i.test(userAgent);
@@ -67,7 +75,7 @@ export default function SiteConsentAndInstall() {
   }, []);
 
   useEffect(() => {
-    if (!consentimentoDefinido || rotaOperacional || estaInstalado()) return;
+    if (estaNoRetratt() || !consentimentoDefinido || rotaOperacional || estaInstalado()) return;
     const dispensadoEm = Number(localStorage.getItem(INSTALL_DISMISSED_KEY) || 0);
     const aindaDispensado = Date.now() - dispensadoEm < INSTALL_DELAY_DAYS * 24 * 60 * 60 * 1000;
     if (aindaDispensado) return;
@@ -122,7 +130,9 @@ export default function SiteConsentAndInstall() {
         </aside>
       )}
 
-      {mostrarInstalacao && !mostrarCookies && (
+      {ehRetratt && <RetrattInstallPrompt consentimentoDefinido={consentimentoDefinido} mostrarCookies={mostrarCookies} />}
+
+      {!ehRetratt && mostrarInstalacao && !mostrarCookies && (
         <aside className="fixed right-3 top-20 z-[145] w-[calc(100vw-1.5rem)] max-w-[360px] sm:right-5 sm:top-24" role="dialog" aria-label="Instalar aplicativo iTatame">
           <div className="relative overflow-hidden rounded-2xl border border-cyan-500/25 bg-[#0b0b10]/95 p-4 shadow-[0_18px_55px_rgba(0,0,0,0.72)] backdrop-blur-xl">
             <button onClick={dispensarInstalacao} aria-label="Fechar" className="absolute right-3 top-3 rounded-full border border-white/10 bg-white/5 p-1.5 text-zinc-500 transition hover:text-white"><X size={14} /></button>

@@ -326,8 +326,8 @@ export default function EventoGaleriaCliente() {
 
         <div className="max-w-screen-2xl mx-auto px-2 md:px-4">
 
-          <section className="mt-4 mb-4 overflow-hidden rounded-2xl border border-white/10 bg-[#0a0a0e] shadow-2xl relative">
-            <div className="relative min-h-[220px] md:min-h-[260px] px-4 py-6 md:px-8 md:py-8 flex flex-col">
+          <section className="mt-3 mb-3 overflow-hidden rounded-2xl border border-white/10 bg-[#0a0a0e] shadow-2xl relative">
+            <div className="relative min-h-[180px] md:min-h-[190px] px-4 py-5 md:px-8 md:py-6 flex flex-col">
               <div className="absolute inset-0 opacity-40">
                 <img
                   src={evento?.capa_url || "https://images.pexels.com/photos/16335196/pexels-photo-16335196.jpeg?auto=compress&cs=tinysrgb&w=1920"}
@@ -339,12 +339,12 @@ export default function EventoGaleriaCliente() {
 
               <div className="relative z-10 max-w-4xl flex flex-col h-full justify-center">
 
-                <Link href="/fotos" className="inline-flex cursor-pointer items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 hover:text-white transition-colors mb-5 w-fit">
+                <Link href="/fotos" className="inline-flex cursor-pointer items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 hover:text-white transition-colors mb-3 w-fit">
                   <ChevronLeft size={14} /> Voltar aos eventos
                 </Link>
 
                 {/* 🔥 IDENTIFICAÇÃO DO AUTOR DA GALERIA */}
-                <div className="mb-3">
+                <div className="mb-2">
                    {evento?.tipo_autor === "organizador" && evento?.autor_slug ? (
                        <Link href={`/fotos/organizador/${evento.autor_slug}`} className="inline-flex items-center gap-2.5 bg-white/10 hover:bg-white/20 border border-white/10 rounded-full pr-4 pl-1 py-1 backdrop-blur-md transition-all cursor-pointer group w-fit">
                           <div className="w-6 h-6 rounded-full bg-zinc-900 border border-white/10 flex items-center justify-center text-[9px] font-black text-white group-hover:scale-110 transition-transform">
@@ -366,28 +366,28 @@ export default function EventoGaleriaCliente() {
                    )}
                 </div>
 
-                <h1 className="mt-1 max-w-3xl text-3xl font-black uppercase tracking-tight leading-none text-white md:text-5xl">
+                <h1 className="mt-1 max-w-3xl text-2xl font-black uppercase tracking-tight leading-tight text-white sm:text-3xl md:text-4xl">
                   {evento?.nome || "Evento Retratt"}
                 </h1>
 
-                <div className="mt-5 flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-wider text-zinc-200">
+                <div className="mt-3 flex flex-wrap gap-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-200">
                   {evento?.data_evento && (
-                    <span className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-black/50 backdrop-blur-md px-3 py-2">
+                    <span className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-black/50 backdrop-blur-md px-2.5 py-1.5">
                       <CalendarDays size={14} className="text-retratt" /> {formatarData(evento.data_evento)}
                     </span>
                   )}
                   {(evento?.cidade || evento?.local) && (
-                    <span className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-black/50 backdrop-blur-md px-3 py-2">
+                    <span className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-black/50 backdrop-blur-md px-2.5 py-1.5">
                       <MapPin size={14} className="text-retratt" /> {[evento.local, evento.cidade, evento.estado].filter(Boolean).join(" - ")}
                     </span>
                   )}
-                  <span className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-black/50 backdrop-blur-md px-3 py-2">
+                  <span className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-black/50 backdrop-blur-md px-2.5 py-1.5">
                     <ImageIcon size={14} className="text-zinc-400" /> {totalFotos} {totalFotos === 1 ? "foto" : "fotos"}{totalVideos > 0 && ` · ${totalVideos} ${totalVideos === 1 ? "vídeo" : "vídeos"}`} · {albuns.length || 1} álbum
                   </span>
                   <button
                     type="button"
                     onClick={compartilharGaleria}
-                    className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-retratt/30 bg-retratt/15 px-3 py-2 text-retratt backdrop-blur-md transition-colors hover:bg-retratt hover:text-black"
+                    className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-retratt/30 bg-retratt/15 px-2.5 py-1.5 text-retratt backdrop-blur-md transition-colors hover:bg-retratt hover:text-black"
                   >
                     {linkCompartilhado ? <CheckCircle2 size={14} /> : <Share2 size={14} />}
                     {linkCompartilhado ? "Link copiado" : albumAtivo === "todos" ? "Compartilhar" : "Compartilhar álbum"}
@@ -397,13 +397,27 @@ export default function EventoGaleriaCliente() {
             </div>
           </section>
 
-          <div className="sticky top-[60px] md:top-[80px] z-40 mb-6 bg-[#0a0a0e]/90 backdrop-blur-xl border border-white/10 p-2 md:p-3 rounded-2xl flex flex-col md:flex-row gap-3 shadow-2xl">
+          <section aria-labelledby="busca-fotos-ia" className="mb-3 rounded-2xl border border-retratt/25 bg-gradient-to-r from-[#211108] via-[#130c09] to-[#0a0a0e] px-4 py-4 shadow-lg shadow-orange-950/10 sm:px-5">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-retratt/25 bg-retratt/10 text-retratt">
+                  <ScanFace size={22} />
+                </div>
+                <div>
+                  <h2 id="busca-fotos-ia" className="text-base font-black text-white sm:text-lg">Encontre suas fotos com IA</h2>
+                  <p className="mt-0.5 max-w-xl text-xs leading-relaxed text-zinc-300">Envie uma selfie e veja as fotos em que você aparece nesta galeria.</p>
+                </div>
+              </div>
+              <BuscaFacial
+                eventoId={eventoId}
+                triggerLabel="Buscar minhas fotos"
+                triggerClassName="flex w-full shrink-0 cursor-pointer items-center justify-center gap-2 rounded-xl bg-retratt px-5 py-3 text-xs font-black text-black transition-colors hover:bg-orange-400 sm:w-auto"
+              />
+            </div>
+            <p className="mt-3 text-[10px] leading-relaxed text-zinc-500 sm:ml-[52px]">A selfie é usada somente para localizar fotos. A busca solicita seu consentimento antes do envio.</p>
+          </section>
 
-            <BuscaFacial
-              eventoId={eventoId}
-              triggerLabel="Pesquisa facial"
-              triggerClassName="flex items-center justify-center gap-2.5 bg-black/50 hover:bg-black border border-white/5 rounded-xl px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.1em] text-white shrink-0 cursor-pointer transition-colors"
-            />
+          <div className="sticky top-[60px] md:top-[80px] z-40 mb-3 bg-[#0a0a0e]/90 backdrop-blur-xl border border-white/10 p-2 md:p-3 rounded-2xl flex flex-col md:flex-row gap-3 shadow-2xl">
 
             {eventoPermiteBuscaPorNumero(evento) && (
               <BuscaPorNumero
@@ -447,27 +461,12 @@ export default function EventoGaleriaCliente() {
             </div>
           </div>
 
-          {Number(evento?.desconto_combo_percentual || 0) > 0 && <div className="mb-6 rounded-3xl bg-gradient-to-r from-[#18100c] via-orange-950/20 to-[#0a0a0e] border border-retratt/20 p-5 md:p-6 flex flex-col md:flex-row items-center justify-between gap-5 shadow-lg shadow-orange-950/10">
-             <div className="flex items-center gap-4 text-center md:text-left">
-                <div className="hidden sm:flex w-12 h-12 rounded-full bg-retratt/10 text-retratt items-center justify-center shrink-0 border border-retratt/20">
-                   <Percent size={24} />
-                </div>
-                <div>
-                   <h3 className="text-lg md:text-xl font-black uppercase tracking-tight text-white mb-1">
-                      Leve mais, <span className="text-retratt">Pague menos</span>
-                   </h3>
-                   <p className="text-[11px] text-zinc-400 font-medium uppercase tracking-widest">
-                      {Number(evento.desconto_combo_percentual)}% de desconto a partir de {Number(evento.desconto_combo_qtd || 3)} mídias da mesma galeria e fotógrafo.
-                   </p>
-                </div>
-             </div>
-             <div className="flex gap-3 w-full md:w-auto">
-                <div className="flex-1 md:flex-none bg-retratt/10 border border-retratt/30 rounded-2xl px-5 py-3 text-center shadow-[0_0_15px_rgba(255,90,31,0.1)]">
-                   <p className="text-xl font-black text-retratt">{Number(evento.desconto_combo_percentual)}<span className="text-xs text-retratt/50">%</span></p>
-                   <p className="text-[9px] font-black uppercase tracking-widest text-retratt mt-1">{Number(evento.desconto_combo_qtd || 3)}+ mídias</p>
-                </div>
-             </div>
-          </div>}
+          {Number(evento?.desconto_combo_percentual || 0) > 0 && (
+            <div className="mb-4 flex items-center gap-2.5 rounded-xl border border-retratt/20 bg-retratt/[0.07] px-3 py-2.5 text-xs text-zinc-300 sm:px-4">
+              <Percent size={16} className="shrink-0 text-retratt" />
+              <p><strong className="text-retratt">{Number(evento.desconto_combo_percentual)}% de desconto</strong> a partir de {Number(evento.desconto_combo_qtd || 3)} mídias da mesma galeria e fotógrafo.</p>
+            </div>
+          )}
 
           {!carregando && totalFotos > 0 && totalVideos > 0 && (
             <div className="mb-5 grid grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-[#0a0a0e] p-1.5 sm:inline-grid sm:min-w-[360px]" role="tablist" aria-label="Tipo de mídia">

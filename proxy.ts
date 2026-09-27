@@ -196,6 +196,13 @@ export function proxy(request: NextRequest) {
       return NextResponse.next();
     }
 
+    // Cada domínio instala seu próprio service worker no escopo raiz.
+    if (path === '/sw.js') {
+      const destinoInterno = request.nextUrl.clone();
+      destinoInterno.pathname = '/retratt-sw.js';
+      return NextResponse.rewrite(destinoInterno);
+    }
+
     /**
      * Logos, fontes, PDFs, scripts e outros arquivos
      * públicos continuam sendo servidos normalmente.
