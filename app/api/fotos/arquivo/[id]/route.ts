@@ -44,18 +44,11 @@ export async function GET(request: Request, context: Params) {
       return NextResponse.json({ error: "Preview ainda nao gerado." }, { status: 404 });
     }
 
-    const arquivo = await fetch(createR2PresignedGetUrl(key, 180), { cache: "no-store" });
-    if (!arquivo.ok || !arquivo.body) {
-      return NextResponse.json({ error: "Arquivo nao disponivel no R2." }, { status: arquivo.status || 502 });
-    }
-
-    return new NextResponse(arquivo.body, {
-      status: 200,
-      headers: {
-        "Content-Type": arquivo.headers.get("content-type") || "image/jpeg",
-        "Cache-Control": "private, max-age=180",
-      },
-    });
+    // O preview já é protegido por marca d'água. O navegador pode buscá-lo no R2
+    // sem fazer a função da Vercel transmitir cada imagem ou vídeo inteiro.
+    const response = NextResponse.redirect(createR2PresignedGetUrl(key, 3600), 307);
+    response.headers.set("Cache-Control", "public, max-age=300, s-maxage=300");
+    return response;
   } catch (error: unknown) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Erro ao abrir preview." }, { status: 500 });
   }

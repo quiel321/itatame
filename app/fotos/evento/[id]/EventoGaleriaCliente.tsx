@@ -6,17 +6,21 @@ import { useParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
 import { FOTO_IA_NUMERO_TAG_PREFIX } from "@/app/lib/fotos-ai";
 import { eventoPermiteBuscaPorNumero } from "@/app/lib/fotos-busca-numero";
-import { arquivoFotoEhVideo, FotoAlbum, FotoArquivo, formatarPrecoFotos } from "@/app/lib/fotos";
+import { arquivoFotoEhVideo, FotoAlbum, FotoArquivo, FotoEvento, formatarPrecoFotos } from "@/app/lib/fotos";
 import FotosShell from "../../_components/FotosShell";
 import BuscaFacial from "../../_components/BuscaFacial";
 import BuscaPorNumero from "../../_components/BuscaPorNumero";
 import PreviewProtectionOverlay from "../../_components/PreviewProtectionOverlay";
-import { Camera, CalendarDays, CheckCircle2, ChevronLeft, Filter, Image as ImageIcon, MapPin, Play, ScanFace, Search, Share2, ShieldCheck, ShoppingCart, Video, X, Building2, Percent } from "lucide-react";
+import { Camera, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Filter, Image as ImageIcon, MapPin, Play, ScanFace, Search, Share2, ShieldCheck, ShoppingCart, Video, X, Building2, Percent } from "lucide-react";
 
 const CARRINHO_FOTOS_KEY = "carrinho_fotos";
 
 function fotoPreviewSrc(foto: FotoArquivo) {
   return `/api/fotos/arquivo/${foto.id}?tipo=preview`;
+}
+
+function fotoThumbSrc(foto: FotoArquivo) {
+  return `/api/fotos/arquivo/${foto.id}?tipo=thumb`;
 }
 
 function videoPreviewSrc(foto: FotoArquivo) {
@@ -25,21 +29,41 @@ function videoPreviewSrc(foto: FotoArquivo) {
 
 type DadosFotografo = { nome?: string | null; foto_url?: string | null };
 
+type EventoGaleria = FotoEvento & {
+  descricao?: string | null;
+  autor_nome?: string;
+  autor_slug?: string;
+  tipo_autor?: string;
+};
+
+export type GaleriaInicial = {
+  evento: EventoGaleria;
+  albuns: FotoAlbum[];
+  fotos: FotoArquivo[];
+  totalMidias: number | null;
+  totalVideos: number | null;
+};
+
 function dadosFotografo(foto: FotoArquivo) {
   const dados = (foto as FotoArquivo & { fotografo_dados?: DadosFotografo | DadosFotografo[] | null }).fotografo_dados;
   return Array.isArray(dados) ? dados[0] : dados;
 }
 
-export default function EventoGaleriaCliente() {
+export default function EventoGaleriaCliente({ initialData }: { initialData?: GaleriaInicial }) {
   const params = useParams<{ id: string }>();
   const eventoId = params.id;
-  const [evento, setEvento] = useState<any>(null);
-  const [albuns, setAlbuns] = useState<FotoAlbum[]>([]);
-  const [fotos, setFotos] = useState<FotoArquivo[]>([]);
+  const [evento, setEvento] = useState<EventoGaleria | null>(initialData?.evento || null);
+  const [albuns, setAlbuns] = useState<FotoAlbum[]>(initialData?.albuns || []);
+  const [fotos, setFotos] = useState<FotoArquivo[]>(initialData?.fotos || []);
   const [albumAtivo, setAlbumAtivo] = useState("todos");
-  const [tipoAtivo, setTipoAtivo] = useState<"fotos" | "videos">("fotos");
+  const [tipoAtivo, setTipoAtivo] = useState<"fotos" | "videos">(initialData?.totalMidias && initialData.totalMidias === initialData.totalVideos ? "videos" : "fotos");
   const [busca, setBusca] = useState("");
-  const [carregando, setCarregando] = useState(true);
+  const [carregando, setCarregando] = useState(!initialData);
+  const [limiteVisivel, setLimiteVisivel] = useState(48);
+  const [haMaisNoBanco, setHaMaisNoBanco] = useState((initialData?.fotos.length || 0) === 1000);
+  const [buscandoMais, setBuscandoMais] = useState(false);
+  const [totalMidiasBanco, setTotalMidiasBanco] = useState<number | null>(initialData?.totalMidias ?? null);
+  const [totalVideosBanco, setTotalVideosBanco] = useState<number | null>(initialData?.totalVideos ?? null);
 
   const [carrinho, setCarrinho] = useState<string[]>([]);
   const [carrinhoCarregado, setCarrinhoCarregado] = useState(false);
@@ -47,6 +71,7 @@ export default function EventoGaleriaCliente() {
   const [fotoOrigemBusca, setFotoOrigemBusca] = useState<"ia" | "numero" | null>(null);
   const [linkCompartilhado, setLinkCompartilhado] = useState(false);
   const temporizadorProtecaoRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const toqueInicialFoto = useRef<number | null>(null);
 
   useEffect(() => {
     const desativarProtecao = () => {
@@ -137,15 +162,18 @@ export default function EventoGaleriaCliente() {
   }, [carrinho, carrinhoCarregado]);
 
   useEffect(() => {
+    if (initialData) return;
     async function carregar() {
       if (!eventoId) return;
       setCarregando(true);
 
       // 1. Busca os dados base do evento (🔥 ADICIONADO: 'created_by' no select)
-      const [{ data: eventoData }, { data: albunsData }, { data: fotosData }] = await Promise.all([
+      const [{ data: eventoData }, { data: albunsData }, { data: fotosData }, { count: totalBanco }, { count: videosBanco }] = await Promise.all([
         supabase.from("foto_eventos").select("id, nome, slug, descricao, local, cidade, estado, data_evento, capa_url, status, vendas_ate, desconto_combo_qtd, desconto_combo_percentual, organizador_user_id, created_by").eq("id", eventoId).maybeSingle(),
         supabase.from("foto_albuns").select("id, evento_id, fotografo_id, titulo, descricao, capa_url, status").eq("evento_id", eventoId).eq("status", "publicado").order("ordem", { ascending: true }),
-        supabase.from("foto_arquivos").select("id, evento_id, album_id, fotografo_id, titulo, mime_type, r2_original_key, r2_preview_key, r2_thumb_key, preview_url, thumb_url, preco_centavos, status, tags, fotografo_dados:fotografos!fotografo_id(nome, foto_url)").eq("evento_id", eventoId).eq("status", "publicada").order("created_at", { ascending: false }),
+        supabase.from("foto_arquivos").select("id, evento_id, album_id, fotografo_id, titulo, mime_type, r2_original_key, r2_preview_key, r2_thumb_key, preview_url, thumb_url, preco_centavos, status, tags, fotografo_dados:fotografos!fotografo_id(nome, foto_url)").eq("evento_id", eventoId).eq("status", "publicada").order("created_at", { ascending: false }).order("id", { ascending: false }).range(0, 999),
+        supabase.from("foto_arquivos").select("id", { count: "exact", head: true }).eq("evento_id", eventoId).eq("status", "publicada"),
+        supabase.from("foto_arquivos").select("id", { count: "exact", head: true }).eq("evento_id", eventoId).eq("status", "publicada").like("mime_type", "video/%"),
       ]);
 
       if (!eventoData || eventoData.status !== "publicado") {
@@ -188,16 +216,21 @@ export default function EventoGaleriaCliente() {
       setEvento(eventoCompleto);
       setAlbuns((albunsData || []) as FotoAlbum[]);
       const midias = (fotosData || []) as FotoArquivo[];
+      setHaMaisNoBanco(midias.length === 1000);
+      setTotalMidiasBanco(totalBanco);
+      setTotalVideosBanco(videosBanco);
       const tipoDaUrl = new URLSearchParams(window.location.search).get("tipo");
-      const temFotos = midias.some((midia) => !arquivoFotoEhVideo(midia));
-      const temVideos = midias.some((midia) => arquivoFotoEhVideo(midia));
+      const temFotos = totalBanco !== null && videosBanco !== null
+        ? totalBanco > videosBanco : midias.some((midia) => !arquivoFotoEhVideo(midia));
+      const temVideos = videosBanco !== null
+        ? videosBanco > 0 : midias.some((midia) => arquivoFotoEhVideo(midia));
       setTipoAtivo(temVideos && (tipoDaUrl === "videos" || !temFotos) ? "videos" : "fotos");
       setFotos(midias);
       setCarregando(false);
     }
 
     carregar();
-  }, [eventoId]);
+  }, [eventoId, initialData]);
 
   useEffect(() => {
     if (fotos.length === 0) return;
@@ -206,7 +239,18 @@ export default function EventoGaleriaCliente() {
     if (!fotoId) return;
 
     const fotoEncontrada = fotos.find((foto) => String(foto.id) === fotoId);
-    if (!fotoEncontrada) return;
+    if (!fotoEncontrada) {
+      void supabase.from("foto_arquivos")
+        .select("id, evento_id, album_id, fotografo_id, titulo, mime_type, r2_original_key, r2_preview_key, r2_thumb_key, preview_url, thumb_url, preco_centavos, status, tags, fotografo_dados:fotografos!fotografo_id(nome, foto_url)")
+        .eq("id", fotoId).eq("evento_id", eventoId).eq("status", "publicada").maybeSingle()
+        .then(({ data }) => {
+          if (!data) return;
+          setFotoSelecionada(data as FotoArquivo);
+          const origem = parametros.get("origem");
+          setFotoOrigemBusca(origem === "ia" || origem === "numero" ? origem : null);
+        });
+      return;
+    }
 
     const frame = window.requestAnimationFrame(() => {
       setFotoSelecionada(fotoEncontrada);
@@ -214,7 +258,7 @@ export default function EventoGaleriaCliente() {
       setFotoOrigemBusca(origem === "ia" || origem === "numero" ? origem : null);
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [fotos]);
+  }, [fotos, eventoId]);
 
   useEffect(() => {
     if (albuns.length === 0) return;
@@ -224,8 +268,17 @@ export default function EventoGaleriaCliente() {
     return () => window.cancelAnimationFrame(frame);
   }, [albuns]);
 
+  useEffect(() => {
+    if (!initialData || initialData.totalVideos === 0) return;
+    if (new URLSearchParams(window.location.search).get("tipo") === "videos") {
+      const frame = window.requestAnimationFrame(() => setTipoAtivo("videos"));
+      return () => window.cancelAnimationFrame(frame);
+    }
+  }, [initialData]);
+
   const selecionarAlbum = (albumId: string) => {
     setAlbumAtivo(albumId);
+    setLimiteVisivel(48);
     const url = new URL(window.location.href);
     if (albumId === "todos") url.searchParams.delete("album");
     else url.searchParams.set("album", albumId);
@@ -260,14 +313,16 @@ export default function EventoGaleriaCliente() {
 
   const selecionarTipo = (tipo: "fotos" | "videos") => {
     setTipoAtivo(tipo);
+    setLimiteVisivel(48);
     const url = new URL(window.location.href);
     if (tipo === "fotos") url.searchParams.delete("tipo");
     else url.searchParams.set("tipo", tipo);
     window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
   };
 
-  const totalVideos = useMemo(() => fotos.filter((foto) => arquivoFotoEhVideo(foto)).length, [fotos]);
-  const totalFotos = fotos.length - totalVideos;
+  const videosCarregados = useMemo(() => fotos.filter((foto) => arquivoFotoEhVideo(foto)).length, [fotos]);
+  const totalVideos = totalVideosBanco ?? videosCarregados;
+  const totalFotos = totalMidiasBanco !== null ? totalMidiasBanco - totalVideos : fotos.length - videosCarregados;
   const midiasDoTipo = useMemo(
     () => fotos.filter((foto) => arquivoFotoEhVideo(foto) === (tipoAtivo === "videos")),
     [fotos, tipoAtivo],
@@ -285,6 +340,51 @@ export default function EventoGaleriaCliente() {
       return bateAlbum && bateBusca;
     });
   }, [midiasDoTipo, albumAtivo, busca]);
+
+  const indiceFotoSelecionada = fotoSelecionada
+    ? fotosFiltradas.findIndex((foto) => foto.id === fotoSelecionada.id) : -1;
+
+  function navegarFoto(direcao: -1 | 1) {
+    const proxima = fotosFiltradas[indiceFotoSelecionada + direcao];
+    if (!proxima) return;
+    setFotoSelecionada(proxima);
+    setFotoOrigemBusca(null);
+    const url = new URL(window.location.href);
+    if (url.searchParams.has("foto")) {
+      url.searchParams.set("foto", String(proxima.id));
+      url.searchParams.delete("origem");
+      window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+    }
+  }
+
+  useEffect(() => {
+    if (!fotoSelecionada) return;
+    const aoPressionar = (event: KeyboardEvent) => {
+      if (event.key === "ArrowLeft" && indiceFotoSelecionada > 0) navegarFoto(-1);
+      if (event.key === "ArrowRight" && indiceFotoSelecionada < fotosFiltradas.length - 1) navegarFoto(1);
+    };
+    window.addEventListener("keydown", aoPressionar);
+    return () => window.removeEventListener("keydown", aoPressionar);
+  });
+
+  async function mostrarMais() {
+    if (limiteVisivel < fotosFiltradas.length) {
+      setLimiteVisivel((atual) => atual + 48);
+      return;
+    }
+    if (!haMaisNoBanco || buscandoMais) return;
+    setBuscandoMais(true);
+    const { data, error } = await supabase.from("foto_arquivos")
+      .select("id, evento_id, album_id, fotografo_id, titulo, mime_type, r2_original_key, r2_preview_key, r2_thumb_key, preview_url, thumb_url, preco_centavos, status, tags, fotografo_dados:fotografos!fotografo_id(nome, foto_url)")
+      .eq("evento_id", eventoId).eq("status", "publicada")
+      .order("created_at", { ascending: false }).order("id", { ascending: false }).range(fotos.length, fotos.length + 999);
+    setBuscandoMais(false);
+    if (error) return;
+    const recebidas = (data || []) as FotoArquivo[];
+    setFotos((atuais) => [...atuais, ...recebidas]);
+    setHaMaisNoBanco(recebidas.length === 1000);
+    setLimiteVisivel((atual) => atual + 48);
+  }
 
   const toggleCarrinho = (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -382,7 +482,7 @@ export default function EventoGaleriaCliente() {
                     </span>
                   )}
                   <span className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-black/50 backdrop-blur-md px-2.5 py-1.5">
-                    <ImageIcon size={14} className="text-zinc-400" /> {totalFotos} {totalFotos === 1 ? "foto" : "fotos"}{totalVideos > 0 && ` · ${totalVideos} ${totalVideos === 1 ? "vídeo" : "vídeos"}`} · {albuns.length || 1} álbum
+                    <ImageIcon size={14} className="text-zinc-400" /> {carregando ? "Carregando fotos..." : <>{totalFotos} {totalFotos === 1 ? "foto" : "fotos"}{totalVideos > 0 && ` · ${totalVideos} ${totalVideos === 1 ? "vídeo" : "vídeos"}`} · {albuns.length || 1} álbum</>}
                   </span>
                   <button
                     type="button"
@@ -433,7 +533,7 @@ export default function EventoGaleriaCliente() {
               <Search size={16} className="text-zinc-500 mr-2 shrink-0" />
               <input
                 value={busca}
-                onChange={(e) => setBusca(e.target.value)}
+                onChange={(e) => { setBusca(e.target.value); setLimiteVisivel(48); }}
                 placeholder={eventoPermiteBuscaPorNumero(evento) ? "Buscar por nome, equipe, referência ou número..." : "Buscar por nome, equipe ou referência..."}
                 className="w-full bg-transparent border-none text-xs text-white outline-none placeholder:text-zinc-600 font-medium"
               />
@@ -447,7 +547,7 @@ export default function EventoGaleriaCliente() {
                 onClick={() => selecionarAlbum("todos")}
                 className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all cursor-pointer shrink-0 ${albumAtivo === "todos" ? 'bg-retratt text-black shadow-md shadow-orange-950/30' : 'bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white'}`}
               >
-                Todas ({midiasDoTipo.length})
+                Todas ({carregando ? "..." : tipoAtivo === "videos" ? totalVideos : totalFotos})
               </button>
               {albuns.map(album => (
                 <button
@@ -464,7 +564,7 @@ export default function EventoGaleriaCliente() {
           {Number(evento?.desconto_combo_percentual || 0) > 0 && (
             <div className="mb-4 flex items-center gap-2.5 rounded-xl border border-retratt/20 bg-retratt/[0.07] px-3 py-2.5 text-xs text-zinc-300 sm:px-4">
               <Percent size={16} className="shrink-0 text-retratt" />
-              <p><strong className="text-retratt">{Number(evento.desconto_combo_percentual)}% de desconto</strong> a partir de {Number(evento.desconto_combo_qtd || 3)} mídias da mesma galeria e fotógrafo.</p>
+              <p><strong className="text-retratt">{Number(evento?.desconto_combo_percentual)}% de desconto</strong> a partir de {Number(evento?.desconto_combo_qtd || 3)} mídias da mesma galeria e fotógrafo.</p>
             </div>
           )}
 
@@ -501,7 +601,7 @@ export default function EventoGaleriaCliente() {
             </div>
           ) : (
             <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 xl2:grid-cols-7 gap-2 md:gap-3">
-              {fotosFiltradas.map((foto) => {
+              {fotosFiltradas.slice(0, limiteVisivel).map((foto) => {
                 const noCarrinho = carrinho.includes(String(foto.id));
                 const ehVideo = arquivoFotoEhVideo(foto);
 
@@ -518,7 +618,7 @@ export default function EventoGaleriaCliente() {
                     {foto.r2_thumb_key || foto.r2_preview_key ? (
                       <img
                         data-foto-protegida-imagem
-                        src={fotoPreviewSrc(foto)}
+                        src={fotoThumbSrc(foto)}
                         alt={foto.titulo || "Foto do evento"}
                         className={`w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105 ${noCarrinho ? 'opacity-40 grayscale-[60%]' : 'opacity-90'}`}
                         loading="lazy"
@@ -562,6 +662,14 @@ export default function EventoGaleriaCliente() {
             </div>
           )}
 
+          {!carregando && (fotosFiltradas.length > limiteVisivel || haMaisNoBanco) && (
+            <div className="mt-8 flex justify-center">
+              <button type="button" onClick={() => void mostrarMais()} disabled={buscandoMais} className="rounded-xl border border-white/20 px-6 py-3 text-xs font-black uppercase text-white hover:border-retratt disabled:opacity-50">
+                {buscandoMais ? "Carregando..." : "Mostrar mais fotos"}
+              </button>
+            </div>
+          )}
+
           {carrinho.length > 0 && (
             <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[95%] max-w-sm bg-[#16161e]/95 backdrop-blur-xl border border-retratt/30 p-2.5 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.9),0_0_30px_rgba(255,90,31,0.2)] flex items-center justify-between z-40 animate-in slide-in-from-bottom-10 fade-in duration-300">
               <div className="flex items-center gap-3 pl-2">
@@ -584,13 +692,22 @@ export default function EventoGaleriaCliente() {
         {/* MODAL DE FOTO */}
         {fotoSelecionada && (
           <div className="fixed inset-0 z-[200] bg-black/95 backdrop-blur-md flex items-center justify-center p-2 md:p-4 animate-in fade-in duration-300" onClick={fecharFotoSelecionada}>
-            <div className="relative w-full max-w-7xl h-full flex flex-col md:flex-row gap-4 items-center justify-center" onClick={(e) => e.stopPropagation()}>
+            <div className="relative w-full max-w-7xl h-full flex flex-col md:flex-row gap-4 items-center justify-center" onClick={(e) => e.stopPropagation()}
+              onTouchStart={(event) => { toqueInicialFoto.current = event.touches[0]?.clientX ?? null; }}
+              onTouchEnd={(event) => {
+                if (toqueInicialFoto.current === null) return;
+                const distancia = event.changedTouches[0].clientX - toqueInicialFoto.current;
+                if (Math.abs(distancia) > 50) navegarFoto(distancia < 0 ? 1 : -1);
+                toqueInicialFoto.current = null;
+              }}>
 
               <button onClick={fecharFotoSelecionada} className="absolute top-2 right-2 md:top-4 md:right-4 z-50 cursor-pointer text-white bg-black/60 hover:bg-black p-2.5 rounded-full backdrop-blur-sm border border-white/10 transition-colors" aria-label="Fechar foto">
                 <X size={20} />
               </button>
 
               <div className="relative flex-1 h-[70vh] md:h-full w-full flex items-center justify-center overflow-hidden rounded-3xl bg-[#050505] border border-white/5 shadow-2xl">
+                {indiceFotoSelecionada > 0 && <button type="button" onClick={() => navegarFoto(-1)} aria-label="Foto anterior" className="absolute left-2 top-1/2 z-40 -translate-y-1/2 rounded-full bg-black/75 p-3 text-white hover:bg-retratt"><ChevronLeft size={22} /></button>}
+                {indiceFotoSelecionada >= 0 && indiceFotoSelecionada < fotosFiltradas.length - 1 && <button type="button" onClick={() => navegarFoto(1)} aria-label="Próxima foto" className="absolute right-2 top-1/2 z-40 -translate-y-1/2 rounded-full bg-black/75 p-3 text-white hover:bg-retratt"><ChevronRight size={22} /></button>}
                 {arquivoFotoEhVideo(fotoSelecionada) && fotoSelecionada.r2_thumb_key ? (
                   <video
                     data-foto-protegida-imagem

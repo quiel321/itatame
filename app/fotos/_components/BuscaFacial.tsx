@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { ChangeEvent, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Camera, CheckCircle2, ImagePlus, Loader2, Play, ScanFace, ShieldCheck, ShoppingCart, X } from "lucide-react";
+import { Camera, CheckCircle2, ChevronLeft, ChevronRight, ImagePlus, Loader2, Play, ScanFace, ShieldCheck, ShoppingCart, X } from "lucide-react";
 
 type ResultadoFace = {
   id: string;
@@ -24,6 +24,18 @@ type BuscaFacialProps = {
   triggerLabel?: string;
   triggerClassName?: string;
 };
+
+function MarcaBuscaFacial({ ampliada = false }: { ampliada?: boolean }) {
+  return (
+    <div aria-hidden="true" className={`pointer-events-none absolute inset-0 grid grid-cols-3 grid-rows-3 overflow-hidden ${ampliada ? "opacity-55" : "opacity-45"}`}>
+      {Array.from({ length: 9 }, (_, indice) => (
+        <span key={indice} className={`flex rotate-[-20deg] items-center justify-center whitespace-nowrap font-black uppercase tracking-widest text-white [text-shadow:0_1px_3px_#000,0_0_2px_#000] ${ampliada ? "text-xs sm:text-base" : "text-[7px] sm:text-[9px]"}`}>
+          RETRATT
+        </span>
+      ))}
+    </div>
+  );
+}
 
 function canvasParaBlob(canvas: HTMLCanvasElement, qualidade: number) {
   return new Promise<Blob>((resolve, reject) => {
@@ -72,6 +84,8 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
   const [erro, setErro] = useState("");
   const [resultados, setResultados] = useState<ResultadoFace[] | null>(null);
   const [fotosNoCarrinho, setFotosNoCarrinho] = useState<string[]>([]);
+  const [indiceAberto, setIndiceAberto] = useState<number | null>(null);
+  const toqueInicial = useRef<number | null>(null);
   const inputGaleria = useRef<HTMLInputElement>(null);
   const inputCamera = useRef<HTMLInputElement>(null);
   const conteudoModal = useRef<HTMLDivElement>(null);
@@ -82,16 +96,25 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
 
   useEffect(() => {
     if (!aberto) return;
-    const fechar = (event: KeyboardEvent) => event.key === "Escape" && setAberto(false);
     const overflowAnterior = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     conteudoModal.current?.scrollTo({ top: 0 });
-    window.addEventListener("keydown", fechar);
-    return () => {
-      document.body.style.overflow = overflowAnterior;
-      window.removeEventListener("keydown", fechar);
-    };
+    return () => { document.body.style.overflow = overflowAnterior; };
   }, [aberto]);
+
+  useEffect(() => {
+    if (!aberto) return;
+    const fechar = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        if (indiceAberto !== null) setIndiceAberto(null);
+        else setAberto(false);
+      }
+      if (indiceAberto !== null && event.key === "ArrowRight") setIndiceAberto((atual) => Math.min((resultados?.length || 1) - 1, (atual ?? 0) + 1));
+      if (indiceAberto !== null && event.key === "ArrowLeft") setIndiceAberto((atual) => Math.max(0, (atual ?? 0) - 1));
+    };
+    window.addEventListener("keydown", fechar);
+    return () => window.removeEventListener("keydown", fechar);
+  }, [aberto, indiceAberto, resultados?.length]);
 
   function selecionar(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -100,6 +123,7 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
     setArquivo(file);
     setPreview(URL.createObjectURL(file));
     setResultados(null);
+    setIndiceAberto(null);
     setErro("");
   }
 
@@ -266,9 +290,10 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
                                 aria-label={`${noCarrinho ? "Remover" : "Adicionar"} ${foto.titulo || "foto"} ${noCarrinho ? "do" : "ao"} carrinho`}
                               />
                             </label>
-                            <Link href={`/fotos/evento/${foto.eventoId}?foto=${encodeURIComponent(foto.id)}&origem=ia`} className="group block">
+                            <button type="button" onClick={() => setIndiceAberto(resultados.indexOf(foto))} className="group block w-full text-left">
                               <div className="relative aspect-[4/5] overflow-hidden bg-zinc-950">
-                                <img data-foto-protegida-imagem src={`/api/fotos/arquivo/${foto.id}?tipo=thumb`} alt={foto.titulo || "Foto encontrada"} className={`h-full w-full object-cover transition duration-300 group-hover:scale-105 ${noCarrinho ? "opacity-70" : ""}`} />
+                                <img data-foto-protegida-imagem src={`/api/fotos/arquivo/${foto.id}?tipo=thumb`} alt={foto.titulo || "Foto encontrada"} loading="lazy" className={`h-full w-full object-cover transition duration-300 group-hover:scale-105 ${noCarrinho ? "opacity-70" : ""}`} />
+                                <MarcaBuscaFacial />
                                 {ehVideo && <span className="absolute bottom-2 left-2 z-10 inline-flex items-center gap-1 rounded-full bg-black/80 px-2 py-1 text-[7px] font-black uppercase tracking-wider text-white"><Play size={9} className="fill-retratt text-retratt" /> Vídeo</span>}
                                 <span className={`absolute left-2 top-2 rounded-full px-2 py-1 text-[8px] font-black uppercase tracking-wider ${foto.nivel === "forte" ? "bg-emerald-400 text-black" : foto.nivel === "provavel" ? "bg-retratt text-black" : "bg-retratt text-black"}`}>{foto.nivel} · {foto.similaridade.toFixed(0)}%</span>
                               </div>
@@ -276,7 +301,7 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
                                 <p className="line-clamp-2 text-[9px] font-black uppercase leading-4 text-white">{foto.evento?.nome || "Galeria Retratt"}</p>
                                 <p className="mt-1 text-[8px] font-black uppercase tracking-wider text-retratt">Abrir {ehVideo ? "este vídeo" : "esta foto"}</p>
                               </div>
-                            </Link>
+                            </button>
                           </article>
                         );
                       })}
@@ -298,6 +323,40 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
             </div>
             </div>
           </div>
+          {indiceAberto !== null && resultados?.[indiceAberto] && (
+            <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/95 p-3" onClick={() => setIndiceAberto(null)} role="dialog" aria-modal="true" aria-label="Foto encontrada">
+              <div className="relative flex h-full w-full max-w-5xl flex-col items-center justify-center gap-3" onClick={(event) => event.stopPropagation()}
+                onTouchStart={(event) => { toqueInicial.current = event.touches[0]?.clientX ?? null; }}
+                onTouchEnd={(event) => {
+                  if (toqueInicial.current === null) return;
+                  const distancia = event.changedTouches[0].clientX - toqueInicial.current;
+                  if (Math.abs(distancia) > 50) setIndiceAberto((atual) => Math.max(0, Math.min(resultados.length - 1, (atual ?? 0) + (distancia < 0 ? 1 : -1))));
+                  toqueInicial.current = null;
+                }}>
+                <button type="button" onClick={() => setIndiceAberto(null)} aria-label="Fechar foto" className="absolute right-0 top-0 z-20 rounded-full bg-zinc-900 p-3 text-white"><X size={20} /></button>
+                <div className="flex min-h-0 flex-1 items-center justify-center pt-12">
+                  {resultados[indiceAberto].mimeType?.startsWith("video/") ? (
+                    <video key={resultados[indiceAberto].id} src={`/api/fotos/arquivo/${resultados[indiceAberto].id}?tipo=video-preview`} poster={`/api/fotos/arquivo/${resultados[indiceAberto].id}?tipo=thumb`} controls playsInline preload="metadata" className="max-h-full max-w-full" />
+                  ) : (
+                    <div className="relative inline-flex max-h-full max-w-full items-center justify-center overflow-hidden">
+                      <img data-foto-protegida-imagem src={`/api/fotos/arquivo/${resultados[indiceAberto].id}?tipo=preview`} alt={resultados[indiceAberto].titulo || "Foto encontrada"} className="max-h-full max-w-full object-contain" />
+                      <MarcaBuscaFacial ampliada />
+                    </div>
+                  )}
+                </div>
+                <div className="flex w-full items-center justify-between gap-3 pb-4">
+                  <button type="button" onClick={() => setIndiceAberto((atual) => Math.max(0, (atual ?? 0) - 1))} disabled={indiceAberto === 0} aria-label="Foto anterior" className="rounded-full bg-zinc-800 p-3 text-white disabled:opacity-30"><ChevronLeft /></button>
+                  <div className="text-center text-xs text-white">
+                    <p>{indiceAberto + 1} de {resultados.length} · {resultados[indiceAberto].evento?.nome || "Galeria Retratt"}</p>
+                    <button type="button" onClick={() => alternarFotoNoCarrinho(String(resultados[indiceAberto].id))} className="mt-2 rounded-lg bg-retratt px-4 py-2 font-bold text-black">
+                      {fotosNoCarrinho.includes(String(resultados[indiceAberto].id)) ? "Remover do carrinho" : "Adicionar ao carrinho"}
+                    </button>
+                  </div>
+                  <button type="button" onClick={() => setIndiceAberto((atual) => Math.min(resultados.length - 1, (atual ?? 0) + 1))} disabled={indiceAberto === resultados.length - 1} aria-label="Próxima foto" className="rounded-full bg-zinc-800 p-3 text-white disabled:opacity-30"><ChevronRight /></button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>,
         document.body,
       )}

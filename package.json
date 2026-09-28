@@ -10,6 +10,7 @@
     "fotos:ia:indexar": "tsx scripts/indexar-fotos-ia.ts",
     "fotos:ia:verificar": "tsx scripts/verificar-fotos-ia.ts",
     "fotos:watermark:retratt": "tsx scripts/atualizar-watermarks-retratt.ts",
+    "fotos:thumbs:existentes": "tsx scripts/gerar-miniaturas-fotos-existentes.ts",
     "fotos:pagamentos:relatorio": "tsx scripts/relatorio-meios-pagamento-fotos.ts"
   },
   "dependencies": {

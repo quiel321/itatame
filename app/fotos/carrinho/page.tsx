@@ -1,15 +1,18 @@
 ﻿"use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
 import { formatarPrecoFotos } from "@/app/lib/fotos";
 import FotosShell from "../_components/FotosShell";
+import PreviewProtectionOverlay from "../_components/PreviewProtectionOverlay";
 import {
   AlertCircle,
   ArrowLeft,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Copy,
   Download,
   Gift,
@@ -20,6 +23,7 @@ import {
   Trash2,
   Video,
   Wallet,
+  X,
 } from "lucide-react";
 
 declare global {
@@ -109,6 +113,8 @@ function carregarSdkMercadoPago() {
 export default function FotosCarrinhoPage() {
   const router = useRouter();
   const [fotos, setFotos] = useState<FotoCarrinho[]>([]);
+  const [indiceAberto, setIndiceAberto] = useState<number | null>(null);
+  const toqueInicial = useRef<number | null>(null);
   const [etapa, setEtapa] = useState<EtapaPagamento>("carrinho");
   const [copiado, setCopiado] = useState(false);
   const [carregandoCart, setCarregandoCart] = useState(true);
@@ -125,6 +131,25 @@ export default function FotosCarrinhoPage() {
   const temDesconto = fotos.length >= comboQtd && comboPercentual > 0;
   const valorDesconto = temDesconto ? Math.round(subtotal * (comboPercentual / 100)) : 0;
   const total = subtotal - valorDesconto;
+  const modalAberto = indiceAberto !== null;
+
+  useEffect(() => {
+    if (!modalAberto) return;
+    const overflowAnterior = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = overflowAnterior; };
+  }, [modalAberto]);
+
+  useEffect(() => {
+    if (!modalAberto) return;
+    const aoPressionar = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIndiceAberto(null);
+      if (event.key === "ArrowLeft") setIndiceAberto((atual) => Math.max(0, (atual ?? 0) - 1));
+      if (event.key === "ArrowRight") setIndiceAberto((atual) => Math.min(fotos.length - 1, (atual ?? 0) + 1));
+    };
+    window.addEventListener("keydown", aoPressionar);
+    return () => window.removeEventListener("keydown", aoPressionar);
+  }, [modalAberto, fotos.length]);
 
   useEffect(() => {
     async function carregarCarrinho() {
@@ -201,6 +226,7 @@ export default function FotosCarrinhoPage() {
   }, []);
 
   function removerFoto(id: string) {
+    if (indiceAberto !== null && fotos[indiceAberto]?.id === id) setIndiceAberto(null);
     const novasFotos = fotos.filter((foto) => foto.id !== id);
     setFotos(novasFotos);
     const idsRestantes = novasFotos.map((foto) => foto.id);
@@ -408,7 +434,9 @@ export default function FotosCarrinhoPage() {
                 {fotos.map((foto) => (
                   <div key={foto.id} className="group relative min-w-0 rounded-xl border border-white/5 bg-[#0a0a0e] p-1.5 transition-all duration-300 hover:border-retratt/30 hover:bg-retratt/5 sm:p-2.5">
                     <div className="relative mb-2 aspect-[4/5] overflow-hidden rounded-lg bg-zinc-900 sm:mb-3">
-                      <img src={foto.imagem} alt="Prévia protegida da foto no carrinho" className="h-full w-full object-cover opacity-90" />
+                      <button type="button" onClick={() => setIndiceAberto(fotos.indexOf(foto))} aria-label={`Ampliar ${foto.mimeType?.startsWith("video/") ? "vídeo" : "foto"} no carrinho`} className="absolute inset-0 w-full cursor-zoom-in">
+                        <img src={`/api/fotos/arquivo/${foto.id}?tipo=thumb`} alt="Prévia protegida da foto no carrinho" loading="lazy" className="h-full w-full object-cover opacity-90" />
+                      </button>
                       {foto.mimeType?.startsWith("video/") && <span className="absolute left-2 top-2 z-10 inline-flex items-center gap-1 rounded-full bg-black/80 px-2 py-1 text-[8px] font-black uppercase tracking-wider text-white"><Video size={10}/> Vídeo</span>}
                       <div aria-hidden="true" className="pointer-events-none absolute inset-0 grid grid-cols-2 grid-rows-4 overflow-hidden">
                         {Array.from({ length: 8 }, (_, indice) => (
@@ -573,6 +601,33 @@ export default function FotosCarrinhoPage() {
             </div>
           )}
         </section>
+        {indiceAberto !== null && fotos[indiceAberto] && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/95 p-3" role="dialog" aria-modal="true" aria-label="Prévia do carrinho" onClick={() => setIndiceAberto(null)}>
+            <div className="relative flex h-full w-full max-w-5xl flex-col items-center justify-center gap-3" onClick={(event) => event.stopPropagation()}
+              onTouchStart={(event) => { toqueInicial.current = event.touches[0]?.clientX ?? null; }}
+              onTouchEnd={(event) => {
+                if (toqueInicial.current === null) return;
+                const distancia = event.changedTouches[0].clientX - toqueInicial.current;
+                if (Math.abs(distancia) > 50) setIndiceAberto((atual) => Math.max(0, Math.min(fotos.length - 1, (atual ?? 0) + (distancia < 0 ? 1 : -1))));
+                toqueInicial.current = null;
+              }}>
+              <button type="button" onClick={() => setIndiceAberto(null)} aria-label="Fechar prévia" className="absolute right-0 top-0 z-20 rounded-full bg-zinc-900 p-3 text-white"><X size={20} /></button>
+              <div className="relative flex min-h-0 flex-1 items-center justify-center pt-12">
+                {fotos[indiceAberto].mimeType?.startsWith("video/") ? (
+                  <video key={fotos[indiceAberto].id} src={`/api/fotos/arquivo/${fotos[indiceAberto].id}?tipo=video-preview`} poster={fotos[indiceAberto].imagem} controls playsInline preload="metadata" className="max-h-full max-w-full" />
+                ) : (
+                  <img src={fotos[indiceAberto].imagem} alt="Prévia protegida da foto no carrinho" className="max-h-full max-w-full object-contain" />
+                )}
+                <PreviewProtectionOverlay className="rounded-xl" />
+              </div>
+              <div className="flex w-full items-center justify-between gap-3 pb-4 text-white">
+                {fotos.length > 1 ? <button type="button" onClick={() => setIndiceAberto((atual) => Math.max(0, (atual ?? 0) - 1))} disabled={indiceAberto === 0} aria-label="Foto anterior" className="rounded-full bg-zinc-800 p-3 disabled:opacity-30"><ChevronLeft /></button> : <span />}
+                <p className="text-center text-xs">{indiceAberto + 1} de {fotos.length} · {fotos[indiceAberto].evento}</p>
+                {fotos.length > 1 ? <button type="button" onClick={() => setIndiceAberto((atual) => Math.min(fotos.length - 1, (atual ?? 0) + 1))} disabled={indiceAberto === fotos.length - 1} aria-label="Próxima foto" className="rounded-full bg-zinc-800 p-3 disabled:opacity-30"><ChevronRight /></button> : <span />}
+              </div>
+            </div>
+          </div>
+        )}
       </main>
     </FotosShell>
   );

@@ -40,7 +40,7 @@ type UploadStatus = "idle" | "preparando" | "enviando" | "confirmando" | "ok" | 
 type EtapaUpload = "preparando" | "enviando" | "confirmando";
 
 // Vídeos entram na mesma fila, mas são processados um de cada vez para não esgotar a memória do navegador.
-const CONCORRENCIA_UPLOAD = 3;
+const CONCORRENCIA_UPLOAD = 4;
 
 function fracaoDaEtapa(etapa: EtapaUpload, percentualEnvio = 0) {
   if (etapa === "preparando") return 0.2;
@@ -175,6 +175,14 @@ async function gerarDerivadosFoto(file: File) {
   desenharProtecaoRetratt(ctx, width, height);
 
   const previewBlob = await canvasParaJpeg(canvas, 0.82);
+  const thumbCanvas = document.createElement("canvas");
+  const thumbScale = Math.min(1, 400 / width);
+  thumbCanvas.width = Math.max(1, Math.round(width * thumbScale));
+  thumbCanvas.height = Math.max(1, Math.round(height * thumbScale));
+  const thumbCtx = thumbCanvas.getContext("2d");
+  if (!thumbCtx) throw new Error("Não foi possível gerar miniatura.");
+  thumbCtx.drawImage(canvas, 0, 0, thumbCanvas.width, thumbCanvas.height);
+  const thumbBlob = await canvasParaJpeg(thumbCanvas, 0.76);
 
   const dimensoes = [FOTO_IA_MAX_DIMENSAO, 1760, 1600, 1440, 1280, 1120, 960];
   const qualidades = [0.86, 0.78, 0.7, 0.62, 0.54];
@@ -202,7 +210,7 @@ async function gerarDerivadosFoto(file: File) {
     throw new Error("Não foi possível preparar a miniatura de reconhecimento abaixo de 300 KB.");
   }
 
-  return { previewBlob, miniaturaIa };
+  return { previewBlob, thumbBlob, miniaturaIa };
 }
 
 function posicionarVideo(video: HTMLVideoElement, tempo: number) {
@@ -690,7 +698,7 @@ export default function PainelFotografoPage() {
     if (!uploadResponse.ok) throw new Error(uploadData.error || "Erro ao preparar os links de upload.");
 
     try {
-    async function enviarArquivo(blob: Blob, tipo: "preview" | "original" | "ia", contentType: string) {
+    async function enviarArquivo(blob: Blob, tipo: "preview" | "original" | "thumb" | "ia", contentType: string) {
       return fetch("/api/fotos/enviar-arquivo", {
         method: "POST",
         headers: {
@@ -704,30 +712,36 @@ export default function PainelFotografoPage() {
     }
 
     onEtapa("enviando", 0);
-    const iaResponse = await enviarArquivo(miniaturaIa, "ia", "image/jpeg");
-    if (!iaResponse.ok) {
-      const detalhe = await iaResponse.json().catch(() => null);
-      throw new Error(detalhe?.error || `Falha ao preparar a busca facial deste ${ehVideo ? "vídeo" : "arquivo"}.`);
-    }
-
-    const previewResponse = await enviarArquivo(previewBlob, "preview", "image/jpeg");
-    if (!previewResponse.ok) {
-      const detalhe = await previewResponse.json().catch(() => null);
-      throw new Error(detalhe?.error || "Falha ao enviar a previa para o R2.");
-    }
-
-    if (ehVideo) {
-      if (derivadosVideo?.previewVideoBlob && uploadData.videoPreviewUploadUrl) {
-        await enviarDiretoAoR2(uploadData.videoPreviewUploadUrl, derivadosVideo.previewVideoBlob, () => undefined);
-      }
-      await enviarDiretoAoR2(uploadData.uploadUrl, arquivoPronto, (percentual) => onEtapa("enviando", percentual));
-    } else {
-      const putResponse = await enviarArquivo(arquivoPronto, "original", arquivoPronto.type);
-      if (!putResponse.ok) {
-        const detalhe = await putResponse.json().catch(() => null);
-        throw new Error(detalhe?.error || "Falha ao enviar a foto original para o armazenamento.");
+    // Envie diretamente ao R2. O proxy antigo continua como fallback caso o CORS do bucket
+    // ainda não permita PUT do domínio usado pelo fotógrafo.
+    async function enviarImagem(blob: Blob, tipo: "preview" | "original" | "thumb" | "ia", url: string, onProgress: (percentual: number) => void = () => undefined) {
+      try {
+        await enviarDiretoAoR2(url, blob, onProgress);
+      } catch (erroDireto) {
+        const resposta = await enviarArquivo(blob, tipo, blob.type);
+        if (!resposta.ok) {
+          const detalhe = await resposta.json().catch(() => null);
+          throw new Error(detalhe?.error || (erroDireto instanceof Error ? erroDireto.message : "Falha ao enviar imagem."));
+        }
       }
     }
+
+    const envios = [
+      enviarImagem(miniaturaIa, "ia", uploadData.iaUploadUrl),
+      enviarImagem(previewBlob, "preview", uploadData.previewUploadUrl),
+      ehVideo
+        ? enviarDiretoAoR2(uploadData.uploadUrl, arquivoPronto, (percentual) => onEtapa("enviando", percentual))
+        : enviarImagem(arquivoPronto, "original", uploadData.uploadUrl, (percentual) => onEtapa("enviando", percentual)),
+    ];
+    if (derivadosFoto?.thumbBlob && uploadData.thumbUploadUrl) {
+      envios.push(enviarImagem(derivadosFoto.thumbBlob, "thumb", uploadData.thumbUploadUrl));
+    }
+    if (ehVideo && derivadosVideo?.previewVideoBlob && uploadData.videoPreviewUploadUrl) {
+      envios.push(enviarDiretoAoR2(uploadData.videoPreviewUploadUrl, derivadosVideo.previewVideoBlob, () => undefined));
+    }
+    const resultados = await Promise.allSettled(envios);
+    const falha = resultados.find((resultado) => resultado.status === "rejected");
+    if (falha?.status === "rejected") throw falha.reason;
 
     onEtapa("confirmando");
     const confirmarResponse = await fetch("/api/fotos/confirmar-upload", {

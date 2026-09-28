@@ -86,6 +86,7 @@ export async function POST(request: Request) {
     const fotoId = crypto.randomUUID();
     const key = fotoStoragePath(eventoId, albumId, fotoId, nomeSeguro(fileName));
     const previewKey = fotoStoragePath(eventoId, albumId, `${fotoId}-preview`, "preview.jpg");
+    const thumbKey = ehVideo ? null : fotoStoragePath(eventoId, albumId, `${fotoId}-thumb`, "thumb.jpg");
     const videoPreviewKey = ehVideo && videoPreviewContentType
       ? fotoStoragePath(eventoId, albumId, `${fotoId}-amostra`, `amostra.${extensaoPreviewVideo(videoPreviewContentType)}`)
       : null;
@@ -105,7 +106,7 @@ export async function POST(request: Request) {
       tamanho_bytes: size,
       r2_original_key: key,
       r2_preview_key: previewKey,
-      r2_thumb_key: videoPreviewKey,
+      r2_thumb_key: videoPreviewKey || thumbKey,
       preco_centavos: precoFinal,
       status: "processando",
     });
@@ -116,7 +117,9 @@ export async function POST(request: Request) {
       fotoId,
       key,
       uploadUrl: createR2PresignedPutUrl(key),
+      iaUploadUrl: createR2PresignedPutUrl(fotoIaStorageKey(fotoId)),
       previewUploadUrl: createR2PresignedPutUrl(previewKey),
+      thumbUploadUrl: thumbKey ? createR2PresignedPutUrl(thumbKey) : null,
       previewKey,
       videoPreviewUploadUrl: videoPreviewKey ? createR2PresignedPutUrl(videoPreviewKey) : null,
       videoPreviewKey,

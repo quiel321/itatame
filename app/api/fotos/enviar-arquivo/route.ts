@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     const tipoArquivo = request.headers.get("x-arquivo-tipo") || "";
     const contentType = (request.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
 
-    if (!fotoId || !["original", "preview", "ia"].includes(tipoArquivo)) {
+    if (!fotoId || !["original", "preview", "thumb", "ia"].includes(tipoArquivo)) {
       return NextResponse.json({ error: "Arquivo de foto nao identificado." }, { status: 400 });
     }
     if (!TIPOS_PERMITIDOS.has(contentType)) {
@@ -79,6 +79,8 @@ export async function POST(request: Request) {
       ? fotoIaStorageKey(fotoValidada.id)
       : tipoArquivo === "preview"
         ? fotoValidada.r2_preview_key
+        : tipoArquivo === "thumb"
+          ? fotoValidada.r2_thumb_key
         : fotoValidada.r2_original_key;
     if (!key) return NextResponse.json({ error: "Destino do arquivo nao configurado." }, { status: 500 });
 
