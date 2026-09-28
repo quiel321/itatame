@@ -9,6 +9,7 @@ import { obterAccessTokenOrganizador } from "@/app/lib/mercado-pago-integracao";
 import { autenticarRequest } from "@/app/lib/api-auth";
 import { aplicarDescontoCupom, calcularValorInscricao, valorAindaDevido } from "@/app/lib/valor-inscricao";
 import { usuarioGerenciaInscricao } from "@/app/lib/inscricao-autorizacao";
+import { cpfValido } from "@/app/lib/validar-cpf";
 
 type EventoPagamento = {
   id: string | number;
@@ -85,6 +86,7 @@ export async function POST(request: Request) {
         absoluto,
         idade,
         pagamento_ok,
+        estorno_status,
         cupom_id,
         valor_inscricao,
         valor_total,
@@ -130,6 +132,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Organizador sem Mercado Pago conectado." }, { status: 409 });
     }
 
+    if (inscricao.estorno_status === "processando") {
+      return NextResponse.json({ error: "Aguarde a conclusão do estorno antes de fazer um novo pagamento." }, { status: 409 });
+    }
+
     const accessToken = await obterAccessTokenOrganizador(request, organizador, supabase);
     if (!accessToken) return NextResponse.json({ error: "A conexão Mercado Pago do organizador expirou. Solicite uma nova conexão." }, { status: 409 });
 
@@ -144,6 +150,27 @@ export async function POST(request: Request) {
     const comissao = calcularComissaoMarketplace(valorTotal, organizador.plano_comercial);
     const descricao = `Inscricao - ${evento.nome || "Evento iTatame"}`;
     const paymentPayload = limparPayloadPagamento(formData, comissao.valorTotal, comissao.comissao, descricao, request, inscricao, evento);
+
+    if (paymentPayload.payment_method_id === "pix") {
+      const { data: pagador, error: pagadorError } = await supabase
+        .from("atletas")
+        .select("cpf")
+        .eq("user_id", usuario.id)
+        .maybeSingle();
+      if (pagadorError) {
+        console.error("Erro ao consultar CPF do pagador Pix:", pagadorError);
+        return NextResponse.json({ error: "Não foi possível consultar os dados do pagador Pix." }, { status: 500 });
+      }
+      const cpfPagador = String(pagador?.cpf || "").replace(/\D/g, "");
+      if (!cpfValido(cpfPagador) || !usuario.email) {
+        return NextResponse.json({ error: "Para pagar com Pix, confira o CPF e o e-mail do titular no seu perfil iTatame." }, { status: 409 });
+      }
+      paymentPayload.payer = {
+        ...(paymentPayload.payer || {}),
+        email: usuario.email,
+        identification: { type: "CPF", number: cpfPagador },
+      };
+    }
 
     const paymentResponse = await fetch("https://api.mercadopago.com/v1/payments", {
       method: "POST",
@@ -168,7 +195,17 @@ export async function POST(request: Request) {
       );
     }
 
-    await supabase.from("inscricoes").update({ mp_payment_id: String(paymentData.id), valor_inscricao: devidoCheio, valor_total: inscricao.pagamento_ok ? Number(inscricao.valor_total || 0) + comissao.valorTotal : comissao.valorTotal }).eq("id", inscricao.id);
+    await supabase.from("inscricoes").update({
+      mp_payment_id: String(paymentData.id),
+      valor_inscricao: devidoCheio,
+      valor_total: inscricao.pagamento_ok ? Number(inscricao.valor_total || 0) + comissao.valorTotal : comissao.valorTotal,
+      estorno_status: null,
+      estorno_valor: null,
+      estorno_refund_id: null,
+      estorno_motivo: null,
+      estornado_em: null,
+      estornado_por: null,
+    }).eq("id", inscricao.id);
 
     if (paymentData.status === "approved") {
       await supabase.from("inscricoes").update({ pagamento_ok: true, mp_payment_id: String(paymentData.id), valor_inscricao: devidoCheio, valor_total: inscricao.pagamento_ok ? Number(inscricao.valor_total || 0) + comissao.valorTotal : comissao.valorTotal }).eq("id", inscricao.id);

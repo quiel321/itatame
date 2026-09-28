@@ -148,7 +148,7 @@ export async function POST(request: Request) {
       motivo,
       atualizado_em: new Date().toISOString(),
       ...extras,
-    }, { onConflict: "inscricao_id" });
+    }, { onConflict: "inscricao_id,mp_payment_id" });
     if (error) throw new Error(`Falha ao registrar auditoria: ${error.message}`);
   };
 
