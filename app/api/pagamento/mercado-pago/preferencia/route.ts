@@ -46,11 +46,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Inscricao nao informada." }, { status: 400 });
     }
 
-    const publicKey = process.env.NEXT_PUBLIC_MP_PUBLIC_KEY;
-    if (!publicKey) {
-      return NextResponse.json({ error: "Configure NEXT_PUBLIC_MP_PUBLIC_KEY para usar Checkout Bricks." }, { status: 500 });
-    }
-
     const supabase = createSupabaseServerClient();
     const { data: inscricao, error: inscricaoError } = await supabase
       .from("inscricoes")
@@ -108,6 +103,11 @@ export async function POST(request: Request) {
         { error: "O organizador ainda nao conectou o Mercado Pago." },
         { status: 409 }
       );
+    }
+
+    const publicKey = organizador.mp_public_key;
+    if (!publicKey) {
+      return NextResponse.json({ error: "A conta Mercado Pago do organizador precisa ser reconectada para atualizar a chave pública." }, { status: 409 });
     }
 
     const accessToken = await obterAccessTokenOrganizador(request, organizador, supabase);

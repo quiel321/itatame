@@ -47,6 +47,8 @@ type OrganizadorFinanceiro = {
   plano_comercial?: string | null;
   comissao_percentual?: string | number | null;
   mp_connected_at?: string | null;
+  mp_user_id?: string | null;
+  mp_live_mode?: boolean | null;
   mp_parcelamento_comprador_confirmado?: boolean | null;
 };
 
@@ -132,7 +134,7 @@ export default function FinanceiroAdminPage() {
 
     const { data: orgData } = await supabase
       .from("organizadores")
-      .select("plano_comercial, comissao_percentual, mp_connected_at, mp_parcelamento_comprador_confirmado")
+      .select("plano_comercial, comissao_percentual, mp_connected_at, mp_user_id, mp_live_mode, mp_parcelamento_comprador_confirmado")
       .eq("user_id", userId)
       .maybeSingle();
 
@@ -371,6 +373,12 @@ export default function FinanceiroAdminPage() {
               <span className="text-emerald-400 text-[9px] font-black uppercase tracking-widest">Configuração financeira</span>
               <h2 className="text-lg md:text-xl font-black text-white mt-1">Plano e recebimento</h2>
               <p className="text-zinc-500 text-xs mt-1 max-w-2xl">Gerencie aqui a conta que recebe as inscrições e as condições de parcelamento.</p>
+              {mercadoPagoConectado && (
+                <p className="text-zinc-400 text-xs mt-2">
+                  Conta Mercado Pago: <strong className="text-zinc-200">{organizador?.mp_user_id || "ID não informado"}</strong>
+                  {organizador?.mp_live_mode === false && <span className="ml-2 text-yellow-400">Modo de teste</span>}
+                </p>
+              )}
             </div>
             <MercadoPagoConnectButton conectado={mercadoPagoConectado} returnTo="/admin/financeiro" className={`rounded-xl px-5 py-3 text-[10px] font-black uppercase tracking-widest border transition-all ${mercadoPagoConectado ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20" : "bg-yellow-500 text-black border-yellow-400 hover:bg-yellow-400"}`} />
           </div>
