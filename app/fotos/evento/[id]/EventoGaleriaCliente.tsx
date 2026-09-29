@@ -448,7 +448,7 @@ export default function EventoGaleriaCliente({ initialData }: { initialData?: Ga
     <FotosShell>
       <main data-foto-protegida className="min-h-screen bg-[#020202] text-white font-sans pb-28 relative print:hidden">
 
-        <div className="max-w-screen-2xl mx-auto px-2 md:px-4">
+        <div className="mx-auto max-w-6xl px-2 md:px-6">
 
           <section className="mt-3 mb-3 overflow-hidden rounded-2xl border border-white/10 bg-[#0a0a0e] shadow-2xl relative">
             <div className="relative min-h-[180px] md:min-h-[190px] px-4 py-5 md:px-8 md:py-6 flex flex-col">
@@ -586,11 +586,11 @@ export default function EventoGaleriaCliente({ initialData }: { initialData?: Ga
           </div>
 
           {evento?.em_breve && <div className="mb-4 rounded-2xl border border-sky-400/20 bg-sky-400/[0.08] px-4 py-4 text-center"><p className="text-sm font-black uppercase tracking-wider text-sky-300">Em breve</p><p className="mt-1 text-xs text-zinc-300">Esta galeria ainda vai receber fotos. Volte em breve para encontrar as suas.</p></div>}
-          {evento && faixasDoEvento(evento).length > 0 && !evento.em_breve && (
-            <div className="mb-4 rounded-2xl border border-sky-400/20 bg-sky-400/[0.06] p-4 text-center">
-              <p className="flex items-center justify-center gap-2 text-sm font-black uppercase text-sky-300"><Percent size={16} /> Ganhe até {faixasDoEvento(evento).at(-1)?.percentual}% de desconto</p>
-              <p className="mt-1 text-xs text-zinc-300">O desconto é aplicado automaticamente às fotos da mesma galeria e fotógrafo.</p>
-              <div className="mt-3 grid gap-2 sm:grid-cols-3">{faixasDoEvento(evento).map((faixa) => <div key={faixa.quantidade} className="rounded-xl bg-sky-400/10 px-3 py-2"><strong className="block text-lg text-sky-300">{faixa.percentual}%</strong><span className="text-[10px] text-zinc-300">A partir de {faixa.quantidade} fotos</span></div>)}</div>
+          {evento && faixasDesconto.length > 0 && !evento.em_breve && (
+            <div className="mx-auto mb-4 max-w-3xl rounded-2xl border border-sky-400/20 bg-sky-400/[0.06] px-3 py-3 text-center md:px-5 md:py-4">
+              <p className="flex items-center justify-center gap-2 text-xs font-black uppercase text-sky-300 md:text-sm"><Percent size={15} /> Ganhe até {faixasDesconto.at(-1)?.percentual}% de desconto</p>
+              <p className="mt-1 text-[10px] text-zinc-300 md:text-xs">Desconto automático nas fotos da mesma galeria e fotógrafo.</p>
+              <div className={`mt-3 grid gap-1.5 md:gap-2 ${faixasDesconto.length === 1 ? "grid-cols-1" : faixasDesconto.length === 2 ? "grid-cols-2" : "grid-cols-3"}`}>{faixasDesconto.map((faixa) => <div key={faixa.quantidade} className="min-w-0 rounded-xl bg-sky-400/10 px-1 py-2 md:px-3"><strong className="block text-base leading-none text-sky-300 md:text-lg">{faixa.percentual}%</strong><span className="mt-1 block text-[9px] leading-tight text-zinc-300 md:text-[10px]">{faixa.quantidade} fotos</span></div>)}</div>
             </div>
           )}
 
@@ -626,7 +626,7 @@ export default function EventoGaleriaCliente({ initialData }: { initialData?: Ga
               <p className="text-[11px] font-bold text-zinc-600 uppercase tracking-widest">{evento?.em_breve ? "As fotos estarão disponíveis em breve." : tipoAtivo === "videos" ? "Nenhum vídeo encontrado para este filtro." : "Nenhuma foto encontrada para este filtro."}</p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 xl2:grid-cols-7 gap-2 md:gap-3">
+            <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl2:grid-cols-6 gap-2 md:gap-3">
               {fotosFiltradas.slice(0, limiteVisivel).map((foto) => {
                 const noCarrinho = carrinho.includes(String(foto.id));
                 const ehVideo = arquivoFotoEhVideo(foto);
