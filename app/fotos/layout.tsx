@@ -11,6 +11,12 @@ export const metadata: Metadata = {
   description:
     "Encontre, compre e reviva seus melhores momentos em fotos de esportes, corridas, casamentos, formaturas, shows e eventos com busca facial inteligente.",
   applicationName: "Retratt",
+  manifest: "/fotos/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    title: "Retratt",
+    statusBarStyle: "black-translucent",
+  },
   category: "Fotografia de eventos",
   icons: {
     icon: [

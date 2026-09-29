@@ -30,7 +30,7 @@ export default function RetrattInstallPrompt({ consentimentoDefinido, mostrarCoo
 
   useEffect(() => {
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js").catch(() => undefined);
+      navigator.serviceWorker.register("/retratt-sw.js").catch(() => undefined);
     }
 
     const receberPrompt = (event: Event) => {
@@ -45,7 +45,7 @@ export default function RetrattInstallPrompt({ consentimentoDefinido, mostrarCoo
     if (!consentimentoDefinido || estaInstalado()) return;
     const dispensadoEm = Number(localStorage.getItem(DISMISSED_KEY) || 0);
     if (Date.now() - dispensadoEm < DELAY_DAYS * 24 * 60 * 60 * 1000) return;
-    if (!instalacao && !ehIOS && !ehSafari) return;
+    if (!instalacao && !ehSafari) return;
     const timer = window.setTimeout(() => setMostrar(true), 1800);
     return () => window.clearTimeout(timer);
   }, [consentimentoDefinido, ehIOS, ehSafari, instalacao]);
@@ -92,7 +92,7 @@ export default function RetrattInstallPrompt({ consentimentoDefinido, mostrarCoo
           </div>
         </div>
 
-        {instalacao ? (
+        {instalacao && !ehSafari ? (
           <button type="button" onClick={() => void instalar()} disabled={instalando} className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-black transition hover:bg-orange-400 disabled:opacity-60">
             <Download size={15} /> {instalando ? "Abrindo instalador..." : "Instalar Retratt"}
           </button>
@@ -101,8 +101,8 @@ export default function RetrattInstallPrompt({ consentimentoDefinido, mostrarCoo
             <div className="flex gap-2.5">
               <Share size={16} className="mt-0.5 shrink-0 text-orange-400" />
               <div>
-                <strong className="block text-[10px] font-black text-white">{ehIOS ? "No Safari do iPhone ou iPad" : "No Safari"}</strong>
-                <p className="mt-0.5 text-[10px] leading-relaxed text-zinc-400">{ehIOS ? "Compartilhar → Adicionar à Tela de Início." : "Arquivo → Adicionar ao Dock."}</p>
+                <strong className="block text-[10px] font-black text-white">Adicione pelo Safari</strong>
+                <p className="mt-0.5 text-[10px] leading-relaxed text-zinc-400">{ehIOS ? "Toque em Compartilhar e depois em Adicionar à Tela de Início. Não há arquivo para baixar." : "No menu Arquivo, escolha Adicionar ao Dock."}</p>
               </div>
             </div>
           </div>
