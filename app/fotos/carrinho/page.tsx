@@ -500,7 +500,7 @@ export default function FotosCarrinhoPage() {
                             {temDesconto ? "Combo ativado" : "Pacote promocional"}
                           </p>
                           <p className="mt-0.5 text-[9px] text-zinc-400">
-                            {temDesconto ? `Você ganhou ${comboPercentual}% de desconto nas fotos.${proximaFaixa ? ` Mais ${proximaFaixa.quantidade - fotosElegiveis.length} foto(s) para ${proximaFaixa.percentual}%.` : ""}` : proximaFaixa ? `Adicione mais ${proximaFaixa.quantidade - fotosElegiveis.length} foto(s) para ganhar ${proximaFaixa.percentual}% OFF.` : ""}
+                            {temDesconto ? `Você ganhou ${comboPercentual}% de desconto nas fotos.${proximaFaixa ? ` Mais ${proximaFaixa.quantidade - fotosElegiveis.length} ${proximaFaixa.quantidade - fotosElegiveis.length === 1 ? "foto" : "fotos"} para ${proximaFaixa.percentual}%.` : ""}` : proximaFaixa ? `Adicione mais ${proximaFaixa.quantidade - fotosElegiveis.length} ${proximaFaixa.quantidade - fotosElegiveis.length === 1 ? "foto" : "fotos"} para ganhar ${proximaFaixa.percentual}% OFF.` : ""}
                           </p>
                         </div>
                       </div>

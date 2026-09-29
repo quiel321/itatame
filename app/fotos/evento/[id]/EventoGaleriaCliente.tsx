@@ -11,6 +11,7 @@ import FotosShell from "../../_components/FotosShell";
 import BuscaFacial from "../../_components/BuscaFacial";
 import BuscaPorNumero from "../../_components/BuscaPorNumero";
 import PreviewProtectionOverlay from "../../_components/PreviewProtectionOverlay";
+import ProgressoDesconto from "../../_components/ProgressoDesconto";
 import { faixasDoEvento } from "@/app/lib/fotos-descontos";
 import { Camera, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Filter, Image as ImageIcon, MapPin, Play, ScanFace, Search, Share2, ShieldCheck, ShoppingCart, Video, X, Building2, Percent } from "lucide-react";
 
@@ -427,6 +428,12 @@ export default function EventoGaleriaCliente({ initialData }: { initialData?: Ga
     return total + (foto ? foto.preco_centavos : 0);
   }, 0);
 
+  const faixasDesconto = evento ? faixasDoEvento(evento) : [];
+  const idsCarrinho = new Set(carrinho);
+  const fotosElegiveisNoCarrinho = fotoSelecionada
+    ? fotos.filter((foto) => idsCarrinho.has(String(foto.id)) && foto.fotografo_id === fotoSelecionada.fotografo_id && !arquivoFotoEhVideo(foto)).length
+    : 0;
+
   const formatarData = (dataStr?: string | null) => {
     if (!dataStr) return "";
     const [ano, mes, dia] = dataStr.slice(0, 10).split("-");
@@ -720,7 +727,8 @@ export default function EventoGaleriaCliente({ initialData }: { initialData?: Ga
                 toqueInicialFoto.current = null;
               }}>
 
-              <div className="w-full shrink-0 px-4 pb-2 pt-[max(12px,env(safe-area-inset-top))] text-white md:hidden"><p className="max-w-[75%] truncate text-sm font-bold">{fotoSelecionada.titulo || "Foto do evento"}</p><p className="text-[10px] text-zinc-400">{indiceFotoSelecionada + 1} de {fotosFiltradas.length}</p></div>
+              <div className="w-full shrink-0 px-4 pb-2 pt-[max(12px,env(safe-area-inset-top))] text-white md:hidden"><p className="max-w-[55%] truncate text-sm font-bold">{fotoSelecionada.titulo || "Foto do evento"}</p><p className="text-[10px] text-zinc-400">{indiceFotoSelecionada + 1} de {fotosFiltradas.length}</p></div>
+              {carrinho.length > 0 && <Link href="/fotos/carrinho" className="absolute right-16 top-[max(12px,env(safe-area-inset-top))] z-50 flex h-10 items-center gap-1 rounded-full border border-white/20 bg-black/75 px-3 text-[10px] font-bold text-white md:hidden" aria-label={`Ver carrinho com ${carrinho.length} itens`}><ShoppingCart size={15} /> {carrinho.length}</Link>}
               <button onClick={fecharFotoSelecionada} className="absolute top-[max(12px,env(safe-area-inset-top))] right-3 md:top-4 md:right-4 z-50 cursor-pointer text-white bg-black/70 hover:bg-black p-2.5 rounded-full backdrop-blur-sm border border-white/10 transition-colors" aria-label="Fechar foto">
                 <X size={20} />
               </button>
@@ -770,7 +778,11 @@ export default function EventoGaleriaCliente({ initialData }: { initialData?: Ga
 
               <div className="w-full shrink-0 border-t border-white/10 bg-[#0a0a0e] px-4 py-3 pb-[max(12px,env(safe-area-inset-bottom))] md:hidden">
                 <div className="mb-2 flex items-center justify-between"><span className="truncate text-[10px] text-zinc-400">{dadosFotografo(fotoSelecionada)?.nome || "Fotógrafo Parceiro"}</span><strong className="text-lg text-retratt">{formatarPrecoFotos(fotoSelecionada.preco_centavos)}</strong></div>
-                <button type="button" onClick={(e) => toggleCarrinho(String(fotoSelecionada.id), e)} className={`w-full rounded-xl py-3 text-xs font-black uppercase ${carrinho.includes(String(fotoSelecionada.id)) ? "bg-emerald-500 text-black" : "bg-retratt text-black"}`}>{carrinho.includes(String(fotoSelecionada.id)) ? "Na sacola · toque para remover" : "Adicionar ao carrinho"}</button>
+                {carrinho.includes(String(fotoSelecionada.id)) ? <>
+                  {!arquivoFotoEhVideo(fotoSelecionada) && <div className="mb-2"><ProgressoDesconto faixas={faixasDesconto} quantidade={fotosElegiveisNoCarrinho} /></div>}
+                  <Link href="/fotos/carrinho" className="flex w-full items-center justify-center gap-2 rounded-xl bg-retratt py-3 text-xs font-black uppercase text-black"><ShoppingCart size={15} /> Ver carrinho · finalizar compra</Link>
+                  <button type="button" onClick={(e) => toggleCarrinho(String(fotoSelecionada.id), e)} className="mt-2 w-full py-1 text-[11px] font-semibold text-zinc-400 underline underline-offset-4">Remover {arquivoFotoEhVideo(fotoSelecionada) ? "este vídeo" : "esta foto"}</button>
+                </> : <button type="button" onClick={(e) => toggleCarrinho(String(fotoSelecionada.id), e)} className="w-full rounded-xl bg-retratt py-3 text-xs font-black uppercase text-black">Adicionar ao carrinho</button>}
               </div>
               <div className="hidden w-full md:w-[340px] shrink-0 bg-[#0a0a0e] border border-white/5 rounded-3xl p-5 md:p-6 md:flex flex-col gap-5 shadow-2xl">
 
@@ -842,6 +854,7 @@ export default function EventoGaleriaCliente({ initialData }: { initialData?: Ga
                 </div>
 
                 <div className="mt-auto flex flex-col gap-4">
+                  {carrinho.includes(String(fotoSelecionada.id)) && !arquivoFotoEhVideo(fotoSelecionada) && <ProgressoDesconto faixas={faixasDesconto} quantidade={fotosElegiveisNoCarrinho} />}
                   <div className="flex items-end justify-between bg-[#050505] p-4 rounded-2xl border border-white/5">
                       <p className="text-[10px] text-zinc-500 font-black uppercase tracking-widest">Valor {arquivoFotoEhVideo(fotoSelecionada) ? "do vídeo" : "da foto"}</p>
                       <p className="text-3xl font-black text-retratt tracking-tight leading-none pr-1">{formatarPrecoFotos(fotoSelecionada.preco_centavos)}</p>
