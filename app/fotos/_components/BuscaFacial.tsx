@@ -86,9 +86,22 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
   const [fotosNoCarrinho, setFotosNoCarrinho] = useState<string[]>([]);
   const [indiceAberto, setIndiceAberto] = useState<number | null>(null);
   const toqueInicial = useRef<number | null>(null);
+  const previewsEmCache = useRef<Map<string, HTMLImageElement>>(new Map());
   const inputGaleria = useRef<HTMLInputElement>(null);
   const inputCamera = useRef<HTMLInputElement>(null);
   const conteudoModal = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (indiceAberto === null || !resultados) return;
+    const vizinhas = [-1, 1].map((delta) => resultados[indiceAberto + delta]).filter((foto): foto is ResultadoFace => Boolean(foto && !foto.mimeType?.startsWith("video/")));
+    for (const foto of vizinhas) {
+      if (previewsEmCache.current.has(foto.id)) continue;
+      const imagem = new Image();
+      imagem.src = `/api/fotos/arquivo/${foto.id}?tipo=preview`;
+      previewsEmCache.current.set(foto.id, imagem);
+    }
+    for (const id of previewsEmCache.current.keys()) if (!vizinhas.some((foto) => foto.id === id)) previewsEmCache.current.delete(id);
+  }, [indiceAberto, resultados]);
 
   useEffect(() => () => {
     if (preview) URL.revokeObjectURL(preview);

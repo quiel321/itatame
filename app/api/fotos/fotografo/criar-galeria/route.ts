@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
 import { obterFotografoDoUsuario } from "@/app/lib/fotos-auth";
+import { validarFaixasDesconto } from "@/app/lib/fotos-descontos";
 
 export const runtime = "nodejs";
 
@@ -31,6 +32,8 @@ export async function POST(request: Request) {
     const dataEvento = String(body.dataEvento || "").trim() || null;
     const capaUrl = String(body.capaUrl || "").trim() || null;
     const preco = Math.max(0, Math.round(Number(body.precoCentavos || 1500)));
+    const descontos = validarFaixasDesconto(body.descontosProgressivos ?? []);
+    if (!descontos) return NextResponse.json({ error: "Revise as faixas de desconto: até cinco faixas, com quantidades e percentuais crescentes." }, { status: 400 });
     if (!nome) return NextResponse.json({ error: "Informe o nome da galeria." }, { status: 400 });
 
     const { data: galeria, error } = await supabase.from("foto_eventos").insert({
@@ -41,6 +44,8 @@ export async function POST(request: Request) {
       data_evento: dataEvento,
       capa_url: capaUrl,
       status: "publicado",
+      em_breve: Boolean(body.emBreve),
+      descontos_progressivos: descontos,
       preco_padrao_centavos: Number.isFinite(preco) ? preco : 1500,
       created_by: auth.user.id,
       organizador_user_id: null,

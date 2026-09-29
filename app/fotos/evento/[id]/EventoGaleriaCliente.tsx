@@ -11,6 +11,7 @@ import FotosShell from "../../_components/FotosShell";
 import BuscaFacial from "../../_components/BuscaFacial";
 import BuscaPorNumero from "../../_components/BuscaPorNumero";
 import PreviewProtectionOverlay from "../../_components/PreviewProtectionOverlay";
+import { faixasDoEvento } from "@/app/lib/fotos-descontos";
 import { Camera, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Filter, Image as ImageIcon, MapPin, Play, ScanFace, Search, Share2, ShieldCheck, ShoppingCart, Video, X, Building2, Percent } from "lucide-react";
 
 const CARRINHO_FOTOS_KEY = "carrinho_fotos";
@@ -72,6 +73,7 @@ export default function EventoGaleriaCliente({ initialData }: { initialData?: Ga
   const [linkCompartilhado, setLinkCompartilhado] = useState(false);
   const temporizadorProtecaoRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toqueInicialFoto = useRef<number | null>(null);
+  const previewsEmCache = useRef<Map<string, HTMLImageElement>>(new Map());
 
   useEffect(() => {
     const desativarProtecao = () => {
@@ -169,7 +171,7 @@ export default function EventoGaleriaCliente({ initialData }: { initialData?: Ga
 
       // 1. Busca os dados base do evento (🔥 ADICIONADO: 'created_by' no select)
       const [{ data: eventoData }, { data: albunsData }, { data: fotosData }, { count: totalBanco }, { count: videosBanco }] = await Promise.all([
-        supabase.from("foto_eventos").select("id, nome, slug, descricao, local, cidade, estado, data_evento, capa_url, status, vendas_ate, desconto_combo_qtd, desconto_combo_percentual, organizador_user_id, created_by").eq("id", eventoId).maybeSingle(),
+        supabase.from("foto_eventos").select("id, nome, slug, descricao, local, cidade, estado, data_evento, capa_url, status, vendas_ate, desconto_combo_qtd, desconto_combo_percentual, descontos_progressivos, em_breve, organizador_user_id, created_by").eq("id", eventoId).maybeSingle(),
         supabase.from("foto_albuns").select("id, evento_id, fotografo_id, titulo, descricao, capa_url, status").eq("evento_id", eventoId).eq("status", "publicado").order("ordem", { ascending: true }),
         supabase.from("foto_arquivos").select("id, evento_id, album_id, fotografo_id, titulo, mime_type, r2_original_key, r2_preview_key, r2_thumb_key, preview_url, thumb_url, preco_centavos, status, tags, fotografo_dados:fotografos!fotografo_id(nome, foto_url)").eq("evento_id", eventoId).eq("status", "publicada").order("created_at", { ascending: false }).order("id", { ascending: false }).range(0, 999),
         supabase.from("foto_arquivos").select("id", { count: "exact", head: true }).eq("evento_id", eventoId).eq("status", "publicada"),
@@ -324,8 +326,8 @@ export default function EventoGaleriaCliente({ initialData }: { initialData?: Ga
   const totalVideos = totalVideosBanco ?? videosCarregados;
   const totalFotos = totalMidiasBanco !== null ? totalMidiasBanco - totalVideos : fotos.length - videosCarregados;
   const midiasDoTipo = useMemo(
-    () => fotos.filter((foto) => arquivoFotoEhVideo(foto) === (tipoAtivo === "videos")),
-    [fotos, tipoAtivo],
+    () => evento?.em_breve ? [] : fotos.filter((foto) => arquivoFotoEhVideo(foto) === (tipoAtivo === "videos")),
+    [fotos, tipoAtivo, evento?.em_breve],
   );
 
   const fotosFiltradas = useMemo(() => {
@@ -343,6 +345,21 @@ export default function EventoGaleriaCliente({ initialData }: { initialData?: Ga
 
   const indiceFotoSelecionada = fotoSelecionada
     ? fotosFiltradas.findIndex((foto) => foto.id === fotoSelecionada.id) : -1;
+
+  useEffect(() => {
+    if (indiceFotoSelecionada < 0) return;
+    const proximas = [-2, -1, 1, 2].map((deslocamento) => fotosFiltradas[indiceFotoSelecionada + deslocamento]).filter((foto): foto is FotoArquivo => Boolean(foto && !arquivoFotoEhVideo(foto)));
+    for (const foto of proximas) {
+      const chave = String(foto.id);
+      if (previewsEmCache.current.has(chave)) continue;
+      const imagem = new Image();
+      imagem.src = fotoPreviewSrc(foto);
+      previewsEmCache.current.set(chave, imagem);
+    }
+    for (const chave of previewsEmCache.current.keys()) {
+      if (!proximas.some((foto) => String(foto.id) === chave)) previewsEmCache.current.delete(chave);
+    }
+  }, [indiceFotoSelecionada, fotosFiltradas]);
 
   function navegarFoto(direcao: -1 | 1) {
     const proxima = fotosFiltradas[indiceFotoSelecionada + direcao];
@@ -497,7 +514,7 @@ export default function EventoGaleriaCliente({ initialData }: { initialData?: Ga
             </div>
           </section>
 
-          <section aria-labelledby="busca-fotos-ia" className="mb-3 rounded-2xl border border-retratt/25 bg-gradient-to-r from-[#211108] via-[#130c09] to-[#0a0a0e] px-4 py-4 shadow-lg shadow-orange-950/10 sm:px-5">
+          {!evento?.em_breve && <section aria-labelledby="busca-fotos-ia" className="mb-3 rounded-2xl border border-retratt/25 bg-gradient-to-r from-[#211108] via-[#130c09] to-[#0a0a0e] px-4 py-4 shadow-lg shadow-orange-950/10 sm:px-5">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-start gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-retratt/25 bg-retratt/10 text-retratt">
@@ -515,11 +532,11 @@ export default function EventoGaleriaCliente({ initialData }: { initialData?: Ga
               />
             </div>
             <p className="mt-3 text-[10px] leading-relaxed text-zinc-500 sm:ml-[52px]">A selfie é usada somente para localizar fotos. A busca solicita seu consentimento antes do envio.</p>
-          </section>
+          </section>}
 
           <div className="sticky top-[60px] md:top-[80px] z-40 mb-3 bg-[#0a0a0e]/90 backdrop-blur-xl border border-white/10 p-2 md:p-3 rounded-2xl flex flex-col md:flex-row gap-3 shadow-2xl">
 
-            {eventoPermiteBuscaPorNumero(evento) && (
+            {!evento?.em_breve && eventoPermiteBuscaPorNumero(evento) && (
               <BuscaPorNumero
                 eventoId={eventoId}
                 triggerLabel="Número"
@@ -561,10 +578,12 @@ export default function EventoGaleriaCliente({ initialData }: { initialData?: Ga
             </div>
           </div>
 
-          {Number(evento?.desconto_combo_percentual || 0) > 0 && (
-            <div className="mb-4 flex items-center gap-2.5 rounded-xl border border-retratt/20 bg-retratt/[0.07] px-3 py-2.5 text-xs text-zinc-300 sm:px-4">
-              <Percent size={16} className="shrink-0 text-retratt" />
-              <p><strong className="text-retratt">{Number(evento?.desconto_combo_percentual)}% de desconto</strong> a partir de {Number(evento?.desconto_combo_qtd || 3)} mídias da mesma galeria e fotógrafo.</p>
+          {evento?.em_breve && <div className="mb-4 rounded-2xl border border-sky-400/20 bg-sky-400/[0.08] px-4 py-4 text-center"><p className="text-sm font-black uppercase tracking-wider text-sky-300">Em breve</p><p className="mt-1 text-xs text-zinc-300">Esta galeria ainda vai receber fotos. Volte em breve para encontrar as suas.</p></div>}
+          {evento && faixasDoEvento(evento).length > 0 && !evento.em_breve && (
+            <div className="mb-4 rounded-2xl border border-sky-400/20 bg-sky-400/[0.06] p-4 text-center">
+              <p className="flex items-center justify-center gap-2 text-sm font-black uppercase text-sky-300"><Percent size={16} /> Ganhe até {faixasDoEvento(evento).at(-1)?.percentual}% de desconto</p>
+              <p className="mt-1 text-xs text-zinc-300">O desconto é aplicado automaticamente às fotos da mesma galeria e fotógrafo.</p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-3">{faixasDoEvento(evento).map((faixa) => <div key={faixa.quantidade} className="rounded-xl bg-sky-400/10 px-3 py-2"><strong className="block text-lg text-sky-300">{faixa.percentual}%</strong><span className="text-[10px] text-zinc-300">A partir de {faixa.quantidade} fotos</span></div>)}</div>
             </div>
           )}
 
@@ -597,7 +616,7 @@ export default function EventoGaleriaCliente({ initialData }: { initialData?: Ga
           ) : fotosFiltradas.length === 0 ? (
             <div className="mt-8 rounded-3xl border border-dashed border-white/10 bg-white/[0.01] p-16 text-center flex flex-col items-center justify-center">
               <Search size={24} className="text-zinc-800 mb-4" />
-              <p className="text-[11px] font-bold text-zinc-600 uppercase tracking-widest">{tipoAtivo === "videos" ? "Nenhum vídeo encontrado para este filtro." : "Nenhuma foto encontrada para este filtro."}</p>
+              <p className="text-[11px] font-bold text-zinc-600 uppercase tracking-widest">{evento?.em_breve ? "As fotos estarão disponíveis em breve." : tipoAtivo === "videos" ? "Nenhum vídeo encontrado para este filtro." : "Nenhuma foto encontrada para este filtro."}</p>
             </div>
           ) : (
             <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 xl2:grid-cols-7 gap-2 md:gap-3">
@@ -691,8 +710,8 @@ export default function EventoGaleriaCliente({ initialData }: { initialData?: Ga
 
         {/* MODAL DE FOTO */}
         {fotoSelecionada && (
-          <div className="fixed inset-0 z-[200] bg-black/95 backdrop-blur-md flex items-center justify-center p-2 md:p-4 animate-in fade-in duration-300" onClick={fecharFotoSelecionada}>
-            <div className="relative w-full max-w-7xl h-full flex flex-col md:flex-row gap-4 items-center justify-center" onClick={(e) => e.stopPropagation()}
+          <div className="fixed inset-0 z-[200] bg-black flex items-center justify-center md:p-4" onClick={fecharFotoSelecionada}>
+            <div className="relative w-full max-w-7xl h-[100dvh] min-h-0 flex flex-col md:flex-row md:gap-4 md:h-full items-center justify-center" onClick={(e) => e.stopPropagation()}
               onTouchStart={(event) => { toqueInicialFoto.current = event.touches[0]?.clientX ?? null; }}
               onTouchEnd={(event) => {
                 if (toqueInicialFoto.current === null) return;
@@ -701,11 +720,12 @@ export default function EventoGaleriaCliente({ initialData }: { initialData?: Ga
                 toqueInicialFoto.current = null;
               }}>
 
-              <button onClick={fecharFotoSelecionada} className="absolute top-2 right-2 md:top-4 md:right-4 z-50 cursor-pointer text-white bg-black/60 hover:bg-black p-2.5 rounded-full backdrop-blur-sm border border-white/10 transition-colors" aria-label="Fechar foto">
+              <div className="w-full shrink-0 px-4 pb-2 pt-[max(12px,env(safe-area-inset-top))] text-white md:hidden"><p className="max-w-[75%] truncate text-sm font-bold">{fotoSelecionada.titulo || "Foto do evento"}</p><p className="text-[10px] text-zinc-400">{indiceFotoSelecionada + 1} de {fotosFiltradas.length}</p></div>
+              <button onClick={fecharFotoSelecionada} className="absolute top-[max(12px,env(safe-area-inset-top))] right-3 md:top-4 md:right-4 z-50 cursor-pointer text-white bg-black/70 hover:bg-black p-2.5 rounded-full backdrop-blur-sm border border-white/10 transition-colors" aria-label="Fechar foto">
                 <X size={20} />
               </button>
 
-              <div className="relative flex-1 h-[70vh] md:h-full w-full flex items-center justify-center overflow-hidden rounded-3xl bg-[#050505] border border-white/5 shadow-2xl">
+              <div className="relative flex-1 min-h-0 md:h-full w-full flex items-center justify-center overflow-hidden bg-[#050505] md:rounded-3xl md:border md:border-white/5 md:shadow-2xl">
                 {indiceFotoSelecionada > 0 && <button type="button" onClick={() => navegarFoto(-1)} aria-label="Foto anterior" className="absolute left-2 top-1/2 z-40 -translate-y-1/2 rounded-full bg-black/75 p-3 text-white hover:bg-retratt"><ChevronLeft size={22} /></button>}
                 {indiceFotoSelecionada >= 0 && indiceFotoSelecionada < fotosFiltradas.length - 1 && <button type="button" onClick={() => navegarFoto(1)} aria-label="Próxima foto" className="absolute right-2 top-1/2 z-40 -translate-y-1/2 rounded-full bg-black/75 p-3 text-white hover:bg-retratt"><ChevronRight size={22} /></button>}
                 {arquivoFotoEhVideo(fotoSelecionada) && fotoSelecionada.r2_thumb_key ? (
@@ -731,7 +751,7 @@ export default function EventoGaleriaCliente({ initialData }: { initialData?: Ga
                     src={fotoPreviewSrc(fotoSelecionada)}
                     alt={fotoSelecionada.titulo || "Foto do evento"}
                     className="w-auto h-auto max-w-full max-h-full object-contain select-none pointer-events-none"
-                    loading="lazy"
+                    loading="eager"
                   />
                 )}
 
@@ -748,7 +768,11 @@ export default function EventoGaleriaCliente({ initialData }: { initialData?: Ga
                 )}
               </div>
 
-              <div className="w-full md:w-[340px] shrink-0 bg-[#0a0a0e] border border-white/5 rounded-3xl p-5 md:p-6 flex flex-col gap-5 shadow-2xl">
+              <div className="w-full shrink-0 border-t border-white/10 bg-[#0a0a0e] px-4 py-3 pb-[max(12px,env(safe-area-inset-bottom))] md:hidden">
+                <div className="mb-2 flex items-center justify-between"><span className="truncate text-[10px] text-zinc-400">{dadosFotografo(fotoSelecionada)?.nome || "Fotógrafo Parceiro"}</span><strong className="text-lg text-retratt">{formatarPrecoFotos(fotoSelecionada.preco_centavos)}</strong></div>
+                <button type="button" onClick={(e) => toggleCarrinho(String(fotoSelecionada.id), e)} className={`w-full rounded-xl py-3 text-xs font-black uppercase ${carrinho.includes(String(fotoSelecionada.id)) ? "bg-emerald-500 text-black" : "bg-retratt text-black"}`}>{carrinho.includes(String(fotoSelecionada.id)) ? "Na sacola · toque para remover" : "Adicionar ao carrinho"}</button>
+              </div>
+              <div className="hidden w-full md:w-[340px] shrink-0 bg-[#0a0a0e] border border-white/5 rounded-3xl p-5 md:p-6 md:flex flex-col gap-5 shadow-2xl">
 
                 {fotoOrigemBusca && (
                   <div className="flex items-center gap-2 rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-[9px] font-black uppercase tracking-widest text-emerald-300">

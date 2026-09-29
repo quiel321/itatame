@@ -9,12 +9,14 @@ import FotosShell from "../../_components/FotosShell";
 import { Camera, CheckCircle2, ChevronDown, CloudUpload, CreditCard, FolderOpen, ImagePlus, ShieldCheck, Wallet, LogOut, AlertCircle, Store, X, Edit, Calendar, MapPin, Trash2, Loader2, Check, Plus, Images, Trophy, ChartNoAxesCombined, Link2 } from "lucide-react";
 import MercadoPagoConnectButton from "@/app/admin/_components/MercadoPagoConnectButton";
 import GerenciadorMidias from "../_components/GerenciadorMidias";
+import EditorFaixasDesconto from "../../_components/EditorFaixasDesconto";
+import { faixasDoEvento, validarFaixasDesconto, type FaixaDesconto } from "@/app/lib/fotos-descontos";
 
 type FotografoPerfil = { id: string; nome: string | null; email: string | null; foto_url?: string | null; telefone?: string | null; documento?: string | null; cep?: string | null; endereco?: string | null; cidade?: string | null; estado?: string | null; bio?: string | null; perfil_completo?: boolean | null; status: string | null; mp_connected_at?: string | null; mp_user_id?: string | null; };
 type Totais = { fotos: number; albuns: number; eventos: number; vendas: number };
 type PerfilForm = { nome: string; telefone: string; documento: string; cep: string; endereco: string; cidade: string; estado: string; bio: string; };
 
-type GaleriaFreelancer = { id: string; nome: string; cidade?: string | null; estado?: string | null; data_evento?: string | null; preco_padrao_centavos?: number | null; preco_bloqueado?: boolean; capa_url?: string | null; comissao_organizador_percentual?: number | null; modelo_recebimento?: "royalty" | "diaria_organizador"; created_by?: string | null; desconto_combo_qtd?: number | null; desconto_combo_percentual?: number | null; };
+type GaleriaFreelancer = { id: string; nome: string; cidade?: string | null; estado?: string | null; data_evento?: string | null; preco_padrao_centavos?: number | null; preco_bloqueado?: boolean; capa_url?: string | null; comissao_organizador_percentual?: number | null; modelo_recebimento?: "royalty" | "diaria_organizador"; created_by?: string | null; desconto_combo_qtd?: number | null; desconto_combo_percentual?: number | null; descontos_progressivos?: FaixaDesconto[] | null; em_breve?: boolean; };
 
 function perfilParaForm(perfil: FotografoPerfil | null, email: string | null): PerfilForm {
   return { nome: perfil?.nome || email?.split("@")[0] || "", telefone: perfil?.telefone || "", documento: perfil?.documento || "", cep: perfil?.cep || "", endereco: perfil?.endereco || "", cidade: perfil?.cidade || "", estado: perfil?.estado || "", bio: perfil?.bio || "", };
@@ -37,7 +39,9 @@ export default function FotografoDashboardPage() {
 
   const [mostrarCriarGaleria, setMostrarCriarGaleria] = useState(false);
   const [mostrarDetalhesMp, setMostrarDetalhesMp] = useState(false);
-  const [galeriaForm, setGaleriaForm] = useState({ nome: "", cidade: "", estado: "", dataEvento: "", preco: "15,00" });
+  const [galeriaForm, setGaleriaForm] = useState({ nome: "", cidade: "", estado: "", dataEvento: "", preco: "15,00", emBreve: false });
+  const [faixasCriacao, setFaixasCriacao] = useState<FaixaDesconto[]>([]);
+  const [faixasEdicao, setFaixasEdicao] = useState<FaixaDesconto[]>([]);
   const [capaGaleria, setCapaGaleria] = useState<File | null>(null);
   const [criandoGaleria, setCriandoGaleria] = useState(false);
   const [mensagemGaleria, setMensagemGaleria] = useState("");
@@ -45,7 +49,7 @@ export default function FotografoDashboardPage() {
   const [minhasGalerias, setMinhasGalerias] = useState<GaleriaFreelancer[]>([]);
   const [galeriasOficiais, setGaleriasOficiais] = useState<GaleriaFreelancer[]>([]);
   const [editandoGaleria, setEditandoGaleria] = useState<GaleriaFreelancer | null>(null);
-  const [editGaleriaForm, setEditGaleriaForm] = useState({ nome: "", cidade: "", estado: "", dataEvento: "", preco: "15,00", comboQtd: "3", comboPercentual: "20" });
+  const [editGaleriaForm, setEditGaleriaForm] = useState({ nome: "", cidade: "", estado: "", dataEvento: "", preco: "15,00", emBreve: false });
   const [editCapaGaleria, setEditCapaGaleria] = useState<File | null>(null);
   const [salvandoEdicao, setSalvandoEdicao] = useState(false);
   const [excluindoGaleria, setExcluindoGaleria] = useState(false);
@@ -117,7 +121,7 @@ export default function FotografoDashboardPage() {
           supabase.from("foto_arquivos").select("id", { count: "exact", head: true }).eq("fotografo_id", perfilAtual.id),
           supabase.from("foto_albuns").select("id", { count: "exact", head: true }).eq("fotografo_id", perfilAtual.id),
           supabase.from("foto_pedidos").select("id", { count: "exact", head: true }).eq("fotografo_id", perfilAtual.id).eq("status", "pago"),
-          supabase.from("foto_eventos").select("id, nome, cidade, estado, data_evento, preco_padrao_centavos, preco_bloqueado, capa_url, desconto_combo_qtd, desconto_combo_percentual").eq("created_by", user.id).neq("status", "arquivado").order("created_at", { ascending: false }),
+          supabase.from("foto_eventos").select("id, nome, cidade, estado, data_evento, preco_padrao_centavos, preco_bloqueado, capa_url, desconto_combo_qtd, desconto_combo_percentual, descontos_progressivos, em_breve").eq("created_by", user.id).neq("status", "arquivado").order("created_at", { ascending: false }),
            supabase.from("foto_evento_fotografos").select("evento_id, comissao_organizador_percentual, modelo_recebimento").eq("fotografo_id", perfilAtual.id).eq("status", "ativo")
         ]);
 
@@ -221,6 +225,8 @@ export default function FotografoDashboardPage() {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
     const normalizado = Number(galeriaForm.preco.replace(/\./g, "").replace(",", "."));
+    const descontosProgressivos = validarFaixasDesconto(faixasCriacao);
+    if (!descontosProgressivos) { setMensagemGaleria("As faixas precisam ter quantidades e descontos crescentes."); return; }
     setCriandoGaleria(true);
     let capaUrl: string | null = null;
     if (capaGaleria) {
@@ -234,7 +240,7 @@ export default function FotografoDashboardPage() {
     const response = await fetch("/api/fotos/fotografo/criar-galeria", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
-      body: JSON.stringify({ ...galeriaForm, capaUrl, precoCentavos: Number.isFinite(normalizado) ? Math.round(normalizado * 100) : 1500 }),
+      body: JSON.stringify({ ...galeriaForm, descontosProgressivos, capaUrl, precoCentavos: Number.isFinite(normalizado) ? Math.round(normalizado * 100) : 1500 }),
     });
     const resultado = await response.json().catch(() => null);
     setCriandoGaleria(false);
@@ -264,9 +270,9 @@ export default function FotografoDashboardPage() {
       estado: galeria.estado || "",
       dataEvento: galeria.data_evento || "",
       preco: ((galeria.preco_padrao_centavos || 0) / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-      comboQtd: String(galeria.desconto_combo_qtd ?? 3),
-      comboPercentual: String(galeria.desconto_combo_percentual ?? 20).replace(".", ","),
+      emBreve: Boolean(galeria.em_breve),
     });
+    setFaixasEdicao(faixasDoEvento(galeria));
     setEditCapaGaleria(null);
   }
 
@@ -285,10 +291,8 @@ export default function FotografoDashboardPage() {
     }
 
     const precoCentavos = Math.max(0, Math.round(Number(editGaleriaForm.preco.replace(/\./g, "").replace(",", ".")) * 100));
-    const comboQtdDigitado = Math.round(Number(editGaleriaForm.comboQtd));
-    const comboPercentualDigitado = Number(editGaleriaForm.comboPercentual.replace(",", "."));
-    const comboQtd = Number.isFinite(comboQtdDigitado) ? Math.max(2, comboQtdDigitado) : 3;
-    const comboPercentual = Number.isFinite(comboPercentualDigitado) ? Math.min(90, Math.max(0, comboPercentualDigitado)) : 0;
+    const descontosProgressivos = validarFaixasDesconto(faixasEdicao);
+    if (!descontosProgressivos) { setSalvandoEdicao(false); alert("As faixas precisam ter quantidades e descontos crescentes."); return; }
 
     const { error } = await supabase.from("foto_eventos").update({
       nome: editGaleriaForm.nome.trim(),
@@ -296,8 +300,8 @@ export default function FotografoDashboardPage() {
       estado: editGaleriaForm.estado.trim().toUpperCase(),
       data_evento: editGaleriaForm.dataEvento || null,
       preco_padrao_centavos: precoCentavos,
-      desconto_combo_qtd: comboQtd,
-      desconto_combo_percentual: comboPercentual,
+      descontos_progressivos: descontosProgressivos,
+      em_breve: editGaleriaForm.emBreve,
       capa_url: novaCapaUrl
     }).eq("id", editandoGaleria.id);
 
@@ -648,27 +652,11 @@ export default function FotografoDashboardPage() {
                                       />
                                    </div>
 
-                                   <div>
-                                      <label className="mb-1.5 ml-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Combo: a partir de (mídias)</label>
-                                      <input
-                                        type="number"
-                                        min={2}
-                                        value={editGaleriaForm.comboQtd}
-                                        onChange={(e) => setEditGaleriaForm({ ...editGaleriaForm, comboQtd: e.target.value })}
-                                        className="h-11 sm:h-12 w-full rounded-xl border border-white/10 bg-black px-4 text-xs font-bold text-white outline-none focus:border-retratt focus:ring-1 focus:ring-retratt/50 transition-all"
-                                      />
-                                   </div>
-
-                                   <div>
-                                      <label className="mb-1.5 ml-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Desconto do combo (%)</label>
-                                      <input
-                                        inputMode="decimal"
-                                        value={editGaleriaForm.comboPercentual}
-                                        onChange={(e) => setEditGaleriaForm({ ...editGaleriaForm, comboPercentual: e.target.value })}
-                                        className="h-11 sm:h-12 w-full rounded-xl border border-white/10 bg-black px-4 text-xs font-bold text-white outline-none focus:border-retratt focus:ring-1 focus:ring-retratt/50 transition-all"
-                                      />
-                                      <p className="mt-1 ml-1 text-[8px] text-zinc-600">Use 0 para desativar. Máximo de 90%.</p>
-                                   </div>
+                                   <EditorFaixasDesconto faixas={faixasEdicao} onChange={setFaixasEdicao} />
+                                   <label className="sm:col-span-2 flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-xs text-white">
+                                     <input type="checkbox" checked={editGaleriaForm.emBreve} onChange={(e) => setEditGaleriaForm({ ...editGaleriaForm, emBreve: e.target.checked })} />
+                                     Em breve: mostrar o aviso enquanto as fotos são preparadas. Desative para iniciar as vendas.
+                                   </label>
 
                                    <div className="sm:col-span-2">
                                       <label className="mb-1.5 ml-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Foto de Capa</label>
@@ -769,6 +757,11 @@ export default function FotografoDashboardPage() {
                            <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Preço Padrão (R$)</label>
                            <input value={galeriaForm.preco} onChange={(e) => setGaleriaForm({ ...galeriaForm, preco: e.target.value })} inputMode="decimal" className="cursor-text h-11 w-full rounded-xl border border-white/10 bg-black px-3 text-xs font-bold text-white outline-none focus:border-retratt" />
                          </div>
+                         <EditorFaixasDesconto faixas={faixasCriacao} onChange={setFaixasCriacao} />
+                         <label className="sm:col-span-2 flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-xs text-white">
+                           <input type="checkbox" checked={galeriaForm.emBreve} onChange={(e) => setGaleriaForm({ ...galeriaForm, emBreve: e.target.checked })} />
+                           Em breve: mostrar o aviso enquanto as fotos são preparadas. Desative para iniciar as vendas.
+                         </label>
                          <div className="sm:col-span-2">
                            <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Foto de Capa</label>
                            <label className="flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-white/15 bg-black hover:border-retratt/50 hover:bg-retratt/5 transition-all text-[9px] font-black uppercase tracking-widest text-zinc-400 hover:text-retratt">

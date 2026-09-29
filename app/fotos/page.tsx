@@ -13,16 +13,17 @@ export default function FotosHomePage() {
   const [eventos, setEventos] = useState<FotoEvento[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [busca, setBusca] = useState("");
+  const [filtro, setFiltro] = useState<"todos" | "abertas" | "em_breve">("todos");
 
   useEffect(() => {
     async function carregar() {
       setCarregando(true);
       const { data } = await supabase
         .from("foto_eventos")
-        .select("id, nome, slug, local, cidade, estado, data_evento, capa_url, status")
+        .select("id, nome, slug, local, cidade, estado, data_evento, capa_url, status, em_breve")
         .eq("status", "publicado")
         .order("data_evento", { ascending: false })
-        .limit(12);
+        .limit(48);
 
       setEventos((data || []) as FotoEvento[]);
       setCarregando(false);
@@ -34,8 +35,8 @@ export default function FotosHomePage() {
   const eventosFiltrados = useMemo(() => {
     const termo = busca.trim().toLowerCase();
     if (!termo) return eventos;
-    return eventos.filter((evento) => [evento.nome, evento.cidade, evento.estado, evento.local].filter(Boolean).join(" ").toLowerCase().includes(termo));
-  }, [eventos, busca]);
+    return eventos.filter((evento) => (filtro === "todos" || (filtro === "em_breve") === Boolean(evento.em_breve)) && [evento.nome, evento.cidade, evento.estado, evento.local].filter(Boolean).join(" ").toLowerCase().includes(termo));
+  }, [eventos, busca, filtro]);
 
   const formatarData = (dataStr?: string | null) => {
     if (!dataStr) return "";
@@ -94,6 +95,7 @@ export default function FotosHomePage() {
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[400px] bg-orange-950/60 blur-[150px] rounded-full z-20"></div>
           </div>
 
+
           <div className="relative z-30 max-w-4xl mx-auto px-4 md:px-6 flex flex-col items-center text-center">
 
             <span className="inline-flex items-center gap-1.5 bg-retratt/10 border border-retratt/20 text-retratt px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-[0.2em] mb-3 shadow-[0_0_20px_rgba(255,90,31,0.15)]">
@@ -140,6 +142,9 @@ export default function FotosHomePage() {
 
         {/* 🏆 EVENTOS RECENTES (GRID COMPACTO) */}
         <section className="relative z-20 max-w-7xl mx-auto px-4 md:px-6 py-6 md:py-10">
+          <div className="mb-4 flex gap-2" role="group" aria-label="Filtrar galerias">
+            {([ ["todos", "Todas"], ["abertas", "Abertas"], ["em_breve", "Em breve"] ] as const).map(([valor, rotulo]) => <button key={valor} type="button" onClick={() => setFiltro(valor)} className={`rounded-full border px-3 py-2 text-[10px] font-bold ${filtro === valor ? "border-retratt bg-retratt/15 text-retratt" : "border-white/10 text-zinc-400"}`}>{rotulo}</button>)}
+          </div>
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-3 mb-6 md:mb-8">
             <div>
               <h2 className="text-xl md:text-2xl font-black uppercase tracking-tight flex items-center gap-2">
@@ -182,7 +187,7 @@ export default function FotosHomePage() {
                   <div className="relative z-10 flex flex-col h-full p-4 md:p-5">
                     <div className="flex justify-between items-start mb-auto">
                       <span className="bg-retratt/20 text-retratt border border-retratt/30 text-[8px] md:text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-md backdrop-blur-md">
-                        Galeria Aberta
+                        {evento.em_breve ? "Em breve" : "Galeria aberta"}
                       </span>
                     </div>
 

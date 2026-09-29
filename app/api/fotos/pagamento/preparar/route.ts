@@ -13,6 +13,7 @@ import {
 } from "@/app/lib/fotos-convidado";
 import { consumirLimiteAuth, ipDaRequisicao } from "@/app/lib/limite-auth";
 import { modeloRecebimentoFotos, obterRecebedorFotos } from "@/app/lib/fotos-recebedor";
+import { calcularDescontoFotos, faixasDoEvento } from "@/app/lib/fotos-descontos";
 
 export const runtime = "nodejs";
 
@@ -70,8 +71,8 @@ export async function POST(request: Request) {
     const { data: fotos, error: fotosError } = await supabase
       .from("foto_arquivos")
       .select(`
-        id, evento_id, fotografo_id, titulo, preco_centavos, status,
-        foto_eventos (id, nome, status, vendas_ate, desconto_combo_qtd, desconto_combo_percentual, organizador_user_id),
+        id, evento_id, fotografo_id, titulo, mime_type, preco_centavos, status,
+        foto_eventos (id, nome, status, vendas_ate, desconto_combo_qtd, desconto_combo_percentual, descontos_progressivos, em_breve, organizador_user_id),
         fotografos (id, nome, mp_access_token, mp_connected_at, status)
       `)
       .in("id", fotoIds)
@@ -88,7 +89,7 @@ export async function POST(request: Request) {
 
     const evento = primeiraRelacao(fotos[0].foto_eventos);
     const fotografo = primeiraRelacao(fotos[0].fotografos);
-    if (!evento || evento.status !== "publicado") {
+    if (!evento || evento.status !== "publicado" || evento.em_breve) {
       return NextResponse.json({ error: "A galeria não está disponível para vendas." }, { status: 409 });
     }
     if (evento.vendas_ate && new Date(evento.vendas_ate) < new Date()) {
@@ -99,11 +100,7 @@ export async function POST(request: Request) {
     }
 
     const subtotalCentavos = fotos.reduce((total, foto) => total + Math.max(0, Number(foto.preco_centavos || 0)), 0);
-    const comboQtd = Math.max(2, Number(evento.desconto_combo_qtd || 3));
-    const comboPercentual = Math.min(90, Math.max(0, Number(evento.desconto_combo_percentual || 0)));
-    const descontoCentavos = fotos.length >= comboQtd
-      ? Math.round(subtotalCentavos * comboPercentual / 100)
-      : 0;
+    const { valor: descontoCentavos } = calcularDescontoFotos(faixasDoEvento(evento), fotos.map((foto) => ({ precoCentavos: Number(foto.preco_centavos || 0), mimeType: foto.mime_type })));
     const totalCentavos = subtotalCentavos - descontoCentavos;
     if (totalCentavos <= 0) return NextResponse.json({ error: "Total do pedido inválido." }, { status: 409 });
 

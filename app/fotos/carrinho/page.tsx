@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
 import { formatarPrecoFotos } from "@/app/lib/fotos";
+import { calcularDescontoFotos, faixasDoEvento, type FaixaDesconto } from "@/app/lib/fotos-descontos";
 import FotosShell from "../_components/FotosShell";
 import PreviewProtectionOverlay from "../_components/PreviewProtectionOverlay";
 import {
@@ -69,6 +70,7 @@ type FotoCarrinho = {
   imagem: string;
   comboQtd: number;
   comboPercentual: number;
+  descontosProgressivos: FaixaDesconto[] | null;
   mimeType: string | null;
 };
 
@@ -115,6 +117,7 @@ export default function FotosCarrinhoPage() {
   const [fotos, setFotos] = useState<FotoCarrinho[]>([]);
   const [indiceAberto, setIndiceAberto] = useState<number | null>(null);
   const toqueInicial = useRef<number | null>(null);
+  const previewsEmCache = useRef<Map<string, HTMLImageElement>>(new Map());
   const [etapa, setEtapa] = useState<EtapaPagamento>("carrinho");
   const [copiado, setCopiado] = useState(false);
   const [carregandoCart, setCarregandoCart] = useState(true);
@@ -126,10 +129,12 @@ export default function FotosCarrinhoPage() {
   const [itensLiberados, setItensLiberados] = useState<ItemPedidoConvidado[]>([]);
 
   const subtotal = fotos.reduce((acc, foto) => acc + foto.precoCentavos, 0);
-  const comboQtd = fotos[0]?.comboQtd || COMBO_QTD_PADRAO;
-  const comboPercentual = fotos[0]?.comboPercentual ?? COMBO_PERCENTUAL_PADRAO;
-  const temDesconto = fotos.length >= comboQtd && comboPercentual > 0;
-  const valorDesconto = temDesconto ? Math.round(subtotal * (comboPercentual / 100)) : 0;
+  const faixas = faixasDoEvento({ descontos_progressivos: fotos[0]?.descontosProgressivos, desconto_combo_qtd: fotos[0]?.comboQtd ?? COMBO_QTD_PADRAO, desconto_combo_percentual: fotos[0]?.comboPercentual ?? COMBO_PERCENTUAL_PADRAO });
+  const fotosElegiveis = fotos.filter((foto) => !foto.mimeType?.startsWith("video/"));
+  const { faixa, valor: valorDesconto } = calcularDescontoFotos(faixas, fotos);
+  const proximaFaixa = faixas.find((item) => item.quantidade > fotosElegiveis.length);
+  const temDesconto = Boolean(faixa);
+  const comboPercentual = faixa?.percentual ?? 0;
   const total = subtotal - valorDesconto;
   const modalAberto = indiceAberto !== null;
 
@@ -150,6 +155,18 @@ export default function FotosCarrinhoPage() {
     window.addEventListener("keydown", aoPressionar);
     return () => window.removeEventListener("keydown", aoPressionar);
   }, [modalAberto, fotos.length]);
+
+  useEffect(() => {
+    if (indiceAberto === null) return;
+    const vizinhas = [-1, 1].map((delta) => fotos[indiceAberto + delta]).filter((foto): foto is FotoCarrinho => Boolean(foto && !foto.mimeType?.startsWith("video/")));
+    for (const foto of vizinhas) {
+      if (previewsEmCache.current.has(foto.id)) continue;
+      const imagem = new Image();
+      imagem.src = foto.imagem;
+      previewsEmCache.current.set(foto.id, imagem);
+    }
+    for (const id of previewsEmCache.current.keys()) if (!vizinhas.some((foto) => foto.id === id)) previewsEmCache.current.delete(id);
+  }, [indiceAberto, fotos]);
 
   useEffect(() => {
     async function carregarCarrinho() {
@@ -174,7 +191,7 @@ export default function FotosCarrinhoPage() {
             preview_url,
             thumb_url,
             status,
-            evento_dados:foto_eventos!evento_id ( nome, desconto_combo_qtd, desconto_combo_percentual ),
+            evento_dados:foto_eventos!evento_id ( nome, desconto_combo_qtd, desconto_combo_percentual, descontos_progressivos ),
             fotografo_dados:fotografos!fotografo_id ( nome )
           `)
           .in("id", idsSalvos)
@@ -207,6 +224,7 @@ export default function FotosCarrinhoPage() {
               imagem: `/api/fotos/arquivo/${foto.id}?tipo=preview`,
               comboQtd: Number(evento?.desconto_combo_qtd || COMBO_QTD_PADRAO),
               comboPercentual: Number(evento?.desconto_combo_percentual ?? COMBO_PERCENTUAL_PADRAO),
+              descontosProgressivos: Array.isArray(evento?.descontos_progressivos) ? evento.descontos_progressivos : null,
               mimeType: foto.mime_type || null,
             };
           });
@@ -471,7 +489,7 @@ export default function FotosCarrinhoPage() {
                     <Wallet size={16} className="text-retratt" /> Resumo
                   </h3>
 
-                  {etapa === "carrinho" && (
+                  {etapa === "carrinho" && faixas.length > 0 && (
                     <div className={`mb-5 rounded-xl border p-3 transition-colors ${temDesconto ? "border-emerald-500/30 bg-emerald-500/10" : "border-white/10 bg-white/5"}`}>
                       <div className="flex items-center gap-3">
                         <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${temDesconto ? "bg-emerald-500/20 text-emerald-400" : "bg-white/10 text-zinc-400"}`}>
@@ -482,7 +500,7 @@ export default function FotosCarrinhoPage() {
                             {temDesconto ? "Combo ativado" : "Pacote promocional"}
                           </p>
                           <p className="mt-0.5 text-[9px] text-zinc-400">
-                            {temDesconto ? `Você ganhou ${comboPercentual}% de desconto.` : `Adicione mais ${comboQtd - fotos.length} item(ns) para ganhar ${comboPercentual}% OFF.`}
+                            {temDesconto ? `Você ganhou ${comboPercentual}% de desconto nas fotos.${proximaFaixa ? ` Mais ${proximaFaixa.quantidade - fotosElegiveis.length} foto(s) para ${proximaFaixa.percentual}%.` : ""}` : proximaFaixa ? `Adicione mais ${proximaFaixa.quantidade - fotosElegiveis.length} foto(s) para ganhar ${proximaFaixa.percentual}% OFF.` : ""}
                           </p>
                         </div>
                       </div>

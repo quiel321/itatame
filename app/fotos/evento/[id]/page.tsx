@@ -21,7 +21,7 @@ export default async function FotosEventoPage({ params }: Props) {
   try {
     const supabase = createSupabaseServerClient();
     const [eventoResult, albunsResult, fotosResult, totalResult, videosResult] = await Promise.all([
-      supabase.from("foto_eventos").select("id, nome, slug, descricao, local, cidade, estado, data_evento, capa_url, status, vendas_ate, desconto_combo_qtd, desconto_combo_percentual, organizador_user_id, created_by").eq("id", id).maybeSingle(),
+      supabase.from("foto_eventos").select("id, nome, slug, descricao, local, cidade, estado, data_evento, capa_url, status, vendas_ate, desconto_combo_qtd, desconto_combo_percentual, descontos_progressivos, em_breve, organizador_user_id, created_by").eq("id", id).maybeSingle(),
       supabase.from("foto_albuns").select("id, evento_id, fotografo_id, titulo, descricao, capa_url, status").eq("evento_id", id).eq("status", "publicado").order("ordem", { ascending: true }),
       supabase.from("foto_arquivos").select("id, evento_id, album_id, fotografo_id, titulo, mime_type, r2_original_key, r2_preview_key, r2_thumb_key, preview_url, thumb_url, preco_centavos, status, tags, fotografo_dados:fotografos!fotografo_id(nome, foto_url)").eq("evento_id", id).eq("status", "publicada").order("created_at", { ascending: false }).order("id", { ascending: false }).range(0, 999),
       supabase.from("foto_arquivos").select("id", { count: "exact", head: true }).eq("evento_id", id).eq("status", "publicada"),

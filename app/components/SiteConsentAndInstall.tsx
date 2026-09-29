@@ -115,15 +115,15 @@ export default function SiteConsentAndInstall() {
   return (
     <>
       {mostrarCookies && (
-        <aside className="fixed inset-x-3 bottom-3 z-[150] mx-auto max-w-3xl rounded-2xl border border-white/10 bg-[#0b0b0f]/95 p-4 shadow-[0_24px_80px_rgba(0,0,0,0.75)] backdrop-blur-xl md:bottom-6 md:p-5" role="dialog" aria-label="Preferências de cookies">
-          <div className="flex items-start gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-red-500/20 bg-red-500/10 text-red-400"><Cookie size={19} /></div>
+        <aside className="fixed inset-x-3 bottom-3 z-[150] mx-auto max-w-xl rounded-2xl border border-white/10 bg-[#111216]/95 p-3 shadow-[0_16px_48px_rgba(0,0,0,0.5)] backdrop-blur-xl md:bottom-5 md:p-4" role="dialog" aria-label="Preferências de cookies">
+          <div className="flex items-start gap-2.5">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-zinc-300"><Cookie size={16} /></div>
             <div className="min-w-0 flex-1">
-              <h2 className="text-sm font-black uppercase tracking-wide text-white">Cookies e sua experiência</h2>
-              <p className="mt-1 text-[11px] leading-relaxed text-zinc-400 md:text-xs">Usamos cookies essenciais para manter login, segurança e preferências. Com sua autorização, também podemos guardar escolhas que tornam sua navegação mais simples.</p>
-              <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
-                <button onClick={() => concluirCookies("necessary")} className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-zinc-300 transition hover:bg-white/10">Somente essenciais</button>
-                <button onClick={() => concluirCookies("all")} className="rounded-xl bg-red-600 px-5 py-2.5 text-[10px] font-black uppercase tracking-widest text-white shadow-lg transition hover:bg-red-500">Aceitar cookies</button>
+              <h2 className="text-xs font-bold text-white">Sua privacidade</h2>
+              <p className="mt-0.5 text-[10px] leading-relaxed text-zinc-400">Usamos cookies essenciais e, com sua permissão, guardamos preferências para melhorar sua visita.</p>
+              <div className="mt-2.5 flex gap-2 sm:justify-end">
+                <button onClick={() => concluirCookies("necessary")} className="flex-1 rounded-lg border border-white/10 px-2 py-2 text-[10px] font-semibold text-zinc-300 transition hover:bg-white/10 sm:flex-none">Só essenciais</button>
+                <button onClick={() => concluirCookies("all")} className="flex-1 rounded-lg bg-zinc-100 px-3 py-2 text-[10px] font-bold text-zinc-900 transition hover:bg-white sm:flex-none">Aceitar</button>
               </div>
             </div>
           </div>

@@ -58,6 +58,8 @@ create table if not exists public.foto_eventos (
   vendas_ate timestamptz,
   desconto_combo_qtd integer not null default 3 check (desconto_combo_qtd >= 2),
   desconto_combo_percentual numeric(5,2) not null default 20 check (desconto_combo_percentual >= 0 and desconto_combo_percentual <= 90),
+  descontos_progressivos jsonb check (descontos_progressivos is null or jsonb_typeof(descontos_progressivos) = 'array'),
+  em_breve boolean not null default false,
   retencao_dias integer not null default 90 check (retencao_dias >= 7),
   created_by uuid references auth.users(id) on delete set null,
   created_at timestamptz not null default now(),
