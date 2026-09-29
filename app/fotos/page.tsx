@@ -16,26 +16,36 @@ export default function FotosHomePage() {
   const [filtro, setFiltro] = useState<"todos" | "abertas" | "em_breve">("todos");
 
   useEffect(() => {
+    let ativo = true;
     async function carregar() {
       setCarregando(true);
-      const { data } = await supabase
+      let consulta = supabase
         .from("foto_eventos")
         .select("id, nome, slug, local, cidade, estado, data_evento, capa_url, status, em_breve")
-        .eq("status", "publicado")
+        .eq("status", "publicado");
+      if (filtro === "em_breve") consulta = consulta.eq("em_breve", true);
+      if (filtro === "abertas") consulta = consulta.or("em_breve.is.null,em_breve.eq.false");
+      const { data } = await consulta
         .order("data_evento", { ascending: false })
         .limit(48);
 
-      setEventos((data || []) as FotoEvento[]);
-      setCarregando(false);
+      if (ativo) {
+        setEventos((data || []) as FotoEvento[]);
+        setCarregando(false);
+      }
     }
 
     carregar();
-  }, []);
+    return () => { ativo = false; };
+  }, [filtro]);
 
   const eventosFiltrados = useMemo(() => {
     const termo = busca.trim().toLowerCase();
-    if (!termo) return eventos;
-    return eventos.filter((evento) => (filtro === "todos" || (filtro === "em_breve") === Boolean(evento.em_breve)) && [evento.nome, evento.cidade, evento.estado, evento.local].filter(Boolean).join(" ").toLowerCase().includes(termo));
+    return eventos.filter((evento) => {
+      const correspondeFiltro = filtro === "todos" || (filtro === "em_breve") === Boolean(evento.em_breve);
+      const correspondeBusca = !termo || [evento.nome, evento.cidade, evento.estado, evento.local].filter(Boolean).join(" ").toLowerCase().includes(termo);
+      return correspondeFiltro && correspondeBusca;
+    });
   }, [eventos, busca, filtro]);
 
   const formatarData = (dataStr?: string | null) => {
@@ -143,7 +153,7 @@ export default function FotosHomePage() {
         {/* 🏆 EVENTOS RECENTES (GRID COMPACTO) */}
         <section className="relative z-20 max-w-7xl mx-auto px-4 md:px-6 py-6 md:py-10">
           <div className="mb-4 flex gap-2" role="group" aria-label="Filtrar galerias">
-            {([ ["todos", "Todas"], ["abertas", "Abertas"], ["em_breve", "Em breve"] ] as const).map(([valor, rotulo]) => <button key={valor} type="button" onClick={() => setFiltro(valor)} className={`rounded-full border px-3 py-2 text-[10px] font-bold ${filtro === valor ? "border-retratt bg-retratt/15 text-retratt" : "border-white/10 text-zinc-400"}`}>{rotulo}</button>)}
+            {([ ["todos", "Todas"], ["abertas", "Abertas"], ["em_breve", "Em breve"] ] as const).map(([valor, rotulo]) => <button key={valor} type="button" aria-pressed={filtro === valor} onClick={() => setFiltro(valor)} className={`rounded-full border px-3 py-2 text-[10px] font-bold ${filtro === valor ? "border-retratt bg-retratt/15 text-retratt" : "border-white/10 text-zinc-400"}`}>{rotulo}</button>)}
           </div>
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-3 mb-6 md:mb-8">
             <div>
@@ -186,7 +196,7 @@ export default function FotosHomePage() {
 
                   <div className="relative z-10 flex flex-col h-full p-4 md:p-5">
                     <div className="flex justify-between items-start mb-auto">
-                      <span className="bg-retratt/20 text-retratt border border-retratt/30 text-[8px] md:text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-md backdrop-blur-md">
+                      <span className={`rounded-md border px-1.5 py-0.5 text-[7px] font-black uppercase tracking-wide backdrop-blur-md md:px-2 md:py-1 md:text-[9px] md:tracking-widest ${evento.em_breve ? "border-amber-400/40 bg-amber-500/20 text-amber-200" : "border-emerald-400/40 bg-emerald-500/20 text-emerald-200"}`}>
                         {evento.em_breve ? "Em breve" : "Galeria aberta"}
                       </span>
                     </div>

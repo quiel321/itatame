@@ -119,26 +119,26 @@ export default function FotosLoginPage() {
 
   return (
     <FotosShell>
-      <main className="min-h-screen bg-[#050505] text-white flex items-center py-12 relative overflow-hidden font-sans">
+      <main className="min-h-screen bg-[#050505] text-white flex items-start py-5 md:items-center md:py-12 relative overflow-hidden font-sans">
 
         <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] md:w-[800px] h-[600px] md:h-[800px] blur-[150px] rounded-full transition-colors duration-700 pointer-events-none ${temaAtual.glow}`}></div>
 
-        <section className="relative z-10 w-full max-w-6xl mx-auto px-4 md:px-8 grid gap-10 md:gap-16 md:grid-cols-[1fr_420px] items-center">
+        <section className="relative z-10 w-full max-w-6xl mx-auto px-4 md:px-8 grid gap-4 md:gap-16 md:grid-cols-[1fr_420px] items-center">
 
           <div>
-            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-[0.2em] mb-6 transition-colors duration-500 ${temaAtual.badge}`}>
+            <span className={`hidden md:inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-[0.2em] mb-6 transition-colors duration-500 ${temaAtual.badge}`}>
               <ShieldCheck size={12} /> Acesso seguro Retratt
             </span>
 
-            <h1 className="text-3xl md:text-5xl font-black uppercase tracking-tighter leading-[1.05] drop-shadow-2xl mb-5">
+            <h1 className="text-xl md:text-5xl font-black uppercase tracking-tighter leading-[1.05] drop-shadow-2xl mb-2 md:mb-5">
               Uma conta para comprar,<br className="hidden md:block" /> vender e organizar fotos.
             </h1>
 
-            <p className="text-zinc-400 text-xs md:text-sm font-medium leading-relaxed mb-10 max-w-lg">
+            <p className="hidden md:block text-zinc-400 text-xs md:text-sm font-medium leading-relaxed mb-10 max-w-lg">
               Selecione abaixo como deseja acessar a plataforma. O painel e as ferramentas mudam automaticamente com base no seu perfil.
             </p>
 
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid grid-cols-3 gap-2 md:gap-4">
               {(Object.keys(perfis) as Perfil[]).map((key) => {
                 const item = perfis[key];
                 const Icon = item.icon;
@@ -150,27 +150,28 @@ export default function FotosLoginPage() {
                     key={key}
                     type="button"
                     onClick={() => { if (key !== perfil) setDestinoManual(null); setPerfil(key); }}
-                    className={`cursor-pointer rounded-3xl border p-5 text-left transition-all duration-300 transform ${ativo ? `${temaBotao.activeCard} md:-translate-y-2 shadow-xl` : "border-white/5 bg-[#111] hover:bg-white/5"}`}
+                    aria-pressed={ativo}
+                    className={`cursor-pointer min-w-0 rounded-xl border p-2.5 text-left transition-all duration-300 md:rounded-3xl md:p-5 ${ativo ? `${temaBotao.activeCard} md:-translate-y-2 shadow-xl` : "border-white/5 bg-[#111] hover:bg-white/5"}`}
                   >
-                    <Icon size={24} className={ativo ? temaBotao.activeIcon : "text-zinc-600"} />
-                    <p className={`mt-4 text-[11px] font-black uppercase tracking-wider ${ativo ? "text-white" : "text-zinc-300"}`}>{item.titulo}</p>
-                    <p className={`mt-2 text-[10px] leading-relaxed font-medium ${ativo ? "text-white/80" : "text-zinc-500"}`}>{item.texto}</p>
+                    <Icon size={19} className={ativo ? temaBotao.activeIcon : "text-zinc-600"} />
+                    <p className={`mt-2 text-[9px] font-black uppercase leading-tight md:mt-4 md:text-[11px] md:tracking-wider ${ativo ? "text-white" : "text-zinc-300"}`}>{item.titulo}</p>
+                    <p className={`mt-2 hidden text-[10px] leading-relaxed font-medium md:block ${ativo ? "text-white/80" : "text-zinc-500"}`}>{item.texto}</p>
                   </button>
                 );
               })}
             </div>
           </div>
 
-          <form onSubmit={entrar} className="relative rounded-3xl border border-white/10 bg-[#0a0a0e]/80 backdrop-blur-xl p-6 md:p-8 shadow-2xl flex flex-col">
-            <div className="text-center mb-8">
-               <div className={`w-12 h-12 mx-auto rounded-xl flex items-center justify-center mb-4 transition-colors duration-500 ${temaAtual.activeCard} ${temaAtual.activeIcon}`}>
+          <form onSubmit={entrar} className="relative rounded-2xl border border-white/10 bg-[#0a0a0e]/80 backdrop-blur-xl p-4 md:rounded-3xl md:p-8 shadow-2xl flex flex-col">
+            <div className="mb-4 flex items-center gap-3 md:mb-8 md:block md:text-center">
+               <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-colors duration-500 md:mx-auto md:mb-4 md:h-12 md:w-12 ${temaAtual.activeCard} ${temaAtual.activeIcon}`}>
                   <Lock size={20} />
                </div>
-               <h2 className="text-xl font-black uppercase tracking-tight text-white">Login {perfilAtual.titulo.split(' ')[0]}</h2>
-               <p className="text-[10px] text-zinc-500 uppercase tracking-widest mt-1">Acesso Seguro</p>
+               <div><h2 className="text-base font-black uppercase tracking-tight text-white md:text-xl">Login {perfilAtual.titulo.split(' ')[0]}</h2>
+               <p className="hidden text-[10px] text-zinc-500 uppercase tracking-widest mt-1 md:block">Acesso Seguro</p></div>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-3 md:space-y-4">
                <div>
                  <label className="block text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500 ml-1 mb-1.5">E-mail</label>
                  <div className="relative">
@@ -181,7 +182,7 @@ export default function FotosLoginPage() {
                      type="email"
                      required
                      placeholder="seu@email.com"
-                     className={`cursor-text h-14 w-full rounded-2xl border border-white/5 bg-[#050505] pl-11 pr-4 text-xs font-bold text-white outline-none transition-all placeholder:text-zinc-700 focus:ring-1 ${temaAtual.focus}`}
+                     className={`cursor-text h-12 w-full rounded-xl border border-white/5 bg-[#050505] pl-11 pr-4 text-xs font-bold text-white outline-none transition-all placeholder:text-zinc-700 focus:ring-1 md:h-14 md:rounded-2xl ${temaAtual.focus}`}
                    />
                  </div>
                </div>
@@ -199,7 +200,7 @@ export default function FotosLoginPage() {
                      type={mostrarSenha ? "text" : "password"}
                      required
                      placeholder="••••••••"
-                     className={`cursor-text h-14 w-full rounded-2xl border border-white/5 bg-[#050505] pl-11 pr-12 text-xs font-bold text-white outline-none transition-all placeholder:text-zinc-700 focus:ring-1 ${temaAtual.focus}`}
+                     className={`cursor-text h-12 w-full rounded-xl border border-white/5 bg-[#050505] pl-11 pr-12 text-xs font-bold text-white outline-none transition-all placeholder:text-zinc-700 focus:ring-1 md:h-14 md:rounded-2xl ${temaAtual.focus}`}
                    />
                    <button type="button" onClick={() => setMostrarSenha(!mostrarSenha)} aria-label={mostrarSenha ? "Ocultar senha" : "Mostrar senha"} className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white">{mostrarSenha ? <EyeOff size={17} /> : <Eye size={17} />}</button>
                  </div>
@@ -215,7 +216,7 @@ export default function FotosLoginPage() {
 
             <button
                disabled={carregando}
-               className={`cursor-pointer mt-8 h-14 w-full rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${temaAtual.button}`}
+               className={`cursor-pointer mt-5 h-12 w-full rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed md:mt-8 md:h-14 md:rounded-2xl ${temaAtual.button}`}
             >
                {carregando ? "Acessando sistema..." : `Entrar como ${perfilAtual.titulo.split(' / ')[0]}`}
                {!carregando && temaAtual.iconeBtn}
@@ -224,18 +225,18 @@ export default function FotosLoginPage() {
             {perfil === "comprador" && (
               <Link
                 href={`/fotos/acesso${destinoManual ? `?next=${encodeURIComponent(destinoManual)}` : ""}`}
-                className="cursor-pointer mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 text-[10px] font-black uppercase tracking-widest text-zinc-300 transition-colors hover:bg-white/10 hover:text-white"
+                className="cursor-pointer mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-2 text-center text-[9px] font-black uppercase tracking-wide text-zinc-300 transition-colors hover:bg-white/10 hover:text-white md:h-12 md:rounded-2xl md:text-[10px] md:tracking-widest"
               >
                 <Mail size={14} /> Comprou sem cadastro? Entrar com código
               </Link>
             )}
 
             {/* 🔥 LINK DE CADASTRO DINÂMICO ÚNICO COM MÃOZINHA! */}
-            <div className="mt-8 pt-6 border-t border-white/5">
-               <p className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500 text-center mb-4">{perfil === "comprador" ? "Já usa o iTatame? Entre aqui com a mesma senha." : "Ainda não tem conta?"}</p>
+            <div className="mt-5 border-t border-white/5 pt-4 md:mt-8 md:pt-6">
+               <p className="mb-2 text-center text-[9px] font-black uppercase tracking-wide text-zinc-500 md:mb-4 md:tracking-[0.2em]">{perfil === "comprador" ? "Já usa o iTatame? Entre com a mesma senha." : "Ainda não tem conta?"}</p>
                <Link
                  href={`/fotos/cadastro?perfil=${perfil}${destinoQuery}`}
-                 className={`cursor-pointer h-14 flex items-center justify-center rounded-2xl border bg-[#050505] text-[10px] font-black uppercase tracking-widest transition-all ${temaAtual.hoverLink}`}
+                 className={`cursor-pointer h-11 flex items-center justify-center rounded-xl border bg-[#050505] text-[10px] font-black uppercase tracking-widest transition-all md:h-14 md:rounded-2xl ${temaAtual.hoverLink}`}
                >
                  {perfilAtual.textoCadastro}
                </Link>
