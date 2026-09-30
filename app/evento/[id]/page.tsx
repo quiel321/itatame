@@ -70,34 +70,33 @@ export default function EventoDetalhesPage() {
   };
 
   useEffect(() => {
+    let ativo = true;
     async function carregarDados() {
       if (!params.id) return;
 
-      const { data: eventoData } = await supabase
-        .from("eventos")
-        .select("*")
-        .eq("id", params.id)
-        .single();
-      
+      const [eventoResposta, inscritosResposta] = await Promise.all([
+        supabase.from("eventos").select("*").eq("id", params.id).single(),
+        supabase.from("inscricoes").select("atleta,nome,equipe,faixa,categoria").eq("evento_id", params.id),
+      ]);
+      if (!ativo) return;
+
+      const eventoData = eventoResposta.data;
       setEvento(eventoData);
+      if (!inscritosResposta.error) setInscricoes(inscritosResposta.data || []);
+      setLoading(false);
+
+      // Atualizações operacionais não bloqueiam a abertura da página pública.
       void fetch(`/api/eventos/${params.id}/gerar-chaves-auto`);
       if (eventoData?.organizador_id) {
         const resposta = await fetch(`/api/organizadores/${encodeURIComponent(eventoData.organizador_id)}/publico`);
-        if (resposta.ok) setOrganizador(await resposta.json());
+        if (resposta.ok) {
+          const dados = await resposta.json();
+          if (ativo) setOrganizador(dados);
+        }
       }
-
-      const { data: inscritosData, error } = await supabase
-        .from("inscricoes")
-        .select("*")
-        .eq("evento_id", params.id);
-        
-      if (!error) {
-        setInscricoes(inscritosData || []);
-      }
-
-      setLoading(false);
     }
-    carregarDados();
+    void carregarDados();
+    return () => { ativo = false; };
   }, [params.id]);
 
   useEffect(() => {
