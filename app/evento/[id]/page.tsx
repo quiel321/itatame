@@ -57,7 +57,7 @@ export default function EventoDetalhesPage() {
   const [evento, setEvento] = useState<EventoDetalhes | null>(null);
   const [organizador, setOrganizador] = useState<{ nome: string; foto_url: string | null } | null>(null);
   const [loading, setLoading] = useState(true);
-  const [inscricoes, setInscricoes] = useState<Pick<InscricaoCompeticao, "atleta" | "nome" | "equipe" | "faixa" | "categoria">[]>([]);
+  const [inscricoes, setInscricoes] = useState<Pick<InscricaoCompeticao, "atleta" | "equipe" | "faixa" | "categoria">[]>([]);
   const [resumoLutas, setResumoLutas] = useState<ResumoLutasEvento>({ total: 0, concluidas: 0, emAndamento: 0, pendentes: 0 });
   const [abaAtiva, setAbaAtiva] = useState("sobre");
 
@@ -76,7 +76,7 @@ export default function EventoDetalhesPage() {
 
       const [eventoResposta, inscritosResposta] = await Promise.all([
         supabase.from("eventos").select("*").eq("id", params.id).single(),
-        supabase.from("inscricoes").select("atleta,nome,equipe,faixa,categoria").eq("evento_id", params.id),
+        supabase.from("inscricoes").select("atleta,equipe,faixa,categoria").eq("evento_id", params.id),
       ]);
       if (!ativo) return;
 
@@ -499,7 +499,7 @@ export default function EventoDetalhesPage() {
                       <tbody className="text-[11px] md:text-xs font-medium text-zinc-300">
                         {inscricoes.map((inscricao, idx) => (
                           <tr key={idx} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                            <td className="p-3 md:p-4 text-white font-bold whitespace-nowrap">{inscricao.atleta || inscricao.nome}</td>
+                            <td className="p-3 md:p-4 text-white font-bold whitespace-nowrap">{inscricao.atleta}</td>
                             <td className="p-3 md:p-4 text-zinc-400 whitespace-nowrap">{inscricao.equipe || "-"}</td>
                             <td className="p-3 md:p-4 hidden sm:table-cell">{inscricao.faixa} • {inscricao.categoria || "-"}</td>
                           </tr>
