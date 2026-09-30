@@ -37,8 +37,16 @@ test("correcao de categoria so no periodo de checagem", () => {
   }, agora), true);
 });
 
-test("agrupa professor com academia e letra do atleta", () => {
-  assert.equal(chaveProfessor("Keneth", "4BRAVO", "4BRAVO"), "4BRAVO — Keneth");
+test("agrupa professor por equipe e preserva atleta sem professor", () => {
+  assert.equal(chaveProfessor("Keneth", "4BRAVO"), "4BRAVO — Keneth");
+  const lista = montarInscritosChecagem(
+    [{ id: "1", user_id: "u1", atleta: "Esther", equipe: "Legado", equipe_id: "e1", faixa: "Branca", sexo: "Feminino" }],
+    [{ user_id: "u1", professor: "", academia: "Spartan" }],
+    [],
+    [{ id: "e1", nome: "Legado", academia: "Spartan", professor: "Jefferson" }],
+  );
+  assert.equal(lista[0].professor, "Sem professor");
+  assert.equal(chaveProfessor(lista[0].professor, lista[0].equipe), "Legado — Sem professor");
   assert.equal(letraAtleta("Adailton"), "A");
   assert.equal(rotuloPesoDeclarado("58"), "Peso declarado · 58 kg");
   assert.equal(rotuloPesoDeclarado("58,5"), "Peso declarado · 58,5 kg");

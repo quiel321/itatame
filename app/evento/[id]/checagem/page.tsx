@@ -23,7 +23,7 @@ const ABAS: Array<{ id: AbaChecagem; rotulo: string }> = [
   { id: 'absoluto', rotulo: 'Absoluto' },
   { id: 'peso', rotulo: 'Categoria de peso' },
   { id: 'equipe', rotulo: 'Equipe' },
-  { id: 'professor', rotulo: 'Academia e professor' },
+  { id: 'professor', rotulo: 'Equipe e professor' },
 ];
 
 function LogoEquipe({ src, nome, tamanho = 'h-11 w-11' }: { src?: string | null; nome: string; tamanho?: string }) {
@@ -81,7 +81,7 @@ function CardAtleta({
               <LogoEquipe src={insc.logo_url} nome={insc.equipe} tamanho="h-4 w-4" />
               {insc.equipe}
             </button>
-            <button type="button" onClick={() => onProfessor(chaveProfessor(insc.professor, insc.academia, insc.equipe))} className="text-[10px] font-medium text-zinc-400 hover:text-white hover:underline">
+            <button type="button" onClick={() => onProfessor(chaveProfessor(insc.professor, insc.equipe))} className="text-[10px] font-medium text-zinc-400 hover:text-white hover:underline">
               {insc.professor}
             </button>
           </div>
@@ -139,7 +139,7 @@ export default function ChecagemGeralPage() {
 
   const geral = useMemo(() => {
     const termo = buscaGeral.trim().toLowerCase();
-    return filtrarPagamento(inscricoes).filter((item) => !termo || [item.atleta_nome, item.equipe, item.academia, item.professor, item.categoria_rotulo, item.peso, rotuloPesoDeclarado(item.peso), ...item.chaves.map((chave) => chave.rotulo)].join(' ').toLowerCase().includes(termo));
+    return filtrarPagamento(inscricoes).filter((item) => !termo || [item.atleta_nome, item.equipe, item.professor, item.categoria_rotulo, item.peso, rotuloPesoDeclarado(item.peso), ...item.chaves.map((chave) => chave.rotulo)].join(' ').toLowerCase().includes(termo));
   }, [inscricoes, buscaGeral, filtroPagamento]);
 
   const letras = useMemo(() => {
@@ -190,10 +190,10 @@ export default function ChecagemGeralPage() {
   const gruposProfessor = useMemo(() => {
     const mapa = new Map<string, { titulo: string; logo_url?: string | null; atletas: InscritoChecagem[] }>();
     for (const insc of filtrarPagamento(inscricoes)) {
-      const chave = chaveProfessor(insc.professor, insc.academia, insc.equipe);
-      const atual = mapa.get(chave) || { titulo: chave, logo_url: insc.academia_logo_url, atletas: [] };
+      const chave = chaveProfessor(insc.professor, insc.equipe);
+      const atual = mapa.get(chave) || { titulo: chave, logo_url: insc.logo_url, atletas: [] };
       atual.atletas.push(insc);
-      if (!atual.logo_url) atual.logo_url = insc.academia_logo_url;
+      if (!atual.logo_url) atual.logo_url = insc.logo_url;
       mapa.set(chave, atual);
     }
     return [...mapa.values()].sort((a, b) => a.titulo.localeCompare(b.titulo, 'pt-BR'));

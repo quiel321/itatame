@@ -139,6 +139,7 @@ export async function POST(request: Request) {
   const registrarAuditoria = async (status: "processando" | "estornado" | "erro", extras: Record<string, unknown> = {}) => {
     const { error } = await supabase.from("inscricao_estornos").upsert({
       inscricao_id: inscricao.id,
+      inscricao_id_original: inscricao.id,
       evento_id: inscricao.evento_id,
       mp_payment_id: paymentId,
       valor: valorPagamento,

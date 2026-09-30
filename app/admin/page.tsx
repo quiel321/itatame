@@ -374,12 +374,31 @@ export default function AdminPage() {
   async function salvarEdicaoAtleta() {
     if (!editando) return;
     setLoadingId(editando.id);
+    if (editando.equipe_id !== inscricoes.find(inst => inst.id === editando.id)?.equipe_id) {
+      const { data: { session } } = await supabase.auth.getSession();
+      const resposta = await fetch('/api/equipes/admin', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token || ''}` },
+        body: JSON.stringify({ tipo: 'inscricao', eventoId: editando.evento_id, id: editando.id, equipeId: editando.equipe_id }),
+      });
+      const resultado = await resposta.json().catch(() => ({}));
+      if (!resposta.ok) {
+        alert(resultado.error || 'Não foi possível alterar a equipe desta inscrição.');
+        setLoadingId(null);
+        return;
+      }
+      if (resultado.aviso) alert(resultado.aviso);
+    }
     const { error } = await supabase.from("inscricoes").update({
-      equipe: editando.equipe, categoria: editando.categoria, peso: editando.peso, faixa: editando.faixa
+      categoria: editando.categoria, peso: editando.peso, faixa: editando.faixa
     }).eq("id", editando.id);
     if (!error) {
-      setInscricoes(prev => prev.map(inst => inst.id === editando.id ? editando : inst));
+      const equipeOficial = equipesOficiais.find(item => item.id === editando.equipe_id);
+      const atualizado = { ...editando, equipe: equipeOficial?.nome || editando.equipe };
+      setInscricoes(prev => prev.map(inst => inst.id === editando.id ? atualizado : inst));
       setEditando(null);
+    } else {
+      alert('Não foi possível salvar os dados da inscrição: ' + error.message);
     }
     setLoadingId(null);
   }
@@ -1084,8 +1103,12 @@ export default function AdminPage() {
             
             <div className="space-y-4 relative z-10">
               <div>
-                <label className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1 block pl-1">Equipe / Academia</label>
-                <input type="text" value={editando.equipe || ''} onChange={e => setEditando({...editando, equipe: e.target.value})} className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-red-500 outline-none transition-colors" />
+                <label className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1 block pl-1">Equipe no campeonato</label>
+                <select value={editando.equipe_id || ''} onChange={e => { const oficial = equipesOficiais.find(item => item.id === e.target.value); setEditando({ ...editando, equipe_id: e.target.value, equipe: oficial?.nome || editando.equipe }); }} className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-red-500 outline-none transition-colors">
+                  <option value="">Selecione a equipe oficial</option>
+                  {equipesOficiais.map(item => <option key={item.id} value={item.id}>{item.nome}</option>)}
+                </select>
+                <p className="mt-2 text-[11px] text-zinc-500">Equipe atual: {editando.equipe || 'Sem equipe'}. Se a equipe correta não aparecer, cadastre-a em <Link href={`/admin/equipes?evento=${editando.evento_id}`} className="text-yellow-400 underline">Equipes e professores</Link> e volte para selecionar.</p>
               </div>
               <div>
                 <label className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1 block pl-1">Categoria de peso</label>
@@ -1238,10 +1261,10 @@ export default function AdminPage() {
 function LinhaVinculo({ vinculo, destaque = false }: { vinculo: VinculoInscricao; destaque?: boolean }) {
   const ok = vinculo.situacao === "vinculado";
   const texto = ok
-    ? `${vinculo.equipe} · ${vinculo.academia}${vinculo.professor ? ` · ${vinculo.professor}` : ""}`
+    ? `${vinculo.equipe}${vinculo.professor ? ` · ${vinculo.professor}` : ""}`
     : vinculo.situacao === "sem-equipe"
       ? `Sem equipe no campeonato${vinculo.escrito ? ` · escreveu ${vinculo.escrito}` : ""}`
-      : `Equipe ${vinculo.equipe} · academia sem vínculo${vinculo.escrito ? ` · escreveu ${vinculo.escrito}` : ""}`;
+      : `Equipe no campeonato: ${vinculo.equipe} · no cadastro: ${vinculo.escrito}`;
   return <p className={`${destaque ? "mt-1 text-[10px] font-bold uppercase tracking-wide" : "mt-1 text-[10px] font-bold"} ${ok ? "text-emerald-400" : "text-amber-300"}`}>{texto}</p>;
 }
 
@@ -1260,7 +1283,7 @@ function ConferenciaVinculo({
   const com = itens.filter((item) => item.vinculo.situacao === "vinculado");
   const grupos: Record<string, string[]> = {};
   for (const item of com) {
-    const chave = `${item.vinculo.equipe} · ${item.vinculo.academia}`;
+    const chave = String(item.vinculo.equipe);
     grupos[chave] = [...(grupos[chave] || []), item.nome];
   }
   return (
@@ -1268,7 +1291,7 @@ function ConferenciaVinculo({
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
           <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Conferência de vínculo</p>
-          <p className="mt-1 text-xs text-zinc-400">Quem está na equipe e na academia oficiais pontua no ranking. Os demais precisam de correção com o atleta ou o professor.</p>
+          <p className="mt-1 text-xs text-zinc-400">Confira se a equipe da inscrição coincide com a equipe do cadastro. A academia fica apenas como informação do perfil.</p>
         </div>
         <Link href={`/admin/equipes?evento=${eventoId}`} className="text-[10px] font-black uppercase tracking-widest text-red-300">Abrir equipes</Link>
       </div>
@@ -1281,14 +1304,14 @@ function ConferenciaVinculo({
           {sem.map((item, indice) => (
             <li key={`${item.nome}-${indice}`} className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs">
               <strong className="text-white">{item.nome}</strong>
-              <span className="mt-0.5 block text-amber-200">{item.vinculo.situacao === "sem-equipe" ? "Não entrou em nenhuma equipe deste campeonato." : `Está na equipe ${item.vinculo.equipe}, mas a academia não está inscrita.`}{item.vinculo.professor ? ` Professor: ${item.vinculo.professor}.` : ""}{item.vinculo.escrito ? ` No cadastro: ${item.vinculo.escrito}.` : ""}</span>
+              <span className="mt-0.5 block text-amber-200">{item.vinculo.situacao === "sem-equipe" ? "Não entrou em nenhuma equipe deste campeonato." : `Equipe escolhida: ${item.vinculo.equipe}.`}{item.vinculo.professor ? ` Professor: ${item.vinculo.professor}.` : ""}{item.vinculo.escrito ? ` No cadastro: ${item.vinculo.escrito}.` : ""}</span>
               {item.userId && <Link href={`/admin/mensagens?atleta=${item.userId}&aviso=vinculo`} className="mt-2 inline-block text-[10px] font-black uppercase tracking-widest text-amber-100">Pedir o vínculo no chat</Link>}
             </li>
           ))}
         </ul>
       )}
       <details className="mt-4">
-        <summary className="cursor-pointer text-[10px] font-black uppercase tracking-widest text-zinc-400">Relatório por equipe e academia</summary>
+        <summary className="cursor-pointer text-[10px] font-black uppercase tracking-widest text-zinc-400">Relatório por equipe</summary>
         <div className="mt-3 space-y-3">
           {Object.entries(grupos).map(([titulo, atletas]) => (
             <article key={titulo} className="rounded-xl border border-white/10 px-3 py-2">

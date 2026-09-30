@@ -26,16 +26,48 @@ export async function PATCH(request: Request) {
   if (!eventoId || !tipo || [nome, academia, professor, cidade].some(item => item.length > 120)) {
     return NextResponse.json({ error: "Informe os dados da equipe ou da academia (até 120 caracteres)." }, { status: 400 });
   }
-  if (tipo !== "unir" && !id) {
+  if (!id) {
     return NextResponse.json({ error: "Informe os dados da equipe ou da academia (até 120 caracteres)." }, { status: 400 });
   }
   const supabase = await autorizarOrganizador(eventoId, usuario.id);
   if (!supabase) return NextResponse.json({ error: "Campeonato não autorizado." }, { status: 403 });
 
+  if (tipo === "inscricao") {
+    const equipeId = limpar(body.equipeId);
+    if (!equipeId) return NextResponse.json({ error: "Escolha uma equipe cadastrada no campeonato." }, { status: 400 });
+    const [{ data: inscricao, error: erroInscricao }, { data: equipe, error: erroEquipe }] = await Promise.all([
+      supabase.from("inscricoes").select("id,atleta_id,equipe,equipe_id").eq("id", id).eq("evento_id", eventoId).maybeSingle(),
+      supabase.from("equipes_evento").select("id,nome").eq("id", equipeId).eq("evento_id", eventoId).eq("ativa", true).maybeSingle(),
+    ]);
+    if (erroInscricao || !inscricao || erroEquipe || !equipe) return NextResponse.json({ error: "Inscrição ou equipe não encontrada neste campeonato." }, { status: 404 });
+    if (inscricao.equipe_id === equipe.id && inscricao.equipe === equipe.nome) return NextResponse.json({ success: true });
+    const { error } = await supabase.from("inscricoes")
+      .update({ equipe_id: equipe.id, equipe: equipe.nome }).eq("id", inscricao.id).eq("evento_id", eventoId);
+    if (error) return NextResponse.json({ error: error.message }, { status: 409 });
+    if (inscricao.atleta_id) {
+      const [primeiro, segundo] = await Promise.all([
+        supabase.from("chaves").update({ equipe_1: equipe.nome }).eq("evento_id", eventoId).eq("atleta_1_id", inscricao.atleta_id),
+        supabase.from("chaves").update({ equipe_2: equipe.nome }).eq("evento_id", eventoId).eq("atleta_2_id", inscricao.atleta_id),
+      ]);
+      if (primeiro.error || segundo.error) return NextResponse.json({ success: true, aviso: "Inscrição corrigida. Confira as chaves, pois não foi possível atualizar todas as lutas." });
+    }
+    return NextResponse.json({ success: true });
+  }
+
   if (tipo === "equipe") {
     if (!nome) return NextResponse.json({ error: "Informe o nome da equipe." }, { status: 400 });
     const { data: atual, error: buscaError } = await supabase.from("equipes_evento").select("id,nome").eq("id", id).eq("evento_id", eventoId).maybeSingle();
     if (buscaError || !atual) return NextResponse.json({ error: "Equipe não encontrada." }, { status: 404 });
+    if (atual.nome !== nome) {
+      const vinculados = await Promise.all([
+        supabase.from("inscricoes").select("id", { count: "exact", head: true }).eq("evento_id", eventoId).eq("equipe_id", id),
+        supabase.from("inscricoes").select("id", { count: "exact", head: true }).eq("evento_id", eventoId).eq("equipe", atual.nome),
+        supabase.from("chaves").select("id", { count: "exact", head: true }).eq("evento_id", eventoId).eq("equipe_1", atual.nome),
+        supabase.from("chaves").select("id", { count: "exact", head: true }).eq("evento_id", eventoId).eq("equipe_2", atual.nome),
+      ]);
+      if (vinculados.some(item => item.error)) return NextResponse.json({ error: "Não foi possível conferir os vínculos desta equipe." }, { status: 500 });
+      if (vinculados.some(item => (item.count || 0) > 0)) return NextResponse.json({ error: "Esta equipe já tem atletas ou chaves. Corrija inscrições individualmente antes de alterar o nome da equipe." }, { status: 409 });
+    }
     const { error } = await supabase.from("equipes_evento").update({ nome }).eq("id", id).eq("evento_id", eventoId);
     if (error) return NextResponse.json({ error: error.code === "23505" ? "Já existe uma equipe com este nome no campeonato." : error.message }, { status: 409 });
     await Promise.all([
@@ -69,29 +101,6 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ success: true });
   }
 
-  if (tipo === "unir") {
-    const origemId = limpar(body.origemId);
-    const destinoId = limpar(body.destinoId);
-    if (!origemId || !destinoId || origemId === destinoId) {
-      return NextResponse.json({ error: "Escolha duas equipes diferentes para unificar." }, { status: 400 });
-    }
-    const [{ data: origem }, { data: destino }] = await Promise.all([
-      supabase.from("equipes_evento").select("id,nome").eq("id", origemId).eq("evento_id", eventoId).maybeSingle(),
-      supabase.from("equipes_evento").select("id,nome").eq("id", destinoId).eq("evento_id", eventoId).maybeSingle(),
-    ]);
-    if (!origem || !destino) return NextResponse.json({ error: "Equipe não encontrada." }, { status: 404 });
-    await Promise.all([
-      supabase.from("inscricoes").update({ equipe_id: destino.id, equipe: destino.nome }).eq("evento_id", eventoId).eq("equipe_id", origem.id),
-      supabase.from("inscricoes").update({ equipe_id: destino.id, equipe: destino.nome }).eq("evento_id", eventoId).eq("equipe", origem.nome),
-      supabase.from("solicitacoes_equipe_evento").update({ equipe_id: destino.id, equipe_nome: destino.nome, atualizado_em: new Date().toISOString() }).eq("evento_id", eventoId).eq("equipe_id", origem.id),
-      supabase.from("chaves").update({ equipe_1: destino.nome }).eq("evento_id", eventoId).eq("equipe_1", origem.nome),
-      supabase.from("chaves").update({ equipe_2: destino.nome }).eq("evento_id", eventoId).eq("equipe_2", origem.nome),
-    ]);
-    const { error } = await supabase.from("equipes_evento").delete().eq("id", origem.id).eq("evento_id", eventoId);
-    if (error) return NextResponse.json({ error: "As inscrições foram unificadas, mas a equipe duplicada não pôde ser removida." }, { status: 409 });
-    return NextResponse.json({ success: true });
-  }
-
   return NextResponse.json({ error: "Tipo inválido." }, { status: 400 });
 }
 
@@ -109,8 +118,15 @@ export async function DELETE(request: Request) {
   if (tipo === "equipe") {
     const { data: atual } = await supabase.from("equipes_evento").select("id,nome").eq("id", id).eq("evento_id", eventoId).maybeSingle();
     if (!atual) return NextResponse.json({ error: "Equipe não encontrada." }, { status: 404 });
-    await supabase.from("inscricoes").update({ equipe_id: null }).eq("evento_id", eventoId).eq("equipe_id", id);
-    await supabase.from("solicitacoes_equipe_evento").update({ status: "recusada", equipe_id: null, atualizado_em: new Date().toISOString() }).eq("evento_id", eventoId).eq("equipe_id", id);
+    const vinculados = await Promise.all([
+      supabase.from("inscricoes").select("id", { count: "exact", head: true }).eq("evento_id", eventoId).eq("equipe_id", id),
+      supabase.from("inscricoes").select("id", { count: "exact", head: true }).eq("evento_id", eventoId).eq("equipe", atual.nome),
+      supabase.from("solicitacoes_equipe_evento").select("id", { count: "exact", head: true }).eq("evento_id", eventoId).eq("equipe_id", id).eq("status", "aprovada"),
+      supabase.from("chaves").select("id", { count: "exact", head: true }).eq("evento_id", eventoId).eq("equipe_1", atual.nome),
+      supabase.from("chaves").select("id", { count: "exact", head: true }).eq("evento_id", eventoId).eq("equipe_2", atual.nome),
+    ]);
+    if (vinculados.some(item => item.error)) return NextResponse.json({ error: "Não foi possível conferir os vínculos desta equipe." }, { status: 500 });
+    if (vinculados.some(item => (item.count || 0) > 0)) return NextResponse.json({ error: "Esta equipe tem inscrições, professores ou chaves vinculadas e não pode ser excluída." }, { status: 409 });
     const { error } = await supabase.from("equipes_evento").delete().eq("id", id).eq("evento_id", eventoId);
     if (error) return NextResponse.json({ error: error.code === "23503" ? "Esta equipe ainda está vinculada a inscrições ou chaves e foi preservada." : error.message }, { status: 409 });
     return NextResponse.json({ success: true });

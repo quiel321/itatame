@@ -7,6 +7,7 @@ import Link from "next/link";
 import { absolutoDaInscricao, categoriaCompativel, idadeCompetitiva, rotuloCategoria, type CategoriaCompeticao } from '@/app/lib/categorias-competicao';
 import { tarifaInfantilAplicavel, valorAbsolutoAvulso, valorAddonAbsoluto, valorLoteVigente, pacoteInscricao, pacoteDoTipoInscricao, podeAmpliarPacote, pacoteAposAmpliar, rotuloPacoteInscricao, calcularValorInscricao, valorAindaDevido, type EventoValoresInscricao } from '@/app/lib/valor-inscricao';
 import { urlLoginComRetorno } from '@/app/lib/destino-interno';
+import { encontrarEquipeSemelhante } from '@/app/lib/equipes-nome';
 
 type PerfilCompetidor = {
   id: number;
@@ -44,6 +45,7 @@ function FormularioInscricao() {
   const [atletaId, setAtletaId] = useState<number | null>(null);
   const [nome, setNome] = useState("");
   const [equipe, setEquipe] = useState("");
+  const [equipeDoCadastro, setEquipeDoCadastro] = useState("");
   const [professor, setProfessor] = useState("");
   const [faixa, setFaixa] = useState("");
   const [modalidade, setModalidade] = useState("");
@@ -87,7 +89,7 @@ function FormularioInscricao() {
   const [camposInvalidos, setCamposInvalidos] = useState<string[]>([]);
   const [processando, setProcessando] = useState(false);
 
-  const perfilIncompleto = !nome || !equipe || !faixa || !atletaId;
+  const perfilIncompleto = !nome || !equipe || !professor.trim() || !faixa || !atletaId;
   const idadePeloCadastro = Number.isInteger(idadeCompetitiva(nascimentoAtleta, dataEvento));
 
   function aplicarCompetidor(
@@ -115,16 +117,14 @@ function FormularioInscricao() {
     setCupomAplicado("");
     setCupomMensagem("");
     const equipeNome = String(pessoa.equipe || "").trim();
-    const oficial = equipesOficiais.find(eq => eq.nome.trim().toLocaleLowerCase('pt-BR') === equipeNome.toLocaleLowerCase('pt-BR'));
+    setEquipeDoCadastro(equipeNome);
+    const oficial = encontrarEquipeSemelhante(equipesOficiais, equipeNome);
     if (oficial) {
       setEquipeId(oficial.id);
       setEquipe(oficial.nome);
-    } else if (equipesOficiais.length === 1) {
-      setEquipeId(equipesOficiais[0].id);
-      setEquipe(equipesOficiais[0].nome);
     } else {
       setEquipe(equipeNome);
-      if (equipesOficiais.length > 1) setEquipeId('');
+      setEquipeId(equipeNome ? '__perfil__' : '');
     }
   }
 
@@ -322,7 +322,7 @@ function FormularioInscricao() {
 
     const faltando: { campo: string; mensagem: string }[] = [];
     if (perfilIncompleto) {
-      faltando.push({ campo: "perfil", mensagem: "Complete nome, equipe e faixa deste atleta no perfil." });
+      faltando.push({ campo: "perfil", mensagem: "Complete nome, equipe, professor e faixa deste atleta no perfil." });
     }
     if (!idade || !Number.isInteger(Number(idade)) || Number(idade) < 4 || Number(idade) > 100) {
       faltando.push({ campo: "idade", mensagem: "Informe a idade na data do evento." });
@@ -335,7 +335,7 @@ function FormularioInscricao() {
           : "Não há categoria de peso compatível. Confira idade, faixa e peso no perfil.",
       });
     }
-    if (equipesEvento.length > 0 && !equipeId) {
+    if (!equipeId) {
       faltando.push({ campo: "equipe", mensagem: "Selecione a equipe deste campeonato." });
     }
     if (!termoAceito) {
@@ -465,7 +465,30 @@ function FormularioInscricao() {
       }
     }
 
-    const equipeOficial = equipesEvento.find(eq => eq.id === equipeId);
+    let equipeOficial: { id: string; nome: string; academia: string; professor: string } | undefined;
+    if (eventoId && atletaId) {
+      const { data: { session } } = await supabase.auth.getSession();
+      const resposta = await fetch('/api/equipes/atleta', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token || ''}` },
+        body: JSON.stringify({ eventoId, atletaId }),
+      });
+      const resultado = await resposta.json().catch(() => ({}));
+      if (!resposta.ok || !resultado.equipeId) {
+        setErro(resultado.error || 'Não foi possível vincular a equipe do cadastro ao campeonato.');
+        setProcessando(false);
+        return;
+      }
+      equipeOficial = { id: resultado.equipeId, nome: resultado.nome, academia: '', professor: '' };
+      setEquipeId(equipeOficial.id);
+      setEquipe(equipeOficial.nome);
+      setEquipesEvento(atual => atual.some(item => item.id === equipeOficial!.id) ? atual : [...atual, equipeOficial!]);
+    }
+    if (!equipeOficial) {
+      setErro('Selecione uma equipe válida para este campeonato.');
+      setProcessando(false);
+      return;
+    }
     const categoriaPesoNome = existente?.categoria && String(existente.categoria).trim().toLowerCase() !== "absoluto"
       ? existente.categoria
       : categoria;
@@ -484,7 +507,7 @@ function FormularioInscricao() {
         : categoriaPesoId
           ? { categoria_id: categoriaPesoId, modalidade: categoriasEvento.find(c => c.id === categoriaPesoId)?.modalidade || existente?.modalidade || modalidade }
           : { modalidade }),
-      ...(equipeId ? { equipe_id: equipeId } : {}),
+      equipe_id: equipeOficial.id,
       absoluto: pacoteFinal !== "peso",
       idade,
       observacoes,
@@ -653,7 +676,7 @@ function FormularioInscricao() {
           {perfilIncompleto && (
             <div id="inscricao-perfil" className={`bg-yellow-500/10 border rounded-xl p-4 ${camposInvalidos.includes("perfil") ? "border-red-500 ring-1 ring-red-500/60" : "border-yellow-500/30"}`}>
               <p className="text-yellow-500 font-bold text-xs uppercase tracking-widest mb-1">Perfil Incompleto</p>
-              <p className="text-yellow-200/70 text-xs">Faltam dados obrigatórios no cadastro deste atleta (nome, equipe e faixa). <Link href="/perfil" className="underline font-bold text-yellow-400">Complete em Família / Dependentes</Link></p>
+              <p className="text-yellow-200/70 text-xs">Faltam dados obrigatórios no cadastro deste atleta (nome, equipe, professor e faixa). <Link href="/perfil" className="underline font-bold text-yellow-400">Complete em Família / Dependentes</Link></p>
             </div>
           )}
 
@@ -726,7 +749,13 @@ function FormularioInscricao() {
                 {tipoInscricao !== 'absoluto' && categoriasEvento.length > 0 && !categoriasElegiveis.length && <p className="text-amber-300 text-xs mt-2">{absolutoElegivel ? 'Não há categoria de peso para este atleta. Ele pode se inscrever só no absoluto.' : 'Nenhuma categoria cadastrada combina com idade, sexo, faixa e peso deste atleta. Confira o perfil ou fale com a organização.'}</p>}
                 {tabelaErro && <p role="alert" className="text-red-400 text-xs mt-2">{tabelaErro}</p>}
                 </div>
-                {equipesEvento.length > 0 && <label id="inscricao-equipe" className="block mt-4 scroll-mt-24 text-xs text-zinc-400">Equipe no campeonato<select aria-invalid={camposInvalidos.includes("equipe")} value={equipeId} onChange={e => {const eq=equipesEvento.find(q=>q.id===e.target.value);setEquipeId(e.target.value);if(eq){setEquipe(eq.nome);} limparCampoInvalido("equipe");}} className={`w-full bg-black border rounded-lg p-3 text-white mt-1 ${classeCampo("equipe")}`}><option value="">Selecione a equipe deste evento</option>{equipesEvento.map(eq=><option key={eq.id} value={eq.id}>{eq.nome}</option>)}</select>{camposInvalidos.includes("equipe") && <p className="text-[11px] text-red-400 mt-1.5 font-bold">Selecione a equipe deste campeonato.</p>}</label>}
+                <div id="inscricao-equipe" className="mt-4 scroll-mt-24">
+                  <p className="text-xs text-zinc-400">Equipe no campeonato</p>
+                  <div className="mt-1 rounded-lg border border-white/10 bg-black p-3 text-sm font-bold text-white">{equipeDoCadastro || 'Equipe não informada no perfil'}</div>
+                  <p className="mt-2 text-[11px] text-zinc-400">A equipe vem do cadastro deste atleta. Para corrigir, <Link href="/perfil" className="text-yellow-400 underline">altere o perfil</Link> antes de confirmar a inscrição.</p>
+                  {equipeId === '__perfil__' && <p className="mt-1 text-[11px] text-emerald-300">Ao confirmar, esta equipe será cadastrada no campeonato ou vinculada à equipe existente com o mesmo nome.</p>}
+                  {camposInvalidos.includes("equipe") && <p className="mt-1.5 text-[11px] font-bold text-red-400">Informe a equipe no perfil do atleta.</p>}
+                </div>
 
               </div>
           </section>

@@ -9,12 +9,43 @@ import imageCompression from 'browser-image-compression';
 import { formatarTelefone } from '@/app/lib/formatar-telefone';
 import { Eye, EyeOff } from 'lucide-react';
 
+async function comPrazo<T>(operacao: PromiseLike<T>, milissegundos: number): Promise<T> {
+  let temporizador: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      Promise.resolve(operacao),
+      new Promise<never>((_, rejeitar) => {
+        temporizador = setTimeout(() => rejeitar(new Error('tempo_esgotado')), milissegundos);
+      }),
+    ]);
+  } finally {
+    if (temporizador) clearTimeout(temporizador);
+  }
+}
+
+async function consultarAcesso(token: string) {
+  const controlador = new AbortController();
+  const temporizador = setTimeout(() => controlador.abort(), 15000);
+  try {
+    const resposta = await fetch('/api/organizador/acesso', {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: 'no-store',
+      signal: controlador.signal,
+    });
+    if (!resposta.ok) throw new Error('validacao_indisponivel');
+    return await comPrazo(resposta.json() as Promise<{ destino?: string }>, 5000);
+  } finally {
+    clearTimeout(temporizador);
+  }
+}
+
 export default function LoginOrganizadorPage() {
   const router = useRouter();
   
   // CONTROLADOR DE ESTADOS
   const [aba, setAba] = useState<"login" | "cadastro">("login");
   const [loading, setLoading] = useState(false);
+  const [etapaLogin, setEtapaLogin] = useState("");
   const [erro, setErro] = useState("");
   const [sucesso, setSucesso] = useState("");
   const [mostrarPendencia, setMostrarPendencia] = useState(false);
@@ -41,13 +72,9 @@ export default function LoginOrganizadorPage() {
 
     async function restaurarSessao() {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const { data: { session } } = await comPrazo(supabase.auth.getSession(), 15000);
         if (session?.access_token) {
-          const resposta = await fetch('/api/organizador/acesso', {
-            headers: { Authorization: `Bearer ${session.access_token}` },
-            cache: 'no-store',
-          });
-          const acesso = await resposta.json() as { destino?: string };
+          const acesso = await consultarAcesso(session.access_token);
           if (!ativo) return;
           if (acesso.destino === 'admin') {
             router.replace('/admin');
@@ -122,33 +149,35 @@ export default function LoginOrganizadorPage() {
   // ==========================================
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
+    if (loading) return;
     setLoading(true);
+    setEtapaLogin("Conferindo senha...");
     setErro("");
     setSucesso("");
     setEmailPendente(false);
 
-    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-      email,
-      password: senha,
-    });
+    try {
+      const { data: authData, error: authError } = await comPrazo(supabase.auth.signInWithPassword({
+        email,
+        password: senha,
+      }), 15000);
 
-    if (authError) {
-      if (authError.code === 'email_not_confirmed') {
-        setErro('Confirme seu e-mail antes de entrar. Confira sua caixa de entrada ou solicite outro link.');
-        setEmailPendente(true);
-      } else {
-        setErro(authError.code === 'invalid_credentials' ? 'E-mail ou senha incorretos.' : 'Não foi possível entrar agora. Tente novamente.');
+      if (authError) {
+        if (authError.code === 'email_not_confirmed') {
+          setErro('Confirme seu e-mail antes de entrar. Confira sua caixa de entrada ou solicite outro link.');
+          setEmailPendente(true);
+        } else {
+          setErro(authError.code === 'invalid_credentials' ? 'E-mail ou senha incorretos.' : 'Não foi possível entrar agora. Tente novamente.');
+        }
+        return;
       }
-      setLoading(false);
-      return;
-    }
 
-    if (authData?.session?.access_token) {
-      const resposta = await fetch('/api/organizador/acesso', {
-        headers: { Authorization: `Bearer ${authData.session.access_token}` },
-        cache: 'no-store',
-      });
-      const acesso = await resposta.json() as { destino?: string };
+      if (!authData?.session?.access_token) {
+        setErro('Não foi possível criar a sessão. Tente novamente.');
+        return;
+      }
+      setEtapaLogin("Verificando acesso...");
+      const acesso = await consultarAcesso(authData.session.access_token);
 
       if (acesso.destino === 'admin') {
         router.push('/admin');
@@ -160,10 +189,17 @@ export default function LoginOrganizadorPage() {
         setErro('Não foi possível validar a homologação agora. Tente novamente.');
       } else {
         setErro('Acesso Negado: Esta área é restrita para Organizadores.');
-        await supabase.auth.signOut();
+        await comPrazo(supabase.auth.signOut(), 5000);
       }
+    } catch (falha) {
+      const tempoEsgotado = falha instanceof Error && (falha.message === 'tempo_esgotado' || falha.name === 'TimeoutError' || falha.name === 'AbortError');
+      setErro(tempoEsgotado
+        ? 'A conexão demorou para validar o acesso. Verifique a internet e tente novamente.'
+        : 'Não foi possível validar o acesso agora. Tente novamente.');
+    } finally {
+      setLoading(false);
+      setEtapaLogin("");
     }
-    setLoading(false);
   }
 
   // ==========================================
@@ -364,7 +400,7 @@ export default function LoginOrganizadorPage() {
                   </div>
 
                   <button type="submit" disabled={loading} className="cursor-pointer w-full mt-4 bg-yellow-600 hover:bg-yellow-500 disabled:bg-zinc-800 disabled:text-zinc-500 disabled:cursor-not-allowed text-black font-black uppercase tracking-widest py-3.5 rounded-xl transition-all shadow-[0_0_15px_rgba(202,138,4,0.15)] flex items-center justify-center gap-2 text-[10px] md:text-xs">
-                    {loading ? "Validando Chave..." : "Acessar Central de Comando"}
+                    {loading ? etapaLogin || "Validando acesso..." : "Acessar Central de Comando"}
                   </button>
                 </form>
               ) : (

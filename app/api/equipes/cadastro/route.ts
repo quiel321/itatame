@@ -9,24 +9,20 @@ export async function POST(request: Request) {
   if (!usuario || usuario.is_anonymous) return NextResponse.json({ error: "Entre com uma conta de professor." }, { status: 401 });
   const body = await request.json().catch(() => ({}));
   const eventoId = String(body.eventoId || "").trim();
-  const equipeIdInformada = String(body.equipeId || "").trim();
-  const nome = String(body.nome || "").trim();
-  const academia = String(body.academia || "").trim();
-  const professor = String(body.professor || "").trim();
-  const cidade = String(body.cidade || "").trim();
-  if (!eventoId || !professor || [nome, academia, professor, cidade, equipeIdInformada].some(item => item.length > 120)) {
-    return NextResponse.json({ error: "Informe equipe e professor (até 120 caracteres por campo)." }, { status: 400 });
-  }
-  if (!equipeIdInformada && !nome) {
-    return NextResponse.json({ error: "Informe equipe e professor (até 120 caracteres por campo)." }, { status: 400 });
-  }
+  const academia = "";
+  const cidade = "";
+  if (!eventoId) return NextResponse.json({ error: "Informe o campeonato." }, { status: 400 });
   const supabase = createSupabaseServerClient();
   const [{ data: perfil }, { data: evento }] = await Promise.all([
-    supabase.from("atletas").select("role").eq("user_id", usuario.id).maybeSingle(),
+    supabase.from("atletas").select("role,nome,equipe").eq("user_id", usuario.id).maybeSingle(),
     supabase.from("eventos").select("id").eq("id", eventoId).maybeSingle(),
   ]);
   if (perfil?.role !== "professor") return NextResponse.json({ error: "Somente professores podem cadastrar equipes." }, { status: 403 });
   if (!evento) return NextResponse.json({ error: "Campeonato não encontrado." }, { status: 404 });
+  const professor = String(perfil.nome || "").trim();
+  if (!professor || professor.length > 120) return NextResponse.json({ error: "Complete o nome do professor no perfil." }, { status: 400 });
+  const nome = String(perfil.equipe || "").trim();
+  if (!nome || nome.length > 120) return NextResponse.json({ error: "Complete a equipe no perfil do professor." }, { status: 400 });
 
   const { data: anterior } = await supabase.from("solicitacoes_equipe_evento")
     .select("id,status,equipe_id").eq("evento_id", eventoId).eq("professor_user_id", usuario.id).maybeSingle();
@@ -38,12 +34,7 @@ export async function POST(request: Request) {
     .select("id,nome").eq("evento_id", eventoId);
   if (buscaError) return NextResponse.json({ error: "Não foi possível conferir as equipes." }, { status: 500 });
 
-  const destino = equipeIdInformada
-    ? (equipesEvento || []).find(item => item.id === equipeIdInformada) || null
-    : encontrarEquipeSemelhante(equipesEvento || [], nome);
-  if (equipeIdInformada && !destino) {
-    return NextResponse.json({ error: "Esta equipe não está neste campeonato." }, { status: 404 });
-  }
+  const destino = encontrarEquipeSemelhante(equipesEvento || [], nome);
 
   if (destino) {
     const erroVinculo = await vincularProfessor(supabase, {

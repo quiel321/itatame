@@ -41,9 +41,9 @@ export type InscritoChecagem = {
 
 export type AbaChecagem = 'geral' | 'absoluto' | 'peso' | 'equipe' | 'professor';
 
-export function chaveProfessor(professor?: string | null, academia?: string | null, equipe?: string | null) {
+export function chaveProfessor(professor?: string | null, equipe?: string | null) {
   const nome = String(professor || '').trim() || 'Sem professor';
-  const origem = String(academia || equipe || '').trim();
+  const origem = String(equipe || '').trim();
   return origem ? `${origem} — ${nome}` : nome;
 }
 
@@ -130,7 +130,7 @@ export function montarInscritosChecagem(
     );
     const oficial = equipes.find((item) => item.nome === equipe) || equipes.find((item) => item.id === String(insc.equipe_id || ''));
     const academia = String(atl?.academia || oficial?.academia || '');
-    const professor = String(atl?.professor || oficial?.professor || 'Sem professor');
+    const professor = String(atl?.professor || '').trim() || 'Sem professor';
     const unidade = logoAcademiaUnidade.find((item) =>
       item.equipeId === String(oficial?.id || insc.equipe_id || '')
       && (!item.academia || item.academia === academia.trim().toLowerCase())

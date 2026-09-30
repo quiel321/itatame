@@ -3,9 +3,9 @@ import { encontrarEquipeSemelhante, nomesEquipeIguais } from "@/app/lib/equipes-
 export type EquipeOficial = { id: string; nome: string; academia?: string | null; professor?: string | null };
 export type UnidadeOficial = { equipeId: string; academia: string; professor?: string | null };
 
-export const MENSAGEM_PEDIR_VINCULO = "Olá! Sua inscrição ainda não está ligada a uma equipe e academia oficiais deste campeonato. Abra seu perfil no iTatame e selecione o professor responsável. Assim a pontuação da equipe e da academia fica correta.";
+export const MENSAGEM_PEDIR_VINCULO = "Olá! A equipe desta inscrição não coincide com a equipe do seu cadastro ou não está cadastrada neste campeonato. Confira sua equipe no perfil e fale com a organização antes da montagem das chaves.";
 
-export type SituacaoVinculo = "vinculado" | "sem-equipe" | "sem-academia";
+export type SituacaoVinculo = "vinculado" | "sem-equipe" | "equipe-divergente";
 
 export type VinculoInscricao = {
   situacao: SituacaoVinculo;
@@ -39,26 +39,22 @@ export function classificarVinculoInscricao(dados: {
     };
   }
 
-  const academiaEscrita = String(dados.academiaPerfil || "").trim();
-  const unidade = dados.unidades.find((item) => item.equipeId === equipe.id && (
-    nomesEquipeIguais(item.academia, academiaEscrita) || nomesEquipeIguais(item.academia, dados.equipeInscricao)
-  ));
-
-  if (!unidade) {
+  const equipePerfil = String(dados.equipePerfil || "").trim();
+  if (equipePerfil && !nomesEquipeIguais(equipe.nome, equipePerfil)) {
     return {
-      situacao: "sem-academia",
+      situacao: "equipe-divergente",
       equipe: equipe.nome,
-      academia: null,
+      academia: String(dados.academiaPerfil || "").trim() || null,
       professor,
-      escrito: academiaEscrita || String(dados.equipeInscricao || "").trim(),
+      escrito: equipePerfil,
     };
   }
 
   return {
     situacao: "vinculado",
     equipe: equipe.nome,
-    academia: unidade.academia,
-    professor: professor || String(unidade.professor || "").trim() || null,
+    academia: String(dados.academiaPerfil || "").trim() || null,
+    professor,
     escrito: "",
   };
 }

@@ -17,7 +17,9 @@ import { dataOperacionalEvento } from '@/app/lib/evento-datas';
 
 type InscricaoCancelavel = {
   id: number;
+  user_id?: string;
   pagamento_ok?: boolean;
+  mp_payment_id?: string | null;
   cortesia?: boolean;
   eventos?: { data_fim_inscricoes?: string | null; lote1_data_fim?: string | null; lote2_data_fim?: string | null; lote3_data_fim?: string | null; estado?: string | null } | null;
 };
@@ -80,6 +82,8 @@ export default function PerfilPage() {
   const [editandoInscricao, setEditandoInscricao] = useState<any>(null);
   const [salvandoInscricao, setSalvandoInscricao] = useState(false);
   const [cancelandoInscricaoId, setCancelandoInscricaoId] = useState<number | null>(null);
+  const [confirmandoCancelamento, setConfirmandoCancelamento] = useState<InscricaoCancelavel | null>(null);
+  const [avisoCancelamento, setAvisoCancelamento] = useState("");
   const [minhaEquipe, setMinhaEquipe] = useState<any[]>([]);
 
   const [dependentes, setDependentes] = useState<any[]>([]);
@@ -231,7 +235,7 @@ export default function PerfilPage() {
 
     const { data: inscricoesData } = await supabase
       .from("inscricoes")
-      .select(`id, evento_id, user_id, categoria, categoria_id, idade, sexo, faixa, modalidade, peso, absoluto, pagamento_ok, pesagem_ok, mp_payment_id, cortesia, estorno_status, eventos (nome, data_evento, data_inicio_checagem, data_fim_checagem, data_divulgacao_chaves, data_fim_inscricoes, lote1_data_fim, lote2_data_fim, lote3_data_fim, estado)`)
+      .select(`id, evento_id, user_id, atleta, categoria, categoria_id, idade, sexo, faixa, modalidade, peso, absoluto, pagamento_ok, pesagem_ok, mp_payment_id, cortesia, estorno_status, eventos (nome, data_evento, data_inicio_checagem, data_fim_checagem, data_divulgacao_chaves, data_fim_inscricoes, lote1_data_fim, lote2_data_fim, lote3_data_fim, estado)`)
       .in("user_id", idsFamilia);
 
     if (inscricoesData) setMinhasInscricoes(inscricoesData.filter((insc) => insc.estorno_status !== 'estornado'));
@@ -385,6 +389,7 @@ export default function PerfilPage() {
   async function salvarPerfil() {
     setSalvando(true); setMensagem(""); setErro("");
     if (!nome || !cpf) { setErro("Nome e CPF são obrigatórios."); setSalvando(false); return; }
+    if (role === 'atleta' && !professor.trim()) { setErro("Informe o professor responsável antes de salvar seu cadastro."); setSalvando(false); return; }
 
     const cpfFormatado = formatarCpf(cpf);
     const telefoneDigitos = telefone.replace(/\D/g, "");
@@ -447,17 +452,39 @@ export default function PerfilPage() {
     if (error) {
       setErro(error.message.includes("duplicate key") ? "Este CPF já está em uso." : "Erro ao salvar: " + error.message);
     } else {
+      const sincronizacao = await sincronizarNomeInscricoes(userId);
       const uniuNomes = equipeSalva !== equipe.trim() || academiaSalva !== academia.trim();
-      setMensagem(uniuNomes ? "Dados salvos. Equipe e academia foram unidas aos nomes que já existiam." : "Dados atualizados com sucesso!");
-      setTimeout(() => { setMensagem(""); setAbaAtiva("resumo"); }, 2000);
+      setMensagem(!sincronizacao.ok ? "Cadastro salvo, mas não foi possível conferir os nomes das inscrições. Tente salvar novamente." : sincronizacao.pendentesRevisao ? "Cadastro salvo. Inscrições com pagamento e nome diferente precisam de revisão da organização; o pagamento não foi alterado." : uniuNomes ? "Dados salvos. Equipe e academia foram unidas aos nomes que já existiam." : "Dados atualizados com sucesso!");
+      if (sincronizacao.ok && !sincronizacao.pendentesRevisao) setTimeout(() => { setMensagem(""); setAbaAtiva("resumo"); }, 2000);
     }
     setSalvando(false);
+  }
+
+  async function sincronizarNomeInscricoes(atletaUserId: string) {
+    try {
+      const { data } = await supabase.auth.getSession();
+      if (!data.session?.access_token) return { ok: false, pendentesRevisao: 0 };
+      const resposta = await fetch('/api/inscricoes/sincronizar-nome', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${data.session.access_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ atletaUserId }),
+      });
+      if (!resposta.ok) return { ok: false, pendentesRevisao: 0 };
+      const resultado = await resposta.json();
+      return { ok: true, pendentesRevisao: Number(resultado.pendentesRevisao || 0) };
+    } catch {
+      return { ok: false, pendentesRevisao: 0 };
+    }
   }
 
   async function salvarDependente() {
     setSalvando(true); setMensagem(""); setErro("");
     if (!formDependente.nome || !formDependente.nascimento || !formDependente.sexo || !formDependente.faixa) {
       setErro("Nome, sexo, data de nascimento e faixa do dependente são obrigatórios.");
+      setSalvando(false); return;
+    }
+    if (!String(formDependente.professor || '').trim()) {
+      setErro("Informe o professor responsável pelo dependente antes de salvar.");
       setSalvando(false); return;
     }
     if (formDependente.cpf && !cpfValido(formDependente.cpf)) {
@@ -506,23 +533,33 @@ export default function PerfilPage() {
       foto_url: formDependente.foto_url || null,
     };
 
-    let { error } = await supabase.from("atletas").upsert(dadosDependente, { onConflict: "user_id" });
-    for (let tentativa = 0; tentativa < 8 && error; tentativa++) {
+    const editarExistente = Boolean(formDependente.id);
+    const alteracoes = { ...dadosDependente };
+    if (editarExistente) {
+      for (const campo of ["user_id", "responsavel_id", "role", "email", "telefone"]) delete alteracoes[campo];
+    }
+    const salvar = () => editarExistente
+      ? supabase.from("atletas").update(alteracoes).eq("id", formDependente.id).eq("responsavel_id", userId).select("id").maybeSingle()
+      : supabase.from("atletas").insert(dadosDependente).select("id").maybeSingle();
+    let { data: dependenteSalvo, error } = await salvar();
+    for (let tentativa = 0; tentativa < 8 && error && !editarExistente; tentativa++) {
       const colunaNula = error.message.match(/null value in column "([^"]+)"/i)?.[1];
       if (!colunaNula) break;
       dadosDependente[colunaNula] = colunaNula === "email"
         ? `dep.${dependenteId}@itatame.invalid`
         : "";
-      const retry = await supabase.from("atletas").upsert(dadosDependente, { onConflict: "user_id" });
+      const retry = await salvar();
+      dependenteSalvo = retry.data;
       error = retry.error;
     }
 
-    if (error) {
-      setErro("Erro ao salvar dependente: " + error.message);
+    if (error || !dependenteSalvo) {
+      setErro("Erro ao salvar dependente: " + (error?.message || "Cadastro não encontrado para este responsável."));
     } else {
-      setMensagem("Dependente salvo com sucesso!");
+      const sincronizacao = await sincronizarNomeInscricoes(dependenteId);
+      setMensagem(!sincronizacao.ok ? "Dependente salvo, mas não foi possível conferir os nomes das inscrições. Tente salvar novamente." : sincronizacao.pendentesRevisao ? "Dependente salvo. Uma inscrição com pagamento e nome diferente precisa de revisão da organização." : "Dependente salvo com sucesso!");
       await carregarDadosCompletos();
-      setTimeout(() => { setMensagem(""); setFormDependente(null); }, 1500);
+      if (sincronizacao.ok && !sincronizacao.pendentesRevisao) setTimeout(() => { setMensagem(""); setFormDependente(null); }, 1500);
     }
     setSalvando(false);
   }
@@ -697,25 +734,25 @@ export default function PerfilPage() {
 
   async function cancelarInscricao(insc: InscricaoCancelavel) {
     const pago = Boolean(insc.pagamento_ok && !insc.cortesia);
-    const aviso = pago ? 'Cancelar esta inscrição e solicitar o estorno integral do pagamento?' : 'Excluir esta inscrição?';
-    if (!window.confirm(aviso)) return;
+    const pagamentoPendente = Boolean(!pago && insc.mp_payment_id);
     setCancelandoInscricaoId(insc.id);
-    setErro('');
-    setMensagem('');
+    setAvisoCancelamento('');
     try {
       const { data: sessao } = await supabase.auth.getSession();
-      const resposta = await fetch(pago ? '/api/inscricoes/estorno' : `/api/inscricoes/cancelar?id=${encodeURIComponent(insc.id)}`, {
-        method: pago ? 'POST' : 'DELETE',
-        headers: { Authorization: `Bearer ${sessao.session?.access_token || ''}`, ...(pago ? { 'Content-Type': 'application/json' } : {}) },
-        ...(pago ? { body: JSON.stringify({ inscricaoId: insc.id, motivo: 'Cancelamento solicitado pelo atleta dentro do prazo', confirmacao: 'CANCELAR' }) } : {}),
+      const resposta = await fetch(pago ? '/api/inscricoes/estorno' : pagamentoPendente ? '/api/inscricoes/cancelar-pendente' : `/api/inscricoes/cancelar?id=${encodeURIComponent(insc.id)}`, {
+        method: pago || pagamentoPendente ? 'POST' : 'DELETE',
+        headers: { Authorization: `Bearer ${sessao.session?.access_token || ''}`, ...((pago || pagamentoPendente) ? { 'Content-Type': 'application/json' } : {}) },
+        ...((pago || pagamentoPendente) ? { body: JSON.stringify(pago ? { inscricaoId: insc.id, motivo: 'Cancelamento solicitado pelo atleta dentro do prazo', confirmacao: 'CANCELAR' } : { inscricaoId: insc.id }) } : {}),
       });
       const resultado = await resposta.json().catch(() => ({}));
       if (!resposta.ok) throw new Error(resultado.error || 'Não foi possível cancelar a inscrição.');
       setMinhasInscricoes((atual) => atual.filter((item) => item.id !== insc.id));
       setDependentes((atual) => atual.map((dep) => ({ ...dep, inscricoes: dep.inscricoes?.filter((item: { id: number }) => item.id !== insc.id) })));
-      setMensagem(pago ? 'Inscrição cancelada e estorno solicitado com sucesso.' : 'Inscrição cancelada com sucesso.');
+      setMinhaEquipe((atual) => atual.map((aluno) => ({ ...aluno, inscricoes: aluno.inscricoes?.filter((item: { id: number }) => item.id !== insc.id) })));
+      setAvisoCancelamento(pago ? 'Inscrição cancelada e estorno solicitado com sucesso.' : 'Inscrição cancelada com sucesso.');
+      setConfirmandoCancelamento(null);
     } catch (falha) {
-      setErro(falha instanceof Error ? falha.message : 'Não foi possível cancelar a inscrição.');
+      setAvisoCancelamento(falha instanceof Error ? falha.message : 'Não foi possível cancelar a inscrição.');
     } finally {
       setCancelandoInscricaoId(null);
     }
@@ -1446,6 +1483,8 @@ export default function PerfilPage() {
           {/* 🔵 ABA 3: MINHAS INSCRIÇÕES */}
           {abaAtiva === "inscricoes" && (
             <div className="animate-in fade-in slide-in-from-right-4 duration-500 w-full">
+              {minhasInscricoes.some(insc => insc.user_id === userId && insc.pagamento_ok && insc.atleta && insc.atleta.trim() !== nome.trim()) && <p role="status" className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-100">Há uma inscrição paga com nome diferente do cadastro atual. Peça à organização a conferência da identidade antes da alteração do atleta. O pagamento permanece preservado.</p>}
+              {avisoCancelamento && <p role="status" className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-100">{avisoCancelamento}</p>}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-3">
                 <h3 className="text-xl font-black text-white">Minhas Inscrições</h3>
                 <div className="flex bg-black/50 p-1 rounded-xl border border-white/5 overflow-x-auto w-full sm:w-auto">
@@ -1506,7 +1545,7 @@ export default function PerfilPage() {
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
                           Editar Inscrição
                         </button>
-                        {prazoCancelamentoAberto(insc) ? <button onClick={() => cancelarInscricao(insc)} disabled={cancelandoInscricaoId === insc.id} className="w-full rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-[9px] font-black uppercase tracking-widest text-red-300 disabled:opacity-50">{cancelandoInscricaoId === insc.id ? 'Cancelando...' : 'Cancelar inscrição'}</button> : <p className="text-center text-[10px] text-zinc-500">Prazo encerrado. Fale com o organizador para cancelar.</p>}
+                        {prazoCancelamentoAberto(insc) ? <button onClick={() => { setAvisoCancelamento(''); setConfirmandoCancelamento(insc); }} disabled={cancelandoInscricaoId === insc.id} className="w-full rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-[9px] font-black uppercase tracking-widest text-red-300 disabled:opacity-50">{cancelandoInscricaoId === insc.id ? 'Cancelando...' : 'Cancelar inscrição'}</button> : <p className="text-center text-[10px] text-zinc-500">Prazo encerrado. Fale com o organizador para cancelar.</p>}
 
                         {!insc.pagamento_ok ? (
                           <>
@@ -1548,6 +1587,7 @@ export default function PerfilPage() {
           {/* 🔥 ABA 4: PAINEL DA EQUIPE (EXCLUSIVO PROFESSOR) */}
           {abaAtiva === "equipe" && role === "professor" && (
             <div className="animate-in fade-in slide-in-from-right-4 duration-500 w-full">
+              {avisoCancelamento && <p role="status" className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-100">{avisoCancelamento}</p>}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-3">
                 <div>
                   <h3 className="text-xl font-black text-white flex items-center gap-2">
@@ -1616,12 +1656,12 @@ export default function PerfilPage() {
                         {aluno.inscricoes && aluno.inscricoes.length > 0 ? (
                           <div className="flex flex-col gap-2">
                             {aluno.inscricoes.map((insc: any) => (
-                              <div key={insc.id} className="bg-black/50 rounded-xl p-2.5 flex items-center justify-between border border-white/5">
-                                <div className="flex flex-col truncate pr-2">
+                              <div key={insc.id} className="bg-black/50 rounded-xl p-2.5 flex flex-col gap-2.5 border border-white/5">
+                                <div className="flex flex-col min-w-0">
                                   <span className="text-white text-[11px] font-bold truncate">{insc.eventos?.nome || "Evento Padrão"}</span>
                                   <span className="text-zinc-500 text-[9px] truncate">{insc.categoria}</span>
                                 </div>
-                                <div className="flex items-center gap-1.5 shrink-0">
+                                <div className="flex flex-wrap items-center gap-1.5">
                                   <span className={`text-[8px] font-black uppercase tracking-widest px-2 py-1 rounded ${insc.pagamento_ok ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
                                     {insc.pagamento_ok ? 'Pago' : 'Pendente'}
                                   </span>
@@ -1631,7 +1671,7 @@ export default function PerfilPage() {
                                   <button onClick={() => window.location.href = `/evento/${insc.evento_id}/ao-vivo`} className="cursor-pointer bg-red-600 hover:bg-red-500 border border-red-400/30 text-white px-2 py-1 rounded text-[8px] font-black uppercase tracking-widest transition-colors">
                                     Ao vivo
                                   </button>
-                                  {prazoCancelamentoAberto(insc) && <button onClick={() => cancelarInscricao(insc)} disabled={cancelandoInscricaoId === insc.id} className="rounded border border-red-500/30 px-2 py-1 text-[8px] font-black uppercase text-red-300 disabled:opacity-50">Cancelar</button>}
+                                  {prazoCancelamentoAberto(insc) && <button onClick={() => { setAvisoCancelamento(''); setConfirmandoCancelamento(insc); }} disabled={cancelandoInscricaoId === insc.id} className="rounded border border-red-500/30 px-2 py-1 text-[8px] font-black uppercase text-red-300 disabled:opacity-50">Cancelar</button>}
                                 </div>
                               </div>
                             ))}
@@ -1709,6 +1749,24 @@ export default function PerfilPage() {
             <div className="grid grid-cols-2 gap-3 mt-6">
               <button onClick={() => setEditandoInscricao(null)} className="cursor-pointer bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-xl py-3 text-[10px] font-black uppercase tracking-widest">Cancelar</button>
               <button onClick={salvarEdicaoInscricao} disabled={salvandoInscricao || !editandoInscricao.categoriaNova || !pesoCompativelComDestino} className="cursor-pointer disabled:opacity-60 bg-cyan-500 hover:bg-cyan-400 text-black rounded-xl py-3 text-[10px] font-black uppercase tracking-widest">{salvandoInscricao ? "Salvando..." : "Confirmar Mudança"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmandoCancelamento && (
+        <div className="fixed inset-0 z-[210] flex items-center justify-center bg-black/80 p-4" role="presentation">
+          <div role="dialog" aria-modal="true" aria-labelledby="titulo-cancelamento" className="w-full max-w-md rounded-2xl border border-red-500/30 bg-[#0a0a0e] p-5 shadow-2xl">
+            <h2 id="titulo-cancelamento" className="text-lg font-black text-white">Cancelar inscrição</h2>
+            {confirmandoCancelamento.user_id !== userId && !dependentes.some(dep => dep.user_id === confirmandoCancelamento.user_id) ? (
+              <p className="mt-3 text-sm text-amber-200">O cancelamento deve ser feito pelo titular da inscrição ou seu responsável na própria conta.</p>
+            ) : (
+              <p className="mt-3 text-sm text-zinc-300">{confirmandoCancelamento.pagamento_ok && !confirmandoCancelamento.cortesia ? 'O pagamento será enviado para estorno integral.' : confirmandoCancelamento.mp_payment_id ? 'O pagamento pendente será cancelado no Mercado Pago antes de remover a inscrição.' : 'A inscrição será removida.'}</p>
+            )}
+            {avisoCancelamento && <p role="alert" className="mt-3 text-xs text-amber-200">{avisoCancelamento}</p>}
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <button type="button" onClick={() => { setConfirmandoCancelamento(null); setAvisoCancelamento(''); }} className="rounded-lg border border-white/20 px-4 py-2 text-xs font-bold text-white">Voltar</button>
+              {(confirmandoCancelamento.user_id === userId || dependentes.some(dep => dep.user_id === confirmandoCancelamento.user_id)) && <button type="button" onClick={() => void cancelarInscricao(confirmandoCancelamento)} disabled={cancelandoInscricaoId === confirmandoCancelamento.id} className="rounded-lg bg-red-600 px-4 py-2 text-xs font-black text-white disabled:opacity-50">{cancelandoInscricaoId === confirmandoCancelamento.id ? 'Cancelando...' : 'Confirmar cancelamento'}</button>}
             </div>
           </div>
         </div>
