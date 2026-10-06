@@ -43,9 +43,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Inscricao nao encontrada para este pagamento." }, { status: 404 });
     }
 
-    const idPagamento = paymentId || inscricao.mp_payment_id;
+    const idPagamento = inscricao.mp_payment_id || paymentId;
     if (!idPagamento) {
       return NextResponse.json({ error: "Pagamento Mercado Pago ainda nao registrado." }, { status: 409 });
+    }
+    if (inscricao.mp_payment_id && paymentId && String(paymentId) !== String(inscricao.mp_payment_id)) {
+      return NextResponse.json({ error: "Pagamento diferente do registrado nesta inscrição." }, { status: 409 });
     }
 
     const evento = Array.isArray(inscricao.eventos) ? inscricao.eventos[0] : inscricao.eventos;
@@ -79,21 +82,29 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: paymentData?.message || "Falha ao consultar pagamento." }, { status: 400 });
     }
 
-    if (paymentData.external_reference && paymentData.external_reference !== `inscricao:${inscricao.id}`) {
+    if (String(paymentData.id) !== String(idPagamento) || paymentData.external_reference !== `inscricao:${inscricao.id}`) {
       return NextResponse.json({ error: "Referencia externa divergente." }, { status: 409 });
     }
 
     if (paymentData.status === "approved") {
-      await supabase
+      const { data: atualizada, error: atualizacaoErro } = await supabase
         .from("inscricoes")
         .update({ pagamento_ok: true, mp_payment_id: String(idPagamento) })
-        .eq("id", inscricao.id);
+        .eq("id", inscricao.id)
+        .select("id")
+        .maybeSingle();
+      if (atualizacaoErro || !atualizada) {
+        console.error("Falha ao confirmar inscrição após pagamento aprovado:", atualizacaoErro);
+        return NextResponse.json({ error: "Pagamento aprovado, mas a confirmação da inscrição falhou. Tente conferir novamente." }, { status: 500 });
+      }
 
-      await enviarEmailIngressoConfirmado({
-        inscricaoId: inscricao.id,
-        emailFallback: paymentData?.payer?.email,
-        paymentId: idPagamento,
-      });
+      if (!inscricao.pagamento_ok) {
+        await enviarEmailIngressoConfirmado({
+          inscricaoId: inscricao.id,
+          emailFallback: paymentData?.payer?.email,
+          paymentId: idPagamento,
+        });
+      }
     }
 
     return NextResponse.json(dadosDeExibicao(paymentData));

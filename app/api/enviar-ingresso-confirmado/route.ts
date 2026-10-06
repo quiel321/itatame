@@ -18,13 +18,16 @@ export async function POST(request: Request) {
     const supabase = createSupabaseServerClient();
     const { data: inscricao } = await supabase
       .from("inscricoes")
-      .select("id, user_id, eventos ( organizador_id )")
+      .select("id, user_id, pagamento_ok, eventos ( organizador_id )")
       .eq("id", inscricaoId)
       .maybeSingle();
     const evento = Array.isArray(inscricao?.eventos) ? inscricao.eventos[0] : inscricao?.eventos;
     if (!inscricao || (inscricao.user_id !== usuario.id && evento?.organizador_id !== usuario.id
       && !(await usuarioGerenciaInscricao(supabase, usuario.id, inscricao.user_id)))) {
       return NextResponse.json({ error: "Inscrição não autorizada." }, { status: 403 });
+    }
+    if (!inscricao.pagamento_ok) {
+      return NextResponse.json({ error: "Confira e confirme o pagamento antes de reenviar o ingresso." }, { status: 409 });
     }
 
     const resultado = await enviarEmailIngressoConfirmado({

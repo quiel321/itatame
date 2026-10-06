@@ -85,6 +85,9 @@ export default function PerfilPage() {
   const [confirmandoCancelamento, setConfirmandoCancelamento] = useState<InscricaoCancelavel | null>(null);
   const [avisoCancelamento, setAvisoCancelamento] = useState("");
   const [minhaEquipe, setMinhaEquipe] = useState<any[]>([]);
+  const [alunosOcultos, setAlunosOcultos] = useState<string[]>([]);
+  const [mostrarOcultos, setMostrarOcultos] = useState(false);
+  const [erroOcultos, setErroOcultos] = useState('');
 
   const [dependentes, setDependentes] = useState<any[]>([]);
   const [formDependente, setFormDependente] = useState<any>(null);
@@ -294,6 +297,12 @@ export default function PerfilPage() {
       });
 
       if (userRole === "professor" || userRole === "super-admin") {
+        if (userRole === "professor") {
+          const { data: ocultos, error: ocultosErro } = await supabase.from('professor_alunos_ocultos')
+            .select('aluno_user_id').eq('professor_user_id', authData.user.id);
+          if (ocultosErro) setErroOcultos('Não foi possível carregar as preferências de alunos ocultos.');
+          else setAlunosOcultos((ocultos || []).map(item => item.aluno_user_id));
+        }
         const equipeProfessor = (perfilData.equipe || "").trim();
         let query = supabase.from("atletas_publico").select("id, user_id, nome, faixa, peso, nascimento, foto_url, ouro, prata, bronze, professor, professor_id, equipe, academia").neq("user_id", authData.user.id);
 
@@ -792,7 +801,22 @@ export default function PerfilPage() {
     return `${dia}/${mes}/${ano}`;
   };
 
-  const totalAlunos = minhaEquipe.length;
+  const alunosVisiveis = minhaEquipe.filter(aluno => !alunosOcultos.includes(aluno.user_id));
+  const alunosExibidos = mostrarOcultos ? minhaEquipe : alunosVisiveis;
+  const totalAlunos = alunosVisiveis.length;
+  async function alternarAlunoOculto(aluno: any) {
+    if (!userId || !aluno.user_id) return;
+    setErroOcultos('');
+    const oculto = alunosOcultos.includes(aluno.user_id);
+    const resposta = oculto
+      ? await supabase.from('professor_alunos_ocultos').delete().eq('professor_user_id', userId).eq('aluno_user_id', aluno.user_id)
+      : await supabase.from('professor_alunos_ocultos').insert({ professor_user_id: userId, aluno_user_id: aluno.user_id });
+    if (resposta.error) {
+      setErroOcultos(resposta.error.message);
+      return;
+    }
+    setAlunosOcultos(atual => oculto ? atual.filter(id => id !== aluno.user_id) : [...atual, aluno.user_id]);
+  }
   const vinculoEquipePendente = !nome.trim() || (!equipe.trim() && !academia.trim());
   const categoriaDestinoEdicao: CategoriaCompeticao | undefined = editandoInscricao?.categoriasDisponiveis?.find((c: CategoriaCompeticao) => c.id === editandoInscricao.categoriaNova);
   const pesoEdicaoInformado = String(editandoInscricao?.pesoAtual ?? '').trim();
@@ -1608,14 +1632,20 @@ export default function PerfilPage() {
                 </div>
               )}
 
-              {minhaEquipe.length === 0 ? (
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-xs text-zinc-400">
+                <span>{totalAlunos} aluno{totalAlunos === 1 ? '' : 's'} na grade · {alunosOcultos.length} oculto{alunosOcultos.length === 1 ? '' : 's'}</span>
+                <button type="button" onClick={() => setMostrarOcultos(atual => !atual)} className="rounded-lg border border-white/15 px-3 py-1.5 font-bold text-white">{mostrarOcultos ? 'Ocultar perfis removidos' : 'Ver perfis ocultos'}</button>
+              </div>
+              {erroOcultos && <p role="alert" className="mb-4 text-xs text-red-300">{erroOcultos}</p>}
+
+              {alunosExibidos.length === 0 ? (
                 <div className="bg-black/30 border border-dashed border-white/10 p-10 rounded-2xl text-center">
                   <p className="text-zinc-500 text-sm font-medium">Ainda não há alunos cadastrados no sistema sob a sua supervisão.</p>
                   <p className="text-zinc-600 text-[10px] mt-2 uppercase tracking-widest">Peça para seus alunos escolherem o seu nome na lista durante o cadastro.</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {minhaEquipe.map(aluno => (
+                  {alunosExibidos.map(aluno => (
                     <div key={aluno.id} className="bg-black/40 border border-white/5 rounded-2xl p-4 flex flex-col gap-4 hover:border-yellow-500/30 transition-colors group cursor-default">
 
                       <div className="flex items-center gap-4">
@@ -1630,6 +1660,7 @@ export default function PerfilPage() {
                           </div>
                         </div>
                       </div>
+                      {(!aluno.faixa || alunosOcultos.includes(aluno.user_id)) && <button type="button" onClick={() => void alternarAlunoOculto(aluno)} className="self-start rounded-lg border border-white/15 px-2.5 py-1.5 text-[10px] font-bold text-zinc-300">{alunosOcultos.includes(aluno.user_id) ? 'Mostrar na grade' : 'Ocultar da grade'}</button>}
 
                       {/* 🔥 QUADRO DE MEDALHAS DO ALUNO */}
                       <div className="flex items-center gap-3 mt-1 pt-3 border-t border-white/5">

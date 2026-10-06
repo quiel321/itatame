@@ -54,6 +54,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, message: "Inscricao nao localizada para este pagamento." });
     }
 
+    const { data: inscricao, error: inscricaoErro } = await supabase
+      .from("inscricoes")
+      .select("id, mp_payment_id, eventos ( organizador_id )")
+      .eq("id", inscricaoId)
+      .maybeSingle();
+    const evento = Array.isArray(inscricao?.eventos) ? inscricao.eventos[0] : inscricao?.eventos;
+    if (inscricaoErro) return NextResponse.json({ success: false }, { status: 500 });
+    if (!inscricao || evento?.organizador_id !== organizadorId || (inscricao.mp_payment_id && String(inscricao.mp_payment_id) !== String(paymentId))) {
+      return NextResponse.json({ success: true, message: "Pagamento não corresponde à inscrição." });
+    }
+
     const { data: organizador } = await supabase
       .from("organizadores")
       .select("user_id, mp_access_token, mp_refresh_token, mp_token_expires_at")
@@ -72,15 +83,22 @@ export async function POST(request: Request) {
     });
     const paymentData = await paymentResponse.json();
 
-    if (paymentData.external_reference !== `inscricao:${inscricaoId}`) {
+    if (!paymentResponse.ok) return NextResponse.json({ success: false }, { status: 502 });
+    if (String(paymentData.id) !== String(paymentId) || paymentData.external_reference !== `inscricao:${inscricaoId}`) {
       return NextResponse.json({ success: true, message: "Referencia externa divergente." });
     }
 
     if (paymentData.status === "approved") {
-      await supabase
+      const { data: atualizada, error: atualizacaoErro } = await supabase
         .from("inscricoes")
         .update({ pagamento_ok: true, mp_payment_id: String(paymentId) })
-        .eq("id", inscricaoId);
+        .eq("id", inscricaoId)
+        .select("id")
+        .maybeSingle();
+      if (atualizacaoErro || !atualizada) {
+        console.error("Falha ao gravar confirmação do webhook:", atualizacaoErro);
+        return NextResponse.json({ success: false }, { status: 500 });
+      }
 
       await enviarEmailIngressoConfirmado({
         inscricaoId,

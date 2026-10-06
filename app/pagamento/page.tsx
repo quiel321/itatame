@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
 import { urlLoginComRetorno } from "@/app/lib/destino-interno";
 import { valorAindaDevido } from "@/app/lib/valor-inscricao";
+import { formatarDataHoraNoFuso } from "@/app/lib/evento-datas";
 
 declare global {
   interface Window {
@@ -77,6 +78,8 @@ export default function PagamentoPage() {
   const [checkoutMensagem, setCheckoutMensagem] = useState("");
   const [resultadoPagamento, setResultadoPagamento] = useState<ResultadoPagamento | null>(null);
   const [verificandoPagamento, setVerificandoPagamento] = useState(false);
+  const [conferindoInscricaoId, setConferindoInscricaoId] = useState<string | number | null>(null);
+  const [avisoConferencia, setAvisoConferencia] = useState<Record<string, string>>({});
   const [cupomPorInscricao, setCupomPorInscricao] = useState<Record<string, string>>({});
   const [cupomMsg, setCupomMsg] = useState<Record<string, string>>({});
   const [aplicandoCupomId, setAplicandoCupomId] = useState<string | number | null>(null);
@@ -116,6 +119,7 @@ export default function PagamentoPage() {
           eventos (
             nome,
             data_evento,
+            data_fim_pagamento,
             banner_url,
             cidade,
             estado,
@@ -156,6 +160,29 @@ export default function PagamentoPage() {
       window.paymentBrickController = undefined;
     }
   }, []);
+
+  async function conferirPagamento(insc: any) {
+    setConferindoInscricaoId(insc.id);
+    setAvisoConferencia(atual => ({ ...atual, [String(insc.id)]: '' }));
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('Entre novamente para consultar o pagamento.');
+      const resposta = await fetch('/api/pagamento/mercado-pago/status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ inscricaoId: insc.id }),
+      });
+      const resultado = await resposta.json().catch(() => ({}));
+      if (!resposta.ok) throw new Error(resultado.error || 'Não foi possível consultar o pagamento.');
+      if (resultado.status === 'approved') {
+        await carregarInscricoes();
+        setAvisoConferencia(atual => ({ ...atual, [String(insc.id)]: 'Pagamento confirmado no Mercado Pago.' }));
+      } else {
+        setAvisoConferencia(atual => ({ ...atual, [String(insc.id)]: `Status no Mercado Pago: ${resultado.status || 'indisponível'}.` }));
+      }
+    } catch (error) { setAvisoConferencia(atual => ({ ...atual, [String(insc.id)]: (error as Error).message })); }
+    finally { setConferindoInscricaoId(null); }
+  }
 
   const concluirPagamentoAprovado = useCallback(async (mensagem: string) => {
     setResultadoPagamento(null);
@@ -527,6 +554,12 @@ export default function PagamentoPage() {
                         </span>
                       </div>
 
+                      {abaAtiva === "pendentes" && insc.eventos?.data_fim_pagamento && (
+                        <p className="mb-3 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-[11px] font-semibold text-amber-200">
+                          Prazo para pagamento: {formatarDataHoraNoFuso(insc.eventos.data_fim_pagamento, true, insc.eventos.estado)}
+                        </p>
+                      )}
+
                       <div className="bg-black/50 p-3 rounded-xl border border-white/5 mb-4 md:mb-0">
                         <span className="block text-[9px] text-zinc-500 font-bold uppercase tracking-widest mb-1">Categoria Inscrita</span>
                         <span className="text-white text-xs font-bold">{insc.categoria}{insc.absoluto ? " + Absoluto" : ""}</span>
@@ -573,6 +606,8 @@ export default function PagamentoPage() {
                         >
                           {processandoPagamento && inscricaoSelecionada?.id === insc.id ? "Abrindo..." : "Pagar agora"}
                         </button>
+                        {insc.mp_payment_id && <button type="button" onClick={() => void conferirPagamento(insc)} disabled={conferindoInscricaoId === insc.id} className="rounded-lg border border-cyan-500/20 px-3 py-2 text-[10px] font-bold text-cyan-200 disabled:opacity-50">{conferindoInscricaoId === insc.id ? 'Conferindo...' : 'Já paguei · conferir pagamento'}</button>}
+                        {avisoConferencia[String(insc.id)] && <p role="status" className="text-[10px] text-cyan-100">{avisoConferencia[String(insc.id)]}</p>}
                         <span className="text-center text-zinc-500 text-[9px] font-bold uppercase tracking-widest">
                           Pix, cartão ou boleto via Mercado Pago
                         </span>

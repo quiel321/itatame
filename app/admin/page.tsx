@@ -66,8 +66,35 @@ export default function AdminPage() {
   const [preparacao, setPreparacao] = useState({ categorias: 0, equipes: 0, solicitacoes: 0 });
   const [loading, setLoading] = useState(true);
   const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [avisoPagamento, setAvisoPagamento] = useState('');
   const [editando, setEditando] = useState<any>(null);
   const [confirmandoPagamento, setConfirmandoPagamento] = useState<any>(null);
+
+  async function acaoPagamento(insc: any, acao: 'conferir' | 'reenviar') {
+    setLoadingId(String(insc.id)); setAvisoPagamento('');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('Entre novamente para consultar o pagamento.');
+      const resposta = await fetch(acao === 'conferir' ? '/api/pagamento/mercado-pago/status' : '/api/enviar-ingresso-confirmado', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ inscricaoId: insc.id }),
+      });
+      const resultado = await resposta.json().catch(() => ({}));
+      if (!resposta.ok) throw new Error(resultado.error || 'Não foi possível concluir a ação.');
+      if (acao === 'conferir') {
+        if (resultado.status === 'approved') {
+          setInscricoes(atual => atual.map(item => item.id === insc.id ? { ...item, pagamento_ok: true } : item));
+          setAvisoPagamento(`${insc.atleta}: pagamento aprovado no Mercado Pago e confirmado na inscrição.`);
+        } else {
+          setAvisoPagamento(`${insc.atleta}: status no Mercado Pago: ${resultado.status || 'indisponível'}. A inscrição continua pendente.`);
+        }
+      } else {
+        setAvisoPagamento(`Confirmação reenviada para ${insc.atleta}.`);
+      }
+    } catch (error) { setAvisoPagamento((error as Error).message); }
+    finally { setLoadingId(null); }
+  }
 
   // ==========================================
   // ESTADOS E FUNÇÕES DE GESTÃO DE STAFF
@@ -850,6 +877,7 @@ export default function AdminPage() {
             {/* ========================================================= */}
             {/* GRID DE ATLETAS (CLEAN DESIGN - SEM MEXER NO PESO)          */}
             {/* ========================================================= */}
+            {avisoPagamento && <p role="status" className="mb-4 rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-3 text-xs text-cyan-100">{avisoPagamento}</p>}
             {eventos.length > 0 && !loading && (
               inscricoesFiltradas.length > 0 ? (
                 visualizacaoAtletas === 'lista' ? (
@@ -869,6 +897,8 @@ export default function AdminPage() {
                       </div>
                       <div className="flex flex-wrap gap-1.5"><span className={`rounded-full border px-2 py-1 text-[8px] font-black uppercase ${insc.pagamento_ok ? 'border-green-500/20 bg-green-500/10 text-green-400' : 'border-red-500/20 bg-red-500/10 text-red-400'}`}>{insc.pagamento_ok ? 'Pago' : 'Pendente'}</span><span className={`rounded-full border px-2 py-1 text-[8px] font-black uppercase ${insc.pesagem_ok ? 'border-blue-500/20 bg-blue-500/10 text-blue-300' : 'border-white/5 bg-white/5 text-zinc-500'}`}>{insc.pesagem_ok ? 'Peso OK' : 'Sem peso'}</span></div>
                       <div className="flex flex-wrap gap-1.5">
+                        {!insc.pagamento_ok && insc.mp_payment_id && <button onClick={() => void acaoPagamento(insc, 'conferir')} disabled={loadingId === String(insc.id)} className="rounded-lg border border-cyan-500/30 px-2.5 py-2 text-[8px] font-bold uppercase text-cyan-200 disabled:opacity-50">Conferir MP</button>}
+                        {insc.pagamento_ok && <button onClick={() => void acaoPagamento(insc, 'reenviar')} disabled={loadingId === String(insc.id)} className="rounded-lg border border-green-500/30 px-2.5 py-2 text-[8px] font-bold uppercase text-green-200 disabled:opacity-50">Reenviar confirmação</button>}
                         {!insc.pagamento_ok && <button onClick={() => pedirAlteracaoPagamento(insc)} disabled={loadingId === insc.id} className="rounded-lg px-2 py-2 text-[8px] font-bold uppercase text-zinc-600 hover:text-zinc-300">Marcar pago</button>}
                         {insc.pagamento_ok && <button onClick={() => pedirAlteracaoPagamento(insc)} disabled={loadingId === insc.id} className="rounded-lg border border-white/10 px-2.5 py-2 text-[8px] font-bold uppercase text-zinc-500">Desfazer pagamento</button>}
                         <button onClick={() => setEditando(insc)} className="rounded-lg border border-white/10 px-2.5 py-2 text-[8px] font-black uppercase text-zinc-300">Ver / Editar</button>
@@ -924,6 +954,8 @@ export default function AdminPage() {
                       </div>
 
                       <div className="relative z-10 flex flex-col gap-2 mt-auto border-t border-white/5 pt-4">
+                        {!insc.pagamento_ok && insc.mp_payment_id && <button type="button" onClick={() => void acaoPagamento(insc, 'conferir')} disabled={loadingId === String(insc.id)} className="rounded-lg border border-cyan-500/30 px-3 py-2 text-[9px] font-bold uppercase tracking-widest text-cyan-200 disabled:opacity-50">Conferir pagamento no MP</button>}
+                        {insc.pagamento_ok && <button type="button" onClick={() => void acaoPagamento(insc, 'reenviar')} disabled={loadingId === String(insc.id)} className="rounded-lg border border-green-500/30 px-3 py-2 text-[9px] font-bold uppercase tracking-widest text-green-200 disabled:opacity-50">Reenviar confirmação</button>}
                         <div className="flex gap-2">
                           <button 
                             onClick={() => setEditando(insc)} 

@@ -116,6 +116,18 @@ function Editor({ eventoId }: { eventoId: string }) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
+  async function excluirEquipe(equipe: Equipe) {
+    if (!window.confirm(`Excluir a equipe "${equipe.nome}" deste campeonato?`)) return;
+    setSalvando(true); setMensagem('');
+    try {
+      await chamarAdmin('DELETE', { tipo: 'equipe', id: equipe.id });
+      await recarregar();
+      if (editandoEquipeId === equipe.id) cancelarEdicao();
+      setMensagem(`Equipe "${equipe.nome}" excluída do campeonato.`);
+    } catch (error) { setMensagem((error as Error).message); }
+    finally { setSalvando(false); }
+  }
+
   async function analisar(solicitacao: Solicitacao, aprovar: boolean) {
     setSalvando(true); setMensagem('');
     if (aprovar) {
@@ -175,6 +187,7 @@ function Editor({ eventoId }: { eventoId: string }) {
               {equipe.logo_url ? <img src={equipe.logo_url} alt="" className="h-11 w-11 shrink-0 rounded-xl border border-white/10 object-cover" /> : <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-xs font-black text-zinc-400">{equipe.nome.slice(0,2).toUpperCase()}</span>}
               <div className="min-w-0 flex-1"><p className="truncate text-sm font-black text-white" title={equipe.nome}>{equipe.nome}</p><p className="mt-1 text-[11px] text-zinc-400">{inscritos} {inscritos === 1 ? 'atleta' : 'atletas'} inscrito{inscritos === 1 ? '' : 's'}</p></div>
               <button type="button" onClick={() => editarEquipe(equipe)} disabled={inscritos > 0} title={inscritos > 0 ? 'Equipe com atletas: corrija vínculos pela inscrição individual' : 'Editar nome da equipe'} className="rounded-lg border border-white/10 px-2.5 py-1.5 text-[11px] font-bold text-zinc-300 disabled:cursor-not-allowed disabled:opacity-40">Editar</button>
+              <button type="button" onClick={() => void excluirEquipe(equipe)} disabled={salvando || inscritos > 0 || professoresVinculados.length > 0} title={inscritos > 0 || professoresVinculados.length > 0 ? 'Equipe com vínculos ativos não pode ser excluída' : 'Excluir equipe sem uso'} className="rounded-lg border border-red-500/30 px-2.5 py-1.5 text-[11px] font-bold text-red-300 disabled:cursor-not-allowed disabled:opacity-40">Excluir</button>
             </div>
             <p className="mt-3 truncate text-[11px] text-zinc-500" title={professores.join(', ')}>{professores.length ? `Professor${professores.length > 1 ? 'es' : ''}: ${professores.join(', ')}` : 'Professor ainda não vinculado'}</p>
             <details className="mt-3 border-t border-white/10 pt-2 text-xs text-zinc-400">
