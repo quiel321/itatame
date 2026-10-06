@@ -447,14 +447,24 @@ export default function AdminPage() {
     setAvisoCategoria('');
     setCarregandoCategorias(true);
     setChavesGeradasEdicao(false);
-    const [{ data, error }, { count, error: erroChaves }] = await Promise.all([
-      supabase.from('categorias_evento').select('*')
-        .eq('evento_id', inscricao.evento_id).eq('ativa', true).eq('tipo', 'peso')
-        .order('idade_min').order('peso_min'),
+    const [resultadoCategorias, { count, error: erroChaves }] = await Promise.all([
+      (async () => {
+        const todas: CategoriaCompeticao[] = [];
+        const pagina = 500;
+        for (let inicio = 0; ; inicio += pagina) {
+          const { data, error } = await supabase.from('categorias_evento').select('*')
+            .eq('evento_id', inscricao.evento_id).eq('ativa', true).eq('tipo', 'peso')
+            .order('idade_min').order('peso_min').order('id')
+            .range(inicio, inicio + pagina - 1);
+          if (error) return { data: [] as CategoriaCompeticao[], error };
+          todas.push(...((data || []) as CategoriaCompeticao[]));
+          if (!data || data.length < pagina) return { data: todas, error: null };
+        }
+      })(),
       supabase.from('chaves').select('id', { count: 'exact', head: true }).eq('evento_id', inscricao.evento_id),
     ]);
-    if (error) setAvisoCategoria('Não foi possível carregar as categorias oficiais deste campeonato.');
-    else setCategoriasEdicao((data || []) as CategoriaCompeticao[]);
+    if (resultadoCategorias.error) setAvisoCategoria('Não foi possível carregar todas as categorias oficiais deste campeonato.');
+    else setCategoriasEdicao(resultadoCategorias.data);
     if (erroChaves) setAvisoCategoria('Não foi possível conferir as chaves. A mudança será bloqueada.');
     setChavesGeradasEdicao(Boolean(erroChaves || count));
     setCarregandoCategorias(false);
@@ -1209,17 +1219,18 @@ export default function AdminPage() {
                     <label className="block text-[10px] font-bold uppercase tracking-widest text-cyan-200">Mover para categoria oficial
                       <select value={categoriaDestinoId} onChange={e => setCategoriaDestinoId(e.target.value)} disabled={carregandoCategorias} className="mt-1.5 w-full rounded-lg border border-white/10 bg-black px-3 py-2.5 text-xs text-white disabled:opacity-50">
                         <option value="">{carregandoCategorias ? 'Carregando categorias...' : 'Selecione a categoria'}</option>
-                        {categoriasPermitidas.map(c => { const divergencias = divergenciasCategoria(c, editando); return <option key={c.id} value={c.id}>{rotuloCategoria(c)}{divergencias.idade ? ' · fora da idade' : ''}{divergencias.peso ? ' · fora do peso' : ''}</option>; })}
+                        {categoriasPermitidas.map(c => { const divergencias = divergenciasCategoria(c, editando); return <option key={c.id} value={c.id}>{rotuloCategoria(c)}{divergencias.idade ? ' · outra idade' : ''}{divergencias.peso ? ' · outro peso' : ''}{divergencias.faixa ? ' · outra faixa' : ''}</option>; })}
                       </select>
                     </label>
-                    {categoriaDestino && <p className="text-[11px] text-zinc-300">{divergenciasCategoria(categoriaDestino, editando).idade ? 'Idade fora da faixa selecionada. ' : ''}{divergenciasCategoria(categoriaDestino, editando).peso ? 'Peso fora da faixa selecionada. ' : ''}Os dados reais do atleta serão mantidos.</p>}
+                    {categoriaDestino && <p className="text-[11px] text-zinc-300">{divergenciasCategoria(categoriaDestino, editando).idade ? 'Idade fora da faixa selecionada. ' : ''}{divergenciasCategoria(categoriaDestino, editando).peso ? 'Peso fora da faixa selecionada. ' : ''}{divergenciasCategoria(categoriaDestino, editando).faixa ? 'Faixa diferente da categoria. ' : ''}Os dados reais do atleta serão mantidos.</p>}
+                    {!carregandoCategorias && !categoriasPermitidas.some(c => c.idade_min >= 16) && <p className="text-[11px] text-amber-200">Não há categoria de peso a partir de 16 anos para o sexo e a modalidade desta inscrição. Cadastre a divisão desejada em <Link href={`/admin/categorias?evento=${editando.evento_id}`} className="underline">Categorias do campeonato</Link> para poder selecioná-la aqui. Categorias de absoluto exigem outro tipo de inscrição.</p>}
                     <label className="block text-[10px] font-bold uppercase tracking-widest text-cyan-200">Justificativa da mudança
                       <textarea value={motivoCategoria} onChange={e => setMotivoCategoria(e.target.value)} maxLength={500} rows={2} placeholder="Ex.: remanejamento autorizado após conferência da idade e do peso" className="mt-1.5 w-full rounded-lg border border-white/10 bg-black px-3 py-2.5 text-xs text-white" />
                     </label>
                     {dadosPendentes && <p className="text-[11px] text-amber-200">Salve primeiro as alterações de faixa ou peso abaixo antes de mover a categoria.</p>}
                     {chavesGeradasEdicao && <p className="text-[11px] text-amber-200">Há chaves geradas neste campeonato. A mudança está bloqueada para preservar as lutas.</p>}
                     <button type="button" onClick={() => void aplicarMudancaCategoria()} disabled={salvandoCategoria || carregandoCategorias || chavesGeradasEdicao || Boolean(dadosPendentes) || !categoriaDestino || categoriaDestino.id === editando.categoria_id || motivoCategoria.trim().length < 10} className="rounded-lg bg-cyan-700 px-3 py-2 text-[10px] font-black uppercase text-white disabled:cursor-not-allowed disabled:opacity-40">{salvandoCategoria ? 'Alterando...' : 'Aplicar categoria'}</button>
-                    <p className="text-[10px] text-zinc-500">A mudança preserva a inscrição e o pagamento. Se já houver chaves geradas, o sistema bloqueará o ajuste.</p>
+                    <p className="text-[10px] text-zinc-500">É possível subir ou descer na idade e no peso, inclusive de juvenil para adulto. Se a faixa da categoria for diferente, a exceção também ficará registrada. Os dados reais, a inscrição e o pagamento são preservados. Chaves já geradas bloqueiam o ajuste.</p>
                     {pacote === 'combo' && <p className="text-[10px] text-zinc-500">A chave do absoluto continua seguindo os dados reais do atleta.</p>}
                   </div>
                 )}

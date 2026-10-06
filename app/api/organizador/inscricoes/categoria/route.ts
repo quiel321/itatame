@@ -41,7 +41,7 @@ export async function PATCH(request: Request) {
 
   const categoria = destino as CategoriaCompeticao;
   if (!categoriaPermitidaAoOrganizador(categoria, inscricao)) {
-    return NextResponse.json({ error: 'A categoria deve manter o sexo, a faixa e a modalidade da inscrição. A exceção permite apenas idade e peso.' }, { status: 400 });
+    return NextResponse.json({ error: 'A categoria deve manter o sexo e a modalidade da inscrição. Idade, peso e faixa diferentes exigem justificativa.' }, { status: 400 });
   }
   if (inscricao.categoria_id === categoria.id) return NextResponse.json({ error: 'O atleta já está nesta categoria.' }, { status: 409 });
 

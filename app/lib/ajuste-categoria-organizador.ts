@@ -3,7 +3,6 @@ import { faixaAtletaCompativel, normalizarCompeticao, pesoNaFaixaCategoria, type
 export function categoriaPermitidaAoOrganizador(categoria: CategoriaCompeticao, inscricao: InscricaoCompeticao) {
   return categoria.ativa && categoria.tipo === 'peso'
     && normalizarCompeticao(categoria.sexo) === normalizarCompeticao(inscricao.sexo)
-    && faixaAtletaCompativel(categoria.faixa, inscricao.faixa)
     && (!inscricao.modalidade || normalizarCompeticao(categoria.modalidade) === normalizarCompeticao(inscricao.modalidade));
 }
 
@@ -12,5 +11,6 @@ export function divergenciasCategoria(categoria: CategoriaCompeticao, inscricao:
   return {
     idade: !Number.isInteger(idade) || idade < categoria.idade_min || idade > categoria.idade_max,
     peso: !pesoNaFaixaCategoria(categoria, inscricao),
+    faixa: !faixaAtletaCompativel(categoria.faixa, inscricao.faixa),
   };
 }
