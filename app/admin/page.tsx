@@ -18,6 +18,8 @@ import { formatarDocumento } from '@/app/lib/formatar-documento';
 import { formatarTelefone } from '@/app/lib/formatar-telefone';
 import { formatarValorInscricao, pacoteInscricao, rotuloPacoteInscricao, type PacoteInscricao } from '@/app/lib/valor-inscricao';
 import { classificarVinculoInscricao, type EquipeOficial, type UnidadeOficial, type VinculoInscricao } from '@/app/lib/vinculo-inscricao';
+import { rotuloCategoria, type CategoriaCompeticao } from '@/app/lib/categorias-competicao';
+import { categoriaPermitidaAoOrganizador, divergenciasCategoria } from '@/app/lib/ajuste-categoria-organizador';
 
 function classePacote(pacote: PacoteInscricao) {
   if (pacote === 'combo') return 'border-yellow-500/30 bg-yellow-500/10 text-yellow-300';
@@ -68,6 +70,13 @@ export default function AdminPage() {
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [avisoPagamento, setAvisoPagamento] = useState('');
   const [editando, setEditando] = useState<any>(null);
+  const [categoriasEdicao, setCategoriasEdicao] = useState<CategoriaCompeticao[]>([]);
+  const [carregandoCategorias, setCarregandoCategorias] = useState(false);
+  const [chavesGeradasEdicao, setChavesGeradasEdicao] = useState(false);
+  const [categoriaDestinoId, setCategoriaDestinoId] = useState('');
+  const [motivoCategoria, setMotivoCategoria] = useState('');
+  const [salvandoCategoria, setSalvandoCategoria] = useState(false);
+  const [avisoCategoria, setAvisoCategoria] = useState('');
   const [confirmandoPagamento, setConfirmandoPagamento] = useState<any>(null);
 
   async function acaoPagamento(insc: any, acao: 'conferir' | 'reenviar') {
@@ -417,7 +426,7 @@ export default function AdminPage() {
       if (resultado.aviso) alert(resultado.aviso);
     }
     const { error } = await supabase.from("inscricoes").update({
-      categoria: editando.categoria, peso: editando.peso, faixa: editando.faixa
+      peso: editando.peso, faixa: editando.faixa
     }).eq("id", editando.id);
     if (!error) {
       const equipeOficial = equipesOficiais.find(item => item.id === editando.equipe_id);
@@ -428,6 +437,49 @@ export default function AdminPage() {
       alert('Não foi possível salvar os dados da inscrição: ' + error.message);
     }
     setLoadingId(null);
+  }
+
+  async function abrirEdicao(inscricao: any) {
+    setEditando(inscricao);
+    setCategoriasEdicao([]);
+    setCategoriaDestinoId(inscricao.categoria_id || '');
+    setMotivoCategoria('');
+    setAvisoCategoria('');
+    setCarregandoCategorias(true);
+    setChavesGeradasEdicao(false);
+    const [{ data, error }, { count, error: erroChaves }] = await Promise.all([
+      supabase.from('categorias_evento').select('*')
+        .eq('evento_id', inscricao.evento_id).eq('ativa', true).eq('tipo', 'peso')
+        .order('idade_min').order('peso_min'),
+      supabase.from('chaves').select('id', { count: 'exact', head: true }).eq('evento_id', inscricao.evento_id),
+    ]);
+    if (error) setAvisoCategoria('Não foi possível carregar as categorias oficiais deste campeonato.');
+    else setCategoriasEdicao((data || []) as CategoriaCompeticao[]);
+    if (erroChaves) setAvisoCategoria('Não foi possível conferir as chaves. A mudança será bloqueada.');
+    setChavesGeradasEdicao(Boolean(erroChaves || count));
+    setCarregandoCategorias(false);
+  }
+
+  async function aplicarMudancaCategoria() {
+    if (!editando || !categoriaDestinoId) return;
+    setSalvandoCategoria(true); setAvisoCategoria('');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('Entre novamente com a conta do organizador.');
+      const resposta = await fetch('/api/organizador/inscricoes/categoria', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ inscricaoId: editando.id, categoriaId: categoriaDestinoId, motivo: motivoCategoria }),
+      });
+      const resultado = await resposta.json().catch(() => ({}));
+      if (!resposta.ok) throw new Error(resultado.error || 'Não foi possível mudar a categoria.');
+      const atualizado = { ...editando, ...resultado.inscricao };
+      setEditando(atualizado);
+      setInscricoes(atual => atual.map(item => item.id === editando.id ? { ...item, ...resultado.inscricao } : item));
+      setMotivoCategoria('');
+      setAvisoCategoria('Categoria oficial atualizada na inscrição. Idade, peso, pagamento e cadastro do atleta foram preservados.');
+    } catch (error) { setAvisoCategoria((error as Error).message); }
+    finally { setSalvandoCategoria(false); }
   }
 
   async function excluirInscricao(id: string, nomeAtleta: string) {
@@ -901,7 +953,7 @@ export default function AdminPage() {
                         {insc.pagamento_ok && <button onClick={() => void acaoPagamento(insc, 'reenviar')} disabled={loadingId === String(insc.id)} className="rounded-lg border border-green-500/30 px-2.5 py-2 text-[8px] font-bold uppercase text-green-200 disabled:opacity-50">Reenviar confirmação</button>}
                         {!insc.pagamento_ok && <button onClick={() => pedirAlteracaoPagamento(insc)} disabled={loadingId === insc.id} className="rounded-lg px-2 py-2 text-[8px] font-bold uppercase text-zinc-600 hover:text-zinc-300">Marcar pago</button>}
                         {insc.pagamento_ok && <button onClick={() => pedirAlteracaoPagamento(insc)} disabled={loadingId === insc.id} className="rounded-lg border border-white/10 px-2.5 py-2 text-[8px] font-bold uppercase text-zinc-500">Desfazer pagamento</button>}
-                        <button onClick={() => setEditando(insc)} className="rounded-lg border border-white/10 px-2.5 py-2 text-[8px] font-black uppercase text-zinc-300">Ver / Editar</button>
+                        <button onClick={() => void abrirEdicao(insc)} className="rounded-lg border border-white/10 px-2.5 py-2 text-[8px] font-black uppercase text-zinc-300">Ver / Editar</button>
                         <button onClick={() => excluirInscricao(insc.id, insc.atleta || 'Atleta')} disabled={loadingId === insc.id} className="rounded-lg px-2 py-2 text-[8px] font-black uppercase text-red-400">Excluir</button>
                       </div>
                     </article>;
@@ -958,7 +1010,7 @@ export default function AdminPage() {
                         {insc.pagamento_ok && <button type="button" onClick={() => void acaoPagamento(insc, 'reenviar')} disabled={loadingId === String(insc.id)} className="rounded-lg border border-green-500/30 px-3 py-2 text-[9px] font-bold uppercase tracking-widest text-green-200 disabled:opacity-50">Reenviar confirmação</button>}
                         <div className="flex gap-2">
                           <button 
-                            onClick={() => setEditando(insc)} 
+                            onClick={() => void abrirEdicao(insc)}
                             className="cursor-pointer flex-1 py-2 rounded-lg text-[9px] font-bold text-zinc-400 hover:text-white hover:bg-white/5 transition-colors uppercase tracking-widest active:scale-95 flex items-center justify-center gap-1.5 bg-transparent border border-transparent hover:border-white/10"
                           >
                             <Edit3 size={12} /> Ver / Editar
@@ -1110,6 +1162,10 @@ export default function AdminPage() {
           <div className="bg-[#0e0e12] border border-white/10 rounded-3xl w-full max-w-lg p-6 shadow-2xl relative overflow-hidden max-h-[90vh] overflow-y-auto">
             {(() => {
               const pacote = pacoteInscricao(editando);
+              const categoriasPermitidas = categoriasEdicao.filter(c => categoriaPermitidaAoOrganizador(c, editando));
+              const categoriaDestino = categoriasPermitidas.find(c => c.id === categoriaDestinoId);
+              const inscricaoOriginal = inscricoes.find(item => item.id === editando.id);
+              const dadosPendentes = inscricaoOriginal && (String(editando.peso ?? '') !== String(inscricaoOriginal.peso ?? '') || String(editando.faixa ?? '') !== String(inscricaoOriginal.faixa ?? ''));
               return (
                 <>
             <h3 className="text-xl font-black text-white mb-1 uppercase tracking-tighter relative z-10">Inscrição do atleta</h3>
@@ -1144,7 +1200,30 @@ export default function AdminPage() {
               </div>
               <div>
                 <label className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1 block pl-1">Categoria de peso</label>
-                <input type="text" value={editando.categoria || ''} onChange={e => setEditando({...editando, categoria: e.target.value})} className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-red-500 outline-none transition-colors" />
+                <p className="rounded-xl border border-white/10 bg-black px-4 py-3 text-xs text-zinc-200">Atual: {editando.categoria || 'Não informada'}</p>
+                {editando.categoria_ajuste_motivo && <p className="mt-2 text-[11px] text-amber-200">Último ajuste do organizador: {editando.categoria_ajuste_motivo}</p>}
+                {pacote === 'absoluto' ? (
+                  <p className="mt-2 text-[11px] text-zinc-400">Inscrição só de absoluto. A categoria de peso pode ser alterada apenas em inscrições de peso ou combo.</p>
+                ) : (
+                  <div className="mt-3 space-y-2 rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-3">
+                    <label className="block text-[10px] font-bold uppercase tracking-widest text-cyan-200">Mover para categoria oficial
+                      <select value={categoriaDestinoId} onChange={e => setCategoriaDestinoId(e.target.value)} disabled={carregandoCategorias} className="mt-1.5 w-full rounded-lg border border-white/10 bg-black px-3 py-2.5 text-xs text-white disabled:opacity-50">
+                        <option value="">{carregandoCategorias ? 'Carregando categorias...' : 'Selecione a categoria'}</option>
+                        {categoriasPermitidas.map(c => { const divergencias = divergenciasCategoria(c, editando); return <option key={c.id} value={c.id}>{rotuloCategoria(c)}{divergencias.idade ? ' · fora da idade' : ''}{divergencias.peso ? ' · fora do peso' : ''}</option>; })}
+                      </select>
+                    </label>
+                    {categoriaDestino && <p className="text-[11px] text-zinc-300">{divergenciasCategoria(categoriaDestino, editando).idade ? 'Idade fora da faixa selecionada. ' : ''}{divergenciasCategoria(categoriaDestino, editando).peso ? 'Peso fora da faixa selecionada. ' : ''}Os dados reais do atleta serão mantidos.</p>}
+                    <label className="block text-[10px] font-bold uppercase tracking-widest text-cyan-200">Justificativa da mudança
+                      <textarea value={motivoCategoria} onChange={e => setMotivoCategoria(e.target.value)} maxLength={500} rows={2} placeholder="Ex.: remanejamento autorizado após conferência da idade e do peso" className="mt-1.5 w-full rounded-lg border border-white/10 bg-black px-3 py-2.5 text-xs text-white" />
+                    </label>
+                    {dadosPendentes && <p className="text-[11px] text-amber-200">Salve primeiro as alterações de faixa ou peso abaixo antes de mover a categoria.</p>}
+                    {chavesGeradasEdicao && <p className="text-[11px] text-amber-200">Há chaves geradas neste campeonato. A mudança está bloqueada para preservar as lutas.</p>}
+                    <button type="button" onClick={() => void aplicarMudancaCategoria()} disabled={salvandoCategoria || carregandoCategorias || chavesGeradasEdicao || Boolean(dadosPendentes) || !categoriaDestino || categoriaDestino.id === editando.categoria_id || motivoCategoria.trim().length < 10} className="rounded-lg bg-cyan-700 px-3 py-2 text-[10px] font-black uppercase text-white disabled:cursor-not-allowed disabled:opacity-40">{salvandoCategoria ? 'Alterando...' : 'Aplicar categoria'}</button>
+                    <p className="text-[10px] text-zinc-500">A mudança preserva a inscrição e o pagamento. Se já houver chaves geradas, o sistema bloqueará o ajuste.</p>
+                    {pacote === 'combo' && <p className="text-[10px] text-zinc-500">A chave do absoluto continua seguindo os dados reais do atleta.</p>}
+                  </div>
+                )}
+                {avisoCategoria && <p role="status" className="mt-2 text-[11px] text-amber-200">{avisoCategoria}</p>}
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
