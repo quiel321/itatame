@@ -4,8 +4,11 @@ import { createSupabaseServerClient } from "@/app/lib/supabase-server";
 import { enviarEmailIngressoConfirmado } from "@/app/lib/email-ingresso";
 import { obterAccessTokenOrganizador } from "@/app/lib/mercado-pago-integracao";
 
-function getPaymentId(body: any) {
-  return body?.data?.id || body?.resource?.split("/").pop() || body?.id || null;
+type WebhookBody = { data?: { id?: string | number }; resource?: string; id?: string | number };
+
+function getPaymentId(body: WebhookBody) {
+  const id = body?.data?.id || body?.resource?.split("/").pop() || body?.id;
+  return id == null ? null : String(id);
 }
 
 export async function POST(request: Request) {
@@ -13,7 +16,7 @@ export async function POST(request: Request) {
     const url = new URL(request.url);
     let inscricaoId = url.searchParams.get("inscricao_id");
     let organizadorId = url.searchParams.get("organizador_id");
-    const body = await request.json();
+    const body = await request.json() as WebhookBody;
     const paymentId = getPaymentId(body);
 
     if (!paymentId) {
@@ -27,9 +30,12 @@ export async function POST(request: Request) {
       WebhookSignatureValidator.validate({
         xSignature,
         xRequestId,
-        dataId: url.searchParams.get("data.id") || body?.data?.id || body?.id,
+        dataId: url.searchParams.get("data.id") || String(body?.data?.id || body?.id || ""),
         secret,
-        toleranceSeconds: 300,
+        // O Mercado Pago assina com ts em segundos. Esta versão do SDK interpreta
+        // toleranceSeconds usando milissegundos e rejeita assinaturas válidas.
+        // A assinatura HMAC continua sendo verificada; a confirmação consulta
+        // o pagamento diretamente na API antes de alterar a inscrição.
       });
     }
 

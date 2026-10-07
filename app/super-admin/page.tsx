@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Activity, AlertTriangle, Banknote, ChevronDown, FileText, Globe, Scale, Search, ShieldCheck, Users } from "lucide-react";
+import { Activity, AlertTriangle, ChevronDown, FileText, Search, ShieldCheck } from "lucide-react";
 import { supabase } from "@/app/lib/supabase";
 import { baixarCsv, exportarPdfRetratt, exportarPdfSuporte } from "@/app/lib/super-admin-relatorio";
 import {
@@ -72,6 +72,7 @@ export default function SuperAdminMasterPage() {
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState("");
   const [sistema, setSistema] = useState<Sistema>("itatame");
+  const [visaoItatame, setVisaoItatame] = useState<"geral" | "campeonato">("geral");
   const [organizadores, setOrganizadores] = useState<OrganizadorPainel[]>([]);
   const [eventos, setEventos] = useState<EventoPainel[]>([]);
   const [inscricoes, setInscricoes] = useState<InscricaoPainel[]>([]);
@@ -86,8 +87,6 @@ export default function SuperAdminMasterPage() {
   const [semIdMp, setSemIdMp] = useState(false);
   const [limite, setLimite] = useState(80);
   const [buscaRetratt, setBuscaRetratt] = useState("");
-  const [showRegrasModal, setShowRegrasModal] = useState(false);
-  const [novaRegra, setNovaRegra] = useState({ tipo: "peso", nome: "", genero: "Masculino" });
 
   useEffect(() => {
     let ativo = true;
@@ -149,6 +148,7 @@ export default function SuperAdminMasterPage() {
   }, [router]);
 
   useEffect(() => {
+    if (sistema !== "retratt" || retratt) return;
     let ativo = true;
     async function carregarRetratt() {
       const { data: sessao } = await supabase.auth.getSession();
@@ -178,7 +178,7 @@ export default function SuperAdminMasterPage() {
     return () => {
       ativo = false;
     };
-  }, []);
+  }, [sistema, retratt]);
 
   const organizadoresPorUsuario = useMemo(() => indiceOrganizadores(organizadores), [organizadores]);
   const eventosPorId = useMemo(() => new Map(eventos.map((evento) => [String(evento.id), evento])), [eventos]);
@@ -186,6 +186,19 @@ export default function SuperAdminMasterPage() {
     () => resumirItatame(inscricoes.map((item) => itemResumoDaInscricao(item, organizadoresPorUsuario))),
     [inscricoes, organizadoresPorUsuario],
   );
+  const campeonatoSelecionado = visaoItatame === "campeonato" ? eventosPorId.get(eventoId) : undefined;
+  const inscricoesDoCampeonato = useMemo(
+    () => visaoItatame === "campeonato" && eventoId ? inscricoes.filter((item) => String(item.evento_id) === eventoId) : [],
+    [eventoId, inscricoes, visaoItatame],
+  );
+  const resumoCampeonato = useMemo(
+    () => resumirItatame(inscricoesDoCampeonato.map((item) => itemResumoDaInscricao(item, organizadoresPorUsuario))),
+    [inscricoesDoCampeonato, organizadoresPorUsuario],
+  );
+  const resumoAtivo = visaoItatame === "campeonato" ? resumoCampeonato : resumoItatame;
+  const organizadorCampeonato = campeonatoSelecionado?.organizador_id
+    ? organizadoresPorUsuario.get(campeonatoSelecionado.organizador_id)
+    : undefined;
 
   const fila = organizadores.filter((item) => item.status === "pendente").length;
   const aprovados = organizadores.filter((item) => item.status === "aprovado");
@@ -204,7 +217,7 @@ export default function SuperAdminMasterPage() {
       const userId = evento?.organizador_id || embutido?.organizador_id || "";
       const organizador = organizadoresPorUsuario.get(userId);
       if (organizadorId && userId !== organizadorId) return false;
-      if (eventoId && String(item.evento_id) !== eventoId) return false;
+      if (visaoItatame === "campeonato" && (!eventoId || String(item.evento_id) !== eventoId)) return false;
       if (faixa && item.faixa !== faixa) return false;
       const atual = situacaoInscricao(item);
       if (situacao !== "todos" && atual !== situacao) return false;
@@ -215,7 +228,7 @@ export default function SuperAdminMasterPage() {
         .toLowerCase()
         .includes(termo);
     });
-  }, [busca, eventoId, eventosPorId, faixa, inscricoes, organizadorId, organizadoresPorUsuario, semIdMp, situacao]);
+  }, [busca, eventoId, eventosPorId, faixa, inscricoes, organizadorId, organizadoresPorUsuario, semIdMp, situacao, visaoItatame]);
 
   const resumoFiltrado = useMemo(
     () => resumirItatame(filtradas.map((item) => itemResumoDaInscricao(item, organizadoresPorUsuario))),
@@ -231,6 +244,17 @@ export default function SuperAdminMasterPage() {
     const evento = item.evento_id != null ? eventosPorId.get(String(item.evento_id)) : undefined;
     const userId = evento?.organizador_id || eventoEmbutido(item)?.organizador_id || "";
     return montarLinhaSuporte(item, organizadoresPorUsuario.get(userId), evento);
+  }
+
+  function mudarVisaoItatame(visao: "geral" | "campeonato") {
+    setVisaoItatame(visao);
+    setEventoId(visao === "campeonato" ? eventoId || String(eventos[0]?.id ?? "") : "");
+    setOrganizadorId("");
+    setSituacao("todos");
+    setSemIdMp(false);
+    setBusca("");
+    setFaixa("");
+    setLimite(80);
   }
 
   function exportarItatame(formato: "pdf" | "csv") {
@@ -250,7 +274,7 @@ export default function SuperAdminMasterPage() {
     }
     exportarPdfSuporte({
       titulo: "Itatame — ficha de suporte",
-      subtitulo: `Gerado em ${hoje}. ${filtradas.length} inscrições no filtro atual. Valores da Retratt não entram neste relatório.`,
+      subtitulo: `Gerado em ${hoje}. ${visaoItatame === "campeonato" ? `Campeonato: ${campeonatoSelecionado?.nome || eventoId}. ` : "Visão geral. "}${filtradas.length} inscrições no filtro atual. Valores da Retratt não entram neste relatório.`,
       resumo: [
         ["Faturamento pago", moeda(resumoFiltrado.faturamento)],
         ["Comissão da plataforma", moeda(resumoFiltrado.comissao)],
@@ -304,130 +328,100 @@ export default function SuperAdminMasterPage() {
   const visiveis = filtradas.slice(0, limite);
 
   return (
-    <main className="relative min-h-screen overflow-x-hidden bg-[#050505] p-4 text-white md:p-6 lg:p-8">
-      <div className="pointer-events-none absolute right-0 top-0 h-[520px] w-[520px] rounded-full bg-indigo-900/15 blur-[150px]" />
-      <div className="relative mx-auto max-w-7xl">
-        <header className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-end">
-          <div className="flex items-center gap-4">
-              {fotoUrl ? (
-              <img src={fotoUrl} alt="" className="h-16 w-16 rounded-full border-2 border-indigo-500/50 object-cover md:h-20 md:w-20" />
-              ) : (
-              <div className="flex h-16 w-16 items-center justify-center rounded-full border border-white/10 bg-zinc-900 text-zinc-500 md:h-20 md:w-20">
-                <ShieldCheck className="h-8 w-8" />
-                </div>
-              )}
+    <main className="min-h-screen bg-[#090a0c] p-4 text-zinc-100 md:p-6 lg:p-8">
+      <div className="mx-auto max-w-[1440px]">
+        <header className="mb-6 flex items-center justify-between gap-4 border-b border-white/10 pb-5">
+          <div className="flex items-center gap-3">
+            {fotoUrl ? <img src={fotoUrl} alt="" className="h-10 w-10 rounded-full object-cover" /> : <span className="flex h-10 w-10 items-center justify-center rounded-full bg-zinc-800 text-zinc-400"><ShieldCheck size={18} /></span>}
             <div>
-              <div className="mb-2 flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-md bg-indigo-600 px-2.5 py-1 text-[9px] font-black uppercase tracking-widest">
-                  <Globe size={12} /> Super Admin
-                </span>
-                <span className="text-[9px] font-bold uppercase tracking-widest text-green-400">Sistemas separados</span>
-              </div>
-              <h1 className="text-3xl font-black tracking-tight md:text-5xl">QG de suporte</h1>
-              <p className="mt-1 max-w-xl text-sm text-zinc-400">
-                {nomeDono}, o Itatame e a Retratt ficam em caixas diferentes. O dinheiro de campeonato não entra no de foto.
-              </p>
+              <p className="text-xs text-zinc-400">Olá, {nomeDono}</p>
+              <h1 className="text-xl font-semibold tracking-tight md:text-2xl">Administração</h1>
             </div>
           </div>
           <button
             onClick={() => supabase.auth.signOut().then(() => router.push("/"))}
-            className="rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest"
+            className="rounded-md border border-white/15 px-3 py-2 text-xs text-zinc-300 hover:bg-white/5"
           >
-            Encerrar sessão
+            Sair
           </button>
         </header>
 
-        <div className="mb-6 grid gap-3 md:grid-cols-2">
-          <button
-            type="button"
-            onClick={() => setSistema("itatame")}
-            className={`rounded-3xl border p-5 text-left transition ${sistema === "itatame" ? "border-red-500/60 bg-red-500/10" : "border-white/10 bg-[#0a0a0e] hover:border-white/20"}`}
-          >
-            <p className="text-[10px] font-black uppercase tracking-widest text-red-400">Sistema Itatame</p>
-            <p className="mt-2 text-2xl font-black">{moeda(resumoItatame.faturamento)}</p>
-            <p className="mt-1 text-xs text-zinc-400">Inscrições pagas · comissão {moeda(resumoItatame.comissao)} · {eventos.length} campeonatos · {aprovados.length} organizadores</p>
-          </button>
-          <button
-            type="button"
-            onClick={() => setSistema("retratt")}
-            className={`rounded-3xl border p-5 text-left transition ${sistema === "retratt" ? "border-cyan-500/60 bg-cyan-500/10" : "border-white/10 bg-[#0a0a0e] hover:border-white/20"}`}
-          >
-            <p className="text-[10px] font-black uppercase tracking-widest text-cyan-400">Sistema Retratt</p>
-            <p className="mt-2 text-2xl font-black">{carregandoRetratt ? "..." : centavos(retratt?.geral.faturamentoCentavos)}</p>
-            <p className="mt-1 text-xs text-zinc-400">
-              {carregandoRetratt ? "Consolidando vendas de foto..." : `${retratt?.geral.pedidosPagos || 0} pedidos pagos · ${retratt?.geral.galerias || 0} galerias · royalty aberto ${centavos(retratt?.geral.royaltyEmAbertoCentavos)}`}
-            </p>
-            </button>
-        </div>
+        <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
+          <aside className="lg:sticky lg:top-6 lg:self-start">
+            <nav aria-label="Navegação do super-admin" className="grid grid-cols-2 gap-1 rounded-lg border border-white/10 bg-[#101114] p-2 text-sm sm:grid-cols-3 lg:block lg:space-y-1">
+              <p className="col-span-2 px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500 sm:col-span-3 lg:col-span-1">iTatame</p>
+              <button type="button" aria-current={sistema === "itatame" ? "page" : undefined} onClick={() => setSistema("itatame")} className={`block w-full rounded-md px-3 py-2 text-left ${sistema === "itatame" ? "bg-white/10 text-white" : "text-zinc-400 hover:bg-white/5"}`}>Visão geral</button>
+              <Link href="/super-admin/organizadores" className="block rounded-md px-3 py-2 text-zinc-400 hover:bg-white/5">Organizadores {fila > 0 && <span className="ml-1 text-amber-300">({fila})</span>}</Link>
+              <Link href="/super-admin/suporte" className="block rounded-md px-3 py-2 text-zinc-400 hover:bg-white/5">Suporte</Link>
+              <Link href="/super-admin/inscricoes" className="block rounded-md px-3 py-2 text-zinc-400 hover:bg-white/5">Inscrições e estornos</Link>
+              <Link href="/super-admin/atletas" className="block rounded-md px-3 py-2 text-zinc-400 hover:bg-white/5">Auditoria de atletas</Link>
+              <p className="col-span-2 border-t border-white/10 px-3 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wider text-zinc-500 sm:col-span-3 lg:col-span-1">Retratt</p>
+              <button type="button" aria-current={sistema === "retratt" ? "page" : undefined} onClick={() => setSistema("retratt")} className={`block w-full rounded-md px-3 py-2 text-left ${sistema === "retratt" ? "bg-white/10 text-white" : "text-zinc-400 hover:bg-white/5"}`}>Visão geral</button>
+              <Link href="/super-admin/fotos" className="block rounded-md px-3 py-2 text-zinc-400 hover:bg-white/5">Financeiro e reembolsos</Link>
+            </nav>
+          </aside>
+          <div className="min-w-0">
 
         {sistema === "itatame" ? (
           <section>
-            {erro && <p className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">{erro}</p>}
-            <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-              <article className="rounded-2xl border border-red-500/30 bg-[#0a0a0e] p-4">
-                <p className="text-[9px] font-black uppercase tracking-widest text-red-300">Faturamento Itatame</p>
-                <p className="mt-2 text-xl font-black md:text-2xl">{moeda(resumoItatame.faturamento)}</p>
-                <p className="mt-1 text-[10px] text-zinc-500">{resumoItatame.pagos} pagas · repasse {moeda(resumoItatame.repasse)}</p>
-              </article>
-              <article className="rounded-2xl border border-white/10 bg-[#0a0a0e] p-4">
-                <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Comissão da plataforma</p>
-                <p className="mt-2 text-xl font-black md:text-2xl">{moeda(resumoItatame.comissao)}</p>
-                <p className="mt-1 text-[10px] text-zinc-500">Pelo plano de cada organizador</p>
-              </article>
-              <article className="rounded-2xl border border-white/10 bg-[#0a0a0e] p-4">
-                <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Em aberto</p>
-                <p className="mt-2 text-xl font-black md:text-2xl">{moeda(resumoItatame.pendente)}</p>
-                <p className="mt-1 text-[10px] text-zinc-500">{resumoItatame.pendentes} pendentes · {moeda(resumoItatame.estornado)} estornado</p>
-              </article>
-              <article className="rounded-2xl border border-white/10 bg-[#0a0a0e] p-4">
-                <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Organizadores</p>
-                <p className="mt-2 text-xl font-black md:text-2xl">{aprovados.length}</p>
-                <p className="mt-1 text-[10px] text-zinc-500">{fila} na fila · {semMercadoPago} sem Mercado Pago</p>
-              </article>
+            <div className="mb-5">
+              <h2 className="text-2xl font-semibold">iTatame</h2>
+              <p className="text-sm text-zinc-500">Campeonatos, inscrições e suporte aos organizadores.</p>
             </div>
-
-            <div className="mb-6 grid gap-3 md:grid-cols-4">
-              <Link href="/super-admin/suporte" className="rounded-2xl border border-yellow-500/40 bg-yellow-500/10 p-5 transition hover:border-yellow-400">
-                <Users className="mb-3 text-yellow-400" size={20} />
-                <h2 className="font-black">Acessar painel comum</h2>
-                <p className="mt-1 text-[11px] leading-relaxed text-zinc-400">Visão detalhada da tela de cada organizador, para o suporte atender qualquer conta.</p>
-              </Link>
-              <Link href="/super-admin/organizadores" className="rounded-2xl border border-white/10 bg-[#0a0a0e] p-5 transition hover:border-indigo-500/50">
-                <ShieldCheck className="mb-3 text-indigo-400" size={20} />
-                <h2 className="font-black">Homologação</h2>
-                <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">{fila} conta(s) aguardando análise de acesso.</p>
-              </Link>
-              <Link href="/super-admin/inscricoes" className="rounded-2xl border border-white/10 bg-[#0a0a0e] p-5 transition hover:border-red-500/50">
-                <Banknote className="mb-3 text-red-400" size={20} />
-                <h2 className="font-black">Estornos Itatame</h2>
-                <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">Devolução de inscrição de campeonato, separada do reembolso de foto.</p>
-          </Link>
-              <button type="button" onClick={() => setShowRegrasModal(true)} className="rounded-2xl border border-white/10 bg-[#0a0a0e] p-5 text-left transition hover:border-blue-500/50">
-                <Scale className="mb-3 text-blue-400" size={20} />
-                <h2 className="font-black">Livro de regras</h2>
-                <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">Pesos, faixas e idades usados nos campeonatos.</p>
-          </button>
+            {erro && <p className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">{erro}</p>}
+            <div className="mb-5 flex flex-wrap items-center gap-3 border-b border-white/10 pb-4">
+              <div role="group" aria-label="Escopo do painel iTatame" className="inline-flex rounded-md border border-white/15 p-1 text-sm">
+                <button type="button" aria-pressed={visaoItatame === "geral"} onClick={() => mudarVisaoItatame("geral")} className={`rounded px-3 py-1.5 ${visaoItatame === "geral" ? "bg-zinc-700 text-white" : "text-zinc-400 hover:text-white"}`}>Visão geral</button>
+                <button type="button" aria-pressed={visaoItatame === "campeonato"} onClick={() => mudarVisaoItatame("campeonato")} className={`rounded px-3 py-1.5 ${visaoItatame === "campeonato" ? "bg-zinc-700 text-white" : "text-zinc-400 hover:text-white"}`}>Por campeonato</button>
+              </div>
+              {visaoItatame === "campeonato" && <label className="min-w-0 flex-1 text-xs text-zinc-400 sm:min-w-72 sm:max-w-xl">
+                <span className="sr-only">Selecionar campeonato</span>
+                <select value={eventoId} onChange={(event) => { setEventoId(event.target.value); setLimite(80); }} className="w-full rounded-md border border-white/15 bg-[#101114] px-3 py-2 text-sm text-white outline-none focus:border-red-400">
+                  {eventos.length === 0 && <option value="">Nenhum campeonato cadastrado</option>}
+                  {eventos.map((evento) => <option key={evento.id} value={String(evento.id)}>{evento.nome || "Sem nome"} · {dataCurta(evento.data_evento)} · {organizadoresPorUsuario.get(evento.organizador_id || "")?.nome || "Organizador não identificado"}</option>)}
+                </select>
+              </label>}
+            </div>
+            {visaoItatame === "campeonato" && campeonatoSelecionado && <div className="mb-4 flex flex-wrap gap-x-5 gap-y-1 text-sm text-zinc-400">
+              <span><strong className="font-medium text-zinc-200">Campeonato:</strong> {campeonatoSelecionado.nome}</span>
+              <span><strong className="font-medium text-zinc-200">Organizador:</strong> {organizadorCampeonato?.nome || "Não identificado"}</span>
+              <span><strong className="font-medium text-zinc-200">Data:</strong> {dataCurta(campeonatoSelecionado.data_evento)}</span>
+              {campeonatoSelecionado.cidade && <span>{campeonatoSelecionado.cidade}{campeonatoSelecionado.estado ? `, ${campeonatoSelecionado.estado}` : ""}</span>}
+            </div>}
+            <div className="mb-5 rounded-lg border border-white/10 bg-[#101114]">
+              <div className="grid grid-cols-2 md:grid-cols-4">
+                <ResumoItem titulo="Inscrições pagas" valor={moeda(resumoAtivo.faturamento)} detalhe={`${resumoAtivo.pagos} inscrições`} />
+                <ResumoItem titulo="Comissão" valor={moeda(resumoAtivo.comissao)} detalhe={`Repasse ${moeda(resumoAtivo.repasse)}`} />
+                <ResumoItem titulo="Aguardando pagamento" valor={moeda(resumoAtivo.pendente)} detalhe={`${resumoAtivo.pendentes} inscrições`} />
+                {visaoItatame === "campeonato"
+                  ? <ResumoItem titulo="Inscrições no campeonato" valor={String(resumoAtivo.inscricoes)} detalhe={`${resumoAtivo.estornos} estorno(s)`} />
+                  : <ResumoItem titulo="Organizadores ativos" valor={String(aprovados.length)} detalhe={`${eventos.length} campeonatos`} />}
+              </div>
+              {(fila > 0 || semMercadoPago > 0) && <div className="flex flex-wrap gap-x-5 gap-y-1 border-t border-white/10 px-4 py-2 text-xs text-zinc-400">
+                {fila > 0 && <Link href="/super-admin/organizadores" className="text-amber-300 hover:underline">{fila} organizador(es) para homologar</Link>}
+                {semMercadoPago > 0 && <Link href="/super-admin/suporte" className="hover:underline">{semMercadoPago} sem Mercado Pago conectado</Link>}
+              </div>}
             </div>
 
             <div className="mb-4 flex flex-wrap gap-2">
               <button type="button" onClick={() => { setSituacao("pendente"); setSemIdMp(false); }} className="rounded-full border border-yellow-500/30 bg-yellow-500/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-yellow-200">
-                {resumoItatame.pendentes} pagamentos pendentes
+                {resumoAtivo.pendentes} pagamentos pendentes
               </button>
               <button type="button" onClick={() => { setSituacao("pago"); setSemIdMp(true); }} className="rounded-full border border-orange-500/30 bg-orange-500/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-orange-200">
                 <AlertTriangle size={12} className="mr-1 inline" /> Pagas sem ID Mercado Pago
               </button>
               <button type="button" onClick={() => { setSituacao("estornado"); setSemIdMp(false); }} className="rounded-full border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-red-200">
-                {resumoItatame.estornos} estornos
+                {resumoAtivo.estornos} estornos
               </button>
-              <button type="button" onClick={() => { setSituacao("todos"); setSemIdMp(false); setOrganizadorId(""); setEventoId(""); setFaixa(""); setBusca(""); }} className="rounded-full border border-white/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-zinc-400">
+              <button type="button" onClick={() => { setSituacao("todos"); setSemIdMp(false); setOrganizadorId(""); setFaixa(""); setBusca(""); }} className="rounded-full border border-white/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-zinc-400">
                 Limpar filtros
               </button>
           </div>
 
-            <div className="rounded-3xl border border-white/10 bg-[#0a0a0e]/90 p-5">
+            <div className="rounded-lg border border-white/10 bg-[#101114] p-4 md:p-5">
               <div className="mb-5 flex flex-col justify-between gap-3 border-b border-white/5 pb-4 md:flex-row md:items-center">
                 <div>
-                  <h2 className="text-lg font-black">Lista de suporte · Itatame</h2>
+                  <h2 className="text-lg font-semibold">{visaoItatame === "campeonato" ? "Inscrições do campeonato" : "Inscrições · visão geral"}</h2>
                   <p className="mt-1 text-xs text-zinc-500">
                     {filtradas.length} inscrições · pago {moeda(resumoFiltrado.faturamento)} · pendente {moeda(resumoFiltrado.pendente)}
                   </p>
@@ -440,21 +434,18 @@ export default function SuperAdminMasterPage() {
             </div>
             </div>
 
-              <div className="mb-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+              <div className="mb-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                 <label className="relative xl:col-span-2">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={15} />
                   <input value={busca} onChange={(event) => setBusca(event.target.value)} placeholder="Atleta, equipe, organizador, e-mail ou ID MP" className="w-full rounded-xl border border-white/10 bg-black py-2.5 pl-9 pr-3 text-xs outline-none focus:border-red-500" />
                 </label>
-                <SelectFiltro value={organizadorId} onChange={setOrganizadorId} placeholder="Todos os organizadores">
+                {visaoItatame === "geral" && <SelectFiltro value={organizadorId} onChange={setOrganizadorId} placeholder="Todos os organizadores">
                   {Array.from(organizadoresPorUsuario.values())
                     .sort((a, b) => String(a.nome).localeCompare(String(b.nome), "pt-BR"))
                     .map((item) => (
                       <option key={item.user_id} value={item.user_id || ""}>{item.nome || "Sem nome"} · {item.academia || item.status}</option>
                     ))}
-                </SelectFiltro>
-                <SelectFiltro value={eventoId} onChange={setEventoId} placeholder="Todos os campeonatos">
-                  {eventos.map((evento) => <option key={evento.id} value={String(evento.id)}>{evento.nome}</option>)}
-                </SelectFiltro>
+                </SelectFiltro>}
                 <SelectFiltro value={situacao} onChange={(valor) => setSituacao(valor as "todos" | SituacaoInscricao)} placeholder="">
                   <option value="todos">Pagamento: todos</option>
                   <option value="pago">Somente pagos</option>
@@ -538,36 +529,24 @@ export default function SuperAdminMasterPage() {
           </section>
         ) : (
           <section>
+            <div className="mb-5">
+              <h2 className="text-2xl font-semibold">Retratt</h2>
+              <p className="text-sm text-zinc-500">Vendas de fotos, royalties e repasses.</p>
+            </div>
             {erroRetratt && <p className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">{erroRetratt}</p>}
-            <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-              <article className="rounded-2xl border border-cyan-500/30 bg-[#0a0a0e] p-4">
-                <p className="text-[9px] font-black uppercase tracking-widest text-cyan-300">Vendas Retratt</p>
-                <p className="mt-2 text-xl font-black md:text-2xl">{centavos(retratt?.geral.faturamentoCentavos)}</p>
-                <p className="mt-1 text-[10px] text-zinc-500">{retratt?.geral.pedidosPagos || 0} pedidos pagos</p>
-              </article>
-              <article className="rounded-2xl border border-white/10 bg-[#0a0a0e] p-4">
-                <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Comissão Itatame</p>
-                <p className="mt-2 text-xl font-black md:text-2xl">{centavos(retratt?.geral.comissaoItatameCentavos)}</p>
-                <p className="mt-1 text-[10px] text-zinc-500">Snapshot de cada venda de foto</p>
-              </article>
-              <article className="rounded-2xl border border-white/10 bg-[#0a0a0e] p-4">
-                <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Royalty em aberto</p>
-                <p className="mt-2 text-xl font-black md:text-2xl">{centavos(retratt?.geral.royaltyEmAbertoCentavos)}</p>
-                <p className="mt-1 text-[10px] text-zinc-500">Disponível {centavos(retratt?.geral.royaltyDisponivelCentavos)} · pago {centavos(retratt?.geral.royaltyPagoCentavos)}</p>
-              </article>
-              <article className="rounded-2xl border border-white/10 bg-[#0a0a0e] p-4">
-                <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Operação</p>
-                <p className="mt-2 text-xl font-black md:text-2xl">{retratt?.geral.fotosVendidas || 0}</p>
-                <p className="mt-1 text-[10px] text-zinc-500">{retratt?.geral.galerias || 0} galerias · {retratt?.geral.fotografos || 0} fotógrafos</p>
-              </article>
+            <div className="mb-5 grid grid-cols-2 rounded-lg border border-white/10 bg-[#101114] md:grid-cols-4">
+              <ResumoItem titulo="Vendas pagas" valor={carregandoRetratt ? "Carregando…" : centavos(retratt?.geral.faturamentoCentavos)} detalhe={`${retratt?.geral.pedidosPagos || 0} pedidos`} />
+              <ResumoItem titulo="Comissão" valor={centavos(retratt?.geral.comissaoItatameCentavos)} detalhe="Vendas de fotos" />
+              <ResumoItem titulo="Royalty em aberto" valor={centavos(retratt?.geral.royaltyEmAbertoCentavos)} detalhe={`Pago ${centavos(retratt?.geral.royaltyPagoCentavos)}`} />
+              <ResumoItem titulo="Fotos vendidas" valor={String(retratt?.geral.fotosVendidas || 0)} detalhe={`${retratt?.geral.galerias || 0} galerias`} />
             </div>
 
-            <div className="mb-6 flex flex-wrap gap-3">
-              <Link href="/super-admin/fotos" className="rounded-xl bg-cyan-500 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-black">Abrir financeiro completo e reembolsos</Link>
-              <button type="button" onClick={exportarRetratt} className="rounded-xl border border-cyan-500/30 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-cyan-300">PDF dos royalties</button>
+            <div className="mb-5 flex flex-wrap gap-3 text-sm">
+              <Link href="/super-admin/fotos" className="text-cyan-300 hover:underline">Ver financeiro completo e reembolsos →</Link>
+              <button type="button" onClick={exportarRetratt} className="text-zinc-300 hover:underline">Baixar PDF dos royalties</button>
             </div>
 
-            <div className="rounded-3xl border border-white/10 bg-[#0a0a0e] p-5">
+            <div className="rounded-lg border border-white/10 bg-[#101114] p-4 md:p-5">
               <div className="mb-4 flex flex-col justify-between gap-3 md:flex-row md:items-center">
                 <div>
                   <h2 className="text-lg font-black">Organizadores na Retratt</h2>
@@ -610,7 +589,7 @@ export default function SuperAdminMasterPage() {
               <h3 className="mb-3 mt-8 text-sm font-black uppercase tracking-widest text-zinc-400">Pedidos pagos recentes</h3>
               <div className="space-y-2">
                 {(retratt?.pedidosRecentes || []).map((pedido) => (
-                  <article key={pedido.id} className="grid gap-2 rounded-xl border border-white/5 bg-black/40 p-3 text-xs md:grid-cols-5">
+                  <article key={pedido.id} className="grid gap-2 border-t border-white/10 py-3 text-xs md:grid-cols-5">
                     <div>
                       <p className="font-bold">{pedido.galeria}</p>
                       <p className="text-[10px] text-zinc-500">{dataCurta(pedido.data)} · {pedido.fotos} fotos</p>
@@ -625,49 +604,20 @@ export default function SuperAdminMasterPage() {
         </div>
           </section>
         )}
-      </div>
-
-      {showRegrasModal && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/95 p-4">
-          <div className="w-full max-w-2xl rounded-3xl border border-blue-500/20 bg-[#0e0e12]">
-            <div className="flex items-start justify-between border-b border-white/5 p-6">
-              <div>
-                <h2 className="text-xl font-black">Livro de regras</h2>
-                <p className="mt-1 text-xs text-zinc-400">Categorias oficiais dos campeonatos Itatame.</p>
-              </div>
-              <button type="button" onClick={() => setShowRegrasModal(false)} className="rounded-lg bg-white/5 px-3 py-2 text-xs">Fechar</button>
-            </div>
-            <div className="space-y-4 p-6">
-              <div className="flex gap-2">
-                {(["peso", "idade", "faixa"] as const).map((tipo) => (
-                  <button key={tipo} type="button" onClick={() => setNovaRegra({ ...novaRegra, tipo })} className={`flex-1 rounded-lg border py-2 text-[10px] font-black uppercase tracking-widest ${novaRegra.tipo === tipo ? "border-blue-500/40 bg-blue-500/10 text-blue-300" : "border-white/10 text-zinc-500"}`}>{tipo}</button>
-                ))}
-              </div>
-              <div className="grid gap-3 md:grid-cols-2">
-                <select value={novaRegra.genero} onChange={(event) => setNovaRegra({ ...novaRegra, genero: event.target.value })} className="rounded-xl border border-white/10 bg-black px-3 py-3 text-xs">
-                  <option>Masculino</option>
-                  <option>Feminino</option>
-                  <option>Ambos</option>
-                    </select>
-                <input value={novaRegra.nome} onChange={(event) => setNovaRegra({ ...novaRegra, nome: event.target.value })} placeholder="Nome da regra" className="rounded-xl border border-white/10 bg-black px-3 py-3 text-xs outline-none" />
-              </div>
-              <button
-                type="button"
-                disabled={!novaRegra.nome}
-                onClick={() => {
-                  alert(`Regra de ${novaRegra.tipo} [${novaRegra.nome}] anotada. A tabela categorias_globais ainda precisa existir no banco para publicar aos organizadores.`);
-                  setNovaRegra({ tipo: "peso", nome: "", genero: "Masculino" });
-                  setShowRegrasModal(false);
-                }}
-                className="w-full rounded-xl bg-blue-600 py-3 text-xs font-black uppercase tracking-widest disabled:opacity-40"
-              >
-                Adicionar ao livro
-              </button>
-            </div>
           </div>
         </div>
-      )}
+      </div>
     </main>
+  );
+}
+
+function ResumoItem({ titulo, valor, detalhe }: { titulo: string; valor: string; detalhe: string }) {
+  return (
+    <div className="min-w-0 border-b border-r border-white/10 p-4 last:border-r-0 md:border-b-0">
+      <p className="text-xs text-zinc-400">{titulo}</p>
+      <p className="mt-1 truncate text-lg font-semibold tabular-nums md:text-xl" title={valor}>{valor}</p>
+      <p className="mt-1 truncate text-xs text-zinc-500" title={detalhe}>{detalhe}</p>
+    </div>
   );
 }
 

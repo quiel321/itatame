@@ -3,9 +3,25 @@
 import { useEffect, useState } from "react"
 import { supabase } from "../../lib/supabase"
 import Link from "next/link"
+import { baixarCsv } from "@/app/lib/super-admin-relatorio"
+import { buscarPaginas } from "@/app/lib/super-admin-painel"
+
+type InscricaoAuditoria = {
+  id: number
+  atleta: string | null
+  nome?: string | null
+  equipe: string | null
+  faixa: string | null
+  categoria: string | null
+  idade: number | null
+  peso: number | null
+  pagamento_ok: boolean | null
+  pesagem_ok: boolean | null
+}
 
 export default function SuperAdminInscricoesPage() {
-  const [inscricoes, setInscricoes] = useState<any[]>([])
+  const [inscricoes, setInscricoes] = useState<InscricaoAuditoria[]>([])
+  const [erro, setErro] = useState("")
   
   // ESTADOS DE FILTRO
   const [filtroFaixa, setFiltroFaixa] = useState("")
@@ -15,17 +31,17 @@ export default function SuperAdminInscricoesPage() {
 
   useEffect(() => {
     async function carregarInscricoes() {
-      // Como é painel Super Admin, puxamos TUDO sem filtrar evento
-      const { data, error } = await supabase
-        .from("inscricoes")
-        .select("*")
-        .order("id", { ascending: false })
-
-      if (error) {
-        console.log(error)
-        return
+      try {
+        const data = await buscarPaginas<InscricaoAuditoria>(async (inicio, fim) => {
+          const resultado = await supabase.from("inscricoes")
+            .select("id, atleta, equipe, faixa, categoria, idade, peso, pagamento_ok, pesagem_ok")
+            .order("id", { ascending: false }).range(inicio, fim)
+          return { data: resultado.data as InscricaoAuditoria[] | null, error: resultado.error }
+        })
+        setInscricoes(data)
+      } catch (falha) {
+        setErro(falha instanceof Error ? falha.message : "Falha ao carregar inscrições.")
       }
-      setInscricoes(data || [])
     }
     carregarInscricoes()
   }, [])
@@ -41,6 +57,15 @@ export default function SuperAdminInscricoesPage() {
 
   // Extrair equipes únicas para o select automaticamente
   const equipesUnicas = Array.from(new Set(inscricoes.map(i => i.equipe).filter(Boolean)))
+  const faixasUnicas = Array.from(new Set(inscricoes.map(i => i.faixa).filter(Boolean)))
+  const categoriasUnicas = Array.from(new Set(inscricoes.map(i => i.categoria).filter(Boolean)))
+
+  function exportarCsv() {
+    if (inscricoesFiltradas.length === 0) return
+    baixarCsv(`auditoria-atletas-${new Date().toISOString().slice(0, 10)}.csv`,
+      ["ID inscrição", "Atleta", "Equipe", "Faixa", "Categoria", "Idade", "Peso", "Pagamento", "Pesagem"],
+      inscricoesFiltradas.map((item) => [String(item.id), item.atleta || item.nome || "", item.equipe || "", item.faixa || "", item.categoria || "", String(item.idade ?? ""), String(item.peso ?? ""), item.pagamento_ok ? "Confirmado" : "Pendente", item.pesagem_ok ? "OK" : "Pendente"]))
+  }
 
   return (
     <main className="min-h-screen bg-[#050505] text-white p-4 md:p-8 relative overflow-hidden">
@@ -63,12 +88,14 @@ export default function SuperAdminInscricoesPage() {
           </div>
           
           <div className="flex items-center gap-2">
-             <button className="cursor-pointer bg-white/5 hover:bg-white/10 border border-white/10 text-white text-[10px] md:text-xs font-bold uppercase tracking-widest px-4 py-2.5 rounded-lg transition-colors flex items-center gap-2">
+             <Link href="/super-admin" className="rounded-lg border border-white/10 px-4 py-2.5 text-xs text-zinc-300">Voltar ao painel</Link>
+             <button type="button" onClick={exportarCsv} disabled={inscricoesFiltradas.length === 0} className="cursor-pointer bg-white/5 hover:bg-white/10 border border-white/10 text-white text-[10px] md:text-xs font-bold uppercase tracking-widest px-4 py-2.5 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-40">
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                 Exportar CSV
              </button>
           </div>
         </div>
+        {erro && <p role="alert" className="mb-4 text-sm text-red-300">{erro}</p>}
 
         {/* BARRA DE FILTROS AVANÇADA */}
         <div className="bg-[#0a0a0e]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-4 mb-6 shadow-xl grid grid-cols-1 md:grid-cols-4 gap-3">
@@ -91,11 +118,7 @@ export default function SuperAdminInscricoesPage() {
               className="cursor-pointer w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2.5 outline-none focus:border-indigo-500 text-white transition-colors appearance-none text-xs font-bold"
             >
               <option value="">Todas as Faixas</option>
-              <option value="Branca">Branca</option>
-              <option value="Azul">Azul</option>
-              <option value="Roxa">Roxa</option>
-              <option value="Marrom">Marrom</option>
-              <option value="Preta">Preta</option>
+              {faixasUnicas.map((item) => <option key={item} value={item || ""}>{item}</option>)}
             </select>
             <svg className="w-3.5 h-3.5 text-zinc-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
           </div>
@@ -107,11 +130,7 @@ export default function SuperAdminInscricoesPage() {
               className="cursor-pointer w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2.5 outline-none focus:border-indigo-500 text-white transition-colors appearance-none text-xs font-bold"
             >
               <option value="">Todas Categorias</option>
-              <option value="Pluma (Até 64.500 kg)">Pluma (Até 64.500 kg)</option>
-              <option value="Leve (Até 72.500 kg)">Leve (Até 72.500 kg)</option>
-              <option value="Meio Pesado (Até 80.000 kg)">Meio Pesado (Até 80.000 kg)</option>
-              <option value="Super Pesado (Até 85.500 kg)">Super Pesado (Até 85.500 kg)</option>
-              <option value="Pesadíssimo (Acima de 85.5 kg)">Pesadíssimo (Acima de 85.5 kg)</option>
+              {categoriasUnicas.map((item) => <option key={item} value={item || ""}>{item}</option>)}
             </select>
             <svg className="w-3.5 h-3.5 text-zinc-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
           </div>
@@ -123,8 +142,8 @@ export default function SuperAdminInscricoesPage() {
               className="cursor-pointer w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2.5 outline-none focus:border-indigo-500 text-white transition-colors appearance-none text-xs font-bold"
             >
               <option value="">Todas as Equipes</option>
-              {equipesUnicas.map((eq: any, idx) => (
-                <option key={idx} value={eq}>{eq}</option>
+              {equipesUnicas.map((eq) => (
+                <option key={eq} value={eq || ""}>{eq}</option>
               ))}
             </select>
             <svg className="w-3.5 h-3.5 text-zinc-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
