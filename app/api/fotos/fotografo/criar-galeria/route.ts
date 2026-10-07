@@ -31,7 +31,7 @@ export async function POST(request: Request) {
     const estado = String(body.estado || "").trim().toUpperCase().slice(0, 2);
     const dataEvento = String(body.dataEvento || "").trim() || null;
     const capaUrl = String(body.capaUrl || "").trim() || null;
-    const preco = Math.max(0, Math.round(Number(body.precoCentavos || 1500)));
+    const preco = Math.max(0, Math.round(Number(body.precoCentavos ?? 1500)));
     const descontos = validarFaixasDesconto(body.descontosProgressivos ?? []);
     if (!descontos) return NextResponse.json({ error: "Revise as faixas de desconto: até cinco faixas, com quantidades e percentuais crescentes." }, { status: 400 });
     if (!nome) return NextResponse.json({ error: "Informe o nome da galeria." }, { status: 400 });

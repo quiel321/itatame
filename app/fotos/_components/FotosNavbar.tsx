@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { supabase } from "@/app/lib/supabase";
 import { resolverPerfilFotos, rotaLoginFotos, rotaPainelFotos, type PerfilFotos } from "@/app/lib/fotos-acesso";
-import { ChartNoAxesCombined, FolderPlus, LayoutDashboard, Menu, Plus, ShoppingCart, UserRound, X } from "lucide-react";
+import { ChartNoAxesCombined, FolderPlus, LayoutDashboard, Menu, ShoppingCart, UserRound, X } from "lucide-react";
 
 const CARRINHO_FOTOS_KEY = "carrinho_fotos";
 
@@ -107,8 +107,7 @@ export default function FotosNavbar({ area = "publico" }: FotosNavbarProps) {
         {area === "fotografo" ? (
           <nav className="hidden items-center gap-7 text-[10px] font-black uppercase tracking-widest text-zinc-500 md:flex">
             <Link href="/fotos/fotografo/dashboard" className="inline-flex items-center gap-1.5 hover:text-retratt"><LayoutDashboard size={13}/> Visão geral</Link>
-            <Link href="/fotos/fotografo/painel" className="inline-flex items-center gap-1.5 text-retratt hover:text-white"><FolderPlus size={13}/> Criar álbum</Link>
-            <Link href="/fotos/fotografo/dashboard#criar-galeria" className="inline-flex items-center gap-1.5 hover:text-retratt"><Plus size={13}/> Minha galeria</Link>
+            <Link href="/fotos/fotografo/dashboard#albuns" className="inline-flex items-center gap-1.5 text-retratt hover:text-white"><FolderPlus size={13}/> Álbuns</Link>
             <Link href="/fotos/fotografo/financeiro" className="inline-flex items-center gap-1.5 hover:text-emerald-300"><ChartNoAxesCombined size={13}/> Financeiro</Link>
             <Link href="/fotos/fotografo/dashboard#perfil-fotografo" className="inline-flex items-center gap-1.5 hover:text-white"><UserRound size={13}/> Perfil</Link>
             <Link href="/fotos" className="hover:text-white">Ver loja</Link>
@@ -170,8 +169,7 @@ export default function FotosNavbar({ area = "publico" }: FotosNavbarProps) {
               <span className="rounded-full bg-retratt px-2 py-1 text-[9px] text-white">{itensCarrinho}</span>
             </Link>
             {area === "fotografo" && <Link href="/fotos/fotografo/dashboard" onClick={fecharMenu} className="border-b border-white/5 pb-4 text-white">Visão geral</Link>}
-            {area === "fotografo" && <Link href="/fotos/fotografo/painel" onClick={fecharMenu} className="border-b border-white/5 pb-4 text-retratt">Criar álbum</Link>}
-            {area === "fotografo" && <Link href="/fotos/fotografo/dashboard#criar-galeria" onClick={fecharMenu} className="border-b border-white/5 pb-4 text-retratt">Minha própria galeria</Link>}
+            {area === "fotografo" && <Link href="/fotos/fotografo/dashboard#albuns" onClick={fecharMenu} className="border-b border-white/5 pb-4 text-retratt">Álbuns</Link>}
             {area === "fotografo" && <Link href="/fotos/fotografo/financeiro" onClick={fecharMenu} className="border-b border-white/5 pb-4 text-emerald-300">Financeiro</Link>}
             {area === "fotografo" && <Link href="/fotos/fotografo/dashboard#perfil-fotografo" onClick={fecharMenu} className="border-b border-white/5 pb-4">Meu perfil</Link>}
             <Link href="/fotos" onClick={fecharMenu} className="cursor-pointer hover:text-retratt transition-colors border-b border-white/5 pb-4">Eventos & Galerias</Link>

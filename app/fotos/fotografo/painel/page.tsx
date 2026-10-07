@@ -434,8 +434,8 @@ export default function PainelFotografoPage() {
   const [novoAlbum, setNovoAlbum] = useState("Geral");
   const [arquivos, setArquivos] = useState<File[]>([]);
   const [buscaArquivo, setBuscaArquivo] = useState("");
-  const [precoFoto, setPrecoFoto] = useState("15,00");
-  const [precoVideo, setPrecoVideo] = useState("25,00");
+  const [precoFoto, setPrecoFoto] = useState("0,00");
+  const [precoVideo, setPrecoVideo] = useState("0,00");
   const [status, setStatus] = useState<UploadStatus>("idle");
   const [mensagem, setMensagem] = useState("");
   const [carregando, setCarregando] = useState(true);
@@ -537,8 +537,8 @@ export default function PainelFotografoPage() {
 
   const eventoSelecionado = useMemo(() => eventos.find((evento) => evento.id === eventoId), [eventos, eventoId]);
   const albumSelecionado = useMemo(() => albuns.find((album) => album.id === albumId), [albuns, albumId]);
-  const valorFotoAtual = formatarPrecoFotos(eventoSelecionado?.preco_bloqueado ? Number(eventoSelecionado.preco_padrao_centavos || 0) : converterPrecoCentavos(precoFoto, 1500));
-  const valorVideoAtual = formatarPrecoFotos(eventoSelecionado?.preco_bloqueado ? Number(eventoSelecionado.preco_video_centavos || 0) : converterPrecoCentavos(precoVideo, 2500));
+  const valorFotoAtual = formatarPrecoFotos(eventoSelecionado?.preco_bloqueado ? Number(eventoSelecionado.preco_padrao_centavos || 0) : converterPrecoCentavos(precoFoto, 0));
+  const valorVideoAtual = formatarPrecoFotos(eventoSelecionado?.preco_bloqueado ? Number(eventoSelecionado.preco_video_centavos || 0) : converterPrecoCentavos(precoVideo, 0));
   const enviando = ["preparando", "enviando", "confirmando"].includes(status);
   const uploadBloqueado = !eventoId || carregandoAlbuns || enviando || criandoAlbum;
   const totalBytes = useMemo(() => arquivos.reduce((total, arquivo) => total + arquivo.size, 0), [arquivos]);
@@ -687,8 +687,8 @@ export default function PainelFotografoPage() {
         size: arquivoPronto.size,
         titulo: arquivoPronto.name.replace(/\.[^.]+$/, ""),
         precoCentavos: ehVideo
-          ? converterPrecoCentavos(precoVideo, 2500)
-          : converterPrecoCentavos(precoFoto, 1500),
+          ? converterPrecoCentavos(precoVideo, 0)
+          : converterPrecoCentavos(precoFoto, 0),
         duracaoSegundos: derivadosVideo?.duracaoSegundos || null,
         videoPreviewContentType: derivadosVideo?.previewVideoContentType || null,
       }),
@@ -851,6 +851,12 @@ export default function PainelFotografoPage() {
       return;
     }
 
+    if (!eventoSelecionado?.preco_bloqueado) {
+      const fotosGratis = arquivos.some((arquivo) => !arquivo.type.startsWith("video/")) && converterPrecoCentavos(precoFoto, 0) === 0;
+      const videosGratis = arquivos.some((arquivo) => arquivo.type.startsWith("video/")) && converterPrecoCentavos(precoVideo, 0) === 0;
+      if ((fotosGratis || videosGratis) && !window.confirm("Uma ou mais mídias deste lote estão com preço de R$ 0,00. Deseja publicá-las gratuitamente?")) return;
+    }
+
     let destinoAlbumId = albumId;
     if (!destinoAlbumId) {
       const albumCriado = await criarAlbum();
@@ -871,9 +877,9 @@ export default function PainelFotografoPage() {
                 <p className="inline-flex items-center gap-2 rounded-full border border-retratt/30 bg-retratt/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.24em] text-retratt">
                   <Camera size={13} /> Área do fotógrafo
                 </p>
-                <h1 className="mt-4 text-3xl font-black uppercase leading-none md:text-5xl">Criar álbum</h1>
+                <h1 className="mt-4 text-3xl font-black uppercase leading-none md:text-5xl">Adicionar mídias</h1>
                 <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-400">
-                  Escolha a galeria, organize um álbum e publique fotos ou vídeos em um fluxo simples. As fotos continuam otimizadas automaticamente até 3MB.
+                  Escolha o álbum, selecione as fotos ou vídeos e confira os preços antes de publicar. As fotos continuam otimizadas automaticamente até 3MB.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -892,7 +898,7 @@ export default function PainelFotografoPage() {
                 <p className="mt-1 truncate text-sm font-bold text-white">{email || "Entrar para enviar"}</p>
               </div>
               <div className="rounded-xl border border-white/10 bg-black/50 p-4">
-                <p className="text-[10px] font-black uppercase tracking-wider text-zinc-500">Eventos liberados</p>
+                <p className="text-[10px] font-black uppercase tracking-wider text-zinc-500">Álbuns disponíveis</p>
                 <p className="mt-1 text-2xl font-black text-retratt">{eventos.length}</p>
               </div>
               <div className="rounded-xl border border-white/10 bg-black/50 p-4">
@@ -941,32 +947,32 @@ export default function PainelFotografoPage() {
                 <FolderPlus size={18} className="text-retratt" />
                 <div>
                   <p className="text-[9px] font-black uppercase tracking-[0.22em] text-retratt">Passo 1</p>
-                  <h2 className="text-sm font-black uppercase tracking-wider">Onde publicar?</h2>
+                  <h2 className="text-sm font-black uppercase tracking-wider">Escolha o álbum</h2>
                 </div>
               </div>
 
-              <label className="text-[10px] font-black uppercase tracking-[0.22em] text-zinc-500">Galeria do evento</label>
+              <label className="text-[10px] font-black uppercase tracking-[0.22em] text-zinc-500">Álbum do evento ou trabalho</label>
               <select value={eventoId} onChange={(e) => setEventoId(e.target.value)} className="mt-2 h-11 w-full cursor-pointer rounded-lg border border-white/10 bg-black px-3 text-xs font-bold outline-none focus:border-retratt">
-                <option value="">Escolha uma galeria</option>
+                <option value="">Escolha um álbum</option>
                 {eventos.map((evento) => <option key={evento.id} value={evento.id}>{evento.nome}</option>)}
               </select>
 
-              <label className="mt-4 block text-[10px] font-black uppercase tracking-[0.22em] text-zinc-500">Álbum</label>
+              <label className="mt-4 block text-[10px] font-black uppercase tracking-[0.22em] text-zinc-500">Pasta de fotos</label>
               <select value={albumId} onChange={(e) => setAlbumId(e.target.value)} disabled={!eventoId || carregandoAlbuns} className="mt-2 h-11 w-full cursor-pointer rounded-lg border border-white/10 bg-black px-3 text-xs font-bold outline-none focus:border-retratt disabled:cursor-wait disabled:text-zinc-600">
-                <option value="">{carregandoAlbuns ? "Buscando álbuns..." : albuns.length ? "Escolha um álbum" : "Nenhum álbum criado"}</option>
+                <option value="">{carregandoAlbuns ? "Buscando pastas..." : albuns.length ? "Escolha uma pasta" : "Pasta Geral criada ao publicar"}</option>
                 {albuns.map((album) => <option key={album.id} value={album.id}>{album.titulo}</option>)}
               </select>
 
               <div className={`mt-4 rounded-xl border p-3 ${!carregandoAlbuns && eventoId && !albuns.length ? "border-retratt/40 bg-retratt/10" : "border-white/10 bg-black"}`}>
-                <p className="text-[10px] font-black uppercase tracking-[0.22em] text-zinc-400">{albuns.length ? "Criar outro álbum" : "Dê um nome ao primeiro álbum"}</p>
+                <p className="text-[10px] font-black uppercase tracking-[0.22em] text-zinc-400">{albuns.length ? "Criar outra pasta (opcional)" : "Pasta personalizada (opcional)"}</p>
                 {!carregandoAlbuns && eventoId && !albuns.length && (
-                  <p className="mt-2 text-xs leading-5 text-orange-100/75">Pode continuar tranquilo: se você não criar agora, faremos isso automaticamente ao enviar.</p>
+                  <p className="mt-2 text-xs leading-5 text-orange-100/75">Pode seguir direto para as fotos. A pasta Geral será criada ao publicar.</p>
                 )}
                 <div className="mt-3 flex flex-col gap-2">
                   <input value={novoAlbum} onChange={(e) => setNovoAlbum(e.target.value)} className="h-10 min-w-0 flex-1 rounded-lg border border-white/10 bg-zinc-950 px-3 text-xs outline-none focus:border-retratt" placeholder="Ex: Pódio, Pista, Cerimônia" />
                   <button type="button" onClick={() => void criarAlbum()} disabled={!eventoId || !novoAlbum.trim() || criandoAlbum || carregandoAlbuns} className="inline-flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-retratt/30 bg-retratt/10 px-4 text-[10px] font-black uppercase tracking-wider text-retratt hover:bg-retratt hover:text-black disabled:cursor-not-allowed disabled:opacity-40">
                     {criandoAlbum ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
-                    {criandoAlbum ? "Criando álbum..." : "Criar e selecionar álbum"}
+                    {criandoAlbum ? "Criando pasta..." : "Criar e selecionar pasta"}
                   </button>
                 </div>
               </div>
@@ -1019,13 +1025,14 @@ export default function PainelFotografoPage() {
               </div>
 
               <div className="rounded-2xl border border-white/10 bg-black p-4">
-                <label className="text-[10px] font-black uppercase tracking-[0.22em] text-zinc-500">Preços de venda</label>
+                <p className="text-[10px] font-black uppercase tracking-[0.22em] text-zinc-500">Passo 3 · Confira os preços</p>
+                <p className="mt-2 text-xs leading-5 text-zinc-400">Os campos começam zerados. Preencha os valores para vender; R$ 0,00 publica gratuitamente após confirmação.</p>
                 <div className="mt-2 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
                   <label className="block">
                     <span className="text-[9px] font-black uppercase tracking-wider text-zinc-500">Cada foto</span>
                     <div className="relative mt-1">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-zinc-500">R$</span>
-                      <input value={eventoSelecionado?.preco_bloqueado ? ((eventoSelecionado.preco_padrao_centavos || 0) / 100).toFixed(2).replace(".", ",") : precoFoto} onChange={(e) => setPrecoFoto(e.target.value)} disabled={eventoSelecionado?.preco_bloqueado} inputMode="decimal" className="h-12 w-full rounded-lg border border-white/10 bg-zinc-950 pl-9 pr-3 text-lg font-black outline-none focus:border-retratt disabled:opacity-50" />
+                      <input value={eventoSelecionado?.preco_bloqueado ? ((eventoSelecionado.preco_padrao_centavos || 0) / 100).toFixed(2).replace(".", ",") : precoFoto} onFocus={(e) => e.target.select()} onChange={(e) => setPrecoFoto(e.target.value)} disabled={eventoSelecionado?.preco_bloqueado} inputMode="decimal" className="h-12 w-full rounded-lg border border-white/10 bg-zinc-950 pl-9 pr-3 text-lg font-black outline-none focus:border-retratt disabled:opacity-50" />
                     </div>
                     <span className="mt-1 block text-[10px] font-bold text-emerald-300">{valorFotoAtual}</span>
                   </label>
@@ -1033,7 +1040,7 @@ export default function PainelFotografoPage() {
                     <span className="text-[9px] font-black uppercase tracking-wider text-zinc-500">Cada vídeo</span>
                     <div className="relative mt-1">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-zinc-500">R$</span>
-                      <input value={eventoSelecionado?.preco_bloqueado ? ((eventoSelecionado.preco_video_centavos || 0) / 100).toFixed(2).replace(".", ",") : precoVideo} onChange={(e) => setPrecoVideo(e.target.value)} disabled={eventoSelecionado?.preco_bloqueado} inputMode="decimal" className="h-12 w-full rounded-lg border border-white/10 bg-zinc-950 pl-9 pr-3 text-lg font-black outline-none focus:border-retratt disabled:opacity-50" />
+                      <input value={eventoSelecionado?.preco_bloqueado ? ((eventoSelecionado.preco_video_centavos || 0) / 100).toFixed(2).replace(".", ",") : precoVideo} onFocus={(e) => e.target.select()} onChange={(e) => setPrecoVideo(e.target.value)} disabled={eventoSelecionado?.preco_bloqueado} inputMode="decimal" className="h-12 w-full rounded-lg border border-white/10 bg-zinc-950 pl-9 pr-3 text-lg font-black outline-none focus:border-retratt disabled:opacity-50" />
                     </div>
                     <span className="mt-1 block text-[10px] font-bold text-emerald-300">{valorVideoAtual}</span>
                   </label>
@@ -1042,7 +1049,7 @@ export default function PainelFotografoPage() {
                 <p className="mt-3 text-xs text-zinc-500">Lote atual: <span className="font-bold text-white">{arquivos.length}</span> mídia(s) · {formatarTamanho(totalBytes)}</p>
 
                 <button type="button" onClick={() => void iniciarEnvio()} disabled={uploadBloqueado} className="mt-4 inline-flex min-h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-retratt px-3 py-3 text-center text-xs font-black uppercase tracking-wider text-black shadow-[0_0_24px_rgba(255,90,31,0.18)] transition hover:bg-retratt disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500">
-                  {criandoAlbum ? <><Loader2 size={16} className="animate-spin" /> Criando álbum</> : enviando ? <><Loader2 size={16} className="animate-spin" /> Publicando {uploadAtual}/{uploadTotal}</> : !arquivos.length ? <><ImagePlus size={16} /> Escolher mídias</> : !albumId ? <><FolderPlus size={16} /> Criar álbum e publicar</> : <><CloudUpload size={16} /> Publicar {arquivos.length} mídia(s)</>}
+                  {criandoAlbum ? <><Loader2 size={16} className="animate-spin" /> Preparando pasta</> : enviando ? <><Loader2 size={16} className="animate-spin" /> Publicando {uploadAtual}/{uploadTotal}</> : !arquivos.length ? <><ImagePlus size={16} /> Escolher mídias</> : !albumId ? <><FolderPlus size={16} /> Preparar pasta e publicar</> : <><CloudUpload size={16} /> Publicar {arquivos.length} mídia(s)</>}
                 </button>
 
                 {(enviando || status === "ok") && (

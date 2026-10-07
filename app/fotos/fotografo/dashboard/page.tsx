@@ -39,7 +39,7 @@ export default function FotografoDashboardPage() {
 
   const [mostrarCriarGaleria, setMostrarCriarGaleria] = useState(false);
   const [mostrarDetalhesMp, setMostrarDetalhesMp] = useState(false);
-  const [galeriaForm, setGaleriaForm] = useState({ nome: "", cidade: "", estado: "", dataEvento: "", preco: "15,00", emBreve: false });
+  const [galeriaForm, setGaleriaForm] = useState({ nome: "", cidade: "", estado: "", dataEvento: "", preco: "0,00", emBreve: false });
   const [faixasCriacao, setFaixasCriacao] = useState<FaixaDesconto[]>([]);
   const [faixasEdicao, setFaixasEdicao] = useState<FaixaDesconto[]>([]);
   const [capaGaleria, setCapaGaleria] = useState<File | null>(null);
@@ -240,7 +240,7 @@ export default function FotografoDashboardPage() {
     const response = await fetch("/api/fotos/fotografo/criar-galeria", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
-      body: JSON.stringify({ ...galeriaForm, descontosProgressivos, capaUrl, precoCentavos: Number.isFinite(normalizado) ? Math.round(normalizado * 100) : 1500 }),
+      body: JSON.stringify({ ...galeriaForm, descontosProgressivos, capaUrl, precoCentavos: Number.isFinite(normalizado) ? Math.max(0, Math.round(normalizado * 100)) : 0 }),
     });
     const resultado = await response.json().catch(() => null);
     setCriandoGaleria(false);
@@ -407,19 +407,18 @@ export default function FotografoDashboardPage() {
                 <div className="min-w-0">
                   <p className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-retratt/20 bg-retratt/10 px-3 py-1 text-[8px] font-black uppercase tracking-[0.2em] text-retratt shadow-[0_0_15px_rgba(255,90,31,0.1)] sm:text-[9px]"><Camera size={12} /> Dashboard do Fotógrafo</p>
                   <h1 className="break-words text-3xl font-black uppercase leading-none tracking-tight drop-shadow-md sm:text-4xl md:text-5xl">Olá, {primeiroNome}!</h1>
-                  <p className="mt-3 max-w-xl text-xs font-medium leading-relaxed text-zinc-400 md:text-sm">Crie suas galerias, publique mídias e acompanhe vendas e repasses em um só lugar.</p>
+                  <p className="mt-3 max-w-xl text-xs font-medium leading-relaxed text-zinc-400 md:text-sm">Organize seus álbuns, publique mídias e acompanhe vendas e repasses em um só lugar.</p>
                 </div>
               </div>
               <div className="flex flex-col sm:flex-row w-full sm:w-auto items-stretch sm:items-center gap-3">
                 <Link href="/fotos/fotografo/financeiro" className="cursor-pointer inline-flex h-11 w-full sm:w-auto items-center justify-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-5 text-[10px] font-black uppercase tracking-widest text-emerald-300 hover:bg-emerald-400 hover:text-black transition-colors shadow-sm">Financeiro <ChartNoAxesCombined size={14} className="shrink-0" /></Link>
-                <Link href="/fotos/fotografo/painel" className="cursor-pointer inline-flex h-11 w-full sm:w-auto items-center justify-center gap-2 rounded-xl bg-retratt px-5 text-[10px] font-black uppercase tracking-widest text-black hover:bg-retratt transition-colors shadow-sm">Criar álbum <CloudUpload size={14} className="shrink-0" /></Link>
-                <button type="button" onClick={abrirCriacaoGaleria} className="cursor-pointer inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-retratt/40 bg-retratt/10 px-5 text-[10px] font-black uppercase tracking-widest text-retratt transition-colors hover:bg-retratt hover:text-black sm:w-auto"><Plus size={14}/> Minha galeria</button>
+                <Link href="#albuns" className="cursor-pointer inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-retratt px-5 text-[10px] font-black uppercase tracking-widest text-black hover:brightness-110 sm:w-auto">Álbuns <FolderOpen size={14} className="shrink-0" /></Link>
                 {userId && <button onClick={deslogar} className="cursor-pointer inline-flex h-11 w-full sm:w-auto items-center justify-center gap-2 rounded-xl border border-retratt/20 bg-retratt/10 px-6 text-[10px] font-black uppercase tracking-widest text-retratt hover:bg-retratt hover:text-white transition-all shadow-sm">Sair <LogOut size={14} className="shrink-0" /></button>}
               </div>
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-              {[[ImagePlus, "Mídias Publicadas", totais.fotos, "text-retratt"], [FolderOpen, "Álbuns Criados", totais.albuns, "text-white"], [Store, "Eventos", totais.eventos, "text-retratt"], [Wallet, "Vendas", totais.vendas, "text-emerald-400"]].map(([Icon, label, valor, cor], index) => {
+              {[[ImagePlus, "Mídias Publicadas", totais.fotos, "text-retratt"], [FolderOpen, "Pastas de fotos", totais.albuns, "text-white"], [Store, "Eventos", totais.eventos, "text-retratt"], [Wallet, "Vendas", totais.vendas, "text-emerald-400"]].map(([Icon, label, valor, cor], index) => {
                 const IconComponent = Icon as typeof Camera;
                 return (
                   <div key={index} className="relative overflow-hidden rounded-2xl border border-white/5 bg-[#0a0a0e]/80 backdrop-blur-md p-4 sm:p-5 shadow-lg group hover:border-white/10 transition-colors">
@@ -488,6 +487,11 @@ export default function FotografoDashboardPage() {
                    </div>
                 )}
 
+                <div id="albuns" className="scroll-mt-24 flex items-center justify-between gap-3 pt-2">
+                  <div><h2 className="text-lg font-black uppercase text-white">Álbuns</h2><p className="mt-1 text-xs text-zinc-400">Escolha um álbum para adicionar fotos ou crie um novo abaixo.</p></div>
+                  <button type="button" onClick={abrirCriacaoGaleria} className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-retratt px-4 py-3 text-[10px] font-black uppercase text-black hover:brightness-110"><Plus size={14} /> Novo álbum</button>
+                </div>
+
                 {/* 🔥 EVENTOS OFICIAIS */}
                 {galeriasOficiais.length > 0 && (
                   <div className="rounded-3xl border border-emerald-500/10 bg-[#0a0a0e] p-5 sm:p-6 md:p-8 shadow-xl mt-6">
@@ -545,7 +549,7 @@ export default function FotografoDashboardPage() {
                 {minhasGalerias.length > 0 && (
                   <div className="rounded-3xl border border-white/5 bg-[#0a0a0e] p-5 sm:p-6 md:p-8 shadow-xl mt-6">
                     <h2 className="text-lg font-black uppercase tracking-tight text-white mb-6 flex items-center gap-2">
-                       <ImagePlus size={20} className="text-retratt shrink-0"/> Trabalho Freelancer
+                       <ImagePlus size={20} className="text-retratt shrink-0"/> Meus álbuns
                     </h2>
 
                     <div className="space-y-4">
@@ -724,7 +728,7 @@ export default function FotografoDashboardPage() {
                   >
                     <div className="min-w-0 flex-1">
                       <p className="text-[9px] font-black uppercase tracking-[0.2em] text-retratt truncate">Trabalho freelancer</p>
-                      <h2 className="mt-1 text-base sm:text-lg font-black uppercase tracking-tight text-white truncate">Criar minha própria galeria</h2>
+                      <h2 className="mt-1 text-base sm:text-lg font-black uppercase tracking-tight text-white truncate">Novo álbum independente</h2>
                     </div>
                     <div className={`w-10 h-10 shrink-0 rounded-full bg-retratt/10 border border-retratt/20 flex items-center justify-center text-retratt transition-transform duration-300 ${mostrarCriarGaleria ? "rotate-45" : ""}`}>
                        <Plus size={20} />
@@ -733,8 +737,8 @@ export default function FotografoDashboardPage() {
 
                   {mostrarCriarGaleria && (
                     <div className="px-5 pb-5 md:px-8 md:pb-8 border-t border-white/5 pt-5 sm:pt-6 animate-in slide-in-from-top-4 fade-in duration-300 bg-black/20">
-                       <p className="mb-2 text-[10px] leading-relaxed text-zinc-400">Use quando o trabalho não estiver vinculado a um organizador. A galeria e o álbum Geral ficarão sob sua conta.</p>
-                       <p className="mb-6 rounded-xl border border-retratt/20 bg-retratt/5 p-3 text-[9px] font-bold leading-relaxed text-orange-100">Em galerias freelancer não há comissão de organizador. Em cada venda, a Retratt retém 5%; você recebe 95% menos a tarifa do Mercado Pago, descontada da sua conta.</p>
+                       <p className="mb-2 text-[10px] leading-relaxed text-zinc-400">Para trabalhos sem organizador, crie seu álbum aqui. Depois use “Adicionar mídias” no cartão do álbum para publicar as fotos.</p>
+                       <p className="mb-6 rounded-xl border border-retratt/20 bg-retratt/5 p-3 text-[9px] font-bold leading-relaxed text-orange-100">Em álbuns independentes não há comissão de organizador. Em cada venda, a Retratt retém 5%; você recebe 95% menos a tarifa do Mercado Pago, descontada da sua conta.</p>
 
                        <div className="grid gap-3 sm:grid-cols-2">
                          <div className="sm:col-span-2">
@@ -754,8 +758,9 @@ export default function FotografoDashboardPage() {
                            <input type="date" value={galeriaForm.dataEvento} onChange={(e) => setGaleriaForm({ ...galeriaForm, dataEvento: e.target.value })} className="cursor-text h-11 w-full rounded-xl border border-white/10 bg-black px-3 text-xs font-bold text-white outline-none focus:border-retratt" />
                          </div>
                          <div>
-                           <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Preço Padrão (R$)</label>
-                           <input value={galeriaForm.preco} onChange={(e) => setGaleriaForm({ ...galeriaForm, preco: e.target.value })} inputMode="decimal" className="cursor-text h-11 w-full rounded-xl border border-white/10 bg-black px-3 text-xs font-bold text-white outline-none focus:border-retratt" />
+                           <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Preço inicial por foto (R$)</label>
+                           <input value={galeriaForm.preco} onFocus={(e) => e.target.select()} onChange={(e) => setGaleriaForm({ ...galeriaForm, preco: e.target.value })} inputMode="decimal" className="cursor-text h-11 w-full rounded-xl border border-white/10 bg-black px-3 text-xs font-bold text-white outline-none focus:border-retratt" />
+                           <p className="mt-1 text-[10px] text-zinc-500">Começa em R$ 0,00. Defina o valor antes de publicar se desejar vender.</p>
                          </div>
                          <EditorFaixasDesconto faixas={faixasCriacao} onChange={setFaixasCriacao} />
                          <label className="sm:col-span-2 flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-xs text-white">
@@ -777,7 +782,7 @@ export default function FotografoDashboardPage() {
                          </button>
                          <button type="button" onClick={criarGaleriaFreelancer} disabled={criandoGaleria || !galeriaForm.nome.trim()} className="cursor-pointer h-11 w-full sm:w-auto flex items-center justify-center gap-2 rounded-xl bg-retratt px-8 text-[10px] font-black uppercase tracking-widest text-black hover:bg-retratt disabled:cursor-not-allowed disabled:opacity-50 transition-colors shadow-[0_0_15px_rgba(255,90,31,0.2)]">
                            {criandoGaleria ? <Loader2 size={14} className="animate-spin shrink-0" /> : <Plus size={14} className="shrink-0" />}
-                           {criandoGaleria ? "Criando..." : "Criar Galeria"}
+                           {criandoGaleria ? "Criando..." : "Criar álbum"}
                          </button>
                        </div>
                        {mensagemGaleria && <p className="mt-3 text-xs font-bold text-retratt text-center sm:text-right">{mensagemGaleria}</p>}
