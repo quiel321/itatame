@@ -1,6 +1,7 @@
 ﻿import { NextResponse } from "next/server";
 import { createR2PresignedGetUrl } from "@/app/lib/r2";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
+import { acessoAlbumPermitido } from "@/app/lib/fotos-acesso-album";
 
 export const runtime = "nodejs";
 
@@ -15,11 +16,18 @@ export async function GET(request: Request, context: Params) {
     const supabase = createSupabaseServerClient();
     const { data: foto, error } = await supabase
       .from("foto_arquivos")
-      .select("id, status, mime_type, r2_original_key, r2_preview_key, r2_thumb_key, preview_url, thumb_url")
+      .select("id, evento_id, status, mime_type, r2_original_key, r2_preview_key, r2_thumb_key, preview_url, thumb_url")
       .eq("id", id)
       .maybeSingle();
 
     if (error || !foto || foto.status !== "publicada") {
+      return NextResponse.json({ error: "Foto nao encontrada." }, { status: 404 });
+    }
+
+    const { data: album } = await supabase.from("foto_eventos")
+      .select("id, status, acesso_por_link, acesso_token")
+      .eq("id", foto.evento_id).maybeSingle();
+    if (!acessoAlbumPermitido(album, url.searchParams.get("acesso"))) {
       return NextResponse.json({ error: "Foto nao encontrada." }, { status: 404 });
     }
 
@@ -37,7 +45,10 @@ export async function GET(request: Request, context: Params) {
         : foto.preview_url || foto.thumb_url;
 
     if (urlPublica && /^https?:\/\//.test(urlPublica)) {
-      return NextResponse.redirect(urlPublica);
+      const response = NextResponse.redirect(urlPublica);
+      response.headers.set("Cache-Control", album?.acesso_por_link ? "private, no-store" : "public, max-age=300, s-maxage=300");
+      response.headers.set("Referrer-Policy", "no-referrer");
+      return response;
     }
 
     if (!key) {
@@ -47,7 +58,8 @@ export async function GET(request: Request, context: Params) {
     // O preview já é protegido por marca d'água. O navegador pode buscá-lo no R2
     // sem fazer a função da Vercel transmitir cada imagem ou vídeo inteiro.
     const response = NextResponse.redirect(createR2PresignedGetUrl(key, 3600), 307);
-    response.headers.set("Cache-Control", "public, max-age=300, s-maxage=300");
+    response.headers.set("Cache-Control", album?.acesso_por_link ? "private, no-store" : "public, max-age=300, s-maxage=300");
+    response.headers.set("Referrer-Policy", "no-referrer");
     return response;
   } catch (error: unknown) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Erro ao abrir preview." }, { status: 500 });

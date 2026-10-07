@@ -103,7 +103,7 @@ export async function POST(request: Request) {
 
     const eventoIds = [...new Set(fotos.map((foto) => foto.evento_id))];
     const { data: eventos, error: eventosError } = eventoIds.length
-      ? await supabase.from("foto_eventos").select("id, nome, data_evento, cidade, estado").in("id", eventoIds)
+      ? await supabase.from("foto_eventos").select("id, nome, data_evento, cidade, estado").in("id", eventoIds).eq("acesso_por_link", false)
       : { data: [], error: null };
     if (eventosError) throw new Error(eventosError.message);
     const eventoPorId = new Map((eventos || []).map((evento) => [evento.id, evento]));
@@ -111,7 +111,7 @@ export async function POST(request: Request) {
     const fotoPorId = new Map(fotos.map((foto) => [foto.id, foto]));
     const resultados = ids.flatMap((id) => {
       const foto = fotoPorId.get(id);
-      if (!foto) return [];
+      if (!foto || !eventoPorId.has(foto.evento_id)) return [];
       const similaridade = melhoresPorFoto.get(id) || 0;
       return [{
         id: foto.id,

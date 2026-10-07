@@ -44,10 +44,10 @@ export const carregarDadosOgFotos = cache(async (alvo: AlvoOgFotos): Promise<Dad
   if (!UUID.test(alvo.eventoId)) return null;
   const { data: evento } = await supabase
     .from("foto_eventos")
-    .select("id, nome, local, cidade, estado, data_evento, capa_url, status")
+    .select("id, nome, local, cidade, estado, data_evento, capa_url, status, acesso_por_link")
     .eq("id", alvo.eventoId)
     .maybeSingle();
-  if (!evento || evento.status !== "publicado") return null;
+  if (!evento || evento.status !== "publicado" || evento.acesso_por_link) return null;
 
   const album = alvo.albumId && UUID.test(alvo.albumId)
     ? (await supabase

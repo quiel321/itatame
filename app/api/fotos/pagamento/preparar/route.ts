@@ -14,6 +14,7 @@ import {
 import { consumirLimiteAuth, ipDaRequisicao } from "@/app/lib/limite-auth";
 import { modeloRecebimentoFotos, obterRecebedorFotos } from "@/app/lib/fotos-recebedor";
 import { calcularDescontoFotos, faixasDoEvento } from "@/app/lib/fotos-descontos";
+import { acessoAlbumPermitido } from "@/app/lib/fotos-acesso-album";
 
 export const runtime = "nodejs";
 
@@ -72,7 +73,7 @@ export async function POST(request: Request) {
       .from("foto_arquivos")
       .select(`
         id, evento_id, fotografo_id, titulo, mime_type, preco_centavos, status,
-        foto_eventos (id, nome, status, vendas_ate, desconto_combo_qtd, desconto_combo_percentual, descontos_progressivos, em_breve, organizador_user_id),
+        foto_eventos (id, nome, status, vendas_ate, desconto_combo_qtd, desconto_combo_percentual, descontos_progressivos, em_breve, organizador_user_id, acesso_por_link, acesso_token, permite_download_gratis),
         fotografos (id, nome, mp_access_token, mp_connected_at, status)
       `)
       .in("id", fotoIds)
@@ -91,6 +92,13 @@ export async function POST(request: Request) {
     const fotografo = primeiraRelacao(fotos[0].fotografos);
     if (!evento || evento.status !== "publicado" || evento.em_breve) {
       return NextResponse.json({ error: "A galeria não está disponível para vendas." }, { status: 409 });
+    }
+    const acessoInformado = typeof body.acessos?.[eventoId] === "string" ? body.acessos[eventoId] : null;
+    if (!acessoAlbumPermitido(evento, acessoInformado)) {
+      return NextResponse.json({ error: "O link de acesso deste álbum é inválido ou expirou." }, { status: 403 });
+    }
+    if (evento.permite_download_gratis) {
+      return NextResponse.json({ error: "Este álbum oferece downloads gratuitos diretamente na galeria." }, { status: 409 });
     }
     if (evento.vendas_ate && new Date(evento.vendas_ate) < new Date()) {
       return NextResponse.json({ error: "O prazo de compra desta galeria terminou." }, { status: 409 });

@@ -64,6 +64,8 @@ type ResultadoPagamento = {
 
 type FotoCarrinho = {
   id: string;
+  eventoId: string;
+  acesso: string | null;
   evento: string;
   fotografo: string;
   precoCentavos: number;
@@ -185,6 +187,7 @@ export default function FotosCarrinhoPage() {
           .from("foto_arquivos")
           .select(`
             id,
+            evento_id,
             titulo,
             mime_type,
             preco_centavos,
@@ -200,7 +203,7 @@ export default function FotosCarrinhoPage() {
         if (consulta.error) {
           consulta = await supabase
             .from("foto_arquivos")
-            .select("id, titulo, mime_type, preco_centavos, preview_url, thumb_url, status")
+            .select("id, evento_id, titulo, mime_type, preco_centavos, preview_url, thumb_url, status")
             .in("id", idsSalvos)
             .eq("status", "publicada");
         }
@@ -208,20 +211,40 @@ export default function FotosCarrinhoPage() {
         if (consulta.error) throw consulta.error;
 
         const mapa = new Map((consulta.data || []).map((foto: any) => [String(foto.id), foto]));
+        const privados = new Map<string, { foto: any; evento: any; acesso: string }>();
+        const faltantes = idsSalvos.filter((id: string) => !mapa.has(id));
+        const grupos = new Map<string, string[]>();
+        for (const id of faltantes) {
+          const eventoId = localStorage.getItem(`retratt_evento_foto_${id}`);
+          if (!eventoId) continue;
+          grupos.set(eventoId, [...(grupos.get(eventoId) || []), id]);
+        }
+        await Promise.all([...grupos].map(async ([eventoId, ids]) => {
+          const acesso = localStorage.getItem(`retratt_acesso_album_${eventoId}`);
+          if (!acesso) return;
+          const parametros = new URLSearchParams({ acesso, fotos: ids.join(",") });
+          const resposta = await fetch(`/api/fotos/evento/${eventoId}/midias-privadas?${parametros}`, { cache: "no-store" });
+          if (!resposta.ok) return;
+          const resultado = await resposta.json();
+          for (const foto of resultado.fotos || []) privados.set(String(foto.id), { foto, evento: resultado.evento, acesso });
+        }));
         const fotosReais = idsSalvos
-          .map((id: string) => mapa.get(id))
+          .map((id: string) => mapa.get(id) || privados.get(id)?.foto)
           .filter(Boolean)
           .map((foto: any) => {
             // Agora puxamos pelo apelido exato que demos na query acima!
-            const evento = primeiraRelacao(foto.evento_dados);
+            const privado = privados.get(String(foto.id));
+            const evento = privado?.evento || primeiraRelacao(foto.evento_dados);
             const fotografo = primeiraRelacao(foto.fotografo_dados);
 
             return {
               id: String(foto.id),
+              eventoId: String(foto.evento_id),
+              acesso: privado?.acesso || null,
               evento: evento?.nome || "Evento Oficial",
               fotografo: fotografo?.nome || "Fotógrafo Parceiro",
               precoCentavos: Number(foto.preco_centavos || 0),
-              imagem: `/api/fotos/arquivo/${foto.id}?tipo=preview`,
+              imagem: `/api/fotos/arquivo/${foto.id}?tipo=preview${privado ? `&acesso=${encodeURIComponent(privado.acesso)}` : ""}`,
               comboQtd: Number(evento?.desconto_combo_qtd || COMBO_QTD_PADRAO),
               comboPercentual: Number(evento?.desconto_combo_percentual ?? COMBO_PERCENTUAL_PADRAO),
               descontosProgressivos: Array.isArray(evento?.descontos_progressivos) ? evento.descontos_progressivos : null,
@@ -278,6 +301,7 @@ export default function FotosCarrinhoPage() {
       headers: { "Content-Type": "application/json", ...autenticacao },
       body: JSON.stringify({
         fotoIds: fotos.map((foto) => foto.id),
+        acessos: Object.fromEntries(fotos.filter((foto) => foto.acesso).map((foto) => [foto.eventoId, foto.acesso])),
         comprador: userId ? undefined : { nome, email },
       }),
     });
@@ -453,7 +477,7 @@ export default function FotosCarrinhoPage() {
                   <div key={foto.id} className="group relative min-w-0 rounded-xl border border-white/5 bg-[#0a0a0e] p-1.5 transition-all duration-300 hover:border-retratt/30 hover:bg-retratt/5 sm:p-2.5">
                     <div className="relative mb-2 aspect-[4/5] overflow-hidden rounded-lg bg-zinc-900 sm:mb-3">
                       <button type="button" onClick={() => setIndiceAberto(fotos.indexOf(foto))} aria-label={`Ampliar ${foto.mimeType?.startsWith("video/") ? "vídeo" : "foto"} no carrinho`} className="absolute inset-0 w-full cursor-zoom-in">
-                        <img src={`/api/fotos/arquivo/${foto.id}?tipo=thumb`} alt="Prévia protegida da foto no carrinho" loading="lazy" className="h-full w-full object-cover opacity-90" />
+                        <img src={`/api/fotos/arquivo/${foto.id}?tipo=thumb${foto.acesso ? `&acesso=${encodeURIComponent(foto.acesso)}` : ""}`} alt="Prévia protegida da foto no carrinho" loading="lazy" className="h-full w-full object-cover opacity-90" />
                       </button>
                       {foto.mimeType?.startsWith("video/") && <span className="absolute left-2 top-2 z-10 inline-flex items-center gap-1 rounded-full bg-black/80 px-2 py-1 text-[8px] font-black uppercase tracking-wider text-white"><Video size={10}/> Vídeo</span>}
                       <div aria-hidden="true" className="pointer-events-none absolute inset-0 grid grid-cols-2 grid-rows-4 overflow-hidden">
@@ -632,7 +656,7 @@ export default function FotosCarrinhoPage() {
               <button type="button" onClick={() => setIndiceAberto(null)} aria-label="Fechar prévia" className="absolute right-0 top-0 z-20 rounded-full bg-zinc-900 p-3 text-white"><X size={20} /></button>
               <div className="relative flex min-h-0 flex-1 items-center justify-center pt-12">
                 {fotos[indiceAberto].mimeType?.startsWith("video/") ? (
-                  <video key={fotos[indiceAberto].id} src={`/api/fotos/arquivo/${fotos[indiceAberto].id}?tipo=video-preview`} poster={fotos[indiceAberto].imagem} controls playsInline preload="metadata" className="max-h-full max-w-full" />
+                  <video key={fotos[indiceAberto].id} src={`/api/fotos/arquivo/${fotos[indiceAberto].id}?tipo=video-preview${fotos[indiceAberto].acesso ? `&acesso=${encodeURIComponent(fotos[indiceAberto].acesso!)}` : ""}`} poster={fotos[indiceAberto].imagem} controls playsInline preload="metadata" className="max-h-full max-w-full" />
                 ) : (
                   <img src={fotos[indiceAberto].imagem} alt="Prévia protegida da foto no carrinho" className="max-h-full max-w-full object-contain" />
                 )}

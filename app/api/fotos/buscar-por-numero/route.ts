@@ -58,11 +58,11 @@ export async function POST(request: Request) {
     if (eventoId) {
       const { data: evento, error: eventoError } = await supabase
         .from("foto_eventos")
-        .select("id, nome, descricao, local")
+        .select("id, nome, descricao, local, acesso_por_link")
         .eq("id", eventoId)
         .maybeSingle();
       if (eventoError) throw new Error(eventoError.message);
-      if (!evento || !eventoPermiteBuscaPorNumero(evento)) {
+      if (!evento || evento.acesso_por_link || !eventoPermiteBuscaPorNumero(evento)) {
         return NextResponse.json(
           { error: `A busca por número está disponível apenas para ${BUSCA_NUMERO_MODALIDADES}.` },
           { status: 422, headers: { "Cache-Control": "no-store" } },
@@ -83,7 +83,7 @@ export async function POST(request: Request) {
 
     const eventoIds = [...new Set((fotos || []).map((foto) => foto.evento_id))];
     const { data: eventos, error: eventosError } = eventoIds.length
-      ? await supabase.from("foto_eventos").select("id, nome, descricao, local, data_evento, cidade, estado").in("id", eventoIds)
+      ? await supabase.from("foto_eventos").select("id, nome, descricao, local, data_evento, cidade, estado").in("id", eventoIds).eq("acesso_por_link", false)
       : { data: [], error: null };
     if (eventosError) throw new Error(eventosError.message);
     const eventosPermitidos = (eventos || []).filter(eventoPermiteBuscaPorNumero);

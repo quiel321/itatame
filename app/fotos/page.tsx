@@ -22,7 +22,7 @@ export default function FotosHomePage() {
       let consulta = supabase
         .from("foto_eventos")
         .select("id, nome, slug, local, cidade, estado, data_evento, capa_url, status, em_breve")
-        .eq("status", "publicado");
+        .eq("status", "publicado").eq("acesso_por_link", false);
       if (filtro === "em_breve") consulta = consulta.eq("em_breve", true);
       if (filtro === "abertas") consulta = consulta.or("em_breve.is.null,em_breve.eq.false");
       const { data } = await consulta

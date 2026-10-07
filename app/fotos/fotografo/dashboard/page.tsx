@@ -16,7 +16,7 @@ type FotografoPerfil = { id: string; nome: string | null; email: string | null; 
 type Totais = { fotos: number; albuns: number; eventos: number; vendas: number };
 type PerfilForm = { nome: string; telefone: string; documento: string; cep: string; endereco: string; cidade: string; estado: string; bio: string; };
 
-type GaleriaFreelancer = { id: string; nome: string; cidade?: string | null; estado?: string | null; data_evento?: string | null; preco_padrao_centavos?: number | null; preco_bloqueado?: boolean; capa_url?: string | null; comissao_organizador_percentual?: number | null; modelo_recebimento?: "royalty" | "diaria_organizador"; created_by?: string | null; desconto_combo_qtd?: number | null; desconto_combo_percentual?: number | null; descontos_progressivos?: FaixaDesconto[] | null; em_breve?: boolean; };
+type GaleriaFreelancer = { id: string; nome: string; cidade?: string | null; estado?: string | null; data_evento?: string | null; preco_padrao_centavos?: number | null; preco_bloqueado?: boolean; capa_url?: string | null; comissao_organizador_percentual?: number | null; modelo_recebimento?: "royalty" | "diaria_organizador"; created_by?: string | null; desconto_combo_qtd?: number | null; desconto_combo_percentual?: number | null; descontos_progressivos?: FaixaDesconto[] | null; em_breve?: boolean; acesso_por_link?: boolean; acesso_token?: string | null; permite_download_gratis?: boolean; };
 
 function perfilParaForm(perfil: FotografoPerfil | null, email: string | null): PerfilForm {
   return { nome: perfil?.nome || email?.split("@")[0] || "", telefone: perfil?.telefone || "", documento: perfil?.documento || "", cep: perfil?.cep || "", endereco: perfil?.endereco || "", cidade: perfil?.cidade || "", estado: perfil?.estado || "", bio: perfil?.bio || "", };
@@ -39,7 +39,7 @@ export default function FotografoDashboardPage() {
 
   const [mostrarCriarGaleria, setMostrarCriarGaleria] = useState(false);
   const [mostrarDetalhesMp, setMostrarDetalhesMp] = useState(false);
-  const [galeriaForm, setGaleriaForm] = useState({ nome: "", cidade: "", estado: "", dataEvento: "", preco: "0,00", emBreve: false });
+  const [galeriaForm, setGaleriaForm] = useState({ nome: "", cidade: "", estado: "", dataEvento: "", preco: "0,00", emBreve: false, acessoPorLink: false, downloadGratuito: false });
   const [faixasCriacao, setFaixasCriacao] = useState<FaixaDesconto[]>([]);
   const [faixasEdicao, setFaixasEdicao] = useState<FaixaDesconto[]>([]);
   const [capaGaleria, setCapaGaleria] = useState<File | null>(null);
@@ -55,6 +55,7 @@ export default function FotografoDashboardPage() {
   const [excluindoGaleria, setExcluindoGaleria] = useState(false);
   const [excluindoConta, setExcluindoConta] = useState(false);
   const [linkCopiado, setLinkCopiado] = useState<string | null>(null);
+  const [configurandoAlbumId, setConfigurandoAlbumId] = useState<string | null>(null);
 
   const [gerenciandoGaleria, setGerenciandoGaleria] = useState<string | null>(null);
 
@@ -121,7 +122,7 @@ export default function FotografoDashboardPage() {
           supabase.from("foto_arquivos").select("id", { count: "exact", head: true }).eq("fotografo_id", perfilAtual.id),
           supabase.from("foto_albuns").select("id", { count: "exact", head: true }).eq("fotografo_id", perfilAtual.id),
           supabase.from("foto_pedidos").select("id", { count: "exact", head: true }).eq("fotografo_id", perfilAtual.id).eq("status", "pago"),
-          supabase.from("foto_eventos").select("id, nome, cidade, estado, data_evento, preco_padrao_centavos, preco_bloqueado, capa_url, desconto_combo_qtd, desconto_combo_percentual, descontos_progressivos, em_breve").eq("created_by", user.id).neq("status", "arquivado").order("created_at", { ascending: false }),
+          supabase.from("foto_eventos").select("id, nome, cidade, estado, data_evento, preco_padrao_centavos, preco_bloqueado, capa_url, desconto_combo_qtd, desconto_combo_percentual, descontos_progressivos, em_breve, acesso_por_link, acesso_token, permite_download_gratis").eq("created_by", user.id).neq("status", "arquivado").order("created_at", { ascending: false }),
            supabase.from("foto_evento_fotografos").select("evento_id, comissao_organizador_percentual, modelo_recebimento").eq("fotografo_id", perfilAtual.id).eq("status", "ativo")
         ]);
 
@@ -367,13 +368,35 @@ export default function FotografoDashboardPage() {
 
   async function copiarLinkGaleria(galeriaId: string) {
     const prefixo = window.location.pathname.startsWith("/fotos") ? "/fotos" : "";
-    const link = `${window.location.origin}${prefixo}/evento/${galeriaId}`;
+    const galeria = minhasGalerias.find((item) => item.id === galeriaId);
+    const acesso = galeria?.acesso_por_link && galeria.acesso_token ? `?acesso=${encodeURIComponent(galeria.acesso_token)}` : "";
+    const link = `${window.location.origin}${prefixo}/evento/${galeriaId}${acesso}`;
     try {
       await navigator.clipboard.writeText(link);
       setLinkCopiado(galeriaId);
       window.setTimeout(() => setLinkCopiado((atual) => atual === galeriaId ? null : atual), 2000);
     } catch {
       prompt("Copie o link da galeria:", link);
+    }
+  }
+
+  async function configurarAlbum(galeria: GaleriaFreelancer, alteracao: { acessoPorLink?: boolean; downloadGratuito?: boolean }) {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) { alert("Sessão expirada. Entre novamente."); return; }
+    setConfigurandoAlbumId(galeria.id);
+    try {
+      const response = await fetch("/api/fotos/fotografo/configurar-album", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ albumId: galeria.id, acessoPorLink: alteracao.acessoPorLink ?? Boolean(galeria.acesso_por_link), downloadGratuito: alteracao.downloadGratuito ?? Boolean(galeria.permite_download_gratis) }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Não foi possível atualizar o álbum.");
+      setMinhasGalerias((atuais) => atuais.map((item) => item.id === galeria.id ? { ...item, ...data.album } : item));
+    } catch (error: unknown) {
+      alert(error instanceof Error ? error.message : "Não foi possível atualizar o álbum.");
+    } finally {
+      setConfigurandoAlbumId(null);
     }
   }
 
@@ -431,65 +454,91 @@ export default function FotografoDashboardPage() {
           </div>
         </section>
 
-        <section className="mx-auto grid w-full max-w-7xl gap-6 px-4 py-8 md:px-8 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
+        <section className="mx-auto grid w-full max-w-7xl gap-6 px-4 py-8 md:px-8 xl:grid-cols-[300px_minmax(0,1fr)]">
           <div className="space-y-6 w-full min-w-0">
             {!userId ? null : (
               <>
-                {(!exibirFormularioPerfil && !perfilPendente) ? (
-                   <div id="perfil-fotografo" className="scroll-mt-24 bg-[#0a0a0e] rounded-3xl p-5 sm:p-6 border border-white/5 shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
-                      <div className="flex min-w-0 items-center gap-4">
-                        <div className="relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl border-2 border-retratt/30 bg-retratt/10">
-                          {perfil?.foto_url ? <img src={perfil.foto_url} alt="Foto de perfil" className="h-full w-full object-cover" /> : <Camera size={28} className="text-retratt" />}
-                          <span className="absolute bottom-1 right-1 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-black"><Check size={12}/></span>
-                        </div>
-                        <div className="min-w-0">
-                          <p className="truncate text-base font-black uppercase tracking-tight text-white">{nomeExibicao}</p>
-                          <p className="mt-1 text-[9px] font-bold uppercase tracking-widest text-emerald-400">Perfil verificado • apto a faturar</p>
-                          <p className="mt-2 line-clamp-2 text-[10px] leading-relaxed text-zinc-500">{perfil?.bio || "Adicione uma apresentação curta para compradores e organizadores conhecerem o seu trabalho."}</p>
-                        </div>
-                      </div>
-                      <button onClick={() => setMostrarFormularioPerfil(true)} className="cursor-pointer w-full sm:w-auto px-6 py-3 bg-white/5 hover:bg-white/10 text-white text-[9px] font-black uppercase tracking-widest rounded-xl transition-colors border border-white/10 text-center">Editar foto e perfil</button>
-                   </div>
-                ) : (
-                   <div id="perfil-fotografo" className="scroll-mt-24 rounded-3xl border border-retratt/30 bg-retratt/5 shadow-[0_0_30px_rgba(255,90,31,0.05)] p-5 sm:p-6 md:p-8">
-                     <div className="flex flex-col sm:flex-row sm:items-start justify-between mb-6 gap-4">
-                        <div><h2 className="text-base font-black uppercase tracking-tight text-white md:text-lg">Dados do Fotógrafo</h2><p className="text-[10px] font-bold text-retratt/80 uppercase tracking-widest mt-1">{perfilPendente ? "Necessário para repasses" : "Atualizar Informações"}</p></div>
-                        {!perfilPendente && (<button onClick={() => setMostrarFormularioPerfil(false)} className="cursor-pointer w-full sm:w-auto inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-white/5 px-4 text-[9px] font-black uppercase tracking-widest hover:bg-white hover:text-black transition-colors">Cancelar</button>)}
-                     </div>
+                <div id="albuns" className="scroll-mt-24 flex items-center justify-between gap-3 pt-2">
+                  <div><h2 className="text-lg font-black uppercase text-white">Álbuns</h2><p className="mt-1 text-xs text-zinc-400">Crie um álbum ou escolha um existente para adicionar fotos.</p></div>
+                  <button type="button" onClick={abrirCriacaoGaleria} className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-retratt px-4 py-3 text-[10px] font-black uppercase text-black hover:brightness-110"><Plus size={14} /> Novo álbum</button>
+                </div>
 
-                     <div className="space-y-4">
-                       {perfilPendente && (<div className="flex items-start gap-3 bg-black/40 p-4 rounded-xl border border-retratt/20 mb-4"><AlertCircle size={16} className="text-retratt shrink-0 mt-0.5" /><p className="text-[10px] font-bold text-orange-100 leading-relaxed uppercase tracking-wider">Preencha os campos abaixo para que as suas fotos possam ser exibidas nas galerias oficiais.</p></div>)}
+                {/* 🔥 CRIAR GALERIA */}
+                <div id="criar-galeria" ref={criarGaleriaRef} className="scroll-mt-24 rounded-3xl border border-retratt/20 bg-retratt/[0.02] overflow-hidden shadow-xl transition-all duration-300 mt-6">
+                  <div
+                    onClick={() => mostrarCriarGaleria ? setMostrarCriarGaleria(false) : abrirCriacaoGaleria()}
+                    className="flex items-center justify-between p-5 md:p-8 cursor-pointer hover:bg-retratt/[0.05] transition-colors gap-4"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[9px] font-black uppercase tracking-[0.2em] text-retratt truncate">Trabalho freelancer</p>
+                      <h2 className="mt-1 text-base sm:text-lg font-black uppercase tracking-tight text-white truncate">Novo álbum independente</h2>
+                    </div>
+                    <div className={`w-10 h-10 shrink-0 rounded-full bg-retratt/10 border border-retratt/20 flex items-center justify-center text-retratt transition-transform duration-300 ${mostrarCriarGaleria ? "rotate-45" : ""}`}>
+                       <Plus size={20} />
+                    </div>
+                  </div>
 
-                       <div className="flex flex-col sm:flex-row sm:items-center gap-4 rounded-2xl border border-white/5 bg-black/40 p-4 sm:p-5">
-                         <div className="flex h-16 w-16 sm:h-20 sm:w-20 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-retratt/30 bg-retratt/10">
-                           {perfil?.foto_url ? <img src={perfil.foto_url} alt="Foto do fotógrafo" className="h-full w-full object-cover" /> : <Camera size={24} className="text-retratt" />}
-                         </div>
-                         <div className="flex-1 min-w-0">
-                           <p className="text-xs font-black uppercase text-white">Foto de perfil</p>
-                           <p className="mt-1 text-[10px] text-zinc-500">Esta imagem identifica você nas galerias e no painel.</p>
-                           <input ref={fotoInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={enviarFotoPerfil} />
-                           <button type="button" onClick={() => fotoInputRef.current?.click()} disabled={enviandoFoto} className="mt-3 w-full sm:w-auto h-9 cursor-pointer rounded-lg border border-retratt/30 bg-retratt/10 px-4 text-[9px] font-black uppercase tracking-widest text-retratt disabled:opacity-50 text-center">{enviandoFoto ? "Enviando..." : "Adicionar foto"}</button>
-                         </div>
-                       </div>
+                  {mostrarCriarGaleria && (
+                    <div className="px-5 pb-5 md:px-8 md:pb-8 border-t border-white/5 pt-5 sm:pt-6 animate-in slide-in-from-top-4 fade-in duration-300 bg-black/20">
+                       <p className="mb-2 text-[10px] leading-relaxed text-zinc-400">Para trabalhos sem organizador, crie seu álbum aqui. Depois use “Adicionar mídias” no cartão do álbum para publicar as fotos.</p>
+                       <p className="mb-6 rounded-xl border border-retratt/20 bg-retratt/5 p-3 text-[9px] font-bold leading-relaxed text-orange-100">Em álbuns independentes não há comissão de organizador. Em cada venda, a Retratt retém 5%; você recebe 95% menos a tarifa do Mercado Pago, descontada da sua conta.</p>
 
                        <div className="grid gap-3 sm:grid-cols-2">
-                         <div className="sm:col-span-2"><label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Nome Completo</label><input value={perfilForm.nome} onChange={(e) => setPerfilForm({ ...perfilForm, nome: e.target.value })} className="cursor-text h-11 w-full rounded-xl border border-white/10 bg-[#050505] px-3 text-xs font-bold text-white outline-none focus:border-retratt" placeholder="Seu nome" /></div>
-                         <div><label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">WhatsApp</label><input value={perfilForm.telefone} onChange={(e) => setPerfilForm({ ...perfilForm, telefone: e.target.value })} className="cursor-text h-11 w-full rounded-xl border border-white/10 bg-[#050505] px-3 text-xs font-bold text-white outline-none focus:border-retratt" placeholder="(00) 00000-0000" /></div>
-                         <div><label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">CPF</label><input value={perfilForm.documento} onChange={(e) => setPerfilForm({ ...perfilForm, documento: e.target.value })} className="cursor-text h-11 w-full rounded-xl border border-white/10 bg-[#050505] px-3 text-xs font-bold text-white outline-none focus:border-retratt" placeholder="000.000.000-00" /></div>
-                         <div><label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">CEP</label><input value={perfilForm.cep} onChange={(e) => setPerfilForm({ ...perfilForm, cep: e.target.value })} className="cursor-text h-11 w-full rounded-xl border border-white/10 bg-[#050505] px-3 text-xs font-bold text-white outline-none focus:border-retratt" placeholder="00000-000" /></div>
-                         <div className="sm:col-span-2"><label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Endereço Completo</label><input value={perfilForm.endereco} onChange={(e) => setPerfilForm({ ...perfilForm, endereco: e.target.value })} className="cursor-text h-11 w-full rounded-xl border border-white/10 bg-[#050505] px-3 text-xs font-bold text-white outline-none focus:border-retratt" placeholder="Rua, Número, Bairro" /></div>
-                         <div><label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Cidade</label><input value={perfilForm.cidade} onChange={(e) => setPerfilForm({ ...perfilForm, cidade: e.target.value })} className="cursor-text h-11 w-full rounded-xl border border-white/10 bg-[#050505] px-3 text-xs font-bold text-white outline-none focus:border-retratt" placeholder="Sua cidade" /></div>
-                         <div><label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Estado (UF)</label><input value={perfilForm.estado} onChange={(e) => setPerfilForm({ ...perfilForm, estado: e.target.value })} className="cursor-text h-11 w-full rounded-xl border border-white/10 bg-[#050505] px-3 text-xs font-bold text-white outline-none focus:border-retratt" placeholder="Ex: SP" maxLength={2} /></div>
-                         <div className="sm:col-span-2"><label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Bio (Equipamento / Foco)</label><textarea value={perfilForm.bio} onChange={(e) => setPerfilForm({ ...perfilForm, bio: e.target.value })} className="cursor-text min-h-20 w-full rounded-xl border border-white/10 bg-[#050505] p-3 text-xs font-bold text-white outline-none focus:border-retratt" placeholder="Ex: Especialista em desporto. Utilizo Sony A7IV com lente 70-200mm." /></div>
+                         <div className="sm:col-span-2">
+                           <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Nome do evento ou ensaio</label>
+                           <input value={galeriaForm.nome} onChange={(e) => setGaleriaForm({ ...galeriaForm, nome: e.target.value })} className="cursor-text h-11 w-full rounded-xl border border-white/10 bg-black px-3 text-xs font-bold text-white outline-none focus:border-retratt" />
+                         </div>
+                         <div>
+                           <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Cidade</label>
+                           <input value={galeriaForm.cidade} onChange={(e) => setGaleriaForm({ ...galeriaForm, cidade: e.target.value })} className="cursor-text h-11 w-full rounded-xl border border-white/10 bg-black px-3 text-xs font-bold text-white outline-none focus:border-retratt" />
+                         </div>
+                         <div>
+                           <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Estado (UF)</label>
+                           <input value={galeriaForm.estado} onChange={(e) => setGaleriaForm({ ...galeriaForm, estado: e.target.value })} maxLength={2} className="cursor-text h-11 w-full rounded-xl border border-white/10 bg-black px-3 text-xs font-bold uppercase text-white outline-none focus:border-retratt" />
+                         </div>
+                         <div>
+                           <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Data do Evento</label>
+                           <input type="date" value={galeriaForm.dataEvento} onChange={(e) => setGaleriaForm({ ...galeriaForm, dataEvento: e.target.value })} className="cursor-text h-11 w-full rounded-xl border border-white/10 bg-black px-3 text-xs font-bold text-white outline-none focus:border-retratt" />
+                         </div>
+                         <div>
+                           <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Preço inicial por foto (R$)</label>
+                           <input value={galeriaForm.preco} onFocus={(e) => e.target.select()} onChange={(e) => setGaleriaForm({ ...galeriaForm, preco: e.target.value })} inputMode="decimal" className="cursor-text h-11 w-full rounded-xl border border-white/10 bg-black px-3 text-xs font-bold text-white outline-none focus:border-retratt" />
+                           <p className="mt-1 text-[10px] text-zinc-500">Começa em R$ 0,00. Defina o valor antes de publicar se desejar vender.</p>
+                         </div>
+                         <EditorFaixasDesconto faixas={faixasCriacao} onChange={setFaixasCriacao} />
+                         <label className="sm:col-span-2 flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-xs text-white">
+                           <input type="checkbox" checked={galeriaForm.emBreve} onChange={(e) => setGaleriaForm({ ...galeriaForm, emBreve: e.target.checked })} />
+                           Em breve: mostrar o aviso enquanto as fotos são preparadas. Desative para iniciar as vendas.
+                         </label>
+                         <label className="sm:col-span-2 flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-xs text-white">
+                           <input type="checkbox" checked={galeriaForm.acessoPorLink} onChange={(e) => setGaleriaForm({ ...galeriaForm, acessoPorLink: e.target.checked })} />
+                           Oculto: apenas quem receber o link de acesso poderá abrir este álbum.
+                         </label>
+                         <label className="sm:col-span-2 flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-xs text-white">
+                           <input type="checkbox" checked={galeriaForm.downloadGratuito} onChange={(e) => setGaleriaForm({ ...galeriaForm, downloadGratuito: e.target.checked })} />
+                           Download gratuito: liberar os arquivos originais sem pagamento. Quem tiver o link poderá baixá-los.
+                         </label>
+                         <div className="sm:col-span-2">
+                           <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Foto de Capa</label>
+                           <label className="flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-white/15 bg-black hover:border-retratt/50 hover:bg-retratt/5 transition-all text-[9px] font-black uppercase tracking-widest text-zinc-400 hover:text-retratt">
+                             <CloudUpload size={14} className="shrink-0" /> <span className="truncate max-w-[200px]">{capaGaleria ? `Selecionada: ${capaGaleria.name}` : "Adicionar Imagem de Capa"}</span>
+                             <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => setCapaGaleria(e.target.files?.[0] || null)} />
+                           </label>
+                         </div>
                        </div>
-                       <div className="mt-6"><button type="button" onClick={salvarPerfilFotografo} disabled={salvandoPerfil || !perfilForm.nome.trim() || !perfilForm.telefone.trim() || !perfilForm.documento.trim()} className="cursor-pointer h-12 w-full flex items-center justify-center rounded-xl bg-retratt text-[11px] font-black uppercase tracking-widest text-black hover:bg-retratt disabled:cursor-not-allowed disabled:opacity-50 transition-all shadow-[0_0_15px_rgba(255,90,31,0.2)]">{salvandoPerfil ? "A Processar..." : "Salvar Perfil Seguro"}</button></div>
-                     </div>
-                   </div>
-                )}
 
-                <div id="albuns" className="scroll-mt-24 flex items-center justify-between gap-3 pt-2">
-                  <div><h2 className="text-lg font-black uppercase text-white">Álbuns</h2><p className="mt-1 text-xs text-zinc-400">Escolha um álbum para adicionar fotos ou crie um novo abaixo.</p></div>
-                  <button type="button" onClick={abrirCriacaoGaleria} className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-retratt px-4 py-3 text-[10px] font-black uppercase text-black hover:brightness-110"><Plus size={14} /> Novo álbum</button>
+                       <div className="mt-6 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-3 pt-4 border-t border-white/5">
+                         <button type="button" onClick={() => setMostrarCriarGaleria(false)} className="h-11 w-full sm:w-auto cursor-pointer rounded-xl border border-white/10 bg-transparent px-6 text-[10px] font-black uppercase tracking-widest text-white hover:bg-white/5 transition-colors">
+                            Cancelar
+                         </button>
+                         <button type="button" onClick={criarGaleriaFreelancer} disabled={criandoGaleria || !galeriaForm.nome.trim()} className="cursor-pointer h-11 w-full sm:w-auto flex items-center justify-center gap-2 rounded-xl bg-retratt px-8 text-[10px] font-black uppercase tracking-widest text-black hover:bg-retratt disabled:cursor-not-allowed disabled:opacity-50 transition-colors shadow-[0_0_15px_rgba(255,90,31,0.2)]">
+                           {criandoGaleria ? <Loader2 size={14} className="animate-spin shrink-0" /> : <Plus size={14} className="shrink-0" />}
+                           {criandoGaleria ? "Criando..." : "Criar álbum"}
+                         </button>
+                       </div>
+                       {mensagemGaleria && <p className="mt-3 text-xs font-bold text-retratt text-center sm:text-right">{mensagemGaleria}</p>}
+                    </div>
+                  )}
                 </div>
 
                 {/* 🔥 EVENTOS OFICIAIS */}
@@ -567,10 +616,11 @@ export default function FotografoDashboardPage() {
                                         <span className="flex min-w-0 items-center gap-1"><MapPin size={10} className="shrink-0"/> <span className="truncate">{galeria.cidade || "Local"} / {galeria.estado || "UF"}</span></span>
                                      </div>
                                       <div className="mt-3 flex flex-wrap gap-1.5 text-[8px] font-black uppercase tracking-wider">
-                                        <span className="rounded-full bg-retratt/10 px-2 py-1 text-retratt">R$ {((galeria.preco_padrao_centavos || 0) / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 })} por foto</span>
-                                        <span className="rounded-full bg-emerald-400/10 px-2 py-1 text-emerald-300">Você recebe 95%*</span>
+                                        <span className="rounded-full bg-retratt/10 px-2 py-1 text-retratt">{galeria.permite_download_gratis ? "Download gratuito" : `R$ ${((galeria.preco_padrao_centavos || 0) / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 })} por foto`}</span>
+                                        <span className="rounded-full bg-white/10 px-2 py-1 text-zinc-300">{galeria.acesso_por_link ? "Oculto · acesso por link" : "Público"}</span>
+                                        {!galeria.permite_download_gratis && <span className="rounded-full bg-emerald-400/10 px-2 py-1 text-emerald-300">Você recebe 95%*</span>}
                                       </div>
-                                      <p className="mt-2 text-[8px] leading-relaxed text-zinc-600">*Antes da tarifa do meio de pagamento.</p>
+                                      {!galeria.permite_download_gratis && <p className="mt-2 text-[8px] leading-relaxed text-zinc-600">*Antes da tarifa do meio de pagamento.</p>}
                                   </div>
                             </div>
 
@@ -591,6 +641,11 @@ export default function FotografoDashboardPage() {
                                     Loja
                                   </Link>
                                </div>
+
+                            <div className="mt-3 flex flex-wrap gap-2 border-t border-white/5 pt-3 text-xs text-zinc-300">
+                              <button type="button" disabled={configurandoAlbumId === galeria.id} onClick={() => void configurarAlbum(galeria, { acessoPorLink: !galeria.acesso_por_link })} className="rounded-lg border border-white/15 px-3 py-2 hover:border-retratt disabled:opacity-50">{galeria.acesso_por_link ? "Tornar público" : "Ocultar e liberar por link"}</button>
+                              <button type="button" disabled={configurandoAlbumId === galeria.id} onClick={() => void configurarAlbum(galeria, { downloadGratuito: !galeria.permite_download_gratis })} className="rounded-lg border border-white/15 px-3 py-2 hover:border-retratt disabled:opacity-50">{galeria.permite_download_gratis ? "Vender por foto" : "Liberar download gratuito"}</button>
+                            </div>
 
                             {renderizarGerenciador(galeria.id)}
 
@@ -720,81 +775,66 @@ export default function FotografoDashboardPage() {
                   </div>
                 )}
 
-                {/* 🔥 CRIAR GALERIA */}
-                <div id="criar-galeria" ref={criarGaleriaRef} className="scroll-mt-24 rounded-3xl border border-retratt/20 bg-retratt/[0.02] overflow-hidden shadow-xl transition-all duration-300 mt-6">
-                  <div
-                    onClick={() => mostrarCriarGaleria ? setMostrarCriarGaleria(false) : abrirCriacaoGaleria()}
-                    className="flex items-center justify-between p-5 md:p-8 cursor-pointer hover:bg-retratt/[0.05] transition-colors gap-4"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[9px] font-black uppercase tracking-[0.2em] text-retratt truncate">Trabalho freelancer</p>
-                      <h2 className="mt-1 text-base sm:text-lg font-black uppercase tracking-tight text-white truncate">Novo álbum independente</h2>
-                    </div>
-                    <div className={`w-10 h-10 shrink-0 rounded-full bg-retratt/10 border border-retratt/20 flex items-center justify-center text-retratt transition-transform duration-300 ${mostrarCriarGaleria ? "rotate-45" : ""}`}>
-                       <Plus size={20} />
-                    </div>
-                  </div>
-
-                  {mostrarCriarGaleria && (
-                    <div className="px-5 pb-5 md:px-8 md:pb-8 border-t border-white/5 pt-5 sm:pt-6 animate-in slide-in-from-top-4 fade-in duration-300 bg-black/20">
-                       <p className="mb-2 text-[10px] leading-relaxed text-zinc-400">Para trabalhos sem organizador, crie seu álbum aqui. Depois use “Adicionar mídias” no cartão do álbum para publicar as fotos.</p>
-                       <p className="mb-6 rounded-xl border border-retratt/20 bg-retratt/5 p-3 text-[9px] font-bold leading-relaxed text-orange-100">Em álbuns independentes não há comissão de organizador. Em cada venda, a Retratt retém 5%; você recebe 95% menos a tarifa do Mercado Pago, descontada da sua conta.</p>
-
-                       <div className="grid gap-3 sm:grid-cols-2">
-                         <div className="sm:col-span-2">
-                           <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Nome do evento ou ensaio</label>
-                           <input value={galeriaForm.nome} onChange={(e) => setGaleriaForm({ ...galeriaForm, nome: e.target.value })} className="cursor-text h-11 w-full rounded-xl border border-white/10 bg-black px-3 text-xs font-bold text-white outline-none focus:border-retratt" />
-                         </div>
-                         <div>
-                           <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Cidade</label>
-                           <input value={galeriaForm.cidade} onChange={(e) => setGaleriaForm({ ...galeriaForm, cidade: e.target.value })} className="cursor-text h-11 w-full rounded-xl border border-white/10 bg-black px-3 text-xs font-bold text-white outline-none focus:border-retratt" />
-                         </div>
-                         <div>
-                           <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Estado (UF)</label>
-                           <input value={galeriaForm.estado} onChange={(e) => setGaleriaForm({ ...galeriaForm, estado: e.target.value })} maxLength={2} className="cursor-text h-11 w-full rounded-xl border border-white/10 bg-black px-3 text-xs font-bold uppercase text-white outline-none focus:border-retratt" />
-                         </div>
-                         <div>
-                           <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Data do Evento</label>
-                           <input type="date" value={galeriaForm.dataEvento} onChange={(e) => setGaleriaForm({ ...galeriaForm, dataEvento: e.target.value })} className="cursor-text h-11 w-full rounded-xl border border-white/10 bg-black px-3 text-xs font-bold text-white outline-none focus:border-retratt" />
-                         </div>
-                         <div>
-                           <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Preço inicial por foto (R$)</label>
-                           <input value={galeriaForm.preco} onFocus={(e) => e.target.select()} onChange={(e) => setGaleriaForm({ ...galeriaForm, preco: e.target.value })} inputMode="decimal" className="cursor-text h-11 w-full rounded-xl border border-white/10 bg-black px-3 text-xs font-bold text-white outline-none focus:border-retratt" />
-                           <p className="mt-1 text-[10px] text-zinc-500">Começa em R$ 0,00. Defina o valor antes de publicar se desejar vender.</p>
-                         </div>
-                         <EditorFaixasDesconto faixas={faixasCriacao} onChange={setFaixasCriacao} />
-                         <label className="sm:col-span-2 flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-xs text-white">
-                           <input type="checkbox" checked={galeriaForm.emBreve} onChange={(e) => setGaleriaForm({ ...galeriaForm, emBreve: e.target.checked })} />
-                           Em breve: mostrar o aviso enquanto as fotos são preparadas. Desative para iniciar as vendas.
-                         </label>
-                         <div className="sm:col-span-2">
-                           <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Foto de Capa</label>
-                           <label className="flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-white/15 bg-black hover:border-retratt/50 hover:bg-retratt/5 transition-all text-[9px] font-black uppercase tracking-widest text-zinc-400 hover:text-retratt">
-                             <CloudUpload size={14} className="shrink-0" /> <span className="truncate max-w-[200px]">{capaGaleria ? `Selecionada: ${capaGaleria.name}` : "Adicionar Imagem de Capa"}</span>
-                             <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => setCapaGaleria(e.target.files?.[0] || null)} />
-                           </label>
-                         </div>
-                       </div>
-
-                       <div className="mt-6 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-3 pt-4 border-t border-white/5">
-                         <button type="button" onClick={() => setMostrarCriarGaleria(false)} className="h-11 w-full sm:w-auto cursor-pointer rounded-xl border border-white/10 bg-transparent px-6 text-[10px] font-black uppercase tracking-widest text-white hover:bg-white/5 transition-colors">
-                            Cancelar
-                         </button>
-                         <button type="button" onClick={criarGaleriaFreelancer} disabled={criandoGaleria || !galeriaForm.nome.trim()} className="cursor-pointer h-11 w-full sm:w-auto flex items-center justify-center gap-2 rounded-xl bg-retratt px-8 text-[10px] font-black uppercase tracking-widest text-black hover:bg-retratt disabled:cursor-not-allowed disabled:opacity-50 transition-colors shadow-[0_0_15px_rgba(255,90,31,0.2)]">
-                           {criandoGaleria ? <Loader2 size={14} className="animate-spin shrink-0" /> : <Plus size={14} className="shrink-0" />}
-                           {criandoGaleria ? "Criando..." : "Criar álbum"}
-                         </button>
-                       </div>
-                       {mensagemGaleria && <p className="mt-3 text-xs font-bold text-retratt text-center sm:text-right">{mensagemGaleria}</p>}
-                    </div>
-                  )}
-                </div>
-
               </>
             )}
           </div>
 
-          <div className="w-full min-w-0 space-y-6 xl:sticky xl:top-24 xl:self-start">
+          <aside className="order-first w-full min-w-0 space-y-4">
+            {userId && (
+              <>
+                {(!exibirFormularioPerfil && !perfilPendente) ? (
+                   <div id="perfil-fotografo" className="scroll-mt-24 bg-[#0a0a0e] rounded-2xl border border-white/5 p-4 shadow-xl">
+                      <div className="flex min-w-0 items-center gap-4">
+                        <div className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl border-2 border-retratt/30 bg-retratt/10">
+                          {perfil?.foto_url ? <img src={perfil.foto_url} alt="Foto de perfil" className="h-full w-full object-cover" /> : <Camera size={28} className="text-retratt" />}
+                          <span className="absolute bottom-1 right-1 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-black"><Check size={12}/></span>
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate text-base font-black uppercase tracking-tight text-white">{nomeExibicao}</p>
+                          <p className="mt-1 text-[9px] font-bold uppercase tracking-widest text-emerald-400">Perfil verificado • apto a faturar</p>
+                          <p className="mt-2 line-clamp-2 text-[10px] leading-relaxed text-zinc-500">{perfil?.bio || "Adicione uma apresentação curta ao seu perfil."}</p>
+                        </div>
+                      </div>
+                      <button onClick={() => setMostrarFormularioPerfil(true)} className="mt-4 w-full cursor-pointer rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-center text-[9px] font-black uppercase tracking-widest text-white transition-colors hover:bg-white/10">Editar foto e perfil</button>
+                   </div>
+                ) : (
+                   <div id="perfil-fotografo" className="scroll-mt-24 rounded-2xl border border-retratt/30 bg-retratt/5 p-4 shadow-[0_0_30px_rgba(255,90,31,0.05)]">
+                     <div className="flex flex-col items-start justify-between mb-6 gap-4">
+                        <div><h2 className="text-base font-black uppercase tracking-tight text-white md:text-lg">Dados do Fotógrafo</h2><p className="text-[10px] font-bold text-retratt/80 uppercase tracking-widest mt-1">{perfilPendente ? "Necessário para repasses" : "Atualizar Informações"}</p></div>
+                        {!perfilPendente && (<button onClick={() => setMostrarFormularioPerfil(false)} className="cursor-pointer w-full inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-white/5 px-4 text-[9px] font-black uppercase tracking-widest hover:bg-white hover:text-black transition-colors">Cancelar</button>)}
+                     </div>
+
+                     <div className="space-y-4">
+                       {perfilPendente && (<div className="flex items-start gap-3 bg-black/40 p-4 rounded-xl border border-retratt/20 mb-4"><AlertCircle size={16} className="text-retratt shrink-0 mt-0.5" /><p className="text-[10px] font-bold text-orange-100 leading-relaxed uppercase tracking-wider">Preencha os campos abaixo para que as suas fotos possam ser exibidas nas galerias oficiais.</p></div>)}
+
+                       <div className="flex flex-col gap-4 rounded-2xl border border-white/5 bg-black/40 p-4 sm:p-5">
+                         <div className="flex h-16 w-16 sm:h-20 sm:w-20 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-retratt/30 bg-retratt/10">
+                           {perfil?.foto_url ? <img src={perfil.foto_url} alt="Foto do fotógrafo" className="h-full w-full object-cover" /> : <Camera size={24} className="text-retratt" />}
+                         </div>
+                         <div className="flex-1 min-w-0">
+                           <p className="text-xs font-black uppercase text-white">Foto de perfil</p>
+                           <p className="mt-1 text-[10px] text-zinc-500">Esta imagem identifica você nas galerias e no painel.</p>
+                           <input ref={fotoInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={enviarFotoPerfil} />
+                           <button type="button" onClick={() => fotoInputRef.current?.click()} disabled={enviandoFoto} className="mt-3 w-full sm:w-auto h-9 cursor-pointer rounded-lg border border-retratt/30 bg-retratt/10 px-4 text-[9px] font-black uppercase tracking-widest text-retratt disabled:opacity-50 text-center">{enviandoFoto ? "Enviando..." : "Adicionar foto"}</button>
+                         </div>
+                       </div>
+
+                       <div className="grid gap-3">
+                         <div className="min-w-0"><label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Nome Completo</label><input value={perfilForm.nome} onChange={(e) => setPerfilForm({ ...perfilForm, nome: e.target.value })} className="cursor-text h-11 w-full rounded-xl border border-white/10 bg-[#050505] px-3 text-xs font-bold text-white outline-none focus:border-retratt" placeholder="Seu nome" /></div>
+                         <div><label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">WhatsApp</label><input value={perfilForm.telefone} onChange={(e) => setPerfilForm({ ...perfilForm, telefone: e.target.value })} className="cursor-text h-11 w-full rounded-xl border border-white/10 bg-[#050505] px-3 text-xs font-bold text-white outline-none focus:border-retratt" placeholder="(00) 00000-0000" /></div>
+                         <div><label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">CPF</label><input value={perfilForm.documento} onChange={(e) => setPerfilForm({ ...perfilForm, documento: e.target.value })} className="cursor-text h-11 w-full rounded-xl border border-white/10 bg-[#050505] px-3 text-xs font-bold text-white outline-none focus:border-retratt" placeholder="000.000.000-00" /></div>
+                         <div><label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">CEP</label><input value={perfilForm.cep} onChange={(e) => setPerfilForm({ ...perfilForm, cep: e.target.value })} className="cursor-text h-11 w-full rounded-xl border border-white/10 bg-[#050505] px-3 text-xs font-bold text-white outline-none focus:border-retratt" placeholder="00000-000" /></div>
+                         <div className="min-w-0"><label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Endereço Completo</label><input value={perfilForm.endereco} onChange={(e) => setPerfilForm({ ...perfilForm, endereco: e.target.value })} className="cursor-text h-11 w-full rounded-xl border border-white/10 bg-[#050505] px-3 text-xs font-bold text-white outline-none focus:border-retratt" placeholder="Rua, Número, Bairro" /></div>
+                         <div><label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Cidade</label><input value={perfilForm.cidade} onChange={(e) => setPerfilForm({ ...perfilForm, cidade: e.target.value })} className="cursor-text h-11 w-full rounded-xl border border-white/10 bg-[#050505] px-3 text-xs font-bold text-white outline-none focus:border-retratt" placeholder="Sua cidade" /></div>
+                         <div><label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Estado (UF)</label><input value={perfilForm.estado} onChange={(e) => setPerfilForm({ ...perfilForm, estado: e.target.value })} className="cursor-text h-11 w-full rounded-xl border border-white/10 bg-[#050505] px-3 text-xs font-bold text-white outline-none focus:border-retratt" placeholder="Ex: SP" maxLength={2} /></div>
+                         <div className="min-w-0"><label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Bio (Equipamento / Foco)</label><textarea value={perfilForm.bio} onChange={(e) => setPerfilForm({ ...perfilForm, bio: e.target.value })} className="cursor-text min-h-20 w-full rounded-xl border border-white/10 bg-[#050505] p-3 text-xs font-bold text-white outline-none focus:border-retratt" placeholder="Ex: Especialista em desporto. Utilizo Sony A7IV com lente 70-200mm." /></div>
+                       </div>
+                       <div className="mt-6"><button type="button" onClick={salvarPerfilFotografo} disabled={salvandoPerfil || !perfilForm.nome.trim() || !perfilForm.telefone.trim() || !perfilForm.documento.trim()} className="cursor-pointer h-12 w-full flex items-center justify-center rounded-xl bg-retratt text-[11px] font-black uppercase tracking-widest text-black hover:bg-retratt disabled:cursor-not-allowed disabled:opacity-50 transition-all shadow-[0_0_15px_rgba(255,90,31,0.2)]">{salvandoPerfil ? "A Processar..." : "Salvar Perfil Seguro"}</button></div>
+                     </div>
+                   </div>
+                )}
+              </>
+            )}
             {userId && (
                <div className={`rounded-3xl border bg-[#0a0a0e] shadow-xl ${mercadoPagoConectado ? "border-emerald-500/20 p-4 sm:p-5" : "border-white/5 p-5 sm:p-6"}`}>
                  {mercadoPagoConectado ? (
@@ -829,15 +869,16 @@ export default function FotografoDashboardPage() {
                </div>
             )}
             {userId && (
-              <div className="rounded-3xl border border-red-500/20 bg-[#0a0a0e] p-5">
-                <h2 className="text-sm font-black text-white">Excluir conta de fotógrafo</h2>
+              <details className="rounded-2xl border border-white/10 bg-[#0a0a0e] p-4">
+                <summary className="cursor-pointer text-xs font-bold text-zinc-400">Gerenciar conta</summary>
+                <h2 className="mt-4 text-sm font-black text-white">Excluir conta de fotógrafo</h2>
                 <p className="mt-2 text-[10px] leading-relaxed text-zinc-400">A exclusão é definitiva. Galerias com pedidos ficam arquivadas, e os registros e arquivos necessários aos compradores são preservados. Pagamentos pendentes precisam ser resolvidos antes.</p>
                 <button type="button" onClick={() => void excluirContaFotografo()} disabled={excluindoConta} className="mt-4 inline-flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-4 text-[9px] font-black uppercase tracking-widest text-red-300 hover:bg-red-500/20 disabled:cursor-wait disabled:opacity-50">
                   <Trash2 size={13} /> {excluindoConta ? "Excluindo..." : "Excluir conta definitivamente"}
                 </button>
-              </div>
+              </details>
             )}
-          </div>
+          </aside>
         </section>
 
       </main>

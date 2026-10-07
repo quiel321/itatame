@@ -35,6 +35,7 @@ export async function POST(request: Request) {
     const descontos = validarFaixasDesconto(body.descontosProgressivos ?? []);
     if (!descontos) return NextResponse.json({ error: "Revise as faixas de desconto: até cinco faixas, com quantidades e percentuais crescentes." }, { status: 400 });
     if (!nome) return NextResponse.json({ error: "Informe o nome da galeria." }, { status: 400 });
+    if (!body.downloadGratuito && (!Number.isFinite(preco) || preco <= 0)) return NextResponse.json({ error: "Informe um preço por foto ou marque o álbum como gratuito." }, { status: 400 });
 
     const { data: galeria, error } = await supabase.from("foto_eventos").insert({
       nome,
@@ -45,6 +46,8 @@ export async function POST(request: Request) {
       capa_url: capaUrl,
       status: "publicado",
       em_breve: Boolean(body.emBreve),
+      acesso_por_link: Boolean(body.acessoPorLink),
+      permite_download_gratis: Boolean(body.downloadGratuito),
       descontos_progressivos: descontos,
       preco_padrao_centavos: Number.isFinite(preco) ? preco : 1500,
       created_by: auth.user.id,

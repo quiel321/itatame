@@ -24,6 +24,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       .from("foto_eventos")
       .select("id, data_evento")
       .eq("status", "publicado")
+      .eq("acesso_por_link", false)
       .order("data_evento", { ascending: false })
       .limit(1000);
 

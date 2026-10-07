@@ -16,6 +16,8 @@ export type FotoEvento = {
   desconto_combo_percentual?: number | null;
   descontos_progressivos?: { quantidade: number; percentual: number }[] | null;
   em_breve?: boolean;
+  acesso_por_link?: boolean;
+  permite_download_gratis?: boolean;
 };
 
 export type FotoAlbum = {

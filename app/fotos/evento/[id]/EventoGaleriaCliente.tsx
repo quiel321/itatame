@@ -17,16 +17,16 @@ import { Camera, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Filter, 
 
 const CARRINHO_FOTOS_KEY = "carrinho_fotos";
 
-function fotoPreviewSrc(foto: FotoArquivo) {
-  return `/api/fotos/arquivo/${foto.id}?tipo=preview`;
+function fotoPreviewSrc(foto: FotoArquivo, acesso?: string | null) {
+  return `/api/fotos/arquivo/${foto.id}?tipo=preview${acesso ? `&acesso=${encodeURIComponent(acesso)}` : ""}`;
 }
 
-function fotoThumbSrc(foto: FotoArquivo) {
-  return `/api/fotos/arquivo/${foto.id}?tipo=thumb`;
+function fotoThumbSrc(foto: FotoArquivo, acesso?: string | null) {
+  return `/api/fotos/arquivo/${foto.id}?tipo=thumb${acesso ? `&acesso=${encodeURIComponent(acesso)}` : ""}`;
 }
 
-function videoPreviewSrc(foto: FotoArquivo) {
-  return `/api/fotos/arquivo/${foto.id}?tipo=video-preview`;
+function videoPreviewSrc(foto: FotoArquivo, acesso?: string | null) {
+  return `/api/fotos/arquivo/${foto.id}?tipo=video-preview${acesso ? `&acesso=${encodeURIComponent(acesso)}` : ""}`;
 }
 
 type DadosFotografo = { nome?: string | null; foto_url?: string | null };
@@ -51,7 +51,7 @@ function dadosFotografo(foto: FotoArquivo) {
   return Array.isArray(dados) ? dados[0] : dados;
 }
 
-export default function EventoGaleriaCliente({ initialData }: { initialData?: GaleriaInicial }) {
+export default function EventoGaleriaCliente({ initialData, acesso }: { initialData?: GaleriaInicial; acesso?: string | null }) {
   const params = useParams<{ id: string }>();
   const eventoId = params.id;
   const [evento, setEvento] = useState<EventoGaleria | null>(initialData?.evento || null);
@@ -172,7 +172,7 @@ export default function EventoGaleriaCliente({ initialData }: { initialData?: Ga
 
       // 1. Busca os dados base do evento (🔥 ADICIONADO: 'created_by' no select)
       const [{ data: eventoData }, { data: albunsData }, { data: fotosData }, { count: totalBanco }, { count: videosBanco }] = await Promise.all([
-        supabase.from("foto_eventos").select("id, nome, slug, descricao, local, cidade, estado, data_evento, capa_url, status, vendas_ate, desconto_combo_qtd, desconto_combo_percentual, descontos_progressivos, em_breve, organizador_user_id, created_by").eq("id", eventoId).maybeSingle(),
+        supabase.from("foto_eventos").select("id, nome, slug, descricao, local, cidade, estado, data_evento, capa_url, status, vendas_ate, desconto_combo_qtd, desconto_combo_percentual, descontos_progressivos, em_breve, organizador_user_id, created_by, permite_download_gratis, acesso_por_link").eq("id", eventoId).maybeSingle(),
         supabase.from("foto_albuns").select("id, evento_id, fotografo_id, titulo, descricao, capa_url, status").eq("evento_id", eventoId).eq("status", "publicado").order("ordem", { ascending: true }),
         supabase.from("foto_arquivos").select("id, evento_id, album_id, fotografo_id, titulo, mime_type, r2_original_key, r2_preview_key, r2_thumb_key, preview_url, thumb_url, preco_centavos, status, tags, fotografo_dados:fotografos!fotografo_id(nome, foto_url)").eq("evento_id", eventoId).eq("status", "publicada").order("created_at", { ascending: false }).order("id", { ascending: false }).range(0, 999),
         supabase.from("foto_arquivos").select("id", { count: "exact", head: true }).eq("evento_id", eventoId).eq("status", "publicada"),
@@ -243,6 +243,15 @@ export default function EventoGaleriaCliente({ initialData }: { initialData?: Ga
 
     const fotoEncontrada = fotos.find((foto) => String(foto.id) === fotoId);
     if (!fotoEncontrada) {
+      if (acesso) {
+        void fetch(`/api/fotos/evento/${eventoId}/midias-privadas?foto=${encodeURIComponent(fotoId)}&acesso=${encodeURIComponent(acesso)}`, { cache: "no-store" })
+          .then((resposta) => resposta.ok ? resposta.json() : null)
+          .then((resultado) => {
+            const foto = resultado?.fotos?.[0];
+            if (foto) setFotoSelecionada(foto as FotoArquivo);
+          });
+        return;
+      }
       void supabase.from("foto_arquivos")
         .select("id, evento_id, album_id, fotografo_id, titulo, mime_type, r2_original_key, r2_preview_key, r2_thumb_key, preview_url, thumb_url, preco_centavos, status, tags, fotografo_dados:fotografos!fotografo_id(nome, foto_url)")
         .eq("id", fotoId).eq("evento_id", eventoId).eq("status", "publicada").maybeSingle()
@@ -261,7 +270,7 @@ export default function EventoGaleriaCliente({ initialData }: { initialData?: Ga
       setFotoOrigemBusca(origem === "ia" || origem === "numero" ? origem : null);
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [fotos, eventoId]);
+  }, [fotos, eventoId, acesso]);
 
   useEffect(() => {
     if (albuns.length === 0) return;
@@ -354,7 +363,7 @@ export default function EventoGaleriaCliente({ initialData }: { initialData?: Ga
       const chave = String(foto.id);
       if (previewsEmCache.current.has(chave)) continue;
       const imagem = new Image();
-      imagem.src = fotoPreviewSrc(foto);
+      imagem.src = fotoPreviewSrc(foto, acesso);
       previewsEmCache.current.set(chave, imagem);
     }
     for (const chave of previewsEmCache.current.keys()) {
@@ -392,10 +401,13 @@ export default function EventoGaleriaCliente({ initialData }: { initialData?: Ga
     }
     if (!haMaisNoBanco || buscandoMais) return;
     setBuscandoMais(true);
-    const { data, error } = await supabase.from("foto_arquivos")
-      .select("id, evento_id, album_id, fotografo_id, titulo, mime_type, r2_original_key, r2_preview_key, r2_thumb_key, preview_url, thumb_url, preco_centavos, status, tags, fotografo_dados:fotografos!fotografo_id(nome, foto_url)")
-      .eq("evento_id", eventoId).eq("status", "publicada")
-      .order("created_at", { ascending: false }).order("id", { ascending: false }).range(fotos.length, fotos.length + 999);
+    const { data, error } = acesso
+      ? await fetch(`/api/fotos/evento/${eventoId}/midias-privadas?offset=${fotos.length}&acesso=${encodeURIComponent(acesso)}`, { cache: "no-store" })
+        .then(async (resposta) => resposta.ok ? { data: (await resposta.json()).fotos, error: null } : { data: null, error: true })
+      : await supabase.from("foto_arquivos")
+        .select("id, evento_id, album_id, fotografo_id, titulo, mime_type, r2_original_key, r2_preview_key, r2_thumb_key, preview_url, thumb_url, preco_centavos, status, tags, fotografo_dados:fotografos!fotografo_id(nome, foto_url)")
+        .eq("evento_id", eventoId).eq("status", "publicada")
+        .order("created_at", { ascending: false }).order("id", { ascending: false }).range(fotos.length, fotos.length + 999);
     setBuscandoMais(false);
     if (error) return;
     const recebidas = (data || []) as FotoArquivo[];
@@ -406,6 +418,10 @@ export default function EventoGaleriaCliente({ initialData }: { initialData?: Ga
 
   const toggleCarrinho = (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
+    if (acesso) {
+      localStorage.setItem(`retratt_acesso_album_${eventoId}`, acesso);
+      localStorage.setItem(`retratt_evento_foto_${id}`, eventoId);
+    }
     setCarrinho(prev => prev.includes(id) ? prev.filter(fotoId => fotoId !== id) : [...prev, id]);
   };
 
@@ -430,6 +446,16 @@ export default function EventoGaleriaCliente({ initialData }: { initialData?: Ga
 
   const faixasDesconto = evento ? faixasDoEvento(evento) : [];
   const idsCarrinho = new Set(carrinho);
+  const fotosPorFotografo = new Map<string, number>();
+  fotos.forEach((foto) => {
+    if (!idsCarrinho.has(String(foto.id)) || arquivoFotoEhVideo(foto)) return;
+    const fotografo = String(foto.fotografo_id ?? "sem-fotografo");
+    fotosPorFotografo.set(fotografo, (fotosPorFotografo.get(fotografo) ?? 0) + 1);
+  });
+  const quantidadeDescontoGaleria = Math.max(0, ...fotosPorFotografo.values());
+  const proximaFaixaGaleria = faixasDesconto.find((faixa) => faixa.quantidade > quantidadeDescontoGaleria);
+  const metaDescontoGaleria = faixasDesconto.at(-1)?.quantidade ?? 1;
+  const progressoDescontoGaleria = Math.min(100, Math.round(quantidadeDescontoGaleria / metaDescontoGaleria * 100));
   const fotosElegiveisNoCarrinho = fotoSelecionada
     ? fotos.filter((foto) => idsCarrinho.has(String(foto.id)) && foto.fotografo_id === fotoSelecionada.fotografo_id && !arquivoFotoEhVideo(foto)).length
     : 0;
@@ -586,12 +612,37 @@ export default function EventoGaleriaCliente({ initialData }: { initialData?: Ga
           </div>
 
           {evento?.em_breve && <div className="mb-4 rounded-2xl border border-sky-400/20 bg-sky-400/[0.08] px-4 py-4 text-center"><p className="text-sm font-black uppercase tracking-wider text-sky-300">Em breve</p><p className="mt-1 text-xs text-zinc-300">Esta galeria ainda vai receber fotos. Volte em breve para encontrar as suas.</p></div>}
-          {evento && faixasDesconto.length > 0 && !evento.em_breve && (
-            <div className="mx-auto mb-4 max-w-3xl rounded-2xl border border-sky-400/20 bg-sky-400/[0.06] px-3 py-3 text-center md:px-5 md:py-4">
-              <p className="flex items-center justify-center gap-2 text-xs font-black uppercase text-sky-300 md:text-sm"><Percent size={15} /> Ganhe até {faixasDesconto.at(-1)?.percentual}% de desconto</p>
-              <p className="mt-1 text-[10px] text-zinc-300 md:text-xs">Desconto automático nas fotos da mesma galeria e fotógrafo.</p>
-              <div className={`mt-3 grid gap-1.5 md:gap-2 ${faixasDesconto.length === 1 ? "grid-cols-1" : faixasDesconto.length === 2 ? "grid-cols-2" : "grid-cols-3"}`}>{faixasDesconto.map((faixa) => <div key={faixa.quantidade} className="min-w-0 rounded-xl bg-sky-400/10 px-1 py-2 md:px-3"><strong className="block text-base leading-none text-sky-300 md:text-lg">{faixa.percentual}%</strong><span className="mt-1 block text-[9px] leading-tight text-zinc-300 md:text-[10px]">{faixa.quantidade} fotos</span></div>)}</div>
-            </div>
+          {evento?.permite_download_gratis && !evento.em_breve && <div className="mb-5 rounded-2xl border border-emerald-400/30 bg-emerald-400/10 px-5 py-4"><p className="text-sm font-black uppercase text-emerald-300">Downloads gratuitos</p><p className="mt-1 text-xs text-zinc-300">Abra uma foto ou vídeo e baixe o arquivo original sem pagamento.</p></div>}
+          {evento && faixasDesconto.length > 0 && !evento.em_breve && !evento.permite_download_gratis && (
+            <section className="mx-auto mb-6 max-w-5xl" aria-label="Descontos progressivos nas fotos">
+              <div className="grid gap-2 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+                <div className="relative overflow-hidden rounded-2xl border border-sky-400/20 bg-gradient-to-r from-sky-950/80 to-[#071720] px-5 py-4 sm:px-6">
+                  <span aria-hidden="true" className="pointer-events-none absolute -right-1 -top-9 select-none text-[150px] font-black leading-none text-sky-300/[0.06]">%</span>
+                  <div className="relative flex items-start gap-3">
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sky-400/15 text-sky-300"><Percent size={26} /></span>
+                    <div className="min-w-0">
+                      <p className="text-base font-black uppercase leading-tight text-sky-300 sm:text-xl">Ganhe até {faixasDesconto.at(-1)?.percentual}% de desconto</p>
+                      <p className="mt-1 text-xs text-zinc-300">{proximaFaixaGaleria ? quantidadeDescontoGaleria > 0 ? `Mais ${proximaFaixaGaleria.quantidade - quantidadeDescontoGaleria} ${proximaFaixaGaleria.quantidade - quantidadeDescontoGaleria === 1 ? "foto" : "fotos"} para liberar ${proximaFaixaGaleria.percentual}%` : "Escolha suas fotos e avance pelas faixas ao lado." : `Meta máxima alcançada com ${quantidadeDescontoGaleria} fotos!`}</p>
+                    </div>
+                  </div>
+                  <div className="relative mt-4 h-1.5 overflow-hidden rounded-full bg-sky-400/15" role="progressbar" aria-label="Progresso para o desconto máximo" aria-valuenow={Math.min(quantidadeDescontoGaleria, metaDescontoGaleria)} aria-valuemin={0} aria-valuemax={metaDescontoGaleria}>
+                    <div className="h-full rounded-full bg-sky-400 transition-[width] duration-300" style={{ width: `${progressoDescontoGaleria}%` }} />
+                  </div>
+                  <p className="relative mt-2 text-[10px] text-zinc-400">Desconto automático em fotos da mesma galeria e fotógrafo.</p>
+                </div>
+                <div className="grid auto-cols-[minmax(105px,1fr)] grid-flow-col gap-2 overflow-x-auto pb-1">
+                  {faixasDesconto.map((faixa) => {
+                    const alcançada = quantidadeDescontoGaleria >= faixa.quantidade;
+                    const próxima = proximaFaixaGaleria?.quantidade === faixa.quantidade;
+                    return <div key={faixa.quantidade} className={`flex min-h-32 flex-col items-center justify-center rounded-xl border px-2 py-3 text-center transition-colors ${alcançada ? "border-sky-300 bg-sky-400 text-slate-950" : próxima ? "border-sky-400/60 bg-sky-400/20 text-sky-200" : "border-sky-400/15 bg-sky-400/[0.08] text-sky-300"}`}>
+                      <span className="text-[9px] font-bold uppercase tracking-widest">{alcançada ? "Liberado" : próxima ? "Próxima meta" : "Ganhe"}</span>
+                      <strong className="mt-1 text-2xl font-black leading-none sm:text-3xl">{faixa.percentual}%</strong>
+                      <span className="mt-2 text-[10px] font-medium">com {faixa.quantidade} fotos</span>
+                    </div>;
+                  })}
+                </div>
+              </div>
+            </section>
           )}
 
           {!carregando && totalFotos > 0 && totalVideos > 0 && (
@@ -644,7 +695,7 @@ export default function EventoGaleriaCliente({ initialData }: { initialData?: Ga
                     {foto.r2_thumb_key || foto.r2_preview_key ? (
                       <img
                         data-foto-protegida-imagem
-                        src={fotoThumbSrc(foto)}
+                        src={fotoThumbSrc(foto, acesso)}
                         alt={foto.titulo || "Foto do evento"}
                         className={`w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105 ${noCarrinho ? 'opacity-40 grayscale-[60%]' : 'opacity-90'}`}
                         loading="lazy"
@@ -673,13 +724,13 @@ export default function EventoGaleriaCliente({ initialData }: { initialData?: Ga
                       <p className="line-clamp-1 text-[9px] font-bold uppercase tracking-tight text-white truncate hidden md:block px-1 mb-1">{foto.titulo || "Foto do evento"}</p>
 
                       <div className="flex items-center justify-between gap-1.5 backdrop-blur-sm bg-black/60 rounded-xl p-1 border border-white/10 md:bg-white/95 md:text-black md:border-transparent">
-                          <span className="text-[10px] md:text-[11px] font-black text-retratt md:text-black md:pl-2 pr-1">{formatarPrecoFotos(foto.preco_centavos)}</span>
-                          <button
+                           <span className="text-[10px] md:text-[11px] font-black text-retratt md:text-black md:pl-2 pr-1">{evento?.permite_download_gratis ? "Grátis" : formatarPrecoFotos(foto.preco_centavos)}</span>
+                           {evento?.permite_download_gratis ? <a href={`/api/fotos/evento/${eventoId}/download-gratuito/${foto.id}${acesso ? `?acesso=${encodeURIComponent(acesso)}` : ""}`} onClick={(e) => e.stopPropagation()} className="rounded-lg bg-emerald-500 px-3 py-2 text-[9px] font-black uppercase text-black">Baixar</a> : <button
                             onClick={(e) => toggleCarrinho(String(foto.id), e)}
                             className={`cursor-pointer px-3 py-2 rounded-lg text-[8px] md:text-[9px] font-black uppercase tracking-widest transition-all ${noCarrinho ? 'bg-green-500 text-white' : 'bg-retratt text-black hover:bg-retratt md:bg-black/90 md:text-white md:hover:bg-black'}`}
                           >
                             {noCarrinho ? <CheckCircle2 size={12}/> : "Carrinho"}
-                          </button>
+                           </button>}
                       </div>
                     </div>
                   </article>
@@ -696,7 +747,7 @@ export default function EventoGaleriaCliente({ initialData }: { initialData?: Ga
             </div>
           )}
 
-          {carrinho.length > 0 && (
+          {!evento?.permite_download_gratis && carrinho.length > 0 && (
             <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[95%] max-w-sm bg-[#16161e]/95 backdrop-blur-xl border border-retratt/30 p-2.5 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.9),0_0_30px_rgba(255,90,31,0.2)] flex items-center justify-between z-40 animate-in slide-in-from-bottom-10 fade-in duration-300">
               <div className="flex items-center gap-3 pl-2">
                 <div className="w-10 h-10 bg-black/40 rounded-xl flex items-center justify-center border border-white/10 text-white shrink-0">
@@ -740,8 +791,8 @@ export default function EventoGaleriaCliente({ initialData }: { initialData?: Ga
                   <video
                     data-foto-protegida-imagem
                     key={fotoSelecionada.id}
-                    src={videoPreviewSrc(fotoSelecionada)}
-                    poster={fotoPreviewSrc(fotoSelecionada)}
+                    src={videoPreviewSrc(fotoSelecionada, acesso)}
+                    poster={fotoPreviewSrc(fotoSelecionada, acesso)}
                     className="h-auto max-h-full w-auto max-w-full object-contain"
                     controls
                     autoPlay
@@ -756,7 +807,7 @@ export default function EventoGaleriaCliente({ initialData }: { initialData?: Ga
                 ) : (
                   <img
                     data-foto-protegida-imagem
-                    src={fotoPreviewSrc(fotoSelecionada)}
+                    src={fotoPreviewSrc(fotoSelecionada, acesso)}
                     alt={fotoSelecionada.titulo || "Foto do evento"}
                     className="w-auto h-auto max-w-full max-h-full object-contain select-none pointer-events-none"
                     loading="eager"
@@ -776,14 +827,14 @@ export default function EventoGaleriaCliente({ initialData }: { initialData?: Ga
                 )}
               </div>
 
-              <div className="w-full shrink-0 border-t border-white/10 bg-[#0a0a0e] px-4 py-3 pb-[max(12px,env(safe-area-inset-bottom))] md:hidden">
+              {evento?.permite_download_gratis ? <div className="w-full border-t border-white/10 bg-[#0a0a0e] p-4 md:hidden"><a className="flex w-full justify-center rounded-xl bg-emerald-500 py-3 text-xs font-black uppercase text-black" href={`/api/fotos/evento/${eventoId}/download-gratuito/${fotoSelecionada.id}${acesso ? `?acesso=${encodeURIComponent(acesso)}` : ""}`}>Baixar original grátis</a></div> : <div className="w-full shrink-0 border-t border-white/10 bg-[#0a0a0e] px-4 py-3 pb-[max(12px,env(safe-area-inset-bottom))] md:hidden">
                 <div className="mb-2 flex items-center justify-between"><span className="truncate text-[10px] text-zinc-400">{dadosFotografo(fotoSelecionada)?.nome || "Fotógrafo Parceiro"}</span><strong className="text-lg text-retratt">{formatarPrecoFotos(fotoSelecionada.preco_centavos)}</strong></div>
                 {carrinho.includes(String(fotoSelecionada.id)) ? <>
                   {!arquivoFotoEhVideo(fotoSelecionada) && <div className="mb-2"><ProgressoDesconto faixas={faixasDesconto} quantidade={fotosElegiveisNoCarrinho} /></div>}
                   <Link href="/fotos/carrinho" className="flex w-full items-center justify-center gap-2 rounded-xl bg-retratt py-3 text-xs font-black uppercase text-black"><ShoppingCart size={15} /> Ver carrinho · finalizar compra</Link>
                   <button type="button" onClick={(e) => toggleCarrinho(String(fotoSelecionada.id), e)} className="mt-2 w-full py-1 text-[11px] font-semibold text-zinc-400 underline underline-offset-4">Remover {arquivoFotoEhVideo(fotoSelecionada) ? "este vídeo" : "esta foto"}</button>
                 </> : <button type="button" onClick={(e) => toggleCarrinho(String(fotoSelecionada.id), e)} className="w-full rounded-xl bg-retratt py-3 text-xs font-black uppercase text-black">Adicionar ao carrinho</button>}
-              </div>
+              </div>}
               <div className="hidden w-full md:w-[340px] shrink-0 bg-[#0a0a0e] border border-white/5 rounded-3xl p-5 md:p-6 md:flex flex-col gap-5 shadow-2xl">
 
                 {fotoOrigemBusca && (
@@ -799,7 +850,7 @@ export default function EventoGaleriaCliente({ initialData }: { initialData?: Ga
                         {(fotoSelecionada.r2_preview_key || fotoSelecionada.r2_thumb_key) && (
                           <img
                             data-foto-protegida-imagem
-                            src={fotoPreviewSrc(fotoSelecionada)}
+                            src={fotoPreviewSrc(fotoSelecionada, acesso)}
                             alt=""
                             onError={(event) => { event.currentTarget.style.display = "none"; }}
                             className="absolute inset-0 h-full w-full object-cover pointer-events-none select-none"
@@ -854,6 +905,7 @@ export default function EventoGaleriaCliente({ initialData }: { initialData?: Ga
                 </div>
 
                 <div className="mt-auto flex flex-col gap-4">
+                  {evento?.permite_download_gratis ? <a className="rounded-xl bg-emerald-500 px-4 py-4 text-center text-xs font-black uppercase text-black" href={`/api/fotos/evento/${eventoId}/download-gratuito/${fotoSelecionada.id}${acesso ? `?acesso=${encodeURIComponent(acesso)}` : ""}`}>Baixar original grátis</a> : <>
                   {carrinho.includes(String(fotoSelecionada.id)) && !arquivoFotoEhVideo(fotoSelecionada) && <ProgressoDesconto faixas={faixasDesconto} quantidade={fotosElegiveisNoCarrinho} />}
                   <div className="flex items-end justify-between bg-[#050505] p-4 rounded-2xl border border-white/5">
                       <p className="text-[10px] text-zinc-500 font-black uppercase tracking-widest">Valor {arquivoFotoEhVideo(fotoSelecionada) ? "do vídeo" : "da foto"}</p>
@@ -884,6 +936,7 @@ export default function EventoGaleriaCliente({ initialData }: { initialData?: Ga
                       Finalizar
                     </Link>
                   </div>
+                  </>}
                 </div>
               </div>
             </div>

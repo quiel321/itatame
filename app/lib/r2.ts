@@ -38,7 +38,7 @@ export function r2Config() {
   return { endpoint, bucket, accessKeyId, secretAccessKey };
 }
 
-function createR2PresignedUrl(key: string, method: "GET" | "PUT" | "DELETE", expiresSeconds = 900) {
+function createR2PresignedUrl(key: string, method: "GET" | "PUT" | "DELETE", expiresSeconds = 900, responseHeaders: Record<string, string> = {}) {
   const { endpoint, bucket, accessKeyId, secretAccessKey } = r2Config();
   const url = new URL(endpoint);
   const host = url.host;
@@ -54,6 +54,7 @@ function createR2PresignedUrl(key: string, method: "GET" | "PUT" | "DELETE", exp
     "X-Amz-Date": amzDate,
     "X-Amz-Expires": String(expiresSeconds),
     "X-Amz-SignedHeaders": "host",
+    ...responseHeaders,
   };
 
   const canonicalRequest = [
@@ -84,6 +85,13 @@ export function createR2PresignedPutUrl(key: string, expiresSeconds = 900) {
 
 export function createR2PresignedGetUrl(key: string, expiresSeconds = 300) {
   return createR2PresignedUrl(key, "GET", expiresSeconds);
+}
+
+export function createR2PresignedDownloadUrl(key: string, nome: string, expiresSeconds = 120) {
+  const nomeSeguro = nome.replace(/[\r\n"\\/]/g, "-").slice(0, 160);
+  return createR2PresignedUrl(key, "GET", expiresSeconds, {
+    "response-content-disposition": `attachment; filename="${nomeSeguro}"`,
+  });
 }
 
 export function createR2PresignedDeleteUrl(key: string, expiresSeconds = 120) {
