@@ -13,6 +13,8 @@ import { ChatEvento, BotaoChatInscricao, useMensagensNaoLidas, SeloNaoLidas } fr
 import { comprimirAvatar } from '@/app/lib/comprimir-avatar';
 import { academiasDaEquipe, equipesOficiais, nomeOficial } from '@/app/lib/vinculo-equipe';
 import CampoNomeOficial from '@/app/components/CampoNomeOficial';
+import CidadeEstadoInput from '@/app/components/CidadeEstadoInput';
+import { cidadeComEstado, separarCidadeEstado } from '@/app/lib/localidades';
 import { dataOperacionalEvento } from '@/app/lib/evento-datas';
 
 type InscricaoCancelavel = {
@@ -72,6 +74,8 @@ export default function PerfilPage() {
   const [professorId, setProfessorId] = useState("");
   const [peso, setPeso] = useState("");
   const [cidade, setCidade] = useState("");
+  const [estadoCidade, setEstadoCidade] = useState("");
+  const [cidadeLegadaOriginal, setCidadeLegadaOriginal] = useState("");
   const [faixa, setFaixa] = useState("");
   const [modalidade, setModalidade] = useState("");
   const [sexo, setSexo] = useState("");
@@ -266,7 +270,10 @@ export default function PerfilPage() {
       setProfessor(perfilData.professor || "");
       setProfessorId(perfilData.professor_id || "");
       setPeso(perfilData.peso || "");
-      setCidade(perfilData.cidade || "");
+      const localidade = separarCidadeEstado(perfilData.cidade || "");
+      setCidade(localidade.cidade);
+      setEstadoCidade(localidade.estado);
+      setCidadeLegadaOriginal(localidade.estado ? "" : localidade.cidade);
       setFaixa(perfilData.faixa || "");
       setModalidade(perfilData.modalidade || "");
       setSexo(perfilData.sexo || "");
@@ -397,6 +404,7 @@ export default function PerfilPage() {
 
   async function salvarPerfil() {
     setSalvando(true); setMensagem(""); setErro("");
+    if (cidade.trim() && !estadoCidade && cidade.trim() !== cidadeLegadaOriginal.trim()) { setErro("Selecione a cidade na lista."); setSalvando(false); return; }
     if (!nome || !cpf) { setErro("Nome e CPF são obrigatórios."); setSalvando(false); return; }
     if (role === 'atleta' && !professor.trim()) { setErro("Informe o professor responsável antes de salvar seu cadastro."); setSalvando(false); return; }
 
@@ -442,7 +450,7 @@ export default function PerfilPage() {
       academia: academiaSalva,
       professor,
       professor_id: professorId || null,
-      cidade,
+      cidade: cidadeComEstado(cidade, estadoCidade),
       faixa,
       modalidade,
       role,
@@ -461,6 +469,7 @@ export default function PerfilPage() {
     if (error) {
       setErro(error.message.includes("duplicate key") ? "Este CPF já está em uso." : "Erro ao salvar: " + error.message);
     } else {
+      setCidadeLegadaOriginal(estadoCidade ? "" : cidade.trim());
       const sincronizacao = await sincronizarNomeInscricoes(userId);
       const uniuNomes = equipeSalva !== equipe.trim() || academiaSalva !== academia.trim();
       setMensagem(!sincronizacao.ok ? "Cadastro salvo, mas não foi possível conferir os nomes das inscrições. Tente salvar novamente." : sincronizacao.pendentesRevisao ? "Cadastro salvo. Inscrições com pagamento e nome diferente precisam de revisão da organização; o pagamento não foi alterado." : uniuNomes ? "Dados salvos. Equipe e academia foram unidas aos nomes que já existiam." : "Dados atualizados com sucesso!");
@@ -538,7 +547,7 @@ export default function PerfilPage() {
       faixa: formDependente.faixa,
       peso: formDependente.peso ? formDependente.peso : null,
       modalidade: formDependente.modalidade,
-      cidade: formDependente.cidade || cidade,
+      cidade: formDependente.cidade || cidadeComEstado(cidade, estadoCidade),
       foto_url: formDependente.foto_url || null,
     };
 
@@ -1143,7 +1152,7 @@ export default function PerfilPage() {
                       </div>
                       <div>
                         <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest block mb-0.5">Cidade Sede</span>
-                        <span className="text-sm md:text-base text-white font-black uppercase tracking-tight">{cidade || "--"}</span>
+                        <span className="text-sm md:text-base text-white font-black uppercase tracking-tight">{cidadeComEstado(cidade, estadoCidade) || "--"}</span>
                       </div>
                       <div>
                         <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest block mb-0.5">Modalidade</span>
@@ -1221,7 +1230,7 @@ export default function PerfilPage() {
                 <div><label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 pl-1 cursor-default">E-mail</label><input type="email" value={email} disabled className="w-full bg-black/20 border border-transparent outline-none rounded-xl px-3 py-2 text-xs text-zinc-500 cursor-not-allowed" /></div>
                 <div><label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 pl-1 cursor-default">CPF *</label><input type="text" value={cpf} onChange={(e) => setCpf(formatarCpf(e.target.value))} className={`cursor-text w-full bg-black/50 border border-white/5 outline-none rounded-xl px-3 py-2 text-xs text-white transition-colors ${role === 'professor' ? 'focus:border-yellow-500/50' : 'focus:border-cyan-500/50'}`} /></div>
                 <div><label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 pl-1 cursor-default">Telefone / WhatsApp</label><input type="tel" value={telefone} onChange={(e) => setTelefone(formatarTelefone(e.target.value))} className={`cursor-text w-full bg-black/50 border border-white/5 outline-none rounded-xl px-3 py-2 text-xs text-white transition-colors ${role === 'professor' ? 'focus:border-yellow-500/50' : 'focus:border-cyan-500/50'}`} /></div>
-                <div><label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 pl-1 cursor-default">Cidade - Estado</label><input type="text" value={cidade} onChange={(e) => setCidade(e.target.value)} className={`cursor-text w-full bg-black/50 border border-white/5 outline-none rounded-xl px-3 py-2 text-xs text-white transition-colors ${role === 'professor' ? 'focus:border-yellow-500/50' : 'focus:border-cyan-500/50'}`} /></div>
+                <div><label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 pl-1 cursor-default">Cidade - Estado</label><CidadeEstadoInput cidade={cidade} estado={estadoCidade} onChange={(localidade) => { setCidade(localidade.cidade); setEstadoCidade(localidade.estado); }} className={`w-full bg-black/50 border border-white/5 outline-none rounded-xl px-3 py-2 text-xs text-white transition-colors ${role === 'professor' ? 'focus:border-yellow-500/50' : 'focus:border-cyan-500/50'}`} accentClassName={role === 'professor' ? 'text-yellow-400' : 'text-cyan-400'} /></div>
 
                 {role === "professor" ? (
                   <>

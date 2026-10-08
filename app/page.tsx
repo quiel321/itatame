@@ -8,6 +8,7 @@ import { supabase } from "./lib/supabase";
 import { obterEtapaEvento, type ResumoLutasEvento, type TomEtapaEvento } from "./lib/evento-etapas";
 import TutorialVideoCard from "./components/TutorialVideoCard";
 import { canalItatame, tutoriais } from "./lib/tutoriais";
+import { normalizarTextoLocalidade } from "./lib/localidades";
 
 const estiloEtapa: Record<TomEtapaEvento, { borda: string; badge: string; barra: string; acao: string }> = {
   cyan: {
@@ -135,12 +136,13 @@ export default function Home() {
   };
 
   const eventosFiltrados = useMemo(() => eventos.filter((evento) => {
-    const termo = busca.toLowerCase();
-    const matchBusca = evento.nome?.toLowerCase().includes(termo) || evento.cidade?.toLowerCase().includes(termo);
+    const termo = normalizarTextoLocalidade(busca);
+    const matchBusca = normalizarTextoLocalidade(String(evento.nome || "")).includes(termo) || normalizarTextoLocalidade(String(evento.cidade || "")).includes(termo);
     const matchModalidade = modalidadeFiltro === "Todas" ? true : evento.descricao?.includes(modalidadeFiltro);
-    const matchEstado = estadoFiltro === "Todos" ? true : evento.estado === estadoFiltro;
+    const matchEstado = estadoFiltro === "Todos" ? true : String(evento.estado || "").toUpperCase() === estadoFiltro;
     return matchBusca && matchModalidade && matchEstado;
   }), [busca, estadoFiltro, eventos, modalidadeFiltro]);
+  const estadosDisponiveis = useMemo(() => [...new Set(eventos.map((evento) => String(evento.estado || "").trim().toUpperCase()).filter((uf) => /^[A-Z]{2}$/.test(uf)))].sort(), [eventos]);
 
   return (
     <main className="flex flex-col min-h-screen bg-[#020202] text-white selection:bg-red-500/30 overflow-x-hidden font-sans">
@@ -223,10 +225,7 @@ export default function Home() {
           className="cursor-pointer appearance-none rounded-xl md:rounded-full border border-white/5 bg-black/40 px-5 text-xs font-bold text-zinc-300 outline-none transition-colors hover:bg-black/60 focus:border-red-500/50"
         >
           <option value="Todos">Local (UF)</option>
-          <option value="MT">Mato Grosso</option>
-          <option value="SP">São Paulo</option>
-          <option value="RJ">Rio de Janeiro</option>
-          <option value="RO">Rondônia</option>
+          {estadosDisponiveis.map((uf) => <option key={uf} value={uf}>{uf}</option>)}
         </select>
       </div>
     </div>

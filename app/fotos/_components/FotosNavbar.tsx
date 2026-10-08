@@ -14,7 +14,7 @@ function LogoFotos() {
       <img
         src="/retratt/logo-white.png"
         alt="Retratt"
-        className="h-8 w-auto object-contain transition-all duration-300 group-hover:brightness-110 md:h-9"
+        className="h-7 w-auto object-contain transition-all duration-300 group-hover:brightness-110 md:h-8"
       />
     </div>
   );
@@ -25,7 +25,6 @@ type FotosNavbarProps = {
 };
 
 export default function FotosNavbar({ area = "publico" }: FotosNavbarProps) {
-  const sitePrincipal = process.env.NEXT_PUBLIC_BASE_URL || "https://www.itatame.com.br";
   const [nome, setNome] = useState<string | null>(null);
   const [fotoPerfil, setFotoPerfil] = useState<string | null>(null);
   const [perfil, setPerfil] = useState<PerfilFotos | null>(null);
@@ -119,7 +118,6 @@ export default function FotosNavbar({ area = "publico" }: FotosNavbarProps) {
             <Link href="/fotos/fotografo" className="cursor-pointer hover:text-retratt transition-colors">Fotógrafo</Link>
             <Link href="/fotos/organizador" className="cursor-pointer hover:text-retratt transition-colors">Organizador</Link>
             <Link href="/fotos/precos" className="cursor-pointer hover:text-retratt transition-colors">Preços</Link>
-            <Link href={sitePrincipal} className="cursor-pointer hover:text-white transition-colors">iTatame</Link>
           </nav>
         )}
 
@@ -177,7 +175,6 @@ export default function FotosNavbar({ area = "publico" }: FotosNavbarProps) {
             <Link href={rotaMinhasFotos} onClick={fecharMenu} className="cursor-pointer hover:text-retratt transition-colors border-b border-white/5 pb-4">Minhas Fotos</Link>
             <Link href="/fotos/organizador" onClick={fecharMenu} className="cursor-pointer hover:text-retratt transition-colors border-b border-white/5 pb-4">Para Organizadores</Link>
             <Link href="/fotos/precos" onClick={fecharMenu} className="cursor-pointer hover:text-retratt transition-colors border-b border-white/5 pb-4">Preços e Condições</Link>
-            <Link href={sitePrincipal} onClick={fecharMenu} className="cursor-pointer hover:text-white transition-colors pb-4">Voltar para o iTatame</Link>
           </nav>
         </div>
       )}

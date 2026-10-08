@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
 import { obterFotografoDoUsuario } from "@/app/lib/fotos-auth";
 import { validarFaixasDesconto } from "@/app/lib/fotos-descontos";
+import { categoriaFotosValida } from "@/app/lib/fotos-categorias";
 
 export const runtime = "nodejs";
 
@@ -27,6 +28,8 @@ export async function POST(request: Request) {
 
     const body = await request.json();
     const nome = String(body.nome || "").trim();
+    const categoria = body.categoria;
+    if (!categoriaFotosValida(categoria)) return NextResponse.json({ error: "Selecione a categoria do evento." }, { status: 400 });
     const cidade = String(body.cidade || "").trim();
     const estado = String(body.estado || "").trim().toUpperCase().slice(0, 2);
     const dataEvento = String(body.dataEvento || "").trim() || null;
@@ -39,6 +42,7 @@ export async function POST(request: Request) {
 
     const { data: galeria, error } = await supabase.from("foto_eventos").insert({
       nome,
+      categoria,
       slug: `${slugify(nome)}-${crypto.randomUUID().slice(0, 8)}`,
       cidade: cidade || null,
       estado: estado || null,

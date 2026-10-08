@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { dataHoraLocalParaIso, fusoHorarioEvento, paraInputDateTimeEvento } from "../../lib/evento-datas";
+import CidadeEstadoInput from "@/app/components/CidadeEstadoInput";
 import { IDADE_MAX_INFANTIL_PADRAO, regrasValoresInscricao, valorOpcional } from "../../lib/valor-inscricao";
 
 type ModoFormulario = "criar" | "editar";
@@ -279,8 +280,8 @@ export default function EventoForm({ modo, eventoId }: EventoFormProps) {
     setErro("");
     setSucesso(false);
 
-    if (!nome || !cidade || !dataEvento) {
-      setErro("Nome, cidade e data do evento são obrigatórios.");
+    if (!nome || !cidade || !estado || !dataEvento) {
+      setErro("Informe o nome, selecione a cidade e defina a data do evento.");
       setSalvando(false);
       return;
     }
@@ -501,8 +502,8 @@ export default function EventoForm({ modo, eventoId }: EventoFormProps) {
                 <p className="md:col-span-4 text-xs text-zinc-400">As datas configuradas controlam automaticamente as inscrições, a checagem e a publicação das chaves. Use “Inscrições encerradas” para fechar manualmente um evento sem data final definida.</p>
                 <Field label="Modalidade"><input value={modalidade} onChange={(e) => setModalidade(e.target.value)} className={inputClass} /></Field>
                 <Field label="Data do evento"><input required type="date" value={dataEvento} onChange={(e) => setDataEvento(e.target.value)} className={inputClass + " [color-scheme:dark]"} /></Field>
-                <Field label="Cidade"><input required value={cidade} onChange={(e) => setCidade(e.target.value)} className={inputClass} /></Field>
-                <Field label="UF"><input value={estado} onChange={(e) => setEstado(e.target.value.toUpperCase())} maxLength={2} className={inputClass} /></Field>
+                <Field label="Cidade"><CidadeEstadoInput cidade={cidade} estado={estado} onChange={(localidade) => { setCidade(localidade.cidade); setEstado(localidade.estado); }} className={inputClass} accentClassName="text-red-400" /></Field>
+                <Field label="UF"><input value={estado} readOnly placeholder="Preenchida ao selecionar a cidade" className={inputClass} /></Field>
                 <Field label="Ginásio / local" className="md:col-span-2"><input value={local} onChange={(e) => setLocal(e.target.value)} className={inputClass} placeholder="Local do campeonato" /></Field>
                 <Field label="Link externo de inscrição" className="md:col-span-2"><input value={linkInscricao} onChange={(e) => setLinkInscricao(e.target.value)} className={inputClass} placeholder="Use somente se a inscrição não for pelo iTatame" /></Field>
               </div>

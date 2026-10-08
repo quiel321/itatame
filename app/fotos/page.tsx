@@ -1,52 +1,68 @@
 ﻿"use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/app/lib/supabase";
 import { FotoEvento } from "@/app/lib/fotos";
+import { CATEGORIAS_FOTOS, categoriaDaGaleria, nomeCategoriaFotos } from "@/app/lib/fotos-categorias";
 import FotosShell from "./_components/FotosShell";
 import BuscaFacial from "./_components/BuscaFacial";
 import BuscaPorNumero from "./_components/BuscaPorNumero";
-import { Home, Camera, Search, CalendarDays, MapPin, ArrowRight, ShieldCheck, Images } from "lucide-react";
+import { Home, Camera, Search, CalendarDays, MapPin, ShieldCheck, Images, ChevronLeft, ChevronRight, Bike, Car, Dumbbell, Footprints, GraduationCap, Heart, Music2, BriefcaseBusiness, Trophy, UsersRound } from "lucide-react";
+
+const ICONE_CATEGORIA = {
+  "jiu-jitsu": Dumbbell, corrida: Footprints, ciclismo: Bike, futebol: Trophy,
+  automobilismo: Car, "outros-esportes": Trophy, casamento: Heart,
+  formatura: GraduationCap, show: Music2, corporativo: BriefcaseBusiness,
+  "outros-eventos": UsersRound,
+} as const;
 
 export default function FotosHomePage() {
   const [eventos, setEventos] = useState<FotoEvento[]>([]);
   const [carregando, setCarregando] = useState(true);
+  const [erroGalerias, setErroGalerias] = useState(false);
+  const [tentarNovamente, setTentarNovamente] = useState(0);
   const [busca, setBusca] = useState("");
   const [filtro, setFiltro] = useState<"todos" | "abertas" | "em_breve">("todos");
+  const [categoriaAtiva, setCategoriaAtiva] = useState("");
+  const barraCategoriasRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let ativo = true;
     async function carregar() {
       setCarregando(true);
-      let consulta = supabase
-        .from("foto_eventos")
-        .select("id, nome, slug, local, cidade, estado, data_evento, capa_url, status, em_breve")
-        .eq("status", "publicado").eq("acesso_por_link", false);
-      if (filtro === "em_breve") consulta = consulta.eq("em_breve", true);
-      if (filtro === "abertas") consulta = consulta.or("em_breve.is.null,em_breve.eq.false");
-      const { data } = await consulta
-        .order("data_evento", { ascending: false })
-        .limit(48);
+      setErroGalerias(false);
+      const consultar = (comCategoria: boolean) => {
+        let consulta = supabase.from("foto_eventos")
+          .select(`id, nome, slug, local, cidade, estado, data_evento, capa_url, status, em_breve${comCategoria ? ", categoria" : ""}`)
+          .eq("status", "publicado").eq("acesso_por_link", false);
+        if (filtro === "em_breve") consulta = consulta.eq("em_breve", true);
+        if (filtro === "abertas") consulta = consulta.or("em_breve.is.null,em_breve.eq.false");
+        if (comCategoria && categoriaAtiva) consulta = consulta.eq("categoria", categoriaAtiva);
+        return consulta.order("data_evento", { ascending: false }).limit(200);
+      };
+      let resultado = await consultar(true);
+      if (resultado.error?.code === "42703") resultado = await consultar(false);
 
       if (ativo) {
-        setEventos((data || []) as FotoEvento[]);
+        setEventos((resultado.data || []) as unknown as FotoEvento[]);
+        setErroGalerias(Boolean(resultado.error));
         setCarregando(false);
       }
     }
 
     carregar();
     return () => { ativo = false; };
-  }, [filtro]);
+  }, [filtro, categoriaAtiva, tentarNovamente]);
 
   const eventosFiltrados = useMemo(() => {
     const termo = busca.trim().toLowerCase();
     return eventos.filter((evento) => {
       const correspondeFiltro = filtro === "todos" || (filtro === "em_breve") === Boolean(evento.em_breve);
       const correspondeBusca = !termo || [evento.nome, evento.cidade, evento.estado, evento.local].filter(Boolean).join(" ").toLowerCase().includes(termo);
-      return correspondeFiltro && correspondeBusca;
+      return correspondeFiltro && correspondeBusca && (!categoriaAtiva || categoriaDaGaleria(evento) === categoriaAtiva);
     });
-  }, [eventos, busca, filtro]);
+  }, [eventos, busca, filtro, categoriaAtiva]);
 
   const formatarData = (dataStr?: string | null) => {
     if (!dataStr) return "";
@@ -60,37 +76,32 @@ export default function FotosHomePage() {
     if (searchInput) searchInput.focus();
   };
 
-  // Mosaico editorial com diferentes tipos de eventos atendidos pela Retratt.
+  // Fotos locais: o fundo não depende do banco nem de serviços externos de imagem.
   const bgPhotos = [
-    "https://loremflickr.com/400/400/running,race?lock=44",
-    "https://loremflickr.com/400/400/wedding,couple?lock=22",
-    "https://loremflickr.com/400/400/motorsport,racing?lock=33",
-    "https://loremflickr.com/400/400/football,soccer?lock=54",
-    "https://loremflickr.com/400/400/graduation,ceremony?lock=55",
-    "https://loremflickr.com/400/400/concert,stage?lock=66",
-    "https://loremflickr.com/400/400/cycling,race?lock=77",
-    "https://loremflickr.com/400/400/corporate,event?lock=88",
+    "/retratt/hero-sports/jiu-jitsu.jpg",
+    "/retratt/hero-sports/corrida.jpg",
+    "/retratt/hero-sports/futebol.jpg",
+    "/retratt/hero-sports/ciclismo.jpg",
+    "/retratt/hero-sports/basquete.jpg",
+    "/retratt/hero-sports/natacao.jpg",
   ];
-
-  const categorias = ["Esportes", "Corridas", "Casamentos", "Formaturas", "Shows", "Corporativos"];
 
   return (
     <FotosShell>
       <main className="min-h-screen bg-[#050505] text-white font-sans selection:bg-retratt/30 pb-24 md:pb-20 overflow-hidden relative">
 
         {/* 🚀 HERO SECTION IMERSIVA COM MOSAICO (MAIS VISÍVEL E COMPACTA) */}
-        <section className="relative w-full pt-8 pb-6 md:pt-12 md:pb-10 overflow-hidden border-b border-white/5 bg-black">
+        <section className="relative flex min-h-[390px] w-full items-center overflow-hidden border-b border-white/5 bg-black py-10 md:min-h-[440px]">
 
           {/* Fundo Mosaico Tecnológico */}
           <div className="absolute inset-0 z-0 flex items-center justify-center pointer-events-none overflow-hidden">
 
-            {/* Grid Inclinado (Opacidade ajustada para deixar as fotos visíveis sem poluir) */}
-            <div className="absolute w-[150vw] md:w-[120vw] h-[150vh] transform -rotate-12 opacity-[0.4] md:opacity-[0.5] grid grid-cols-4 md:grid-cols-6 gap-2 md:gap-3 scale-110 z-0">
-              {[...Array(24)].map((_, i) => (
-                <div key={i} className="w-full h-32 md:h-48 bg-[#0a0a0e] rounded-lg overflow-hidden">
+            <div className="absolute inset-0 z-0 grid grid-cols-2 grid-rows-3 gap-1.5 p-1.5 opacity-90 md:grid-cols-3 md:grid-rows-2 md:gap-2 md:p-2">
+              {bgPhotos.map((foto) => (
+                <div key={foto} className="min-h-0 min-w-0 overflow-hidden rounded-md bg-[#0a0a0e]">
                   <img
-                    src={bgPhotos[i % bgPhotos.length]}
-                    className="w-full h-full object-cover grayscale-[20%]"
+                    src={foto}
+                    className="h-full w-full object-cover"
                     alt=""
                   />
                 </div>
@@ -98,11 +109,10 @@ export default function FotosHomePage() {
             </div>
 
             {/* Overlays Suaves (Camadas extras de preto para o texto brilhar) */}
-            <div className="absolute inset-0 bg-[#050505]/50 z-10"></div>
-            <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/30 to-[#050505] z-10"></div>
-            <div className="absolute inset-0 bg-gradient-to-r from-[#050505] via-transparent to-[#050505] z-10"></div>
+            <div className="absolute inset-0 z-10 bg-black/55"></div>
+            <div className="absolute inset-0 z-10 bg-gradient-to-r from-black/40 via-black/15 to-black/40"></div>
 
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[400px] bg-orange-950/60 blur-[150px] rounded-full z-20"></div>
+            <div className="absolute top-1/2 left-1/2 z-20 h-[270px] w-[620px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-black/45 blur-[70px]"></div>
           </div>
 
 
@@ -123,8 +133,8 @@ export default function FotosHomePage() {
             </p>
 
             {/* 🔍 BARRA DE PESQUISA (GLASSMORPHISM COMPACTO) */}
-            <div className="w-full max-w-3xl bg-black/60 backdrop-blur-xl border border-white/15 p-2 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.8)] flex flex-col md:flex-row gap-2">
-              <div className="flex-1 flex items-center bg-black/50 border border-white/5 rounded-xl px-4 py-1 h-12 md:h-14 focus-within:border-retratt/50 transition-colors">
+            <div className="w-full max-w-3xl bg-black/60 backdrop-blur-xl border border-white/15 p-1.5 md:p-2 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.8)] flex flex-col md:flex-row gap-1.5 md:gap-2">
+              <div className="flex-1 flex items-center bg-black/50 border border-white/5 rounded-xl px-3 md:px-4 py-1 h-10 md:h-14 focus-within:border-retratt/50 transition-colors">
                 <Search size={16} className="text-zinc-400 mr-2 shrink-0" />
                 <input
                   id="search-input"
@@ -135,16 +145,8 @@ export default function FotosHomePage() {
                   className="w-full bg-transparent border-none text-xs md:text-sm text-white outline-none placeholder:text-zinc-500 font-medium"
                 />
               </div>
-              <BuscaFacial />
-              <BuscaPorNumero />
-            </div>
-
-            <div className="mt-3 hidden max-w-2xl flex-wrap items-center justify-center gap-2 md:flex">
-              {categorias.map((categoria) => (
-                <span key={categoria} className="rounded-full border border-white/10 bg-black/40 px-3 py-1.5 text-[8px] font-black uppercase tracking-widest text-zinc-400 backdrop-blur-md">
-                  {categoria}
-                </span>
-              ))}
+              <BuscaFacial triggerClassName="flex h-11 md:h-14 shrink-0 items-center justify-center gap-2 rounded-xl bg-retratt px-4 md:px-6 text-[10px] md:text-[11px] font-black uppercase tracking-widest text-white shadow-[0_0_15px_rgba(255,90,31,0.3)] transition-all hover:bg-retratt" />
+              <BuscaPorNumero triggerClassName="flex h-11 md:h-14 shrink-0 items-center justify-center gap-2 rounded-xl border border-orange-400/30 bg-orange-500/10 px-4 md:px-5 text-[10px] font-black uppercase tracking-widest text-orange-300 transition hover:bg-orange-500 hover:text-black" />
             </div>
 
           </div>
@@ -152,6 +154,17 @@ export default function FotosHomePage() {
 
         {/* 🏆 EVENTOS RECENTES (GRID COMPACTO) */}
         <section className="relative z-20 max-w-7xl mx-auto px-4 md:px-6 py-6 md:py-10">
+          <div className="relative mb-5 border-b border-white/10 px-7" role="group" aria-label="Categorias de eventos">
+            <button type="button" aria-label="Categorias anteriores" onClick={() => barraCategoriasRef.current?.scrollBy({ left: -360, behavior: "smooth" })} className="absolute inset-y-0 left-0 z-10 flex w-7 items-center justify-center bg-[#050505] text-zinc-500 hover:text-white"><ChevronLeft size={18} /></button>
+            <div ref={barraCategoriasRef} className="flex gap-1 overflow-x-auto scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <button type="button" aria-pressed={!categoriaAtiva} onClick={() => setCategoriaAtiva("")} className={`flex min-w-20 shrink-0 flex-col items-center gap-1 border-b-2 px-2 py-2 text-[9px] font-bold transition-colors ${!categoriaAtiva ? "border-retratt text-retratt" : "border-transparent text-zinc-400 hover:text-white"}`}><Images size={16} />Todas</button>
+              {CATEGORIAS_FOTOS.map((categoria) => {
+                const Icone = ICONE_CATEGORIA[categoria.id];
+                return <button key={categoria.id} type="button" aria-pressed={categoriaAtiva === categoria.id} onClick={() => setCategoriaAtiva(categoria.id)} className={`flex min-w-24 shrink-0 flex-col items-center gap-1 border-b-2 px-2 py-2 text-[9px] font-bold transition-colors ${categoriaAtiva === categoria.id ? "border-retratt text-retratt" : "border-transparent text-zinc-400 hover:text-white"}`}><Icone size={16} />{categoria.nome}</button>;
+              })}
+            </div>
+            <button type="button" aria-label="Próximas categorias" onClick={() => barraCategoriasRef.current?.scrollBy({ left: 360, behavior: "smooth" })} className="absolute inset-y-0 right-0 z-10 flex w-7 items-center justify-center bg-[#050505] text-zinc-500 hover:text-white"><ChevronRight size={18} /></button>
+          </div>
           <div className="mb-4 flex gap-2" role="group" aria-label="Filtrar galerias">
             {([ ["todos", "Todas"], ["abertas", "Abertas"], ["em_breve", "Em breve"] ] as const).map(([valor, rotulo]) => <button key={valor} type="button" aria-pressed={filtro === valor} onClick={() => setFiltro(valor)} className={`rounded-full border px-3 py-2 text-[10px] font-bold ${filtro === valor ? "border-retratt bg-retratt/15 text-retratt" : "border-white/10 text-zinc-400"}`}>{rotulo}</button>)}
           </div>
@@ -162,11 +175,6 @@ export default function FotosHomePage() {
               </h2>
               <p className="text-[9px] md:text-[10px] font-bold text-zinc-500 uppercase tracking-widest mt-1">Últimas galerias publicadas pelos nossos fotógrafos</p>
             </div>
-            {eventosFiltrados.length > 0 && (
-               <Link href="/fotos/eventos" className="hidden md:flex text-[9px] font-black uppercase tracking-widest text-zinc-400 hover:text-white items-center gap-1 transition-colors bg-white/5 px-4 py-2 rounded-xl border border-white/5">
-                 Ver todos eventos <ArrowRight size={12} />
-               </Link>
-            )}
           </div>
 
           {carregando ? (
@@ -174,6 +182,11 @@ export default function FotosHomePage() {
                {[1, 2, 3, 4].map(i => (
                  <div key={i} className="h-[160px] md:h-[200px] bg-white/5 rounded-2xl animate-pulse border border-white/5"></div>
                ))}
+            </div>
+          ) : erroGalerias ? (
+            <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-8 text-center">
+              <p className="text-sm text-zinc-300">Não foi possível carregar as galerias.</p>
+              <button type="button" onClick={() => setTentarNovamente((valor) => valor + 1)} className="mt-3 rounded-lg border border-retratt/40 px-4 py-2 text-xs text-retratt">Tentar novamente</button>
             </div>
           ) : eventosFiltrados.length === 0 ? (
             <div className="rounded-3xl border border-dashed border-white/10 bg-white/[0.02] py-20 text-center flex flex-col items-center">
@@ -199,6 +212,7 @@ export default function FotosHomePage() {
                       <span className={`rounded-md border px-1.5 py-0.5 text-[7px] font-black uppercase tracking-wide backdrop-blur-md md:px-2 md:py-1 md:text-[9px] md:tracking-widest ${evento.em_breve ? "border-amber-400/40 bg-amber-500/20 text-amber-200" : "border-emerald-400/40 bg-emerald-500/20 text-emerald-200"}`}>
                         {evento.em_breve ? "Em breve" : "Galeria aberta"}
                       </span>
+                      <span className="rounded-md bg-black/65 px-2 py-1 text-[8px] font-bold text-white">{nomeCategoriaFotos(categoriaDaGaleria(evento))}</span>
                     </div>
 
                     <div className="mt-auto transform transition-transform duration-300 md:group-hover:-translate-y-1">
@@ -219,19 +233,19 @@ export default function FotosHomePage() {
 
         {/* 📸 ÁREA DO FOTÓGRAFO (DIRETA E COMPACTA) */}
         <section className="relative z-20 max-w-7xl mx-auto px-4 md:px-6 mb-8 md:mb-12">
-          <div className="relative rounded-3xl border border-white/5 bg-[#0a0a0e] overflow-hidden shadow-xl">
+          <div className="relative rounded-2xl border border-white/5 bg-[#0a0a0e] overflow-hidden">
             <div className="absolute inset-0 bg-retratt/5 blur-[80px] pointer-events-none"></div>
-            <div className="relative z-10 p-5 md:p-8 flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="relative z-10 p-4 md:px-6 md:py-4 flex flex-col md:flex-row items-center justify-between gap-4">
 
               <div className="flex-1 text-center md:text-left">
                 <span className="inline-flex items-center gap-1.5 text-retratt font-black text-[8px] md:text-[9px] uppercase tracking-[0.2em] mb-2">
                   <Camera size={12} /> Para Fotógrafos Parceiros
                 </span>
-                <h2 className="text-lg md:text-2xl font-black uppercase tracking-tighter leading-tight mb-2 text-white">
-                  Venda suas fotos sem<br className="hidden md:block"/> pagar <span className="text-zinc-500">taxas abusivas.</span>
+                <h2 className="text-base md:text-lg font-black uppercase tracking-tighter leading-tight mb-1 text-white">
+                  Venda suas fotos na Retratt
                 </h2>
-                <p className="text-zinc-400 text-[10px] md:text-[11px] font-medium leading-relaxed max-w-sm mx-auto md:mx-0">
-                  Upload em lote, originais protegidos, busca facial inteligente e recebimento automatizado em uma experiência feita para vender.
+                <p className="text-zinc-400 text-[10px] font-medium leading-relaxed max-w-lg mx-auto md:mx-0">
+                  Crie álbuns, publique fotos e acompanhe suas vendas.
                 </p>
               </div>
 

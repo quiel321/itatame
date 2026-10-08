@@ -35,6 +35,8 @@ type EventoGaleria = FotoEvento & {
   descricao?: string | null;
   autor_nome?: string;
   autor_slug?: string;
+  autor_id?: string;
+  autor_telefone?: string;
   tipo_autor?: string;
 };
 
@@ -190,6 +192,8 @@ export default function EventoGaleriaCliente({ initialData, acesso }: { initialD
       // 2. 🔥 INTELIGÊNCIA DO BANNER CORRIGIDA
       let autorNome = "Organizador";
       let autorSlug = "";
+      let autorId = "";
+      let autorTelefone = "";
       let tipoAutor = "organizador";
 
       if (eventoData?.organizador_user_id) {
@@ -202,9 +206,11 @@ export default function EventoGaleriaCliente({ initialData, acesso }: { initialD
          }
       } else if (eventoData?.created_by) {
          // Se não tem organizador, mas tem created_by, é Fotógrafo Freelancer
-         const { data: fotoData } = await supabase.from("fotografos").select("nome").eq("user_id", eventoData.created_by).maybeSingle();
+         const { data: fotoData } = await supabase.from("fotografos").select("id, nome, telefone").eq("user_id", eventoData.created_by).maybeSingle();
          if (fotoData) {
             autorNome = fotoData.nome || "Fotógrafo Parceiro";
+            autorId = fotoData.id;
+            autorTelefone = fotoData.telefone || "";
             tipoAutor = "fotografo";
          }
       }
@@ -213,6 +219,8 @@ export default function EventoGaleriaCliente({ initialData, acesso }: { initialD
         ...(eventoData || {}),
         autor_nome: autorNome,
         autor_slug: autorSlug,
+        autor_id: autorId,
+        autor_telefone: autorTelefone,
         tipo_autor: tipoAutor
       };
 
@@ -504,16 +512,16 @@ export default function EventoGaleriaCliente({ initialData, acesso }: { initialD
                              Por: {evento.autor_nome}
                           </span>
                        </Link>
-                   ) : (
-                       <div className="inline-flex items-center gap-2.5 bg-retratt/10 border border-retratt/20 rounded-full pr-4 pl-1 py-1 backdrop-blur-md w-fit">
+                   ) : evento?.autor_id ? (
+                       <Link href={`/fotos/fotografo/${evento.autor_id}`} className="inline-flex items-center gap-2.5 bg-retratt/10 border border-retratt/20 rounded-full pr-4 pl-1 py-1 backdrop-blur-md w-fit hover:bg-retratt/20">
                           <div className="w-6 h-6 rounded-full bg-retratt/20 border border-retratt/30 flex items-center justify-center text-[9px] font-black text-retratt">
                              <Camera size={12} />
                           </div>
                           <span className="text-[10px] font-bold text-retratt uppercase tracking-widest">
                              Por: {evento?.autor_nome}
                           </span>
-                       </div>
-                   )}
+                       </Link>
+                   ) : <span className="text-xs text-zinc-400">Por: {evento?.autor_nome}</span>}
                 </div>
 
                 <h1 className="mt-1 max-w-3xl text-2xl font-black uppercase tracking-tight leading-tight text-white sm:text-3xl md:text-4xl">
@@ -765,6 +773,11 @@ export default function EventoGaleriaCliente({ initialData, acesso }: { initialD
           )}
 
         </div>
+
+        {evento?.tipo_autor === "fotografo" && evento.autor_id && <footer className="mx-auto mt-8 max-w-7xl border-t border-white/10 px-4 py-6 text-xs text-zinc-400 md:px-6">
+          <p>Fotógrafo: <Link href={`/fotos/fotografo/${evento.autor_id}`} className="font-bold text-white hover:text-retratt">{evento.autor_nome}</Link></p>
+          {evento.autor_telefone && <p className="mt-1">Contato: <a href={`tel:${evento.autor_telefone.replace(/\D/g, "")}`} className="text-retratt hover:underline">{evento.autor_telefone}</a></p>}
+        </footer>}
 
         {/* MODAL DE FOTO */}
         {fotoSelecionada && (

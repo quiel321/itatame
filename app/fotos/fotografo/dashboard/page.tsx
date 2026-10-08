@@ -10,13 +10,16 @@ import { Camera, CheckCircle2, ChevronDown, CloudUpload, CreditCard, FolderOpen,
 import MercadoPagoConnectButton from "@/app/admin/_components/MercadoPagoConnectButton";
 import GerenciadorMidias from "../_components/GerenciadorMidias";
 import EditorFaixasDesconto from "../../_components/EditorFaixasDesconto";
+import ParceirosAlbum from "../_components/ParceirosAlbum";
 import { faixasDoEvento, validarFaixasDesconto, type FaixaDesconto } from "@/app/lib/fotos-descontos";
+import { CATEGORIAS_FOTOS, nomeCategoriaFotos } from "@/app/lib/fotos-categorias";
+import CidadeEstadoInput from "@/app/components/CidadeEstadoInput";
 
 type FotografoPerfil = { id: string; nome: string | null; email: string | null; foto_url?: string | null; telefone?: string | null; documento?: string | null; cep?: string | null; endereco?: string | null; cidade?: string | null; estado?: string | null; bio?: string | null; perfil_completo?: boolean | null; status: string | null; mp_connected_at?: string | null; mp_user_id?: string | null; };
 type Totais = { fotos: number; albuns: number; eventos: number; vendas: number };
 type PerfilForm = { nome: string; telefone: string; documento: string; cep: string; endereco: string; cidade: string; estado: string; bio: string; };
 
-type GaleriaFreelancer = { id: string; nome: string; cidade?: string | null; estado?: string | null; data_evento?: string | null; preco_padrao_centavos?: number | null; preco_bloqueado?: boolean; capa_url?: string | null; comissao_organizador_percentual?: number | null; modelo_recebimento?: "royalty" | "diaria_organizador"; created_by?: string | null; desconto_combo_qtd?: number | null; desconto_combo_percentual?: number | null; descontos_progressivos?: FaixaDesconto[] | null; em_breve?: boolean; acesso_por_link?: boolean; acesso_token?: string | null; permite_download_gratis?: boolean; };
+type GaleriaFreelancer = { id: string; nome: string; categoria?: string | null; cidade?: string | null; estado?: string | null; data_evento?: string | null; preco_padrao_centavos?: number | null; preco_bloqueado?: boolean; capa_url?: string | null; comissao_organizador_percentual?: number | null; modelo_recebimento?: "royalty" | "diaria_organizador"; created_by?: string | null; desconto_combo_qtd?: number | null; desconto_combo_percentual?: number | null; descontos_progressivos?: FaixaDesconto[] | null; em_breve?: boolean; acesso_por_link?: boolean; acesso_token?: string | null; permite_download_gratis?: boolean; };
 
 function perfilParaForm(perfil: FotografoPerfil | null, email: string | null): PerfilForm {
   return { nome: perfil?.nome || email?.split("@")[0] || "", telefone: perfil?.telefone || "", documento: perfil?.documento || "", cep: perfil?.cep || "", endereco: perfil?.endereco || "", cidade: perfil?.cidade || "", estado: perfil?.estado || "", bio: perfil?.bio || "", };
@@ -39,7 +42,7 @@ export default function FotografoDashboardPage() {
 
   const [mostrarCriarGaleria, setMostrarCriarGaleria] = useState(false);
   const [mostrarDetalhesMp, setMostrarDetalhesMp] = useState(false);
-  const [galeriaForm, setGaleriaForm] = useState({ nome: "", cidade: "", estado: "", dataEvento: "", preco: "0,00", emBreve: false, acessoPorLink: false, downloadGratuito: false });
+  const [galeriaForm, setGaleriaForm] = useState({ nome: "", categoria: "outros-eventos", cidade: "", estado: "", dataEvento: "", preco: "0,00", emBreve: false, acessoPorLink: false, downloadGratuito: false });
   const [faixasCriacao, setFaixasCriacao] = useState<FaixaDesconto[]>([]);
   const [faixasEdicao, setFaixasEdicao] = useState<FaixaDesconto[]>([]);
   const [capaGaleria, setCapaGaleria] = useState<File | null>(null);
@@ -49,7 +52,7 @@ export default function FotografoDashboardPage() {
   const [minhasGalerias, setMinhasGalerias] = useState<GaleriaFreelancer[]>([]);
   const [galeriasOficiais, setGaleriasOficiais] = useState<GaleriaFreelancer[]>([]);
   const [editandoGaleria, setEditandoGaleria] = useState<GaleriaFreelancer | null>(null);
-  const [editGaleriaForm, setEditGaleriaForm] = useState({ nome: "", cidade: "", estado: "", dataEvento: "", preco: "15,00", emBreve: false });
+  const [editGaleriaForm, setEditGaleriaForm] = useState({ nome: "", categoria: "outros-eventos", cidade: "", estado: "", dataEvento: "", preco: "15,00", emBreve: false });
   const [editCapaGaleria, setEditCapaGaleria] = useState<File | null>(null);
   const [salvandoEdicao, setSalvandoEdicao] = useState(false);
   const [excluindoGaleria, setExcluindoGaleria] = useState(false);
@@ -122,21 +125,35 @@ export default function FotografoDashboardPage() {
           supabase.from("foto_arquivos").select("id", { count: "exact", head: true }).eq("fotografo_id", perfilAtual.id),
           supabase.from("foto_albuns").select("id", { count: "exact", head: true }).eq("fotografo_id", perfilAtual.id),
           supabase.from("foto_pedidos").select("id", { count: "exact", head: true }).eq("fotografo_id", perfilAtual.id).eq("status", "pago"),
-          supabase.from("foto_eventos").select("id, nome, cidade, estado, data_evento, preco_padrao_centavos, preco_bloqueado, capa_url, desconto_combo_qtd, desconto_combo_percentual, descontos_progressivos, em_breve, acesso_por_link, acesso_token, permite_download_gratis").eq("created_by", user.id).neq("status", "arquivado").order("created_at", { ascending: false }),
+          supabase.from("foto_eventos").select("id, nome, categoria, cidade, estado, data_evento, preco_padrao_centavos, preco_bloqueado, capa_url, desconto_combo_qtd, desconto_combo_percentual, descontos_progressivos, em_breve, acesso_por_link, acesso_token, permite_download_gratis").eq("created_by", user.id).neq("status", "arquivado").order("created_at", { ascending: false }),
            supabase.from("foto_evento_fotografos").select("evento_id, comissao_organizador_percentual, modelo_recebimento").eq("fotografo_id", perfilAtual.id).eq("status", "ativo")
         ]);
+        let galeriasDados: GaleriaFreelancer[] = (galeriasDb.data || []) as GaleriaFreelancer[];
+        if (galeriasDb.error?.code === "42703") {
+          const fallback = await supabase.from("foto_eventos")
+            .select("id, nome, cidade, estado, data_evento, preco_padrao_centavos, preco_bloqueado, capa_url, desconto_combo_qtd, desconto_combo_percentual, descontos_progressivos, em_breve, acesso_por_link, acesso_token, permite_download_gratis")
+            .eq("created_by", user.id).neq("status", "arquivado").order("created_at", { ascending: false });
+          galeriasDados = (fallback.data || []) as GaleriaFreelancer[];
+        }
 
-        setMinhasGalerias(galeriasDb.data || []);
+        setMinhasGalerias(galeriasDados);
 
         const eventosPermitidos = (credenciais.data || []).map((item) => item.evento_id);
         let oficiaisDb: GaleriaFreelancer[] = [];
 
         if (eventosPermitidos.length > 0) {
-           const { data } = await supabase
+           const consultaOficiais = await supabase
               .from("foto_eventos")
-              .select("id, nome, cidade, estado, data_evento, preco_padrao_centavos, preco_bloqueado, capa_url, created_by")
+              .select("id, nome, categoria, cidade, estado, data_evento, preco_padrao_centavos, preco_bloqueado, capa_url, created_by")
               .in("id", eventosPermitidos)
               .order("created_at", { ascending: false });
+           let oficiaisDados: GaleriaFreelancer[] = (consultaOficiais.data || []) as GaleriaFreelancer[];
+           if (consultaOficiais.error?.code === "42703") {
+             const fallback = await supabase.from("foto_eventos")
+               .select("id, nome, cidade, estado, data_evento, preco_padrao_centavos, preco_bloqueado, capa_url, created_by")
+               .in("id", eventosPermitidos).order("created_at", { ascending: false });
+             oficiaisDados = (fallback.data || []) as GaleriaFreelancer[];
+           }
 
             const royaltyPorEvento = new Map(
              (credenciais.data || []).map((item) => [
@@ -148,7 +165,7 @@ export default function FotografoDashboardPage() {
               String(item.evento_id),
               item.modelo_recebimento === "diaria_organizador" ? "diaria_organizador" : "royalty",
             ] as const));
-           oficiaisDb = (data || [])
+           oficiaisDb = oficiaisDados
              .filter((galeria) => galeria.created_by !== user.id)
              .map((galeria) => ({
                ...galeria,
@@ -163,7 +180,7 @@ export default function FotografoDashboardPage() {
            fotos: fotos.count || 0,
            albuns: albuns.count || 0,
            vendas: vendas.count || 0,
-           eventos: (galeriasDb.data?.length || 0) + oficiaisDb.length
+           eventos: galeriasDados.length + oficiaisDb.length
         }));
       }
 
@@ -179,6 +196,7 @@ export default function FotografoDashboardPage() {
 
   async function salvarPerfilFotografo() {
     if (!perfil?.id) return;
+    if (perfilForm.cidade.trim() && !perfilForm.estado) { alert("Selecione sua cidade na lista."); return; }
     setSalvandoPerfil(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -223,6 +241,7 @@ export default function FotografoDashboardPage() {
 
   async function criarGaleriaFreelancer() {
     setMensagemGaleria("");
+    if (!galeriaForm.cidade.trim() || !galeriaForm.estado) { setMensagemGaleria("Selecione a cidade do evento na lista."); return; }
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
     const normalizado = Number(galeriaForm.preco.replace(/\./g, "").replace(",", "."));
@@ -267,6 +286,7 @@ export default function FotografoDashboardPage() {
     setEditandoGaleria(galeria);
     setEditGaleriaForm({
       nome: galeria.nome || "",
+      categoria: galeria.categoria || "outros-eventos",
       cidade: galeria.cidade || "",
       estado: galeria.estado || "",
       dataEvento: galeria.data_evento || "",
@@ -279,6 +299,7 @@ export default function FotografoDashboardPage() {
 
   async function salvarEdicaoGaleria() {
     if (!editandoGaleria) return;
+    if (!editGaleriaForm.cidade.trim() || !editGaleriaForm.estado) { alert("Selecione a cidade do evento na lista."); return; }
     setSalvandoEdicao(true);
     let novaCapaUrl = editandoGaleria.capa_url;
     const { data: { session } } = await supabase.auth.getSession();
@@ -297,6 +318,7 @@ export default function FotografoDashboardPage() {
 
     const { error } = await supabase.from("foto_eventos").update({
       nome: editGaleriaForm.nome.trim(),
+      categoria: editGaleriaForm.categoria,
       cidade: editGaleriaForm.cidade.trim(),
       estado: editGaleriaForm.estado.trim().toUpperCase(),
       data_evento: editGaleriaForm.dataEvento || null,
@@ -488,13 +510,17 @@ export default function FotografoDashboardPage() {
                            <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Nome do evento ou ensaio</label>
                            <input value={galeriaForm.nome} onChange={(e) => setGaleriaForm({ ...galeriaForm, nome: e.target.value })} className="cursor-text h-11 w-full rounded-xl border border-white/10 bg-black px-3 text-xs font-bold text-white outline-none focus:border-retratt" />
                          </div>
+                         <div className="sm:col-span-2">
+                           <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Categoria</label>
+                           <select value={galeriaForm.categoria} onChange={(e) => setGaleriaForm({ ...galeriaForm, categoria: e.target.value })} className="h-11 w-full rounded-xl border border-white/10 bg-black px-3 text-xs text-white">{CATEGORIAS_FOTOS.map((categoria) => <option key={categoria.id} value={categoria.id}>{categoria.nome}</option>)}</select>
+                         </div>
                          <div>
                            <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Cidade</label>
-                           <input value={galeriaForm.cidade} onChange={(e) => setGaleriaForm({ ...galeriaForm, cidade: e.target.value })} className="cursor-text h-11 w-full rounded-xl border border-white/10 bg-black px-3 text-xs font-bold text-white outline-none focus:border-retratt" />
+                           <CidadeEstadoInput cidade={galeriaForm.cidade} estado={galeriaForm.estado} onChange={({ cidade, estado }) => setGaleriaForm({ ...galeriaForm, cidade, estado })} />
                          </div>
                          <div>
                            <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Estado (UF)</label>
-                           <input value={galeriaForm.estado} onChange={(e) => setGaleriaForm({ ...galeriaForm, estado: e.target.value })} maxLength={2} className="cursor-text h-11 w-full rounded-xl border border-white/10 bg-black px-3 text-xs font-bold uppercase text-white outline-none focus:border-retratt" />
+                           <input value={galeriaForm.estado} readOnly placeholder="Preenchido ao selecionar a cidade" className="h-11 w-full rounded-xl border border-white/10 bg-black px-3 text-xs font-bold uppercase text-zinc-400" />
                          </div>
                          <div>
                            <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Data do Evento</label>
@@ -545,7 +571,7 @@ export default function FotografoDashboardPage() {
                 {galeriasOficiais.length > 0 && (
                   <div className="rounded-3xl border border-emerald-500/10 bg-[#0a0a0e] p-5 sm:p-6 md:p-8 shadow-xl mt-6">
                     <h2 className="text-lg font-black uppercase tracking-tight text-white mb-6 flex items-center gap-2">
-                       <ShieldCheck size={20} className="text-emerald-500 shrink-0"/> Eventos Oficiais
+                       <ShieldCheck size={20} className="text-emerald-500 shrink-0"/> Álbuns compartilhados e eventos oficiais
                     </h2>
                     <p className="text-[10px] text-zinc-400 mb-6 font-medium leading-relaxed">Você foi credenciado para produzir estes eventos. Adicione fotos ou vídeos e acompanhe tudo no mesmo painel.</p>
 
@@ -558,6 +584,7 @@ export default function FotografoDashboardPage() {
                                   </div>
                                   <div className="flex-1 min-w-0">
                                      <h3 className="line-clamp-2 text-sm font-black uppercase leading-snug text-white sm:text-base">{galeria.nome}</h3>
+                                     <span className="text-[9px] text-retratt">{nomeCategoriaFotos(galeria.categoria)}</span>
                                       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[9px] font-bold uppercase tracking-wider text-zinc-500">
                                          <span className="flex items-center gap-1 shrink-0"><Calendar size={10} className="shrink-0"/> {galeria.data_evento ? new Date(galeria.data_evento).toLocaleDateString('pt-BR') : "Sem data"}</span>
                                          <span className="flex min-w-0 items-center gap-1"><MapPin size={10} className="shrink-0"/> <span className="truncate">{galeria.cidade || "Local"} / {galeria.estado || "UF"}</span></span>
@@ -611,6 +638,7 @@ export default function FotografoDashboardPage() {
                                   </div>
                                   <div className="flex-1 min-w-0">
                                      <h3 className="line-clamp-2 text-sm font-black uppercase leading-snug text-white sm:text-base">{galeria.nome}</h3>
+                                     <span className="text-[9px] text-retratt">{nomeCategoriaFotos(galeria.categoria)}</span>
                                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[9px] font-bold uppercase tracking-wider text-zinc-500">
                                         <span className="flex items-center gap-1 shrink-0"><Calendar size={10} className="shrink-0"/> {galeria.data_evento ? new Date(galeria.data_evento).toLocaleDateString('pt-BR') : "Sem data"}</span>
                                         <span className="flex min-w-0 items-center gap-1"><MapPin size={10} className="shrink-0"/> <span className="truncate">{galeria.cidade || "Local"} / {galeria.estado || "UF"}</span></span>
@@ -646,6 +674,7 @@ export default function FotografoDashboardPage() {
                               <button type="button" disabled={configurandoAlbumId === galeria.id} onClick={() => void configurarAlbum(galeria, { acessoPorLink: !galeria.acesso_por_link })} className="rounded-lg border border-white/15 px-3 py-2 hover:border-retratt disabled:opacity-50">{galeria.acesso_por_link ? "Tornar público" : "Ocultar e liberar por link"}</button>
                               <button type="button" disabled={configurandoAlbumId === galeria.id} onClick={() => void configurarAlbum(galeria, { downloadGratuito: !galeria.permite_download_gratis })} className="rounded-lg border border-white/15 px-3 py-2 hover:border-retratt disabled:opacity-50">{galeria.permite_download_gratis ? "Vender por foto" : "Liberar download gratuito"}</button>
                             </div>
+                            <ParceirosAlbum eventoId={galeria.id} />
 
                             {renderizarGerenciador(galeria.id)}
 
@@ -671,24 +700,19 @@ export default function FotografoDashboardPage() {
                                         className="h-11 sm:h-12 w-full rounded-xl border border-white/10 bg-black px-4 text-xs font-bold text-white outline-none focus:border-retratt focus:ring-1 focus:ring-retratt/50 transition-all"
                                       />
                                    </div>
+                                   <div className="sm:col-span-2">
+                                     <label className="mb-1.5 ml-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Categoria</label>
+                                     <select value={editGaleriaForm.categoria} onChange={(e) => setEditGaleriaForm({ ...editGaleriaForm, categoria: e.target.value })} className="h-11 w-full rounded-xl border border-white/10 bg-black px-4 text-xs text-white">{CATEGORIAS_FOTOS.map((categoria) => <option key={categoria.id} value={categoria.id}>{categoria.nome}</option>)}</select>
+                                   </div>
 
                                    <div>
                                       <label className="mb-1.5 ml-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Cidade</label>
-                                      <input
-                                        value={editGaleriaForm.cidade}
-                                        onChange={(e) => setEditGaleriaForm({ ...editGaleriaForm, cidade: e.target.value })}
-                                        className="h-11 sm:h-12 w-full rounded-xl border border-white/10 bg-black px-4 text-xs font-bold text-white outline-none focus:border-retratt focus:ring-1 focus:ring-retratt/50 transition-all"
-                                      />
+                                      <CidadeEstadoInput cidade={editGaleriaForm.cidade} estado={editGaleriaForm.estado} onChange={({ cidade, estado }) => setEditGaleriaForm({ ...editGaleriaForm, cidade, estado })} className="h-11 sm:h-12 w-full rounded-xl border border-white/10 bg-black px-4 text-xs font-bold text-white outline-none focus:border-retratt focus:ring-1 focus:ring-retratt/50 transition-all" />
                                    </div>
 
                                    <div>
                                       <label className="mb-1.5 ml-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Estado (UF)</label>
-                                      <input
-                                        value={editGaleriaForm.estado}
-                                        onChange={(e) => setEditGaleriaForm({ ...editGaleriaForm, estado: e.target.value })}
-                                        maxLength={2}
-                                        className="h-11 sm:h-12 w-full rounded-xl border border-white/10 bg-black px-4 text-xs font-bold text-white uppercase outline-none focus:border-retratt focus:ring-1 focus:ring-retratt/50 transition-all"
-                                      />
+                                      <input value={editGaleriaForm.estado} readOnly placeholder="Preenchido ao selecionar a cidade" className="h-11 sm:h-12 w-full rounded-xl border border-white/10 bg-black px-4 text-xs font-bold uppercase text-zinc-400" />
                                    </div>
 
                                    <div>
@@ -825,8 +849,8 @@ export default function FotografoDashboardPage() {
                          <div><label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">CPF</label><input value={perfilForm.documento} onChange={(e) => setPerfilForm({ ...perfilForm, documento: e.target.value })} className="cursor-text h-11 w-full rounded-xl border border-white/10 bg-[#050505] px-3 text-xs font-bold text-white outline-none focus:border-retratt" placeholder="000.000.000-00" /></div>
                          <div><label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">CEP</label><input value={perfilForm.cep} onChange={(e) => setPerfilForm({ ...perfilForm, cep: e.target.value })} className="cursor-text h-11 w-full rounded-xl border border-white/10 bg-[#050505] px-3 text-xs font-bold text-white outline-none focus:border-retratt" placeholder="00000-000" /></div>
                          <div className="min-w-0"><label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Endereço Completo</label><input value={perfilForm.endereco} onChange={(e) => setPerfilForm({ ...perfilForm, endereco: e.target.value })} className="cursor-text h-11 w-full rounded-xl border border-white/10 bg-[#050505] px-3 text-xs font-bold text-white outline-none focus:border-retratt" placeholder="Rua, Número, Bairro" /></div>
-                         <div><label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Cidade</label><input value={perfilForm.cidade} onChange={(e) => setPerfilForm({ ...perfilForm, cidade: e.target.value })} className="cursor-text h-11 w-full rounded-xl border border-white/10 bg-[#050505] px-3 text-xs font-bold text-white outline-none focus:border-retratt" placeholder="Sua cidade" /></div>
-                         <div><label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Estado (UF)</label><input value={perfilForm.estado} onChange={(e) => setPerfilForm({ ...perfilForm, estado: e.target.value })} className="cursor-text h-11 w-full rounded-xl border border-white/10 bg-[#050505] px-3 text-xs font-bold text-white outline-none focus:border-retratt" placeholder="Ex: SP" maxLength={2} /></div>
+                         <div><label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Cidade</label><CidadeEstadoInput cidade={perfilForm.cidade} estado={perfilForm.estado} onChange={({ cidade, estado }) => setPerfilForm({ ...perfilForm, cidade, estado })} className="h-11 w-full rounded-xl border border-white/10 bg-[#050505] px-3 text-xs font-bold text-white outline-none focus:border-retratt" /></div>
+                         <div><label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Estado (UF)</label><input value={perfilForm.estado} readOnly placeholder="Preenchido ao selecionar a cidade" className="h-11 w-full rounded-xl border border-white/10 bg-[#050505] px-3 text-xs font-bold text-zinc-400" /></div>
                          <div className="min-w-0"><label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Bio (Equipamento / Foco)</label><textarea value={perfilForm.bio} onChange={(e) => setPerfilForm({ ...perfilForm, bio: e.target.value })} className="cursor-text min-h-20 w-full rounded-xl border border-white/10 bg-[#050505] p-3 text-xs font-bold text-white outline-none focus:border-retratt" placeholder="Ex: Especialista em desporto. Utilizo Sony A7IV com lente 70-200mm." /></div>
                        </div>
                        <div className="mt-6"><button type="button" onClick={salvarPerfilFotografo} disabled={salvandoPerfil || !perfilForm.nome.trim() || !perfilForm.telefone.trim() || !perfilForm.documento.trim()} className="cursor-pointer h-12 w-full flex items-center justify-center rounded-xl bg-retratt text-[11px] font-black uppercase tracking-widest text-black hover:bg-retratt disabled:cursor-not-allowed disabled:opacity-50 transition-all shadow-[0_0_15px_rgba(255,90,31,0.2)]">{salvandoPerfil ? "A Processar..." : "Salvar Perfil Seguro"}</button></div>

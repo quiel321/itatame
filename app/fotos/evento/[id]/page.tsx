@@ -41,16 +41,18 @@ export default async function FotosEventoPage({ params, searchParams }: Props) {
       const { acesso_token: _token, ...eventoPublico } = evento;
       let autorNome = "Organizador";
       let autorSlug = "";
+      let autorId = "";
+      let autorTelefone = "";
       let tipoAutor = "organizador";
       if (evento.organizador_user_id) {
         const { data: org } = await supabase.from("foto_organizadores").select("nome, slug").eq("id", evento.organizador_user_id).maybeSingle();
         if (org) { autorNome = org.nome || autorNome; autorSlug = org.slug || ""; }
       } else if (evento.created_by) {
-        const { data: fotografo } = await supabase.from("fotografos").select("nome").eq("user_id", evento.created_by).maybeSingle();
-        if (fotografo) { autorNome = fotografo.nome || "Fotógrafo Parceiro"; tipoAutor = "fotografo"; }
+        const { data: fotografo } = await supabase.from("fotografos").select("id, nome, telefone").eq("user_id", evento.created_by).maybeSingle();
+        if (fotografo) { autorNome = fotografo.nome || "Fotógrafo Parceiro"; autorId = fotografo.id; autorTelefone = fotografo.telefone || ""; tipoAutor = "fotografo"; }
       }
       initialData = {
-        evento: { ...eventoPublico, autor_nome: autorNome, autor_slug: autorSlug, tipo_autor: tipoAutor },
+        evento: { ...eventoPublico, autor_nome: autorNome, autor_slug: autorSlug, autor_id: autorId, autor_telefone: autorTelefone, tipo_autor: tipoAutor },
         albuns: (albunsResult.data || []) as FotoAlbum[],
         fotos: (fotosResult.data || []) as FotoArquivo[],
         totalMidias: totalResult.count,

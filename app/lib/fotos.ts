@@ -8,6 +8,7 @@ export type FotoEvento = {
   data_evento: string | null;
   capa_url: string | null;
   status: string | null;
+  categoria?: string | null;
   preco_padrao_centavos?: number | null;
   preco_video_centavos?: number | null;
   preco_bloqueado?: boolean;

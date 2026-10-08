@@ -515,7 +515,6 @@ export default function PainelFotografoPage() {
           .from("foto_albuns")
           .select("id, evento_id, fotografo_id, titulo, descricao, capa_url, status")
           .eq("evento_id", eventoId)
-          .or(`fotografo_id.eq.${fotografoId},fotografo_id.is.null`)
           .order("ordem", { ascending: true });
 
         if (error) throw error;

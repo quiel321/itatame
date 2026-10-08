@@ -4,6 +4,7 @@ import { obterEventoOrganizador, guardarEventoOrganizador } from '@/app/lib/even
 
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "../lib/supabase";
+import CidadeEstadoInput from "@/app/components/CidadeEstadoInput";
 import { comprimirAvatar } from "../lib/comprimir-avatar";
 import { getPlanoComercial } from "../lib/planos-comerciais";
 import Link from "next/link";
@@ -350,6 +351,7 @@ export default function AdminPage() {
 
   async function salvarPerfil(e: React.FormEvent) {
     e.preventDefault();
+    if (perfilData.cidade.trim() && !perfilData.estado) { alert("Selecione a cidade na lista."); return; }
     setSavingPerfil(true);
 
     try {
@@ -1350,11 +1352,11 @@ export default function AdminPage() {
                   </div>
                   <div className="md:col-span-8">
                     <label className="text-zinc-500 text-[9px] md:text-[10px] font-black uppercase tracking-widest block mb-1 ml-1">Cidade</label>
-                    <input value={perfilData.cidade} onChange={(e) => setPerfilData({...perfilData, cidade: e.target.value})} className="w-full bg-black border border-white/10 rounded-lg px-3 py-2.5 outline-none focus:border-red-500 text-white text-xs md:text-sm" placeholder="Sua Cidade" />
+                    <CidadeEstadoInput cidade={perfilData.cidade} estado={perfilData.estado} onChange={({ cidade, estado }) => setPerfilData({...perfilData, cidade, estado})} className="w-full bg-black border border-white/10 rounded-lg px-3 py-2.5 outline-none focus:border-red-500 text-white text-xs md:text-sm" accentClassName="text-red-400" />
                   </div>
                   <div className="md:col-span-4">
                     <label className="text-zinc-500 text-[9px] md:text-[10px] font-black uppercase tracking-widest block mb-1 ml-1">Estado (UF)</label>
-                    <input value={perfilData.estado} onChange={(e) => setPerfilData({...perfilData, estado: e.target.value})} className="w-full bg-black border border-white/10 rounded-lg px-3 py-2.5 outline-none focus:border-red-500 text-white text-xs md:text-sm" placeholder="Ex: SP" />
+                    <input value={perfilData.estado} readOnly className="w-full bg-black border border-white/10 rounded-lg px-3 py-2.5 text-zinc-400 text-xs md:text-sm" placeholder="Preenchida ao selecionar a cidade" />
                   </div>
                 </div>
               </div>

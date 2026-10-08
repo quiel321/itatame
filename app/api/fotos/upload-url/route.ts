@@ -70,7 +70,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Perfil de fotógrafo não encontrado ou inativo." }, { status: 403 });
     }
 
-    const { data: evento } = await supabase.from("foto_eventos").select("id, preco_padrao_centavos, preco_video_centavos, preco_bloqueado").eq("id", eventoId).maybeSingle();
+    const { data: evento } = await supabase.from("foto_eventos").select("id, created_by, organizador_user_id, preco_padrao_centavos, preco_video_centavos, preco_bloqueado").eq("id", eventoId).maybeSingle();
     if (!evento) return NextResponse.json({ error: "Evento de fotos não encontrado." }, { status: 404 });
 
     if (!(await fotografoPodePublicarNoEvento(supabase, eventoId, fotografo.id))) {
@@ -80,7 +80,11 @@ export async function POST(request: Request) {
     const { data: album } = await supabase.from("foto_albuns").select("id, fotografo_id").eq("id", albumId).eq("evento_id", eventoId).maybeSingle();
     if (!album) return NextResponse.json({ error: "Álbum não encontrado." }, { status: 404 });
     if (album.fotografo_id && album.fotografo_id !== fotografo.id) {
-      return NextResponse.json({ error: "Este álbum pertence a outro fotógrafo." }, { status: 403 });
+      const albumDoDono = !evento.organizador_user_id && evento.created_by && album.fotografo_id !== fotografo.id;
+      if (!albumDoDono) return NextResponse.json({ error: "Este álbum pertence a outro fotógrafo." }, { status: 403 });
+      const { data: dono } = await supabase.from("fotografos").select("id")
+        .eq("user_id", evento.created_by).eq("id", album.fotografo_id).maybeSingle();
+      if (!dono) return NextResponse.json({ error: "Este álbum pertence a outro fotógrafo." }, { status: 403 });
     }
 
     const fotoId = crypto.randomUUID();

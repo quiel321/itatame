@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { ChangeEvent, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { supabase } from "@/app/lib/supabase";
+import { chaveLocalidade, type Localidade } from "@/app/lib/localidades";
 import { Camera, CheckCircle2, ChevronLeft, ChevronRight, ImagePlus, Loader2, Play, ScanFace, ShieldCheck, ShoppingCart, X } from "lucide-react";
 
 type ResultadoFace = {
@@ -78,6 +80,8 @@ async function prepararSelfie(file: File) {
 export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }: BuscaFacialProps = {}) {
   const [aberto, setAberto] = useState(false);
   const [arquivo, setArquivo] = useState<File | null>(null);
+  const [cidadeEvento, setCidadeEvento] = useState("");
+  const [cidades, setCidades] = useState<{ cidade: string; estado: string }[]>([]);
   const [preview, setPreview] = useState("");
   const [consentiu, setConsentiu] = useState(false);
   const [buscando, setBuscando] = useState(false);
@@ -116,6 +120,37 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
   }, [aberto]);
 
   useEffect(() => {
+    if (!aberto || eventoId) return;
+    let ativo = true;
+    void (async () => {
+      const unicas = new Map<string, { cidade: string; estado: string }>();
+      for (let inicio = 0; ativo; inicio += 1000) {
+        const { data, error } = await supabase.from("foto_eventos").select("cidade, estado")
+          .eq("status", "publicado").eq("acesso_por_link", false)
+          .not("cidade", "is", null).order("id").range(inicio, inicio + 999);
+        if (error || !data) break;
+        for (const evento of data) {
+          const cidade = String(evento.cidade || "").trim();
+          const estado = String(evento.estado || "").trim().toUpperCase();
+          if (cidade) unicas.set(chaveLocalidade(cidade, estado), { cidade, estado });
+        }
+        if (data.length < 1000) break;
+      }
+      if (ativo) setCidades([...unicas.values()].sort((a, b) => a.cidade.localeCompare(b.cidade, "pt-BR")));
+      try {
+        const resposta = await fetch("/api/localidades");
+        if (resposta.ok) {
+          const oficiais = await resposta.json() as Localidade[];
+          const nomes = new Map(oficiais.map((item) => [chaveLocalidade(item.cidade, item.estado), item]));
+          for (const [chave, localidade] of unicas) unicas.set(chave, nomes.get(chave) || localidade);
+        }
+      } catch { /* Cidades das galerias seguem disponíveis se o IBGE estiver indisponível. */ }
+      if (ativo) setCidades([...unicas.values()].sort((a, b) => a.cidade.localeCompare(b.cidade, "pt-BR")));
+    })();
+    return () => { ativo = false; };
+  }, [aberto, eventoId]);
+
+  useEffect(() => {
     if (!aberto) return;
     const fechar = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -141,7 +176,7 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
   }
 
   async function buscar() {
-    if (!arquivo || !consentiu) return;
+    if (!arquivo || !consentiu || (!eventoId && !cidadeEvento)) return;
     setBuscando(true);
     setErro("");
     setResultados(null);
@@ -150,6 +185,7 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
       const form = new FormData();
       form.append("imagem", selfie, "selfie-busca.jpg");
       if (eventoId) form.append("eventoId", eventoId);
+      else form.append("cidade", cidadeEvento);
       const response = await fetch("/api/fotos/buscar-por-face", { method: "POST", body: form });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Nao foi possivel buscar suas fotos.");
@@ -224,6 +260,12 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
 
             <div ref={conteudoModal} className="grid flex-1 gap-4 overflow-y-auto p-3 md:grid-cols-[260px_minmax(0,1fr)] md:p-5">
               <div className="space-y-3">
+                {!eventoId && <label className="block text-[10px] font-bold text-zinc-300">Cidade do evento
+                  <select value={cidadeEvento} onChange={(event) => setCidadeEvento(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-white/15 bg-[#18181b] px-3 text-xs text-white">
+                    <option value="">Selecione a cidade</option>
+                    {cidades.map(({ cidade, estado }) => <option key={`${cidade}|${estado}`} value={`${cidade}|${estado}`}>{cidade}{estado ? ` / ${estado}` : ""}</option>)}
+                  </select>
+                </label>}
                 <div className="overflow-hidden rounded-2xl border border-white/10 bg-black">
                   {preview ? (
                     <img src={preview} alt="Selfie selecionada" className="h-[180px] w-full object-cover sm:h-[210px] md:h-[240px]" />
@@ -248,7 +290,7 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
                   <span>Autorizo o uso desta imagem somente para localizar minhas fotos. A selfie não será armazenada.</span>
                 </label>
 
-                <button type="button" onClick={() => void buscar()} disabled={!arquivo || !consentiu || buscando} className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-retratt text-[9px] font-black uppercase tracking-widest text-black disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500">
+                <button type="button" onClick={() => void buscar()} disabled={!arquivo || !consentiu || (!eventoId && !cidadeEvento) || buscando} className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-retratt text-[9px] font-black uppercase tracking-widest text-black disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500">
                   {buscando ? <><Loader2 size={17} className="animate-spin" /> Comparando rostos</> : <><ScanFace size={17} /> Encontrar minhas fotos</>}
                 </button>
                 <p className="flex items-start gap-2 text-[10px] leading-4 text-zinc-500"><ShieldCheck size={14} className="mt-0.5 shrink-0 text-emerald-400" /> A busca inclui resultados fortes, prováveis e possíveis para reduzir a chance de alguma foto ficar de fora.</p>
@@ -259,7 +301,7 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
                 {buscando && (
                   <div className="flex min-h-[260px] flex-col items-center justify-center text-center">
                     <Loader2 size={42} className="animate-spin text-retratt" />
-                    <p className="mt-4 text-sm font-black uppercase tracking-wider">{eventoId ? "Procurando nesta galeria" : "Procurando em todas as galerias"}</p>
+                    <p className="mt-4 text-sm font-black uppercase tracking-wider">{eventoId ? "Procurando nesta galeria" : "Procurando na cidade selecionada"}</p>
                     <p className="mt-2 text-xs text-zinc-500">Isso costuma levar apenas alguns segundos.</p>
                   </div>
                 )}

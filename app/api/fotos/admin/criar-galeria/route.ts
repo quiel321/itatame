@@ -1,5 +1,6 @@
 ﻿import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
+import { categoriaFotosValida } from "@/app/lib/fotos-categorias";
 
 export const runtime = "nodejs";
 
@@ -26,8 +27,9 @@ export async function POST(request: Request) {
     const { data: auth, error: authError } = await supabase.auth.getUser(token);
     if (authError || !auth.user) return NextResponse.json({ error: "Sessao invalida." }, { status: 401 });
 
-    const { eventoId, precoCentavos, precoVideoCentavos, precoBloqueado, descontoComboQtd, descontoComboPercentual } = await request.json();
+    const { eventoId, categoria, precoCentavos, precoVideoCentavos, precoBloqueado, descontoComboQtd, descontoComboPercentual } = await request.json();
     if (!eventoId) return NextResponse.json({ error: "Selecione um evento." }, { status: 400 });
+    if (!categoriaFotosValida(categoria)) return NextResponse.json({ error: "Selecione a categoria do evento." }, { status: 400 });
 
     const { data: evento, error: eventoError } = await supabase
       .from("eventos")
@@ -52,6 +54,7 @@ export async function POST(request: Request) {
       .insert({
         evento_id: evento.id,
         nome: evento.nome,
+        categoria,
         slug: `${slugify(evento.nome)}-${String(evento.id).slice(0, 8)}`,
         local: evento.local,
         cidade: evento.cidade,
