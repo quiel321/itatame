@@ -235,31 +235,31 @@ export default function ChecagemGeralPage() {
 
   return (
     <main className="min-h-screen bg-[#050505] pb-32 text-white">
-      <header className="border-b border-white/10 bg-zinc-950 px-4 pb-4 pt-6">
+      <header className="border-b border-white/10 bg-zinc-950 px-4 py-3 md:py-4">
         <div className="mx-auto max-w-5xl">
-          <Link href={`/evento/${eventoId}`} className="mb-3 inline-flex items-center gap-2 text-[10px] font-medium text-zinc-400 hover:text-white">
+          <Link href={`/evento/${eventoId}`} className="mb-1.5 inline-flex items-center gap-2 text-[10px] font-medium text-zinc-400 hover:text-white">
             <ArrowLeft size={14} /> Página do evento
           </Link>
-          <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-red-500">Lista de atletas</p>
-          <h1 className="mt-1 text-lg font-semibold tracking-tight md:text-xl">{evento?.nome || 'Checagem'}</h1>
-          <p className="mt-2 max-w-2xl text-xs leading-relaxed text-zinc-400">
+
+          <h1 className="text-base font-semibold tracking-tight md:text-xl">{evento?.nome || 'Checagem'}</h1>
+          <p className="mt-1.5 max-w-2xl border-l-2 border-cyan-500/50 pl-2 text-[11px] leading-relaxed text-zinc-300">
             {correcaoAberta
               ? `Correção de categoria liberada até ${formatarDataHoraEvento(evento?.data_fim_checagem, true, evento?.estado)}. O atleta ajusta no perfil.`
               : evento?.data_inicio_checagem
-                ? `A lista já está aberta. Mudança de categoria só de ${formatarDataHoraEvento(evento.data_inicio_checagem, false, evento.estado)} até ${formatarDataHoraEvento(evento.data_fim_checagem, true, evento.estado)}.`
+                ? `Alteração de categoria: de ${formatarDataHoraEvento(evento.data_inicio_checagem, false, evento.estado)} até ${formatarDataHoraEvento(evento.data_fim_checagem, true, evento.estado)}.`
                 : 'A lista acompanha as inscrições. A troca de categoria abre no período definido pelo organizador.'}
           </p>
-          <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4">
-            <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2"><p className="text-[9px] font-medium uppercase tracking-wider text-zinc-500">Inscritos</p><p className="mt-0.5 text-base font-semibold">{inscricoes.length}</p></div>
-            <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2"><p className="text-[9px] font-medium uppercase tracking-wider text-emerald-300">Confirmados</p><p className="mt-0.5 text-base font-semibold text-emerald-200">{confirmados}</p></div>
-            <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2"><p className="text-[9px] font-medium uppercase tracking-wider text-amber-300">Pendentes</p><p className="mt-0.5 text-base font-semibold text-amber-200">{pendentes}</p></div>
-            <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2"><p className="text-[9px] font-medium uppercase tracking-wider text-zinc-500">Equipes</p><p className="mt-0.5 text-base font-semibold">{gruposEquipe.length}</p></div>
+          <div className="mt-3 grid grid-cols-4 gap-1.5 md:gap-3">
+            <div className="rounded-lg border border-white/10 bg-white/5 px-2 py-1.5"><p className="text-[8px] font-medium uppercase tracking-wider text-zinc-500">Inscritos</p><p className="mt-0.5 text-base font-semibold">{inscricoes.length}</p></div>
+            <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2 py-1.5"><p className="text-[8px] font-medium uppercase tracking-wider text-emerald-300">Confirmados</p><p className="mt-0.5 text-base font-semibold text-emerald-200">{confirmados}</p></div>
+            <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-2 py-1.5"><p className="text-[8px] font-medium uppercase tracking-wider text-amber-300">Pendentes</p><p className="mt-0.5 text-base font-semibold text-amber-200">{pendentes}</p></div>
+            <div className="rounded-lg border border-white/10 bg-white/5 px-2 py-1.5"><p className="text-[8px] font-medium uppercase tracking-wider text-zinc-500">Equipes</p><p className="mt-0.5 text-base font-semibold">{gruposEquipe.length}</p></div>
           </div>
         </div>
       </header>
 
-      <div className="mx-auto max-w-5xl px-4 pt-5">
-        <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
+      <div className="mx-auto max-w-5xl px-4 pt-3">
+        <div className="mb-2 flex gap-1.5 overflow-x-auto pb-1">
           {ABAS.map((aba) => (
             <button key={aba.id} type="button" onClick={() => setAbaAtiva(aba.id)} className={`whitespace-nowrap rounded-full px-3 py-1.5 text-[10px] font-semibold ${abaAtiva === aba.id ? 'bg-red-600 text-white' : 'border border-white/10 bg-white/5 text-zinc-400 hover:text-white'}`}>
               {aba.rotulo}
@@ -267,7 +267,7 @@ export default function ChecagemGeralPage() {
           ))}
         </div>
 
-        <div className="mb-5 flex flex-wrap gap-2">
+        <div className="mb-3 flex flex-wrap gap-1.5">
           {[{ id: 'todos', rotulo: 'Todos' }, { id: 'ok', rotulo: 'Pagamento confirmado' }, { id: 'pendente', rotulo: 'Pagamento pendente' }].map((item) => (
             <button key={item.id} type="button" onClick={() => setFiltroPagamento(item.id as typeof filtroPagamento)} className={`rounded-md px-2.5 py-1 text-[10px] font-medium ${filtroPagamento === item.id ? 'bg-white text-black' : 'border border-white/10 text-zinc-400'}`}>
               {item.rotulo}
@@ -279,7 +279,7 @@ export default function ChecagemGeralPage() {
           <section>
             <div className="relative mb-4">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
-              <input value={buscaGeral} onChange={(e) => setBuscaGeral(e.target.value)} placeholder="Buscar atleta, equipe, professor ou categoria" className="w-full rounded-xl border border-white/10 bg-white/5 py-3 pl-10 pr-4 text-sm outline-none placeholder:text-zinc-600 focus:border-red-500" />
+              <input value={buscaGeral} onChange={(e) => setBuscaGeral(e.target.value)} placeholder="Buscar atleta, equipe, professor ou categoria" className="w-full rounded-xl border border-white/10 bg-white/5 py-2 pl-10 pr-4 text-sm outline-none placeholder:text-zinc-600 focus:border-red-500" />
             </div>
             <p className="mb-3 text-[11px] font-medium text-zinc-500">{geral.length} {geral.length === 1 ? 'atleta' : 'atletas'}</p>
             {letras.length > 1 && (
@@ -383,10 +383,10 @@ function ListaPorCategoria({
   onProfessor: (professor: string) => void;
   onCategoria: (chave: string, aba: AbaChecagem) => void;
 }) {
-  const campo = 'w-full rounded-xl border border-white/10 bg-black px-3 py-2.5 text-xs text-white outline-none focus:border-red-500';
+  const campo = 'min-w-0 w-full rounded-lg border border-white/10 bg-black px-2.5 py-2 text-xs text-white outline-none focus:border-red-500';
   return (
     <section>
-      <div className="mb-5 grid gap-3 rounded-2xl border border-white/10 bg-[#0b0b10] p-4 md:grid-cols-5">
+      <div className="mb-3 grid grid-cols-2 gap-2 md:grid-cols-5">
         <select value={filtros.categoria} onChange={(e) => setFiltros({ ...filtros, categoria: e.target.value })} className={campo}>
           <option value="">Categoria</option>
           {opcoes.categorias.map((item) => <option key={item} value={item}>{item}</option>)}
@@ -395,12 +395,12 @@ function ListaPorCategoria({
           <option value="">Faixa</option>
           {opcoes.faixas.map((item) => <option key={item} value={item}>{item}</option>)}
         </select>
-        <input value={filtros.peso} onChange={(e) => setFiltros({ ...filtros, peso: e.target.value })} placeholder="Peso" className={campo} />
+        <input value={filtros.peso} onChange={(e) => setFiltros({ ...filtros, peso: e.target.value })} placeholder="Peso" aria-label="Peso" className={campo} />
         <select value={filtros.sexo} onChange={(e) => setFiltros({ ...filtros, sexo: e.target.value })} className={campo}>
           <option value="">Sexo</option>
           {opcoes.sexos.map((item) => <option key={item} value={item}>{item}</option>)}
         </select>
-        <input value={filtros.busca} onChange={(e) => setFiltros({ ...filtros, busca: e.target.value })} placeholder="Buscar atleta" className={campo} />
+        <input value={filtros.busca} onChange={(e) => setFiltros({ ...filtros, busca: e.target.value })} placeholder="Buscar atleta" aria-label="Buscar atleta" className={`${campo} col-span-2 md:col-span-1`} />
       </div>
       {grupos.length === 0 ? <p className="rounded-2xl border border-dashed border-white/10 p-8 text-center text-sm text-zinc-500">Nenhuma {titulo.toLowerCase()} com esses filtros.</p> : grupos.map((grupo) => (
         <div key={grupo.chave} id={`cat-${grupo.chave}`} className="mb-5 overflow-hidden rounded-2xl border border-white/10 bg-[#0b0b10]">

@@ -1,6 +1,7 @@
 import { limiteParcelas, validarParcelas } from '@/app/lib/parcelamento';
 import crypto from "crypto";
 import { NextResponse } from "next/server";
+import { obterBaseUrlItatame } from "@/app/lib/itatame-url";
 import { calcularComissaoMarketplace } from "@/app/lib/planos-comerciais";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
 import { enviarEmailIngressoConfirmado } from "@/app/lib/email-ingresso";
@@ -24,10 +25,6 @@ type EventoPagamento = {
   regras_pontuacao_equipes?: { valor_absoluto?: number | string | null } | null;
 };
 
-function getBaseUrl(request: Request) {
-  const origin = new URL(request.url).origin;
-  return process.env.NEXT_PUBLIC_BASE_URL || origin;
-}
 
 async function calcularValoresCobranca(supabase: ReturnType<typeof createSupabaseServerClient>, inscricao: any, evento: EventoPagamento) {
   let cupom = null;
@@ -48,7 +45,7 @@ function limparPayloadPagamento(formData: any, valorTotal: number, comissao: num
     description: descricao,
     external_reference: `inscricao:${inscricao.id}`,
     application_fee: comissao,
-    notification_url: `${getBaseUrl(request)}/api/mercado-pago/webhook?inscricao_id=${inscricao.id}&organizador_id=${evento.organizador_id}`,
+    notification_url: `${obterBaseUrlItatame(request)}/api/mercado-pago/webhook?inscricao_id=${inscricao.id}&organizador_id=${evento.organizador_id}`,
     metadata: {
       ...(formData?.metadata || {}),
       inscricao_id: String(inscricao.id),

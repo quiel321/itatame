@@ -43,6 +43,7 @@ export default function AdminPage() {
   const [isOrganizadorNativo, setIsOrganizadorNativo] = useState(false);
   const [organizadorFinanceiro, setOrganizadorFinanceiro] = useState<any>(null);
   
+  const [ferramentasAbertas, setFerramentasAbertas] = useState(false);
   const [showPerfilModal, setShowPerfilModal] = useState(false);
   const [forceCompletion, setForceCompletion] = useState(false);
   const [savingPerfil, setSavingPerfil] = useState(false);
@@ -675,7 +676,7 @@ export default function AdminPage() {
   );
 
   return (
-    <main className="min-h-screen bg-[#050505] text-white p-3 md:p-8 relative overflow-hidden font-sans selection:bg-red-500/30">
+    <main className="min-h-screen bg-[#050505] text-white p-3 md:p-5 relative overflow-hidden font-sans selection:bg-red-500/30">
       
       {/* EFEITOS DE LUZ SUAVES */}
       <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-red-600/5 blur-[150px] rounded-full pointer-events-none"></div>
@@ -683,7 +684,7 @@ export default function AdminPage() {
 
       <div className="max-w-7xl mx-auto relative z-10">
         
-        <nav aria-label="Organização do campeonato" className="-mx-3 mb-4 flex gap-2 overflow-x-auto px-3 pb-1 text-[11px] whitespace-nowrap md:mx-0 md:mb-6 md:flex-wrap md:overflow-visible md:px-0 md:whitespace-normal">
+        <nav aria-label="Organização do campeonato" className="-mx-3 mb-4 flex gap-2 overflow-x-auto px-3 pb-1 text-[11px] whitespace-nowrap md:mx-0 md:mb-3 md:flex-wrap md:overflow-visible md:px-0 md:whitespace-normal">
           <button onClick={() => { guardarEventoOrganizador(''); setEventoSelecionado(''); }} className="shrink-0 rounded-lg border border-white/10 px-3 py-2">Trocar campeonato</button>
           <Link href="/admin/guia" className="shrink-0 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-red-300">Guia rápido</Link>
           <Link href={`/admin/categorias?evento=${eventoSelecionado}`} className="shrink-0 rounded-lg bg-white/5 px-3 py-2">Categorias</Link>
@@ -693,28 +694,25 @@ export default function AdminPage() {
           <Link href="/admin/financeiro" className="shrink-0 rounded-lg bg-white/5 px-3 py-2">Financeiro</Link>
           <Link href="/admin/mensagens" className="relative shrink-0 rounded-lg bg-white/5 px-3 py-2">Chat com atletas<SeloNaoLidas quantidade={chatNaoLidas} /></Link>
         </nav>
-        <div className="mb-4 flex flex-col gap-3 border-b border-white/10 pb-4 md:mb-6 md:flex-row md:items-start md:justify-between md:gap-4 md:pb-5">
-          <div className="flex min-w-0 items-start gap-3 md:gap-5">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-3">
+          <div className="flex min-w-0 flex-1 items-start gap-2 md:gap-3">
             <div className="shrink-0 relative group">
               {fotoUrl ? (
-                <img src={fotoUrl} alt="Perfil Organizador" className="h-12 w-12 rounded-full object-cover border-2 border-red-500/50 shadow-[0_0_20px_rgba(239,68,68,0.3)] md:h-20 md:w-20" />
+                <img src={fotoUrl} alt="Perfil Organizador" className="h-9 w-9 rounded-full object-cover border-2 border-red-500/50 shadow-[0_0_20px_rgba(239,68,68,0.3)] md:h-12 md:w-12" />
               ) : (
-                <div className="flex h-12 w-12 items-center justify-center rounded-full border-2 border-white/10 bg-zinc-900 text-zinc-600 shadow-lg md:h-20 md:w-20">
-                  <Users className="h-6 w-6 md:h-8 md:w-8" />
+                <div className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-white/10 bg-zinc-900 text-zinc-600 md:h-12 md:w-12">
+                  <Users className="h-5 w-5" />
                 </div>
               )}
             </div>
             
             <div className="min-w-0 flex-1">
-              <span className="mb-1 inline-block rounded-md border border-yellow-500/20 bg-yellow-500/10 px-2 py-0.5 text-[8px] font-black uppercase tracking-widest text-yellow-500 shadow-inner md:mb-2 md:text-[10px] md:px-2.5 md:py-1">
-                Área Exclusiva
-              </span>
-              <h1 className="truncate text-xl font-black tracking-tight text-white md:text-4xl">Olá, {organizadorNome}</h1>
+              <h1 className="truncate text-lg font-semibold tracking-tight text-white md:text-xl">Olá, {organizadorNome}</h1>
               {isOrganizadorNativo && (
-                <div className={`mt-2 flex items-center gap-2 rounded-lg border px-2.5 py-1.5 md:max-w-xl ${organizadorFinanceiro?.mp_connected_at ? "border-emerald-500/20 bg-emerald-500/5" : "border-yellow-500/40 bg-yellow-500/10"}`}>
+                <div className={`mt-1 flex w-fit max-w-full items-center gap-2 rounded-md border px-2 py-1 ${organizadorFinanceiro?.mp_connected_at ? "border-emerald-500/20 bg-emerald-500/5" : "border-yellow-500/40 bg-yellow-500/10"}`}>
                   <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${organizadorFinanceiro?.mp_connected_at ? "bg-emerald-400" : "bg-yellow-400"}`} />
-                  <p className={`min-w-0 flex-1 truncate text-[10px] font-bold ${organizadorFinanceiro?.mp_connected_at ? "text-emerald-300" : "text-yellow-200"}`}>
-                    {organizadorFinanceiro?.mp_connected_at ? "Mercado Pago conectado" : "Conecte o Mercado Pago"}
+                  <p className={`min-w-0 truncate text-[10px] font-bold ${organizadorFinanceiro?.mp_connected_at ? "text-emerald-300" : "text-yellow-200"}`}>
+                    <span className="sm:hidden">{organizadorFinanceiro?.mp_connected_at ? "MP conectado" : "Conectar MP"}</span><span className="hidden sm:inline">{organizadorFinanceiro?.mp_connected_at ? "Mercado Pago conectado" : "Conecte o Mercado Pago"}</span>
                   </p>
                   <MercadoPagoConnectButton compacto conectado={Boolean(organizadorFinanceiro?.mp_connected_at)} returnTo="/admin" className={`shrink-0 rounded-md px-2.5 py-1 text-[8px] font-black uppercase tracking-widest md:text-[9px] ${organizadorFinanceiro?.mp_connected_at ? "border border-emerald-500/30 bg-emerald-500/10 text-emerald-300" : "bg-yellow-500 text-black"}`} />
                   <Link href="/admin/financeiro" className="hidden shrink-0 text-[8px] font-bold uppercase tracking-widest text-zinc-500 hover:text-white sm:inline">Financeiro</Link>
@@ -726,7 +724,7 @@ export default function AdminPage() {
           <div className="flex items-center gap-2">
             {isOrganizadorNativo && (
               <button onClick={() => setShowPerfilModal(true)} className="cursor-pointer flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-[9px] font-bold uppercase tracking-widest text-white shadow-sm transition-colors hover:bg-white/10 md:flex-none md:px-4 md:py-2.5 md:text-[10px]">
-                Editar perfil
+                <span className="md:hidden">Perfil</span><span className="hidden md:inline">Editar perfil</span>
               </button>
             )}
 
@@ -762,87 +760,87 @@ export default function AdminPage() {
         {!forceCompletion && (
           <div className={showPerfilModal ? "opacity-30 blur-sm pointer-events-none transition-all duration-300" : "transition-all duration-300"}>
             
-            {/* AÇÕES RÁPIDAS DINÂMICAS */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4 mb-10">
+            <button type="button" onClick={() => setFerramentasAbertas(!ferramentasAbertas)} aria-expanded={ferramentasAbertas} aria-controls="ferramentas-organizador" className="mb-3 flex w-full items-center justify-between rounded-lg border border-white/10 px-3 py-2.5 text-xs text-zinc-300 md:hidden">Ferramentas do campeonato <ChevronDown size={14} /></button>
+            <div id="ferramentas-organizador" className={`${ferramentasAbertas ? "grid" : "hidden"} grid-cols-2 gap-2 md:grid md:grid-cols-4 mb-4`}>
               
-              <Link href="/admin/novo-evento" className="group cursor-pointer bg-black/40 border border-white/5 hover:border-white/20 rounded-2xl p-4 md:p-5 transition-all flex flex-col xl:flex-row xl:items-center gap-3 md:gap-4 shadow-xl hover:-translate-y-1">
-                <div className="w-10 h-10 md:w-12 md:h-12 bg-black text-red-500 border border-white/5 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-red-600 group-hover:border-red-500 group-hover:text-white transition-all shadow-inner">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"></path></svg>
+              <Link href="/admin/novo-evento" className="group cursor-pointer bg-black/40 border border-white/5 hover:border-white/20 rounded-lg px-3 py-2.5 transition-colors flex items-center gap-2">
+                <div className="w-7 h-7 bg-black text-red-500 border border-white/5 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-red-600 group-hover:border-red-500 group-hover:text-white transition-all ">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"></path></svg>
                 </div>
                 <div>
-                  <h3 className="text-xs md:text-sm font-black text-white transition-colors leading-tight">Novo Evento</h3>
-                  <p className="text-zinc-500 text-[9px] md:text-[10px] font-medium mt-1 hidden md:block">Criar campeonato.</p>
+                  <h3 className="text-[11px] font-semibold text-white transition-colors leading-tight">Novo Evento</h3>
+                  <p className="text-zinc-500 text-[9px] md:text-[10px] font-medium mt-1 hidden xl:block">Criar campeonato.</p>
                 </div>
               </Link>
 
-              <Link href="/admin/chaves" className="group cursor-pointer bg-black/40 border border-white/5 hover:border-white/20 rounded-2xl p-4 md:p-5 transition-all flex flex-col xl:flex-row xl:items-center gap-3 md:gap-4 shadow-xl hover:-translate-y-1">
-                <div className="w-10 h-10 md:w-12 md:h-12 bg-black text-yellow-500 border border-white/5 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-yellow-500 group-hover:border-yellow-500 group-hover:text-black transition-all shadow-inner">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+              <Link href="/admin/chaves" className="group cursor-pointer bg-black/40 border border-white/5 hover:border-white/20 rounded-lg px-3 py-2.5 transition-colors flex items-center gap-2">
+                <div className="w-7 h-7 bg-black text-yellow-500 border border-white/5 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-yellow-500 group-hover:border-yellow-500 group-hover:text-black transition-all ">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
                 </div>
                 <div>
-                  <h3 className="text-xs md:text-sm font-black text-white transition-colors leading-tight">Chaveamento</h3>
-                  <p className="text-zinc-500 text-[9px] md:text-[10px] font-medium mt-1 hidden md:block">Sortear atletas.</p>
+                  <h3 className="text-[11px] font-semibold text-white transition-colors leading-tight">Chaveamento</h3>
+                  <p className="text-zinc-500 text-[9px] md:text-[10px] font-medium mt-1 hidden xl:block">Sortear atletas.</p>
                 </div>
               </Link>
 
-              <Link href="/admin/ranking" className="group cursor-pointer bg-black/40 border border-white/5 hover:border-white/20 rounded-2xl p-4 md:p-5 transition-all flex flex-col xl:flex-row xl:items-center gap-3 md:gap-4 shadow-xl hover:-translate-y-1">
-                <div className="w-10 h-10 md:w-12 md:h-12 bg-black text-yellow-400 border border-white/5 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-yellow-500 group-hover:border-yellow-500 group-hover:text-black transition-all shadow-inner">
-                  <Trophy className="w-5 h-5" />
+              <Link href="/admin/ranking" className="group cursor-pointer bg-black/40 border border-white/5 hover:border-white/20 rounded-lg px-3 py-2.5 transition-colors flex items-center gap-2">
+                <div className="w-7 h-7 bg-black text-yellow-400 border border-white/5 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-yellow-500 group-hover:border-yellow-500 group-hover:text-black transition-all ">
+                  <Trophy className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-xs md:text-sm font-black text-white transition-colors leading-tight">Resultados e ranking</h3>
-                  <p className="text-zinc-500 text-[9px] md:text-[10px] font-medium mt-1 hidden md:block">Publicar o pódio.</p>
+                  <h3 className="text-[11px] font-semibold text-white transition-colors leading-tight">Resultados e ranking</h3>
+                  <p className="text-zinc-500 text-[9px] md:text-[10px] font-medium mt-1 hidden xl:block">Publicar o pódio.</p>
                 </div>
               </Link>
 
-              {planoCompleto ? <Link href="/admin/tatames" className="group cursor-pointer bg-black/40 border border-white/5 hover:border-white/20 rounded-2xl p-4 md:p-5 transition-all flex flex-col xl:flex-row xl:items-center gap-3 md:gap-4 shadow-xl hover:-translate-y-1">
-                <div className="w-10 h-10 md:w-12 md:h-12 bg-black text-emerald-500 border border-white/5 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-emerald-500 group-hover:border-emerald-500 group-hover:text-white transition-all shadow-inner">
-                  <Map className="w-5 h-5" />
+              {planoCompleto ? <Link href="/admin/tatames" className="group cursor-pointer bg-black/40 border border-white/5 hover:border-white/20 rounded-lg px-3 py-2.5 transition-colors flex items-center gap-2">
+                <div className="w-7 h-7 bg-black text-emerald-500 border border-white/5 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-emerald-500 group-hover:border-emerald-500 group-hover:text-white transition-all ">
+                  <Map className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-xs md:text-sm font-black text-white transition-colors leading-tight">Zonas de Luta</h3>
-                  <p className="text-zinc-500 text-[9px] md:text-[10px] font-medium mt-1 hidden md:block">Distribuir tatames.</p>
+                  <h3 className="text-[11px] font-semibold text-white transition-colors leading-tight">Zonas de Luta</h3>
+                  <p className="text-zinc-500 text-[9px] md:text-[10px] font-medium mt-1 hidden xl:block">Distribuir tatames.</p>
                 </div>
               </Link> : <div className="group bg-black/40 border border-white/5 rounded-2xl p-4 md:p-5 flex flex-col xl:flex-row xl:items-center gap-3 md:gap-4 opacity-45" title="Disponível no plano Completo">
-                <div className="w-10 h-10 md:w-12 md:h-12 bg-black text-zinc-600 border border-white/5 rounded-xl flex items-center justify-center shrink-0"><Map className="w-5 h-5" /></div>
-                <div><h3 className="text-xs md:text-sm font-black text-white leading-tight">Zonas de Luta</h3><p className="text-yellow-500 text-[9px] font-bold mt-1">Plano Completo</p></div>
+                <div className="w-7 h-7 bg-black text-zinc-600 border border-white/5 rounded-xl flex items-center justify-center shrink-0"><Map className="w-4 h-4" /></div>
+                <div><h3 className="text-[11px] font-semibold text-white leading-tight">Zonas de Luta</h3><p className="text-yellow-500 text-[9px] font-bold mt-1">Plano Completo</p></div>
               </div>}
 
-              <button onClick={abrirModalStaff} className="text-left group cursor-pointer bg-black/40 border border-white/5 hover:border-white/20 rounded-2xl p-4 md:p-5 transition-all flex flex-col xl:flex-row xl:items-center gap-3 md:gap-4 shadow-xl hover:-translate-y-1">
-                <div className="w-10 h-10 md:w-12 md:h-12 bg-black text-blue-400 border border-white/5 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-blue-500 group-hover:border-blue-500 group-hover:text-white transition-all shadow-inner">
-                  <ShieldCheck className="w-5 h-5" />
+              <button onClick={abrirModalStaff} className="text-left group cursor-pointer bg-black/40 border border-white/5 hover:border-white/20 rounded-lg px-3 py-2.5 transition-colors flex items-center gap-2">
+                <div className="w-7 h-7 bg-black text-blue-400 border border-white/5 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-blue-500 group-hover:border-blue-500 group-hover:text-white transition-all ">
+                  <ShieldCheck className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-xs md:text-sm font-black text-white transition-colors leading-tight">Equipe de operação</h3>
-                  <p className="text-zinc-500 text-[9px] md:text-[10px] font-medium mt-1 hidden md:block">PINs de Segurança.</p>
+                  <h3 className="text-[11px] font-semibold text-white transition-colors leading-tight">Equipe de operação</h3>
+                  <p className="text-zinc-500 text-[9px] md:text-[10px] font-medium mt-1 hidden xl:block">PINs de Segurança.</p>
                 </div>
               </button>
 
-              <Link href="/admin/mensagens" className="relative group cursor-pointer bg-black/40 border border-white/5 hover:border-white/20 rounded-2xl p-4 md:p-5 transition-all flex flex-col xl:flex-row xl:items-center gap-3 md:gap-4 shadow-xl hover:-translate-y-1">
-                <div className="relative w-10 h-10 md:w-12 md:h-12 bg-black text-cyan-400 border border-white/5 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-cyan-500 group-hover:border-cyan-500 group-hover:text-black transition-all shadow-inner">
-                  <MessageCircle className="w-5 h-5" />
+              <Link href="/admin/mensagens" className="relative group cursor-pointer bg-black/40 border border-white/5 hover:border-white/20 rounded-lg px-3 py-2.5 transition-colors flex items-center gap-2">
+                <div className="relative w-7 h-7 bg-black text-cyan-400 border border-white/5 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-cyan-500 group-hover:border-cyan-500 group-hover:text-black transition-all ">
+                  <MessageCircle className="w-4 h-4" />
                   <SeloNaoLidas quantidade={chatNaoLidas} />
                 </div>
                 <div>
-                  <h3 className="text-xs md:text-sm font-black text-white transition-colors leading-tight">Chat com atletas</h3>
-                  <p className="text-zinc-500 text-[9px] md:text-[10px] font-medium mt-1 hidden md:block">{chatNaoLidas ? `${chatNaoLidas} ${chatNaoLidas === 1 ? 'mensagem nova' : 'mensagens novas'}.` : 'Dúvidas do campeonato.'}</p>
+                  <h3 className="text-[11px] font-semibold text-white transition-colors leading-tight">Chat com atletas</h3>
+                  <p className="text-zinc-500 text-[9px] md:text-[10px] font-medium mt-1 hidden xl:block">{chatNaoLidas ? `${chatNaoLidas} ${chatNaoLidas === 1 ? 'mensagem nova' : 'mensagens novas'}.` : 'Dúvidas do campeonato.'}</p>
                 </div>
               </Link>
 
-              <Link href="/admin/vouchers" className="col-span-2 sm:col-span-1 md:col-span-1 lg:col-span-1 group cursor-pointer bg-black/40 border border-white/5 hover:border-white/20 rounded-2xl p-4 md:p-5 transition-all flex flex-col xl:flex-row xl:items-center gap-3 md:gap-4 shadow-xl hover:-translate-y-1">
-                <div className="w-10 h-10 md:w-12 md:h-12 bg-black text-purple-400 border border-white/5 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-purple-500 group-hover:border-purple-500 group-hover:text-white transition-all shadow-inner">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"></path></svg>
+              <Link href="/admin/vouchers" className=" group cursor-pointer bg-black/40 border border-white/5 hover:border-white/20 rounded-lg px-3 py-2.5 transition-colors flex items-center gap-2">
+                <div className="w-7 h-7 bg-black text-purple-400 border border-white/5 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-purple-500 group-hover:border-purple-500 group-hover:text-white transition-all ">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"></path></svg>
                 </div>
                 <div>
-                  <h3 className="text-xs md:text-sm font-black text-white transition-colors leading-tight">Cortesias Livres</h3>
-                  <p className="text-zinc-500 text-[9px] md:text-[10px] font-medium mt-1 hidden md:block">Vouchers e Vagas.</p>
+                  <h3 className="text-[11px] font-semibold text-white transition-colors leading-tight">Cortesias Livres</h3>
+                  <p className="text-zinc-500 text-[9px] md:text-[10px] font-medium mt-1 hidden xl:block">Vouchers e Vagas.</p>
                 </div>
               </Link>
             </div>
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 border-b border-white/5 pb-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 mb-3 border-b border-white/5 pb-4">
               <div className="flex items-center gap-3">
                 <Users className="w-5 h-5 text-red-500" />
-                <h2 className="text-xl font-black uppercase tracking-widest text-white">Gestão de Inscrições</h2>
+                <h2 className="text-base font-semibold text-white">Gestão de Inscrições</h2>
               </div>
               <div className="flex flex-wrap gap-2 w-full md:w-auto">
                 <div className="flex rounded-lg border border-white/10 bg-black/40 p-1" aria-label="Modo de exibição dos atletas">
@@ -859,11 +857,11 @@ export default function AdminPage() {
             </div>
 
             {/* SELETOR DE EVENTO E BUSCA BLENDADO */}
-            <div className="bg-black/40 border border-white/5 rounded-2xl p-3 md:p-4 mb-8 flex flex-col md:flex-row items-center gap-3 shadow-xl">
-              <label className="text-zinc-500 font-black uppercase tracking-widest text-[9px] md:text-[10px] shrink-0 pl-2">Filtrar Evento:</label>
+            <div className="mb-4 grid grid-cols-2 items-center gap-2 md:flex md:flex-wrap">
+              <label className="sr-only">Filtrar Evento:</label>
               
-              <div className="relative w-full md:w-1/3 cursor-pointer">
-                <select value={eventoSelecionado} onChange={(e) => setEventoSelecionado(e.target.value)} className="cursor-pointer w-full bg-[#050505] border border-white/10 focus:border-red-500 outline-none rounded-xl px-4 py-3 text-white transition-all appearance-none font-bold text-xs shadow-inner" disabled={eventos.length === 0}>
+              <div className="relative col-span-2 w-full md:w-1/3 cursor-pointer">
+                <select aria-label="Campeonato" value={eventoSelecionado} onChange={(e) => setEventoSelecionado(e.target.value)} className="cursor-pointer w-full bg-[#050505] border border-white/10 focus:border-red-500 outline-none rounded-xl px-4 py-2.5 text-white transition-all appearance-none font-bold text-xs shadow-inner" disabled={eventos.length === 0}>
                   {eventos.length === 0 && <option value="">Nenhum evento criado ainda...</option>}
                   {eventos.length > 0 && <option value="todos">Todos os seus eventos</option>}
                   {eventos.map(ev => <option key={ev.id} value={ev.id.toString()}>🏆 {ev.nome}</option>)}
@@ -871,23 +869,15 @@ export default function AdminPage() {
                 <ChevronDown className="w-4 h-4 text-zinc-500 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
               </div>
 
-              {eventoSelecionado && eventoSelecionado !== "todos" && (
-                <Link 
-                  href={`/admin/eventos/${eventoSelecionado}/editar`} 
-                  className="cursor-pointer w-full md:w-auto shrink-0 bg-red-600/10 hover:bg-red-600/20 border border-red-500/30 text-red-500 hover:text-red-400 text-[10px] font-bold uppercase tracking-widest px-4 py-3 rounded-xl transition-all flex items-center justify-center gap-2 active:scale-95 shadow-sm"
-                >
-                  <Edit3 size={14} /> Editar campeonato
-                </Link>
-              )}
 
               {eventos.length > 0 && (
                 <>
-                  <div className="flex-1 relative cursor-text w-full">
+                  <div className="relative col-span-2 w-full md:flex-1">
                     <Search className="w-4 h-4 text-zinc-500 absolute left-4 top-1/2 -translate-y-1/2" />
-                    <input type="text" placeholder="Buscar atleta ou academia..." value={busca} onChange={(e) => setBusca(e.target.value)} className="w-full bg-[#050505] border border-white/10 rounded-xl pl-11 pr-4 py-3 outline-none focus:border-red-500 text-white transition-colors text-xs placeholder:text-zinc-600 shadow-inner" />
+                    <input type="text" placeholder="Buscar atleta ou academia..." value={busca} onChange={(e) => setBusca(e.target.value)} className="w-full bg-[#050505] border border-white/10 rounded-xl pl-11 pr-4 py-2.5 outline-none focus:border-red-500 text-white transition-colors text-xs placeholder:text-zinc-600 shadow-inner" />
                   </div>
-                  <div className="w-full md:w-48 relative cursor-pointer">
-                    <select value={filtroPagamento} onChange={(e) => setFiltroPagamento(e.target.value)} className="cursor-pointer w-full bg-[#050505] border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-red-500 text-zinc-300 transition-colors appearance-none text-xs font-bold shadow-inner">
+                  <div className="relative col-span-2 w-full md:w-48 cursor-pointer">
+                    <select value={filtroPagamento} onChange={(e) => setFiltroPagamento(e.target.value)} className="cursor-pointer w-full bg-[#050505] border border-white/10 rounded-xl px-4 py-2.5 outline-none focus:border-red-500 text-zinc-300 transition-colors appearance-none text-xs font-bold shadow-inner">
                       <option value="todos">Todos os Status</option>
                       <option value="pagos">Somente Pagos</option>
                       <option value="pendentes">Somente Pendentes</option>
@@ -900,18 +890,18 @@ export default function AdminPage() {
 
             {/* NUMEROS SUAVES */}
             {eventos.length > 0 && (
-              <div className="grid grid-cols-3 gap-3 md:gap-5 mb-8">
-                <div className="bg-black/40 border border-white/5 rounded-2xl p-4 md:p-6 shadow-xl flex flex-col items-center justify-center text-center backdrop-blur-sm">
-                  <h3 className="text-zinc-500 font-black uppercase text-[9px] md:text-[11px] tracking-widest mb-1.5">Total Inscritos</h3>
-                  <p className="text-2xl md:text-4xl font-black text-white">{totalInscritos}</p>
+              <div className="grid grid-cols-3 gap-2 mb-4">
+                <div className="bg-black/40 border border-white/5 rounded-lg px-2 py-2.5 flex flex-col items-center justify-center text-center backdrop-blur-sm">
+                  <h3 className="text-zinc-500 font-medium text-[9px] md:text-[11px] mb-1">Total Inscritos</h3>
+                  <p className="text-lg md:text-xl font-semibold text-white">{totalInscritos}</p>
                 </div>
-                <div className="bg-green-500/5 border border-green-500/10 rounded-2xl p-4 md:p-6 shadow-xl flex flex-col items-center justify-center text-center backdrop-blur-sm">
-                  <h3 className="text-green-500/80 font-black uppercase text-[9px] md:text-[11px] tracking-widest mb-1.5">Pagos Confirmados</h3>
-                  <p className="text-2xl md:text-4xl font-black text-green-500 drop-shadow-[0_0_15px_rgba(34,197,94,0.3)]">{totalPagos}</p>
+                <div className="bg-green-500/5 border border-green-500/10 rounded-lg px-2 py-2.5 flex flex-col items-center justify-center text-center backdrop-blur-sm">
+                  <h3 className="text-green-500/80 font-medium text-[9px] md:text-[11px] mb-1">Pagos Confirmados</h3>
+                  <p className="text-lg md:text-xl font-semibold text-green-500 ">{totalPagos}</p>
                 </div>
-                <div className="bg-red-500/5 border border-red-500/10 rounded-2xl p-4 md:p-6 shadow-xl flex flex-col items-center justify-center text-center backdrop-blur-sm">
-                  <h3 className="text-red-500/80 font-black uppercase text-[9px] md:text-[11px] tracking-widest mb-1.5">Aguardando Pagamento</h3>
-                  <p className="text-2xl md:text-4xl font-black text-red-500 drop-shadow-[0_0_15px_rgba(239,68,68,0.3)]">{totalPendentes}</p>
+                <div className="bg-red-500/5 border border-red-500/10 rounded-lg px-2 py-2.5 flex flex-col items-center justify-center text-center backdrop-blur-sm">
+                  <h3 className="text-red-500/80 font-medium text-[9px] md:text-[11px] mb-1">Aguardando Pagamento</h3>
+                  <p className="text-lg md:text-xl font-semibold text-red-500 ">{totalPendentes}</p>
                 </div>
               </div>
             )}
@@ -976,13 +966,13 @@ export default function AdminPage() {
                   {inscricoesFiltradas.map((insc) => {
                     const pacote = pacoteInscricao(insc);
                     return (
-                    <div key={insc.id} className="bg-[#0a0a0e] border border-white/5 rounded-[20px] p-5 flex flex-col justify-between hover:border-white/10 transition-all shadow-xl h-full relative overflow-hidden group">
+                    <div key={insc.id} className="bg-[#0a0a0e] border border-white/5 rounded-2xl p-3 md:p-4 flex flex-col justify-between hover:border-white/10 transition-all shadow-xl h-full relative overflow-hidden group">
                       
                       <div className={`absolute top-0 left-0 w-full h-1 ${insc.pagamento_ok ? 'bg-green-500/80 shadow-[0_0_10px_rgba(34,197,94,0.5)]' : 'bg-red-500/80 shadow-[0_0_10px_rgba(239,68,68,0.5)]'}`}></div>
 
                       <div className="relative z-10 flex-1">
                         
-                        <div className="flex items-start justify-between gap-2 mb-4 mt-1">
+                        <div className="flex items-start justify-between gap-2 mb-2 mt-1">
                           <span className="text-zinc-500 text-[9px] font-bold uppercase tracking-widest truncate max-w-[140px]" title={insc.eventos?.nome}>
                             {insc.eventos?.nome || "Evento"}
                           </span>
@@ -997,27 +987,27 @@ export default function AdminPage() {
                           </div>
                         </div>
 
-                        <h4 className="text-lg md:text-xl font-black text-white uppercase tracking-tight line-clamp-1" title={insc.atleta}>{insc.atleta || "NÃO INFORMADO"}</h4>
+                        <h4 className="text-base font-black text-white uppercase tracking-tight line-clamp-1" title={insc.atleta}>{insc.atleta || "NÃO INFORMADO"}</h4>
                         <LinhaVinculo vinculo={vinculoDaInscricao(insc)} destaque />
                         
-                        <div className="flex flex-col gap-2 mt-4 mb-4">
-                          <div className="flex flex-wrap gap-2">
-                            <span className="text-[10px] font-bold text-zinc-300 bg-black px-2.5 py-1.5 rounded-md border border-white/5"><span className="text-zinc-500">Faixa:</span> {insc.faixa || "?"}</span>
-                            <span className="text-[10px] font-bold text-zinc-300 bg-black px-2.5 py-1.5 rounded-md border border-white/5"><span className="text-zinc-500">Peso:</span> {insc.peso ? `${insc.peso} kg` : "—"}</span>
-                            <span className="text-[10px] font-bold text-zinc-300 bg-black px-2.5 py-1.5 rounded-md border border-white/5"><span className="text-zinc-500">Idade:</span> {insc.idade || "—"}</span>
-                            <span className="text-[10px] font-bold text-zinc-300 bg-black px-2.5 py-1.5 rounded-md border border-white/5"><span className="text-zinc-500">Sexo:</span> {insc.sexo || "—"}</span>
+                        <div className="flex flex-col gap-1.5 mt-2 mb-2">
+                          <div className="flex flex-wrap gap-1.5">
+                            <span className="text-[10px] font-bold text-zinc-300 bg-black px-2 py-1 rounded-md border border-white/5"><span className="text-zinc-500">Faixa:</span> {insc.faixa || "?"}</span>
+                            <span className="text-[10px] font-bold text-zinc-300 bg-black px-2 py-1 rounded-md border border-white/5"><span className="text-zinc-500">Peso:</span> {insc.peso ? `${insc.peso} kg` : "—"}</span>
+                            <span className="text-[10px] font-bold text-zinc-300 bg-black px-2 py-1 rounded-md border border-white/5"><span className="text-zinc-500">Idade:</span> {insc.idade || "—"}</span>
+                            <span className="text-[10px] font-bold text-zinc-300 bg-black px-2 py-1 rounded-md border border-white/5"><span className="text-zinc-500">Sexo:</span> {insc.sexo || "—"}</span>
                           </div>
-                          <span className="text-[10px] font-bold text-yellow-500/90 bg-yellow-500/5 border border-yellow-500/10 px-2.5 py-1.5 rounded-md w-full" title={insc.categoria}>
+                          <span className="text-[10px] font-bold text-yellow-500/90 bg-yellow-500/5 border border-yellow-500/10 px-2 py-1 rounded-md w-full" title={insc.categoria}>
                             Peso: {pacote === 'absoluto' ? 'Sem categoria de peso' : (insc.categoria || '—')}
                           </span>
-                          <span className={`text-[10px] font-bold px-2.5 py-1.5 rounded-md border ${pacote === 'peso' ? 'text-zinc-500 bg-white/5 border-white/5' : 'text-purple-200 bg-purple-500/10 border-purple-500/20'}`}>
+                          <span className={`text-[10px] font-bold px-2 py-1 rounded-md border ${pacote === 'peso' ? 'text-zinc-500 bg-white/5 border-white/5' : 'text-purple-200 bg-purple-500/10 border-purple-500/20'}`}>
                             Absoluto: {pacote === 'peso' ? 'Não inscrito' : 'Inscrito na chave'}
                           </span>
                           <p className="text-[10px] text-zinc-500">{chavesDoPacote(pacote).join(' + ')} · {formatarValorInscricao(Number(insc.valor_total || insc.valor_inscricao || 0))}</p>
                         </div>
                       </div>
 
-                      <div className="relative z-10 flex flex-col gap-2 mt-auto border-t border-white/5 pt-4">
+                      <div className="relative z-10 flex flex-col gap-1.5 mt-auto border-t border-white/5 pt-2">
                         {!insc.pagamento_ok && insc.mp_payment_id && <button type="button" onClick={() => void acaoPagamento(insc, 'conferir')} disabled={loadingId === String(insc.id)} className="rounded-lg border border-cyan-500/30 px-3 py-2 text-[9px] font-bold uppercase tracking-widest text-cyan-200 disabled:opacity-50">Conferir pagamento no MP</button>}
                         {insc.pagamento_ok && <button type="button" onClick={() => void acaoPagamento(insc, 'reenviar')} disabled={loadingId === String(insc.id)} className="rounded-lg border border-green-500/30 px-3 py-2 text-[9px] font-bold uppercase tracking-widest text-green-200 disabled:opacity-50">Reenviar confirmação</button>}
                         <div className="flex gap-2">

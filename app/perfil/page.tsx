@@ -40,6 +40,9 @@ export default function PerfilPage() {
 
   const [abaAtiva, setAbaAtiva] = useState("resumo");
   const [carteiraEnviada, setCarteiraEnviada] = useState("");
+  const [exportandoCarteira, setExportandoCarteira] = useState(false);
+  const [erroCarteiraPdf, setErroCarteiraPdf] = useState("");
+  const qrCarteiraRef = useRef<HTMLAnchorElement>(null);
   const conteudoRef = useRef<HTMLDivElement>(null);
   const rolarAoAbrir = useRef(false);
 
@@ -798,6 +801,33 @@ export default function PerfilPage() {
     window.setTimeout(() => setCarteiraEnviada(""), 2000);
   }
 
+  async function exportarCarteiraPdf() {
+    if (exportandoCarteira) return;
+    setExportandoCarteira(true); setErroCarteiraPdf("");
+    try {
+      const svg = qrCarteiraRef.current?.querySelector("svg");
+      if (!svg) throw new Error("Abra a carteira para gerar o QR Code.");
+      async function imagem(url: string, largura: number, altura: number, tipo: string) {
+        const img = new Image(); img.crossOrigin = "anonymous";
+        await new Promise<void>((resolve, reject) => { img.onload = () => resolve(); img.onerror = () => reject(new Error("Não foi possível carregar a foto da carteira. Tente novamente.")); img.src = url; });
+        const canvas = document.createElement("canvas"); canvas.width = largura; canvas.height = altura;
+        const ctx = canvas.getContext("2d"); if (!ctx) throw new Error("Seu navegador não conseguiu gerar a imagem.");
+        ctx.fillStyle = "white"; ctx.fillRect(0, 0, largura, altura);
+        const escala = Math.max(largura / img.width, altura / img.height);
+        ctx.drawImage(img, (largura - img.width * escala) / 2, (altura - img.height * escala) / 2, img.width * escala, img.height * escala);
+        return canvas.toDataURL(tipo, 0.95);
+      }
+      const svgUrl = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(svg)], { type: "image/svg+xml;charset=utf-8" }));
+      let qrCode: string;
+      try { qrCode = await imagem(svgUrl, 512, 512, "image/png"); } finally { URL.revokeObjectURL(svgUrl); }
+      const foto = fotoUrl ? await imagem(fotoUrl, 400, 520, "image/jpeg") : undefined;
+      const { gerarCarteiraPdf } = await import("@/app/lib/carteira-pdf");
+      const pdf = gerarCarteiraPdf({ nome, nascimento: nascimento ? formatarData(nascimento) : "", faixa, equipe, academia, professor, modalidade, registro: userId.substring(0, 8).toUpperCase(), mestre: role === "professor", perfilUrl: urlCarteira(), foto, qrCode });
+      pdf.save(`carteira-${role === "professor" ? "mestre" : "atleta"}-${userId.substring(0,8)}.pdf`);
+    } catch (erro) { setErroCarteiraPdf(erro instanceof Error ? erro.message : "Não foi possível exportar a carteira."); }
+    finally { setExportandoCarteira(false); }
+  }
+
   function enviarCarteiraWhatsApp() {
     const titulo = role === "professor" ? "Carteira do mestre" : "Carteira do atleta";
     const texto = `${titulo} ${nome} no iTatame: ${urlCarteira()}`;
@@ -1013,7 +1043,7 @@ export default function PerfilPage() {
                  </div>
 
                  <div className="flex items-center gap-3 px-3 pb-3">
-                    <Link href={`/atleta/${userId}`} aria-label="Abrir perfil público" className="block h-[76px] w-[76px] shrink-0 rounded-lg bg-white p-1">
+                    <Link ref={qrCarteiraRef} href={`/atleta/${userId}`} aria-label="Abrir perfil público" className="block h-[76px] w-[76px] shrink-0 rounded-lg bg-white p-1">
                        <QRCode value={`${process.env.NEXT_PUBLIC_SITE_URL || "https://itatame.com.br"}/atleta/${userId}`} size={68} style={{ height: "auto", maxWidth: "100%", width: "100%" }} />
                     </Link>
                     <div className="min-w-0 flex-1 space-y-1">
@@ -1043,6 +1073,8 @@ export default function PerfilPage() {
                )}
 
                <div className="mt-5 flex w-full max-w-[360px] flex-col gap-2">
+                 <button type="button" onClick={() => void exportarCarteiraPdf()} disabled={exportandoCarteira} className="rounded-xl border border-white/20 py-3 text-[11px] font-semibold text-white hover:bg-white/5 disabled:opacity-50">{exportandoCarteira ? "Gerando PDF..." : "Baixar carteira em PDF para impressão"}</button>
+                 {erroCarteiraPdf && <p role="alert" className="text-xs text-red-400">{erroCarteiraPdf}</p>}
                  <button type="button" onClick={() => void compartilharCarteira()} className={`rounded-xl py-3 text-[10px] font-black uppercase tracking-widest ${role === "professor" ? "bg-yellow-500 text-black" : "bg-cyan-500 text-black"}`}>
                    {carteiraEnviada || "Compartilhar carteira"}
                  </button>

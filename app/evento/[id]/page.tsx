@@ -323,8 +323,8 @@ export default function EventoDetalhesPage() {
         </div>
 
         {/* CORPO DA PÁGINA (Abas + Datas Importantes) */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
-          <div className="lg:col-span-2 space-y-4 md:space-y-8">
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] gap-6 md:gap-8 lg:items-start">
+          <div className="order-1 min-w-0 space-y-4 md:space-y-8">
             <div className="flex overflow-x-auto scrollbar-hide border-b border-white/10 pb-px gap-1 md:gap-2">
               <button onClick={() => setAbaAtiva("sobre")} className={`whitespace-nowrap px-3 py-2 md:px-4 md:py-3 text-[10px] md:text-[11px] font-black uppercase tracking-widest transition-colors ${abaAtiva === "sobre" ? "text-red-500 border-b-2 border-red-500" : "text-zinc-500 hover:text-white"}`}>Sobre o Evento</button>
               <button onClick={() => setAbaAtiva("valores")} className={`whitespace-nowrap px-3 py-2 md:px-4 md:py-3 text-[10px] md:text-[11px] font-black uppercase tracking-widest transition-colors ${abaAtiva === "valores" ? "text-red-500 border-b-2 border-red-500" : "text-zinc-500 hover:text-white"}`}>Valores e Lotes</button>
@@ -475,6 +475,9 @@ export default function EventoDetalhesPage() {
               )}
             </div>
 
+          </div>
+
+          <div className="order-3 min-w-0 lg:col-start-1">
             {/* LISTA DE ATLETAS */}
             <div>
               <div className="flex items-center justify-between mb-3 md:mb-4">
@@ -513,7 +516,7 @@ export default function EventoDetalhesPage() {
           </div>
 
           {/* COLUNA DIREITA: CHECKLIST DINÂMICO */}
-          <div className="lg:col-span-1">
+          <div className="order-2 min-w-0 lg:col-start-2 lg:row-start-1 lg:row-span-2">
             <div className="sticky top-20 md:top-24 bg-[#0a0a0e] border border-red-500/30 rounded-xl md:rounded-2xl p-4 md:p-6 shadow-[0_0_20px_rgba(239,68,68,0.1)] relative overflow-hidden mt-2 md:mt-0">
               <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-600 to-red-400 animate-pulse"></div>
               <div className="absolute -top-10 -right-10 md:-top-20 md:-right-20 w-32 h-32 md:w-40 md:h-40 bg-red-600/10 blur-[40px] md:blur-[50px] rounded-full animate-pulse"></div>

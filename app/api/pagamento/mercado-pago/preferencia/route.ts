@@ -1,5 +1,6 @@
 import { limiteParcelas } from '@/app/lib/parcelamento';
 import { NextResponse } from "next/server";
+import { obterBaseUrlItatame } from "@/app/lib/itatame-url";
 import { calcularComissaoMarketplace } from "@/app/lib/planos-comerciais";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
 import { obterAccessTokenOrganizador } from "@/app/lib/mercado-pago-integracao";
@@ -20,10 +21,6 @@ type EventoPagamento = {
   regras_pontuacao_equipes?: { valor_absoluto?: number | string | null } | null;
 };
 
-function getBaseUrl(request: Request) {
-  const origin = new URL(request.url).origin;
-  return process.env.NEXT_PUBLIC_BASE_URL || origin;
-}
 
 async function calcularValoresCobranca(supabase: ReturnType<typeof createSupabaseServerClient>, inscricao: any, evento: EventoPagamento) {
   let cupom = null;
@@ -121,7 +118,7 @@ export async function POST(request: Request) {
     const valorTotal = aCobrar;
 
     const comissao = calcularComissaoMarketplace(valorTotal, organizador.plano_comercial);
-    const baseUrl = getBaseUrl(request);
+    const baseUrl = obterBaseUrlItatame(request);
 
     const preferenceResponse = await fetch("https://api.mercadopago.com/checkout/preferences", {
       method: "POST",

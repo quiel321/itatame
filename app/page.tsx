@@ -67,6 +67,7 @@ function proximoResumo(
 
 export default function Home() {
   const [eventos, setEventos] = useState<any[]>([]);
+  const [galeriasRetratt, setGaleriasRetratt] = useState<{ id: string; nome: string; capa_url: string }[]>([]);
   const [resumosLutas, setResumosLutas] = useState<Record<string, ResumoLutasEvento>>({});
   const [busca, setBusca] = useState("");
   const [modalidadeFiltro, setModalidadeFiltro] = useState("Todas");
@@ -118,6 +119,26 @@ export default function Home() {
       window.clearInterval(intervalo);
       supabase.removeChannel(canal);
     };
+  }, []);
+
+  useEffect(() => {
+    let ativo = true;
+    async function carregarGaleriasParceiro() {
+      const { data, error } = await supabase.from("foto_eventos")
+        .select("id,nome,capa_url")
+        .eq("status", "publicado").eq("acesso_por_link", false)
+        .not("capa_url", "is", null)
+        .order("data_evento", { ascending: false }).limit(6);
+      if (!ativo || error) return;
+      const capas = new Set<string>();
+      setGaleriasRetratt((data || []).filter((galeria) => {
+        if (!galeria.capa_url || capas.has(galeria.capa_url)) return false;
+        capas.add(galeria.capa_url);
+        return true;
+      }).slice(0, 2));
+    }
+    void carregarGaleriasParceiro();
+    return () => { ativo = false; };
   }, []);
 
   // 3. O motor de arranque: Força o vídeo a reproduzir assim que a página é montada
@@ -279,27 +300,27 @@ export default function Home() {
                   <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0e] via-transparent to-transparent"></div>
                 </div>
 
-                <div className="p-6 flex flex-col flex-1 relative -mt-6 bg-[#0a0a0e]/90 backdrop-blur-md rounded-t-3xl border-t border-white/5">
-                  <span className="mb-2 text-[9px] font-extrabold uppercase tracking-[0.15em] text-zinc-500">{evento.descricao || "Jiu-Jitsu"}</span>
-                  <h3 className="text-base font-black uppercase tracking-tight text-white mb-4 line-clamp-2 leading-snug group-hover:text-red-400 transition-colors">
+                <div className="p-4 flex flex-col flex-1 relative -mt-4 bg-[#0a0a0e]/90 backdrop-blur-md rounded-t-3xl border-t border-white/5">
+                  <span className="mb-1 text-[9px] font-extrabold uppercase tracking-[0.15em] text-zinc-500">{evento.descricao || "Jiu-Jitsu"}</span>
+                  <h3 className="text-base font-black uppercase tracking-tight text-white mb-2 line-clamp-2 leading-snug group-hover:text-red-400 transition-colors">
                     {evento.nome}
                   </h3>
                   
-                  <div className="mt-auto space-y-3 mb-6">
+                  <div className="mt-auto flex flex-wrap items-center gap-x-4 gap-y-1.5 mb-3">
                     {evento.data_evento && (
-                       <div className="flex items-center gap-3 text-[11px] font-bold uppercase tracking-wider text-zinc-400">
-                         <CalendarDays size={16} className="text-red-500 shrink-0" /> {formatarData(evento.data_evento)}
+                       <div className="flex items-center gap-1.5 text-[10px] font-medium text-zinc-400">
+                         <CalendarDays size={13} className="text-red-500 shrink-0" /> {formatarData(evento.data_evento)}
                        </div>
                     )}
                     {evento.cidade && (
-                       <div className="flex items-center gap-3 text-[11px] font-bold uppercase tracking-wider text-zinc-400">
-                         <MapPin size={16} className="text-red-500 shrink-0" /> <span className="truncate">{evento.cidade} {evento.estado ? `- ${evento.estado}` : ""}</span>
+                       <div className="flex items-center gap-1.5 text-[10px] font-medium text-zinc-400">
+                         <MapPin size={13} className="text-red-500 shrink-0" /> <span className="truncate">{evento.cidade} {evento.estado ? `- ${evento.estado}` : ""}</span>
                        </div>
                     )}
                   </div>
 
-                  <div className="mb-3">
-                    <div className="mb-1.5 flex items-center justify-between text-[8px] font-black uppercase tracking-[0.16em] text-zinc-500">
+                  <div className="mb-2">
+                    <div className="mb-1 flex items-center justify-between text-[8px] font-black uppercase tracking-[0.16em] text-zinc-500">
                       <span>{etapa.rotuloProgresso || (etapa.indice === 0 ? "Preparação" : `Etapa ${etapa.indice} de ${etapa.totalEtapas}`)}</span>
                       <span>{etapa.progresso}%</span>
                     </div>
@@ -308,7 +329,7 @@ export default function Home() {
                     </div>
                   </div>
 
-                  <div className={`flex w-full items-center justify-center gap-2 rounded-xl border py-3 text-center transition-colors ${estilo.acao}`}>
+                  <div className={`flex w-full items-center justify-center gap-2 rounded-lg border py-2 text-center transition-colors ${estilo.acao}`}>
                     <span className="flex flex-col">
                       <strong className="text-[10px] font-black uppercase tracking-widest">{etapa.titulo}</strong>
                       <small className="mt-0.5 text-[8px] font-bold tracking-wide opacity-75">{etapa.detalhe}</small>
@@ -355,60 +376,38 @@ export default function Home() {
           </a>
         </section>
 
-        <a
-          href={process.env.NEXT_PUBLIC_FOTOS_URL || "https://retratt.com"}
-          className="group relative mt-10 grid min-h-44 overflow-hidden rounded-2xl border border-orange-500/20 bg-[#0b0908] shadow-[0_16px_45px_rgba(0,0,0,0.35)] transition hover:border-orange-400/45 md:grid-cols-[1.15fr_0.85fr]"
-        >
-          <div className="relative z-10 flex flex-col justify-center p-5 sm:p-6 md:py-7 md:pl-8 md:pr-5">
-            <div className="mb-3 flex items-center gap-3">
-              <img src="/retratt/logo-white.png" alt="Retratt" className="h-6 w-auto object-contain sm:h-7" />
-              <span className="hidden h-5 w-px bg-white/10 sm:block" />
-              <span className="hidden text-[8px] font-black uppercase tracking-[0.2em] text-orange-400 sm:inline">
-                Fotografia oficial de eventos
-              </span>
-            </div>
-            <h2 className="max-w-2xl text-xl font-black uppercase leading-tight tracking-tight text-white sm:text-2xl">
-              Seus melhores momentos, <span className="text-orange-500">em um só lugar.</span>
-            </h2>
-            <p className="mt-2 max-w-2xl text-[11px] font-medium leading-relaxed text-zinc-400 sm:text-xs">
-              Encontre suas fotos esportivas por reconhecimento inteligente ou publique e venda seus cliques na Retratt.
-            </p>
-            <span className="mt-4 inline-flex w-fit items-center gap-2 text-[9px] font-black uppercase tracking-widest text-orange-400 transition group-hover:text-orange-300">
-              Conhecer a Retratt <ChevronRight size={14} />
-            </span>
-          </div>
 
-          <div className="relative grid min-h-32 grid-cols-2 overflow-hidden border-t border-white/5 md:min-h-full md:border-l md:border-t-0">
-            <img
-              src={eventosFiltrados[0]?.banner_url || "/arena.png"}
-              alt="Atletas em competição"
-              className="h-full w-full object-cover opacity-65 transition duration-700 group-hover:scale-105 group-hover:opacity-80"
-            />
-            <img
-              src={eventosFiltrados[1]?.banner_url || "/mt-fight.png"}
-              alt="Fotografia esportiva"
-              className="h-full w-full object-cover opacity-65 transition duration-700 group-hover:scale-105 group-hover:opacity-80"
-            />
-            <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#0b0908] via-transparent to-black/10" />
-            <div className="absolute bottom-3 left-3 flex items-center gap-3 rounded-lg border border-white/10 bg-black/70 px-3 py-2 backdrop-blur-md">
-              <span className="flex items-center gap-1.5 text-[8px] font-black uppercase tracking-widest text-white">
-                <Images size={13} className="text-orange-400" /> Encontre
-              </span>
-              <span className="flex items-center gap-1.5 text-[8px] font-black uppercase tracking-widest text-white">
-                <Camera size={13} className="text-orange-400" /> Venda
-              </span>
-            </div>
-          </div>
-        </a>
       </section>
 
-      {/* 🤝 PARCEIROS OFICIAIS */}
-      <section className="relative z-20 mx-auto w-full max-w-6xl px-4 pb-12 md:px-6">
-        <div className="flex flex-col items-center justify-center border-t border-white/5 pt-10">
-          <h3 className="mb-6 text-center text-[9px] font-extrabold uppercase tracking-[0.2em] text-zinc-600">Parceiros Oficiais</h3>
-          <div className="flex flex-wrap items-center justify-center gap-10 opacity-70 md:gap-16">
-            <a href="https://spartanbjj.com.br/" target="_blank" rel="noopener noreferrer" className="group flex items-center justify-center grayscale transition-all duration-500 hover:grayscale-0 hover:opacity-100">
-              <img src="/logo-spartan.svg" alt="Spartan Jiu-Jitsu" className="h-14 md:h-16 object-contain transition-transform group-hover:scale-105" />
+      <section className="relative z-20 mx-auto w-full max-w-6xl px-4 pb-10 md:px-6" aria-labelledby="parceiros-titulo">
+        <div className="border-t border-white/10 pt-6">
+          <h3 id="parceiros-titulo" className="mb-4 text-sm font-semibold text-white">Parceiros oficiais</h3>
+          <div className="grid gap-3 lg:grid-cols-[1.5fr_1fr]">
+            <article className="relative overflow-hidden rounded-xl border border-white/10 bg-gradient-to-br from-[#151210] to-[#0a0a0e] p-3 transition hover:border-orange-400/30">
+              <div className="absolute -right-10 -top-16 h-32 w-32 rounded-full bg-orange-500/[0.06] blur-3xl" aria-hidden="true" />
+              <a href={process.env.NEXT_PUBLIC_FOTOS_URL || "https://retratt.com"} className="relative flex items-center justify-between gap-3">
+                <span className="flex min-w-0 items-center gap-3">
+                  <img src="/retratt/logo-white.png" alt="Retratt" className="h-6 w-20 shrink-0 object-contain" />
+                  <span><strong className="block text-xs font-semibold text-white">Seus momentos em fotos</strong><span className="mt-0.5 block text-[10px] text-zinc-400">Encontre suas fotos ou publique seus cliques.</span></span>
+                </span>
+                <ChevronRight size={18} className="shrink-0 text-orange-400" />
+              </a>
+              {galeriasRetratt.length > 0 && (
+                <div className="relative mt-2.5 grid grid-cols-2 gap-2">
+                  {galeriasRetratt.map((galeria) => (
+                    <a key={galeria.id} href={(process.env.NEXT_PUBLIC_FOTOS_URL || "https://retratt.com") + "/evento/" + galeria.id} className="group relative overflow-hidden h-20 sm:h-24 rounded-lg border border-white/[0.08] bg-black">
+                      <img src={galeria.capa_url} alt={galeria.nome} loading="lazy" className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
+                      <span className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/15 to-transparent" />
+                      <span className="absolute inset-x-0 bottom-0 p-2"><span className="mb-0.5 flex items-center gap-1 text-[8px] font-bold uppercase tracking-wider text-orange-300"><Images size={11} /> Ver álbum</span><strong className="block line-clamp-2 text-[10px] leading-snug text-white">{galeria.nome}</strong></span>
+                    </a>
+                  ))}
+                </div>
+              )}
+            </article>
+            <a href="https://spartanbjj.com.br/" target="_blank" rel="noopener noreferrer" className="group relative flex items-center gap-3 overflow-hidden rounded-xl border border-white/10 bg-gradient-to-br from-[#141112] to-[#0a0a0e] p-3 transition hover:border-red-400/30">
+              <img src="/logo-spartan.svg" alt="" aria-hidden="true" className="pointer-events-none absolute -right-5 -bottom-8 h-36 w-36 object-contain opacity-[0.05]" />
+              <span className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-black/40"><img src="/logo-spartan.svg" alt="Spartan Jiu-Jitsu" className="h-14 w-14 object-contain" /></span>
+              <span className="relative"><span className="mb-1 block text-[8px] font-bold uppercase tracking-widest text-red-400">No esporte, juntos</span><strong className="block text-sm font-semibold text-white">Spartan Jiu-Jitsu</strong><span className="mt-0.5 block text-[11px] text-zinc-400">Parceiro oficial iTatame</span><span className="mt-2 inline-flex items-center gap-1 text-xs text-zinc-200 group-hover:text-red-300">Conhecer <ChevronRight size={13} /></span></span>
             </a>
           </div>
         </div>

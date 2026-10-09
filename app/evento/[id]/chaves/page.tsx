@@ -5,11 +5,16 @@ import { useParams } from "next/navigation"
 import { supabase } from "@/app/lib/supabase"
 import { rotuloLuta } from "@/app/lib/lutas-rotulos"
 import ArvoreChaveDesktop from "@/app/components/ArvoreChaveDesktop"
+import AvisoChaves from "@/app/components/AvisoChaves"
+import { dataOperacional, type EventoComEtapas } from "@/app/lib/evento-etapas"
 import { totalAbasArvore } from "@/app/lib/chave-visual"
 
 export default function ChavesPage() {
   const params = useParams()
   
+  const [evento, setEvento] = useState<EventoComEtapas | null>(null)
+  const [carregandoEvento, setCarregandoEvento] = useState(true)
+  const [erroEvento, setErroEvento] = useState("")
   const [tipoCategoria, setTipoCategoria] = useState("peso")
   const [categoriasMenu, setCategoriasMenu] = useState<string[]>([])
   const [categoriaSelecionada, setCategoriaSelecionada] = useState("")
@@ -38,12 +43,26 @@ export default function ChavesPage() {
     setLutas(data || [])
   }
 
-  useEffect(() => { 
+  useEffect(() => {
     if (!params.id) return;
-    void fetch(`/api/eventos/${params.id}/gerar-chaves-auto`).then(() => { carregarCategorias(); carregarChaves(); });
-    carregarCategorias();
-    carregarFotos();
-  }, [])
+    let ativo = true;
+    async function carregar() {
+      const { data, error } = await supabase.from("eventos").select("estado,data_divulgacao_chaves").eq("id", params.id).single();
+      if (!ativo) return;
+      if (error || !data) { setErroEvento("Não foi possível consultar o campeonato. Tente novamente."); setCarregandoEvento(false); return; }
+      setEvento(data);
+      const divulgacao = dataOperacional(data.data_divulgacao_chaves, false, data.estado);
+      if (!divulgacao || new Date() >= divulgacao) {
+        await fetch(`/api/eventos/${params.id}/gerar-chaves-auto`);
+        if (!ativo) return;
+        await carregarCategorias();
+        void carregarFotos();
+      }
+      if (ativo) setCarregandoEvento(false);
+    }
+    void carregar().catch(() => { if (ativo) { setErroEvento("Não foi possível carregar as chaves. Tente novamente."); setCarregandoEvento(false); } });
+    return () => { ativo = false; };
+  }, [params.id])
 
   useEffect(() => { carregarChaves(); setAbaAtual(1) }, [categoriaSelecionada])
 
@@ -98,6 +117,10 @@ export default function ChavesPage() {
       return true;
     })
     .sort((a, b) => (parseInt(a.id_visual) || 0) - (parseInt(b.id_visual) || 0));
+
+  const divulgacao = dataOperacional(evento?.data_divulgacao_chaves, false, evento?.estado);
+  if (carregandoEvento) return <main className="p-6 text-center text-sm text-zinc-400">Carregando chaves...</main>;
+  if (erroEvento || (divulgacao && new Date() < divulgacao) || !categoriasMenu.length) return <AvisoChaves eventoId={String(params.id)} evento={evento} erro={erroEvento} />;
 
   const campeaoData = getCampeao();
   const temCampeao = campeaoData.nome && campeaoData.nome !== "";

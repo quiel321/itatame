@@ -13,19 +13,8 @@ async function contextoMensagens(eventoId: string, usuarioId: string) {
 
   if (evento.organizador_id === usuarioId) return { db, evento, papel: 'organizador' as const };
 
-  const { data: inscricao } = await db.from('inscricoes').select('id').eq('evento_id', eventoId).eq('user_id', usuarioId).limit(1).maybeSingle();
-  if (inscricao) return { db, evento, papel: 'atleta' as const };
-
-  const { data: dependente } = await db.from('atletas').select('user_id')
-    .eq('responsavel_id', usuarioId)
-    .limit(20);
-  const ids = (dependente || []).map(item => item.user_id).filter(Boolean);
-  if (ids.length) {
-    const { data: inscDep } = await db.from('inscricoes').select('id').eq('evento_id', eventoId).in('user_id', ids).limit(1).maybeSingle();
-    if (inscDep) return { db, evento, papel: 'atleta' as const };
-  }
-
-  return { db, evento, papel: null };
+  // Qualquer usuário autenticado pode tirar dúvidas; a conversa permanece privada.
+  return { db, evento, papel: 'atleta' as const };
 }
 
 export async function GET(request: Request, contexto: { params: Promise<{ id: string }> }) {
@@ -81,7 +70,7 @@ export async function GET(request: Request, contexto: { params: Promise<{ id: st
       : { data: [] as { user_id: string; nome: string }[] };
     const lista = [...threads.values()].map(thread => ({
       ...thread,
-      nome: (atletas || []).find(item => item.user_id === thread.atleta_user_id)?.nome || 'Atleta',
+      nome: (atletas || []).find(item => item.user_id === thread.atleta_user_id)?.nome || 'Visitante',
     }));
     return NextResponse.json({ papel: acesso.papel, evento: acesso.evento.nome, conversas: lista });
   }
@@ -95,7 +84,7 @@ export async function GET(request: Request, contexto: { params: Promise<{ id: st
   await acesso.db.from('mensagens_evento').update({ lida: true })
     .eq('evento_id', eventoId).eq('atleta_user_id', atletaFiltro).eq('remetente', 'atleta').eq('lida', false);
   const { data: atleta } = await acesso.db.from('atletas_publico').select('user_id,nome').eq('user_id', atletaFiltro).maybeSingle();
-  return NextResponse.json({ papel: acesso.papel, evento: acesso.evento.nome, atleta: atleta?.nome || 'Atleta', mensagens: data || [] });
+  return NextResponse.json({ papel: acesso.papel, evento: acesso.evento.nome, atleta: atleta?.nome || 'Visitante', mensagens: data || [] });
 }
 
 export async function POST(request: Request, contexto: { params: Promise<{ id: string }> }) {
@@ -115,7 +104,12 @@ export async function POST(request: Request, contexto: { params: Promise<{ id: s
   let primeiraDoOrganizador = false;
   if (acesso.papel === 'organizador') {
     const { data: inscrito } = await acesso.db.from('inscricoes').select('id').eq('evento_id', eventoId).eq('user_id', atletaUserId).limit(1).maybeSingle();
-    if (!inscrito) return NextResponse.json({ error: 'Este atleta não está inscrito neste campeonato.' }, { status: 400 });
+    if (!inscrito) {
+      const { data: conversa, error: conversaErro } = await acesso.db.from('mensagens_evento').select('id')
+        .eq('evento_id', eventoId).eq('atleta_user_id', atletaUserId).eq('remetente', 'atleta').limit(1).maybeSingle();
+      if (conversaErro) return NextResponse.json({ error: 'Não foi possível verificar a conversa.' }, { status: 500 });
+      if (!conversa) return NextResponse.json({ error: 'Este usuário ainda não iniciou uma conversa neste campeonato.' }, { status: 400 });
+    }
     const { count } = await acesso.db.from('mensagens_evento').select('id', { count: 'exact', head: true })
       .eq('evento_id', eventoId).eq('atleta_user_id', atletaUserId).eq('remetente', 'organizador');
     primeiraDoOrganizador = !count;

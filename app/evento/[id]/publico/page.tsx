@@ -9,6 +9,8 @@ import { rotuloLuta } from "@/app/lib/lutas-rotulos"
 import { rotuloCategoriaAoVivo } from "@/app/lib/categorias-competicao"
 import { lutasFormamChaveDeTres, placeholderSlotChaveDeTres, resumoHumanoChave, textoAguardandoChaveDeTres, textoOuroAposChecagem } from "@/app/lib/chave-de-tres"
 import ArvoreChaveDesktop from "@/app/components/ArvoreChaveDesktop"
+import AvisoChaves from "@/app/components/AvisoChaves"
+import { dataOperacional, type EventoComEtapas } from "@/app/lib/evento-etapas"
 import { totalAbasArvore } from "@/app/lib/chave-visual"
 
 const formatarHorarioEstimado = (isoString: string | null) => {
@@ -29,6 +31,9 @@ export default function ChavesPublicoPage() {
   const params = useParams()
   const idEvento = params.id as string || params.eventoId as string;
 
+  const [evento, setEvento] = useState<EventoComEtapas | null>(null)
+  const [carregandoEvento, setCarregandoEvento] = useState(true)
+  const [erroEvento, setErroEvento] = useState("")
   const [tipoCategoria, setTipoCategoria] = useState("peso")
   const [categoriasMenu, setCategoriasMenu] = useState<string[]>([])
   const [categoriaSelecionada, setCategoriaSelecionada] = useState("")
@@ -78,21 +83,31 @@ export default function ChavesPublicoPage() {
   }
 
   useEffect(() => {
-    verificarPagamento();
-    carregarCategorias();
-    carregarFotos();
-    if (idEvento) {
-      void supabase.from("eventos").select("nome").eq("id", idEvento).maybeSingle().then(({ data }) => {
-        if (data?.nome) setEventoNome(String(data.nome));
-      });
-      void fetch(`/api/eventos/${idEvento}/gerar-chaves-auto`).then(() => {
-        carregarCategorias();
+    if (!idEvento) return;
+    let ativo = true;
+    async function carregar() {
+      const { data, error } = await supabase.from("eventos").select("nome,estado,data_divulgacao_chaves").eq("id", idEvento).single();
+      if (!ativo) return;
+      if (error || !data) { setErroEvento("Não foi possível consultar o campeonato. Tente novamente."); setCarregandoEvento(false); return; }
+      setEvento(data); setEventoNome(String(data.nome || ""));
+      const divulgacao = dataOperacional(data.data_divulgacao_chaves, false, data.estado);
+      if (!divulgacao || new Date() >= divulgacao) {
+        await fetch(`/api/eventos/${idEvento}/gerar-chaves-auto`);
+        if (!ativo) return;
+        await carregarCategorias();
+        void carregarFotos(); void verificarPagamento();
         setVersaoChaves(atual => atual + 1);
-      });
+      }
+      if (ativo) setCarregandoEvento(false);
     }
-  }, [])
+    void carregar().catch(() => { if (ativo) { setErroEvento("Não foi possível carregar as chaves. Tente novamente."); setCarregandoEvento(false); } });
+    return () => { ativo = false; };
+  }, [idEvento])
 
   useEffect(() => {
+    if (carregandoEvento) return;
+    const divulgacao = dataOperacional(evento?.data_divulgacao_chaves, false, evento?.estado);
+    if (erroEvento || (divulgacao && new Date() < divulgacao)) return;
     carregarChaves()
     const subscription = supabase
       .channel('public-chaves-changes')
@@ -102,7 +117,7 @@ export default function ChavesPublicoPage() {
       })
       .subscribe();
     return () => { supabase.removeChannel(subscription); }
-  }, [categoriaSelecionada, versaoChaves])
+  }, [categoriaSelecionada, versaoChaves, carregandoEvento])
 
   const categoriasFiltradas = categoriasMenu.filter((cat) => {
     const isAbsoluto = cat.toLowerCase().includes("absoluto");
@@ -263,6 +278,10 @@ export default function ChavesPublicoPage() {
       setCategoriaSelecionada(lista[0]);
     }
   }
+
+  const divulgacao = dataOperacional(evento?.data_divulgacao_chaves, false, evento?.estado);
+  if (carregandoEvento) return <p className="p-6 text-center text-sm text-zinc-400">Carregando chaves...</p>;
+  if (erroEvento || (divulgacao && new Date() < divulgacao) || !categoriasMenu.length) return <AvisoChaves eventoId={idEvento} evento={evento} erro={erroEvento} />;
 
   return (
     <main className="min-h-screen max-w-full bg-black p-0 md:p-6">
