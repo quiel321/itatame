@@ -1,8 +1,11 @@
+import { inscricaoCortesia, textoCupomInscricao, valorLiquidoInscricao, type DadosFinanceirosInscricao } from "./inscricao-relatorio";
 import { formatarTelefone } from "@/app/lib/formatar-telefone";
 import { getPlanoComercial } from "@/app/lib/planos-comerciais";
 import { pacoteInscricao, rotuloPacoteInscricao } from "@/app/lib/valor-inscricao";
 
 export type LinhaSuporteItatame = {
+  inscricao: string;
+  cupom: string;
   organizador: string;
   academia: string;
   contato: string;
@@ -58,7 +61,7 @@ export type EventoEmbutido = {
   cidade?: string | null;
 };
 
-export type InscricaoPainel = {
+export type InscricaoPainel = DadosFinanceirosInscricao & {
   id: string | number;
   atleta?: string | null;
   equipe?: string | null;
@@ -115,15 +118,12 @@ function dinheiro(valor: number) {
   return Number(valor.toFixed(2));
 }
 
-export function valorInscricao(item: { valor_total?: unknown; valor_inscricao?: unknown; estorno_valor?: unknown; estorno_status?: string | null; pagamento_ok?: boolean | null }) {
+export function valorInscricao(item: DadosFinanceirosInscricao & { estorno_valor?: number | string | null; estorno_status?: string | null }) {
   if (item.estorno_status === "estornado") {
     const estorno = Number(item.estorno_valor);
     if (Number.isFinite(estorno) && estorno > 0) return estorno;
   }
-  const total = Number(item.valor_total);
-  if (Number.isFinite(total) && total > 0) return total;
-  const base = Number(item.valor_inscricao);
-  return Number.isFinite(base) && base > 0 ? base : 0;
+  return valorLiquidoInscricao(item);
 }
 
 export function situacaoInscricao(item: { pagamento_ok?: boolean | null; estorno_status?: string | null }): SituacaoInscricao {
@@ -286,6 +286,8 @@ export function montarLinhaSuporte(item: InscricaoPainel, organizador?: Organiza
   const plano = getPlanoComercial(organizador?.plano_comercial);
   const telefone = organizador?.telefone ? formatarTelefone(organizador.telefone) : "";
   return {
+    inscricao: String(item.id),
+    cupom: textoCupomInscricao(item),
     organizador: organizador?.nome || "Organizador não identificado",
     academia: organizador?.academia || "—",
     contato: [telefone, organizador?.email].filter(Boolean).join(" · ") || "—",
@@ -300,7 +302,7 @@ export function montarLinhaSuporte(item: InscricaoPainel, organizador?: Organiza
     peso: textoPeso(item.peso),
     pacote: rotuloPacote(item),
     valor: moeda(valorInscricao(item)),
-    pagamento: rotuloSituacao(situacaoInscricao(item)),
+    pagamento: item.estorno_status !== "estornado" && inscricaoCortesia(item) ? "Cortesia" : rotuloSituacao(situacaoInscricao(item)),
     pesagem: item.pesagem_ok ? "Pesagem ok" : "Pesagem pendente",
     mercadoPagoId: item.mp_payment_id || "—",
   };

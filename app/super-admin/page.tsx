@@ -126,7 +126,7 @@ export default function SuperAdminMasterPage() {
           buscarPaginas<InscricaoPainel>(async (inicio, fim) => {
             const resultado = await supabase
               .from("inscricoes")
-              .select("id, atleta, equipe, categoria, faixa, peso, idade, absoluto, pagamento_ok, pesagem_ok, valor_inscricao, valor_total, mp_payment_id, estorno_status, estorno_valor, created_at, evento_id, eventos(nome, organizador_id, data_evento, cidade)")
+              .select("id, atleta, equipe, categoria, faixa, peso, idade, absoluto, pagamento_ok, pesagem_ok, valor_inscricao, valor_total, cupom_id, cupom_codigo, desconto_valor, cortesia, mp_payment_id, estorno_status, estorno_valor, created_at, evento_id, eventos(nome, organizador_id, data_evento, cidade)")
               .order("id", { ascending: false })
               .range(inicio, fim);
             return { data: resultado.data as InscricaoPainel[] | null, error: resultado.error };
@@ -268,8 +268,8 @@ export default function SuperAdminMasterPage() {
     if (formato === "csv") {
       baixarCsv(
         `itatame-suporte-${new Date().toISOString().slice(0, 10)}.csv`,
-        ["Organizador", "Academia", "Contato", "Plano", "Mercado Pago", "Evento", "Data", "Atleta", "Equipe", "Categoria", "Faixa", "Peso", "Pacote", "Valor", "Pagamento", "Pesagem", "ID Mercado Pago"],
-        linhas.map((linha) => [linha.organizador, linha.academia, linha.contato, linha.plano, linha.mercadoPago, linha.evento, linha.dataEvento, linha.atleta, linha.equipe, linha.categoria, linha.faixa, linha.peso, linha.pacote, linha.valor, linha.pagamento, linha.pesagem, linha.mercadoPagoId]),
+        ["Nº inscrição", "Cupom / Desconto", "Organizador", "Academia", "Contato", "Plano", "Mercado Pago", "Evento", "Data", "Atleta", "Equipe", "Categoria", "Faixa", "Peso", "Pacote", "Valor", "Pagamento", "Pesagem", "ID Mercado Pago"],
+        linhas.map((linha) => [linha.inscricao, linha.cupom, linha.organizador, linha.academia, linha.contato, linha.plano, linha.mercadoPago, linha.evento, linha.dataEvento, linha.atleta, linha.equipe, linha.categoria, linha.faixa, linha.peso, linha.pacote, linha.valor, linha.pagamento, linha.pesagem, linha.mercadoPagoId]),
       );
       return;
     }

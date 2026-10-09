@@ -10,8 +10,7 @@ import { getPlanoComercial } from "../lib/planos-comerciais";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import imageCompression from 'browser-image-compression';
-import { jsPDF } from "jspdf";
-import autoTable from "jspdf-autotable";
+import { exportarPdfOrganizador } from "@/app/lib/organizador-relatorio";
 import { ShieldCheck, Map, Trash2, Key, Users, CheckCircle, Copy, RefreshCw, Play, Edit3, Trophy, Search, ChevronDown, Megaphone, MessageCircle } from "lucide-react";
 import MercadoPagoConnectButton from "@/app/admin/_components/MercadoPagoConnectButton";
 import { useMensagensNaoLidas, SeloNaoLidas } from "@/app/components/ChatEvento";
@@ -586,58 +585,7 @@ export default function AdminPage() {
     }
 
     try {
-      // O jsPDF precisa estar instalado: npm install jspdf jspdf-autotable
-      const doc = new jsPDF("landscape"); // Landscape porque tem muita coluna
-
-      // Título do PDF
-      doc.setFontSize(22);
-      doc.setTextColor(220, 38, 38); // Vermelho do iTatame
-      doc.text("ITATAME - LISTA DE ATLETAS", 14, 20);
-
-      // Subtítulo descritivo
-      doc.setFontSize(10);
-      doc.setTextColor(100, 100, 100); // Cinza
-      const dataHoje = new Date().toLocaleDateString('pt-BR');
-      doc.text(`Relatório gerado em ${dataHoje}. Total de atletas: ${inscricoesFiltradas.length}`, 14, 28);
-
-      // Mapeamento dos dados para a tabela do PDF
-      const tableColumn = ["Atleta", "Equipe", "Categoria", "Faixa", "Peso", "Financeiro", "Pesagem"];
-      
-      // 🔥 A CORREÇÃO ESTÁ AQUI: Adicionamos ': any[]' para tipar o array
-      const tableRows: any[] = [];
-
-      inscricoesFiltradas.forEach(insc => {
-        const inscData = [
-          insc.atleta || "N/A",
-          insc.equipe || "N/A",
-          insc.categoria || "N/A",
-          insc.faixa || "N/A",
-          insc.peso ? `${insc.peso} KG` : "Abs.",
-          insc.pagamento_ok ? "PAGO" : "PENDENTE",
-          insc.pesagem_ok ? "OK" : "PEND."
-        ];
-        tableRows.push(inscData);
-      });
-
-      // Gera a tabela usando a extensão autotable
-      autoTable(doc, {
-        head: [tableColumn],
-        body: tableRows,
-        startY: 35,
-        theme: 'grid',
-        styles: { fontSize: 8, cellPadding: 3 },
-        headStyles: { fillColor: [20, 20, 20], textColor: [255, 255, 255], fontStyle: 'bold' },
-        alternateRowStyles: { fillColor: [240, 240, 240] },
-        columnStyles: {
-          0: { cellWidth: 50 }, // Coluna do nome mais larga
-          1: { cellWidth: 40 }, // Coluna da equipe
-          5: { fontStyle: 'bold', halign: 'center' }, // Coluna Pagamento centralizada
-          6: { fontStyle: 'bold', halign: 'center' }  // Coluna Peso centralizada
-        }
-      });
-
-      // Salva o PDF no computador
-      doc.save(`relatorio_iTatame_${new Date().toISOString().slice(0,10)}.pdf`);
+      exportarPdfOrganizador(inscricoesFiltradas);
 
     } catch (error) {
       console.error("Erro ao gerar PDF:", error);

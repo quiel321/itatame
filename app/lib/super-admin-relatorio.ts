@@ -63,7 +63,10 @@ export function exportarPdfSuporte(opcoes: {
   doc.setFontSize(9);
   doc.setTextColor(90);
   doc.text(opcoes.subtitulo, 14, 20);
-  const inicioTabela = desenharResumo(doc, opcoes.resumo, 28);
+  const fimResumo = desenharResumo(doc, opcoes.resumo, 28);
+  doc.setFontSize(8);
+  doc.text("Valor líquido após desconto. Cortesia = inscrição liberada sem cobrança.", 14, fimResumo);
+  const inicioTabela = fimResumo + 4;
 
   autoTable(doc, {
     startY: inicioTabela,
@@ -71,17 +74,18 @@ export function exportarPdfSuporte(opcoes: {
     styles: { fontSize: 7, cellPadding: 1.6, overflow: "linebreak" },
     headStyles: { fillColor: [24, 24, 27], textColor: 255, fontStyle: "bold" },
     alternateRowStyles: { fillColor: [245, 245, 245] },
+    columnStyles: { 6: { cellWidth: 42 }, 9: { cellWidth: 29 } },
     head: [[
       "Organizador",
       "Contato",
       "Plano / MP",
       "Evento",
-      "Atleta",
+      "Nº / Atleta",
       "Equipe",
       "Categoria",
       "Faixa",
       "Pacote",
-      "Valor",
+      "Valor / Cupom",
       "Pagamento",
       "Pesagem",
       "ID MP",
@@ -91,12 +95,12 @@ export function exportarPdfSuporte(opcoes: {
       linha.contato,
       `${linha.plano}\n${linha.mercadoPago}`,
       `${linha.evento}\n${linha.dataEvento}`,
-      linha.atleta,
+      `Nº ${linha.inscricao}\n${linha.atleta}`,
       linha.equipe,
       linha.categoria,
       `${linha.faixa}\n${linha.peso}`,
       linha.pacote,
-      linha.valor,
+      `${linha.valor}\n${linha.cupom}`,
       linha.pagamento,
       linha.pesagem,
       linha.mercadoPagoId,
