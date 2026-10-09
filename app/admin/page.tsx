@@ -395,11 +395,33 @@ export default function AdminPage() {
   }
 
   function pedirAlteracaoPagamento(inscricao: any) {
+    if (inscricao.cortesia) {
+      void removerCortesia(inscricao);
+      return;
+    }
     if (inscricao.pagamento_ok) {
       void toggleStatus(inscricao.id, "pagamento_ok", true);
       return;
     }
     setConfirmandoPagamento(inscricao);
+  }
+
+  async function removerCortesia(inscricao: any) {
+    if (!window.confirm("Retirar a cortesia" + (inscricao.cupom_codigo ? " " + inscricao.cupom_codigo : "") + " de " + inscricao.atleta + "? A inscrição voltará a pendente, com o valor original, e a vaga será devolvida ao cupom.")) return;
+    setLoadingId(inscricao.id); setAvisoPagamento("");
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error("Entre novamente para retirar a cortesia.");
+      const resposta = await fetch("/api/organizador/inscricoes/retirar-cortesia", {
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.access_token },
+        body: JSON.stringify({ inscricaoId: inscricao.id }),
+      });
+      const resultado = await resposta.json();
+      if (!resposta.ok) throw new Error(resultado.error || "Não foi possível retirar a cortesia.");
+      setInscricoes(atual => atual.map(item => item.id === inscricao.id ? { ...item, ...resultado.inscricao } : item));
+      setAvisoPagamento("Cortesia retirada de " + inscricao.atleta + ". Inscrição pendente e vaga do cupom devolvida.");
+    } catch (error) { setAvisoPagamento((error as Error).message); }
+    finally { setLoadingId(null); }
   }
 
   async function toggleStatus(id: string, campo: string, valorAtual: boolean) {
@@ -901,8 +923,8 @@ export default function AdminPage() {
                       <div className="flex flex-wrap gap-1.5">
                         {!insc.pagamento_ok && insc.mp_payment_id && <button onClick={() => void acaoPagamento(insc, 'conferir')} disabled={loadingId === String(insc.id)} className="rounded-lg border border-cyan-500/30 px-2.5 py-2 text-[8px] font-bold uppercase text-cyan-200 disabled:opacity-50">Conferir MP</button>}
                         {insc.pagamento_ok && <button onClick={() => void acaoPagamento(insc, 'reenviar')} disabled={loadingId === String(insc.id)} className="rounded-lg border border-green-500/30 px-2.5 py-2 text-[8px] font-bold uppercase text-green-200 disabled:opacity-50">Reenviar confirmação</button>}
-                        {!insc.pagamento_ok && <button onClick={() => pedirAlteracaoPagamento(insc)} disabled={loadingId === insc.id} className="rounded-lg px-2 py-2 text-[8px] font-bold uppercase text-zinc-600 hover:text-zinc-300">Marcar pago</button>}
-                        {insc.pagamento_ok && <button onClick={() => pedirAlteracaoPagamento(insc)} disabled={loadingId === insc.id} className="rounded-lg border border-white/10 px-2.5 py-2 text-[8px] font-bold uppercase text-zinc-500">Desfazer pagamento</button>}
+                        {!insc.pagamento_ok && <button onClick={() => pedirAlteracaoPagamento(insc)} disabled={loadingId === insc.id} className="rounded-lg px-2 py-2 text-[8px] font-bold uppercase text-zinc-600 hover:text-zinc-300">{insc.cortesia ? "Retirar cortesia" : "Marcar pago"}</button>}
+                        {insc.pagamento_ok && <button onClick={() => pedirAlteracaoPagamento(insc)} disabled={loadingId === insc.id} className="rounded-lg border border-white/10 px-2.5 py-2 text-[8px] font-bold uppercase text-zinc-500">{insc.cortesia ? "Retirar cortesia" : "Desfazer pagamento"}</button>}
                         <button onClick={() => void abrirEdicao(insc)} className="rounded-lg border border-white/10 px-2.5 py-2 text-[8px] font-black uppercase text-zinc-300">Ver / Editar</button>
                         <button onClick={() => excluirInscricao(insc.id, insc.atleta || 'Atleta')} disabled={loadingId === insc.id} className="rounded-lg px-2 py-2 text-[8px] font-black uppercase text-red-400">Excluir</button>
                       </div>
@@ -979,7 +1001,7 @@ export default function AdminPage() {
                           disabled={loadingId === insc.id}
                           className="self-center px-2 py-1 text-[8px] font-bold uppercase tracking-widest text-zinc-600 transition-colors hover:text-zinc-300 disabled:opacity-50"
                         >
-                          {loadingId === insc.id ? "..." : insc.pagamento_ok ? "Desfazer pagamento" : "Marcar como pago"}
+                          {loadingId === insc.id ? "..." : insc.cortesia ? "Retirar cortesia" : insc.pagamento_ok ? "Desfazer pagamento" : "Marcar como pago"}
                         </button>
                       </div>
 
