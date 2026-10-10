@@ -443,7 +443,7 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
           {cameraAberta && <CameraSelfie onCapture={(file) => { usarSelfie(file); setCameraAberta(false); }} onClose={() => setCameraAberta(false)} onUnavailable={() => { setCameraAberta(false); inputGaleria.current?.click(); }} />}
           {indiceAberto !== null && resultados?.[indiceAberto] && (
             <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/95 p-3" onClick={() => setIndiceAberto(null)} role="dialog" aria-modal="true" aria-label="Foto encontrada">
-              <div className="relative flex h-full w-full max-w-5xl flex-col items-center justify-center gap-3" onClick={(event) => event.stopPropagation()}
+              <div className="relative flex h-full w-full max-w-5xl flex-col items-center justify-center gap-3 md:grid md:grid-rows-[minmax(0,1fr)_auto] md:pt-12" onClick={(event) => event.stopPropagation()}
                 onTouchStart={(event) => { toqueInicial.current = event.touches[0]?.clientX ?? null; }}
                 onTouchEnd={(event) => {
                   if (toqueInicial.current === null) return;
@@ -452,12 +452,12 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
                   toqueInicial.current = null;
                 }}>
                 <button type="button" onClick={() => setIndiceAberto(null)} aria-label="Fechar foto" className="absolute right-0 top-0 z-20 rounded-full bg-zinc-900 p-3 text-white"><X size={20} /></button>
-                <div className="flex min-h-0 flex-1 items-center justify-center pt-12">
+                <div className="flex min-h-0 flex-1 items-center justify-center pt-12 md:h-full md:w-full md:overflow-hidden md:pt-0">
                   {resultados[indiceAberto].mimeType?.startsWith("video/") ? (
                     <video key={resultados[indiceAberto].id} src={`/api/fotos/arquivo/${resultados[indiceAberto].id}?tipo=video-preview`} poster={`/api/fotos/arquivo/${resultados[indiceAberto].id}?tipo=thumb`} controls playsInline preload="metadata" className="max-h-full max-w-full" />
                   ) : (
-                    <div className="relative inline-flex max-h-full max-w-full items-center justify-center overflow-hidden">
-                      <img data-foto-protegida-imagem src={`/api/fotos/arquivo/${resultados[indiceAberto].id}?tipo=preview`} alt={resultados[indiceAberto].titulo || "Foto encontrada"} className="max-h-full max-w-full object-contain" />
+                    <div className="relative inline-flex max-h-full max-w-full items-center justify-center overflow-hidden md:h-full md:w-full">
+                      <img data-foto-protegida-imagem src={`/api/fotos/arquivo/${resultados[indiceAberto].id}?tipo=preview`} alt={resultados[indiceAberto].titulo || "Foto encontrada"} className="max-h-full max-w-full object-contain md:h-full md:w-full" />
                       <MarcaBuscaFacial ampliada />
                     </div>
                   )}
