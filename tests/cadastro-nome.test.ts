@@ -5,6 +5,7 @@ import { POST } from '../app/api/cadastro/route';
 function requisicao(perfil: string, nome?: string) {
   const form = new FormData();
   for (const [chave, valor] of Object.entries({ perfil, email: 'titular@example.test', password: 'senha-ficticia', cpf: '52998224725', telefone: '65999990000', nascimento: '1985-01-01' })) form.set(chave, valor);
+  if (perfil === 'professor') { form.set('equipe', 'AAMEP'); form.set('academia', 'CT AAMEP'); }
   if (nome !== undefined) form.set('nome', nome);
   return new Request('http://localhost/api/cadastro', { method: 'POST', body: form });
 }
@@ -34,7 +35,7 @@ for (const perfil of ['atleta', 'professor']) test(`grava nome do ${perfil} no p
     const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
     assert.ok(['https://supabase.test', 'https://api.resend.com'].includes(url.origin), 'Sem acesso a serviços reais');
     if (url.pathname === '/rest/v1/atletas') {
-      if (init?.method === 'POST') { nomePerfil = JSON.parse(String(init.body)).nome; return new Response(null, { status: 201 }); }
+      if (init?.method === 'POST') { const registro = JSON.parse(String(init.body)); nomePerfil = registro.nome; if (perfil === 'professor') { assert.equal(registro.equipe, 'AAMEP'); assert.equal(registro.academia, 'CT AAMEP'); } return new Response(null, { status: 201 }); }
       return Response.json([]);
     }
     if (url.pathname === '/auth/v1/admin/users') {

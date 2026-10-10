@@ -36,3 +36,28 @@ test('equipe exige nome real, sem aceitar o antigo preenchimento automático', (
   for (const valor of [undefined, null, '', '   ', 'Independente', ' independente ']) assert.equal(equipePreenchida(valor), false);
   assert.equal(equipePreenchida(' AAMEP '), true);
 });
+
+test('sugere para professor secundário somente pela mesma equipe e CT', () => {
+  const erick = { ...professor, nome: 'Erick Murilo', user_id: 'erick', academia: 'AAMEP' };
+  const solto = { ...aluno, professor: 'Eberson Amaro', academia: 'AAMEP' };
+  assert.equal(podeSugerirAluno(solto, erick), true);
+  assert.equal(podeSugerirAluno({ ...solto, academia: 'Outro CT' }, erick), false);
+  assert.equal(podeSugerirAluno({ ...solto, equipe: 'Legado' }, erick), false);
+  assert.equal(podeSugerirAluno({ ...solto, professor_id: 'eberson' }, erick), false);
+});
+
+test('sem CT antigo, usa professor cadastrado no mesmo CT e recusa ambiguidades', () => {
+  const erick = { ...professor, nome: 'Erick Murilo', user_id: 'erick', academia: 'AAMEP' };
+  const eberson = { ...professor, nome: 'Eberson Amaro', academia: 'AAMEP' };
+  assert.equal(podeSugerirAluno(aluno, erick, '', [eberson]), true);
+  assert.equal(podeSugerirAluno(aluno, erick, '', [{ ...eberson, academia: 'Outro CT' }]), false);
+  assert.equal(podeSugerirAluno(aluno, erick, '', [eberson, { ...eberson, user_id: 'outro', academia: 'Outro CT' }]), false);
+  assert.equal(podeSugerirAluno({ ...aluno, professor: null }, erick, '', [eberson]), false);
+});
+
+test('Legado sozinha não mistura Spartan e outros CTs', () => {
+  const jefferson = { ...professor, nome: 'Jefferson Rony', equipe: 'Legado Jiu-Jitsu', academia: 'Spartan' };
+  assert.equal(podeSugerirAluno({ ...aluno, professor: null, equipe: 'LEGADO', academia: 'Spartan CT' }, jefferson), true);
+  assert.equal(podeSugerirAluno({ ...aluno, professor: 'Jefferson Rony', equipe: 'Legado', academia: 'Matriz Centro' }, jefferson), false);
+  assert.equal(podeSugerirAluno({ ...aluno, professor: null, equipe: 'Legado', academia: '' }, jefferson), false);
+});

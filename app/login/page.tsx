@@ -11,6 +11,10 @@ import { cpfValido, formatarCpf } from '@/app/lib/validar-cpf';
 import { MENSAGEM_MENOR_DE_IDADE, validarNascimentoTitular } from '@/app/lib/idade-cadastro';
 import { destinoInterno } from '@/app/lib/destino-interno';
 
+import CampoNomeOficial from '@/app/components/CampoNomeOficial';
+import { academiaPreenchida, equipePreenchida } from '@/app/lib/alunos-sugeridos';
+import { academiasDaEquipe, equipesOficiais } from '@/app/lib/vinculo-equipe';
+
 function FormularioLogin() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -24,6 +28,9 @@ function FormularioLogin() {
   const [senha, setSenha] = useState("");
   const [cpf, setCpf] = useState("");
   const [nome, setNome] = useState("");
+  const [equipe, setEquipe] = useState("");
+  const [academia, setAcademia] = useState("");
+  const [vinculosCadastro, setVinculosCadastro] = useState<{ equipe: string; academia: string }[]>([]);
   const [telefone, setTelefone] = useState('');
   const [nascimento, setNascimento] = useState("");
   const [mostrarSenha, setMostrarSenha] = useState(false);
@@ -51,6 +58,15 @@ function FormularioLogin() {
       router.replace(destinoInterno(redirecionarPara));
     });
   }, [redirecionarPara, router]);
+
+  useEffect(() => {
+    if (isLogin || tipoConta !== 'professor') return;
+    let ativo = true;
+    void supabase.from('atletas_publico').select('equipe,academia').eq('role', 'professor').then(({ data }) => {
+      if (ativo) setVinculosCadastro(data || []);
+    });
+    return () => { ativo = false; };
+  }, [isLogin, tipoConta]);
 
   async function reenviarConfirmacao() {
     setLoading(true); setErro(''); setMensagem('');
@@ -111,6 +127,10 @@ function FormularioLogin() {
         setErro("Informe seu nome completo para concluir o cadastro.");
         setLoading(false); return;
       }
+      if (tipoConta === 'professor' && (!equipePreenchida(equipe) || !academiaPreenchida(academia))) {
+        setErro('Informe a equipe e a academia / CT para concluir o cadastro de professor.');
+        setLoading(false); return;
+      }
       if (!cpfValido(cpf)) {
         setErro("Este CPF não existe. Confira os números digitados.");
         setLoading(false);
@@ -132,6 +152,7 @@ function FormularioLogin() {
         const cadastro = new FormData();
         cadastro.set("perfil", tipoConta);
         cadastro.set("nome", nome.trim());
+        if (tipoConta === "professor") { cadastro.set("equipe", equipe.trim()); cadastro.set("academia", academia.trim()); }
         cadastro.set("email", email);
         cadastro.set("password", senha);
         cadastro.set("cpf", cpf);
@@ -301,6 +322,12 @@ function FormularioLogin() {
               </div>
             </div>
           )}
+
+          {!isLogin && tipoConta === 'professor' && <div className="space-y-3 rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-3">
+            <CampoNomeOficial required rotulo="Equipe / bandeira *" valor={equipe} onChange={(valor) => { if (valor !== equipe) setAcademia(''); setEquipe(valor); }} existentes={equipesOficiais(vinculosCadastro)} placeholder="Ex.: AAMEP ou Legado Jiu-Jitsu" />
+            <CampoNomeOficial required rotulo="Academia / CT local *" valor={academia} onChange={setAcademia} existentes={academiasDaEquipe(equipe, vinculosCadastro)} placeholder="Ex.: AAMEP ou Spartan" />
+            <p className="text-[10px] leading-relaxed text-zinc-400">Equipe é a bandeira. Academia / CT é o local onde os alunos treinam. Professores do mesmo CT devem escolher os mesmos nomes.</p>
+          </div>}
 
           {/* CAMPO: CPF (APENAS CADASTRO) */}
           {!isLogin && (

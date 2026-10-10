@@ -8,6 +8,8 @@ import { cpfValido, variantesCpf } from '@/app/lib/validar-cpf';
 import { decidirVinculoProfessor } from '@/app/lib/vincular-professor';
 import { validarNascimentoTitular } from '@/app/lib/idade-cadastro';
 
+import { academiaPreenchida, equipePreenchida } from '@/app/lib/alunos-sugeridos';
+
 function texto(value: FormDataEntryValue | null) {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -46,6 +48,7 @@ export async function POST(request: Request) {
     const cpf = texto(form.get("cpf")).replace(/\D/g, "");
     const telefone = texto(form.get("telefone")).replace(/\D/g, "");
     const academia = texto(form.get("academia"));
+    const equipe = texto(form.get("equipe"));
     const foto = form.get("foto");
 
     if (!email || !email.includes("@") || password.length < 6) {
@@ -56,6 +59,9 @@ export async function POST(request: Request) {
     }
     if (!nome) {
       return NextResponse.json({ error: "Informe o nome completo do titular da conta." }, { status: 400 });
+    }
+    if (perfil === "professor" && (!equipePreenchida(equipe) || !academiaPreenchida(academia))) {
+      return NextResponse.json({ error: "Informe a equipe e a academia / CT do professor antes de criar o cadastro." }, { status: 400 });
     }
     if (perfil === "organizador" && (telefone.length < 10 || telefone.length > 11)) {
       return NextResponse.json({ error: "Informe nome e telefone do organizador." }, { status: 400 });
@@ -176,7 +182,7 @@ export async function POST(request: Request) {
           return NextResponse.json({ error: "Este e-mail já possui cadastro. Entre na conta existente ou recupere a senha." }, { status: 409 });
         }
 
-        const academia = String(organizador.academia || "").trim();
+
         const perfilProfessor = await supabase.from("atletas").insert({
           user_id: senha.userId,
           email,
@@ -184,7 +190,7 @@ export async function POST(request: Request) {
           telefone,
           role: "professor",
           nome,
-          equipe: "",
+          equipe,
           academia,
           professor: "",
           faixa: "",
@@ -243,7 +249,8 @@ export async function POST(request: Request) {
           telefone,
           role: perfil,
           nome,
-          equipe: "",
+          equipe: perfil === "professor" ? equipe : "",
+          ...(perfil === "professor" ? { academia } : {}),
           professor: "",
           faixa: "",
           cidade: "",

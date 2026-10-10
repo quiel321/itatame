@@ -6,7 +6,7 @@ import { GET, POST } from '../app/api/professor/alunos-sugeridos/route';
 const professor = { user_id: 'prof-eber', nome: 'Eber Godofredo', equipe: 'AAMEP', academia: 'CT Eber', role: 'professor' };
 const aluno: AlunoSemVinculo = { id: 408, user_id: 'aluno', nome: 'Aluma Dias', professor: 'Ebarson Amaro', professor_id: null, equipe: 'AAMEP', academia: '', role: 'atleta' };
 
-async function simular(opcoes: { professor?: typeof professor | null; aluno?: typeof aluno; concorrencia?: boolean; segundaPagina?: boolean }, verificar: (writes: unknown[], consultas: URL[]) => Promise<void>) {
+async function simular(opcoes: { professor?: typeof professor | null; aluno?: typeof aluno; concorrencia?: boolean; segundaPagina?: boolean; professores?: typeof professor[] }, verificar: (writes: unknown[], consultas: URL[]) => Promise<void>) {
   const fetchOriginal = globalThis.fetch;
   const ambienteOriginal = { url: process.env.NEXT_PUBLIC_SUPABASE_URL, key: process.env.SUPABASE_SERVICE_ROLE_KEY };
   process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://supabase.test';
@@ -23,9 +23,10 @@ async function simular(opcoes: { professor?: typeof professor | null; aluno?: ty
       writes.push(JSON.parse(String(init.body)));
       assert.equal(url.searchParams.get('id'), 'eq.408');
       assert.equal(url.searchParams.get('professor_id'), 'is.null');
-      assert.equal(url.searchParams.get('professor'), 'eq.Ebarson Amaro');
+      assert.equal(url.searchParams.get('professor'), `eq.${(opcoes.aluno || aluno).professor}`);
       return Response.json(opcoes.concorrencia ? null : { id: aluno.id });
     }
+    if (url.searchParams.get('role') === 'eq.professor') return Response.json(opcoes.professores || [opcoes.professor || professor]);
     if (url.searchParams.has('user_id')) return Response.json(opcoes.professor === null ? [] : [opcoes.professor || professor]);
     if (url.searchParams.has('id')) return Response.json([opcoes.aluno || aluno]);
     if (opcoes.segundaPagina && url.searchParams.get('offset') === '0') {
@@ -68,7 +69,7 @@ test('API busca todas as páginas sem expor campos privados', async () => {
   await simular({ segundaPagina: true }, async (_, consultas) => {
     const resposta = await GET(new Request('http://localhost/api/professor/alunos-sugeridos', { headers: { Authorization: 'Bearer token-teste' } }));
     assert.equal(resposta.status, 200);
-    assert.deepEqual((await resposta.json()).alunos, [aluno]);
+    assert.deepEqual((await resposta.json()).alunos, [{ ...aluno, motivo_sugestao: 'nome' }]);
     assert.equal(resposta.headers.get('Cache-Control'), 'no-store');
     assert.ok(consultas.some(url => url.searchParams.get('offset') === '500'));
     assert.ok(consultas.every(url => !/cpf|telefone|email/.test(url.searchParams.get('select') || '')));
@@ -107,5 +108,27 @@ test('API recusa dados alterados depois da busca', async () => {
 test('API trata disputa por aluno como conflito sem informar sucesso', async () => {
   await simular({ concorrencia: true }, async () => {
     assert.equal((await POST(requisicao(confirmacao))).status, 409);
+  });
+});
+
+test('API sugere por CT e vincula ao professor secundário após confirmação', async () => {
+  const secundario = { ...professor, nome: 'Erick Murilo', user_id: 'erick' };
+  const mesmoCT = { ...aluno, professor: 'Eberson Amaro', academia: professor.academia };
+  await simular({ professor: secundario, aluno: mesmoCT }, async writes => {
+    const resposta = await GET(new Request('http://localhost/api/professor/alunos-sugeridos'));
+    // A autenticação continua obrigatória mesmo para consultas de mesma equipe.
+    const consulta = await GET(new Request('http://localhost/api/professor/alunos-sugeridos', { headers: { Authorization: 'Bearer teste' } }));
+    assert.equal(resposta.status, 401);
+    assert.equal((await consulta.json()).alunos[0].motivo_sugestao, 'academia');
+    assert.equal((await POST(requisicao({ aluno: mesmoCT, professor: secundario, confirmado: true }))).status, 200);
+    assert.deepEqual(writes, [{ professor_id: secundario.user_id, professor: secundario.nome, equipe: secundario.equipe, academia: secundario.academia }]);
+  });
+});
+
+test('API recusa aluno de outra academia mesmo na mesma equipe', async () => {
+  const outroCT = { ...aluno, academia: 'Outra academia' };
+  await simular({ aluno: outroCT }, async writes => {
+    assert.equal((await POST(requisicao({ aluno: outroCT, professor, confirmado: true }))).status, 409);
+    assert.equal(writes.length, 0);
   });
 });

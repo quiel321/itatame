@@ -73,7 +73,7 @@ export default function AlunosSugeridos({ onVinculou }: { onVinculou: () => void
   return (
     <section className="mb-6 rounded-2xl border border-yellow-500/20 bg-yellow-500/5 p-4">
       <h4 className="font-black text-yellow-400">Possíveis alunos de cadastros antigos</h4>
-      <p className="mt-2 text-xs text-zinc-400">Encontramos nomes semelhantes ao seu entre alunos que ainda não têm professor vinculado. Confira cada pessoa antes de confirmar. O vínculo atualiza o cadastro; as inscrições anteriores permanecem como foram feitas.</p>
+      <p className="mt-2 text-xs text-zinc-400">Encontramos alunos sem professor vinculado pelo nome informado ou pela mesma equipe e academia / CT. A equipe sozinha não é suficiente para misturar academias. Confira cada pessoa antes de confirmar. O vínculo atualiza o cadastro; as inscrições anteriores permanecem como foram feitas.</p>
       <form onSubmit={event => { event.preventDefault(); void carregar(busca.trim()); }} className="mt-3 flex flex-wrap gap-2">
         <label className="min-w-48 flex-1 text-xs text-zinc-400">Outra grafia do seu nome
           <input value={busca} onChange={event => setBusca(event.target.value)} maxLength={120} placeholder="Ex.: Ebarson (vazio usa seu nome cadastrado)" className="mt-1 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-white" />
@@ -85,6 +85,7 @@ export default function AlunosSugeridos({ onVinculou }: { onVinculou: () => void
       {!carregando && alunos.map(aluno => (
         <div key={aluno.id} className="mt-3 rounded-xl border border-white/10 bg-black/30 p-3 text-xs">
           <p className="font-bold text-white">{aluno.nome}</p>
+          <p className="mt-1 text-yellow-300">{aluno.motivo_sugestao === 'academia' ? 'Mesma equipe e academia / CT' : aluno.motivo_sugestao === 'professor-academia' ? 'Professor informado pertence ao mesmo CT. Academia do aluno ainda não informada.' : 'Nome do professor semelhante ao informado'}</p>
           <p className="mt-1 text-zinc-400">Professor informado: {aluno.professor || 'Não informado'}</p>
           <p className="text-zinc-400">Equipe: {aluno.equipe || 'Não informada'} · Academia: {aluno.academia || 'Não informada'}</p>
           {confirmando?.id === aluno.id ? (

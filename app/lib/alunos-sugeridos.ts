@@ -1,7 +1,8 @@
+import { nomesEquipeIguais } from './equipes-nome';
 export type ProfessorVinculo = { user_id: string; nome: string; equipe: string; academia: string };
 export type AlunoSemVinculo = {
   id: number; user_id: string; nome: string; professor: string | null;
-  professor_id: string | null; equipe: string | null; academia: string | null; role?: string | null;
+  professor_id: string | null; equipe: string | null; academia: string | null; role?: string | null; motivo_sugestao?: MotivoSugestao;
 };
 
 export function normalizarNomeProfessor(nome: string) {
@@ -41,8 +42,28 @@ export function nomesProfessoresSemelhantes(informado: string, cadastrado: strin
   return distancia(primeiroA.slice(0, tamanho), primeiroB.slice(0, tamanho)) <= 1;
 }
 
-export function podeSugerirAluno(aluno: AlunoSemVinculo, professor: ProfessorVinculo, busca = '') {
-  return aluno.role === 'atleta' && Boolean(aluno.nome?.trim()) && aluno.user_id !== professor.user_id
-    && !aluno.professor_id
-    && nomesProfessoresSemelhantes(aluno.professor || '', busca.trim() || professor.nome);
+export type MotivoSugestao = 'nome' | 'academia' | 'professor-academia';
+
+export function academiaPreenchida(academia: string | null | undefined) {
+  return equipePreenchida(academia);
+}
+
+export function mesmaAcademia(a: string | null | undefined, b: string | null | undefined) {
+  return academiaPreenchida(a) && academiaPreenchida(b) && nomesEquipeIguais(a, b);
+}
+
+export function motivoSugestaoAluno(aluno: AlunoSemVinculo, professor: ProfessorVinculo, busca = '', professores: ProfessorVinculo[] = []): MotivoSugestao | null {
+  if (aluno.role !== 'atleta' || !aluno.nome?.trim() || aluno.user_id === professor.user_id || aluno.professor_id) return null;
+  // Um CT informado e diferente impede misturar filiais da mesma equipe.
+  if (academiaPreenchida(aluno.academia) && !mesmaAcademia(aluno.academia, professor.academia)) return null;
+  if (nomesProfessoresSemelhantes(aluno.professor || '', busca.trim() || professor.nome)) return 'nome';
+  if (!equipePreenchida(aluno.equipe) || !nomesEquipeIguais(aluno.equipe, professor.equipe)) return null;
+  if (mesmaAcademia(aluno.academia, professor.academia)) return 'academia';
+  const correspondentes = professores.filter(item => nomesProfessoresSemelhantes(aluno.professor || '', item.nome));
+  if (correspondentes.length && correspondentes.every(item => nomesEquipeIguais(item.equipe, professor.equipe) && mesmaAcademia(item.academia, professor.academia))) return 'professor-academia';
+  return null;
+}
+
+export function podeSugerirAluno(aluno: AlunoSemVinculo, professor: ProfessorVinculo, busca = '', professores: ProfessorVinculo[] = []) {
+  return motivoSugestaoAluno(aluno, professor, busca, professores) !== null;
 }

@@ -10,10 +10,11 @@ type CampoNomeOficialProps = {
   existentes: string[];
   placeholder: string;
   disabled?: boolean;
+  required?: boolean;
   destaque?: "amarelo" | "ciano";
 };
 
-export default function CampoNomeOficial({ rotulo, valor, onChange, existentes, placeholder, disabled, destaque = "amarelo" }: CampoNomeOficialProps) {
+export default function CampoNomeOficial({ rotulo, valor, onChange, existentes, placeholder, disabled, required, destaque = "amarelo" }: CampoNomeOficialProps) {
   const [aberto, setAberto] = useState(false);
   const oficial = nomeOficial(valor, existentes);
   const precisaUnir = Boolean(valor.trim() && oficial && oficial !== valor.trim());
@@ -32,6 +33,8 @@ export default function CampoNomeOficial({ rotulo, valor, onChange, existentes, 
         type="text"
         value={valor}
         disabled={disabled}
+        required={required}
+        aria-label={rotulo}
         placeholder={placeholder}
         onFocus={() => setAberto(true)}
         onBlur={() => {

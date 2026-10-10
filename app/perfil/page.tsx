@@ -14,7 +14,7 @@ import { comprimirAvatar } from '@/app/lib/comprimir-avatar';
 import { academiasDaEquipe, equipesOficiais, nomeOficial } from '@/app/lib/vinculo-equipe';
 import AvisosCelular from '@/app/components/AvisosCelular';
 import AlunosSugeridos from '@/app/components/AlunosSugeridos';
-import { equipePreenchida } from '@/app/lib/alunos-sugeridos';
+import { academiaPreenchida, equipePreenchida } from '@/app/lib/alunos-sugeridos';
 import CampoNomeOficial from '@/app/components/CampoNomeOficial';
 import CidadeEstadoInput from '@/app/components/CidadeEstadoInput';
 import { cidadeComEstado, separarCidadeEstado } from '@/app/lib/localidades';
@@ -289,7 +289,9 @@ export default function PerfilPage() {
         setProfessorPersonalizado(!perfilData.professor_id || !profsData?.some(p => p.user_id === perfilData.professor_id));
       }
 
-      if (!preservarAba && userRole !== "super-admin" && (!String(perfilData.nome || "").trim() || (!perfilData.cpf && !authData.user.user_metadata?.cpf))) {
+      if (!preservarAba && userRole === "professor" && (!equipePreenchida(perfilData.equipe) || !academiaPreenchida(perfilData.academia))) {
+        setAbaAtiva("editar");
+      } else if (!preservarAba && userRole !== "super-admin" && (!String(perfilData.nome || "").trim() || (!perfilData.cpf && !authData.user.user_metadata?.cpf))) {
         setAbaAtiva("editar");
       } else if (!preservarAba) {
         setAbaAtiva("resumo");
@@ -349,7 +351,7 @@ export default function PerfilPage() {
     if (role === 'atleta' && !professor.trim()) { setErro("Informe o professor responsável antes de salvar seu cadastro."); setSalvando(false); return; }
 
     if (role !== 'super-admin' && !equipePreenchida(equipe)) { setErro('Informe a equipe antes de salvar seu cadastro.'); setSalvando(false); return; }
-    if (role === 'professor' && !academia.trim()) { setErro('Informe sua academia / CT antes de salvar.'); setSalvando(false); return; }
+    if (role === 'professor' && !academiaPreenchida(academia)) { setErro('Informe sua academia / CT antes de salvar.'); setSalvando(false); return; }
 
     const cpfFormatado = formatarCpf(cpf);
     const telefoneDigitos = telefone.replace(/\D/g, "");
@@ -407,7 +409,20 @@ export default function PerfilPage() {
       perfilAtualizado.id = perfilId;
     }
 
-    const { error } = await supabase.from("atletas").upsert(perfilAtualizado);
+    let error: { message: string } | null = null;
+    if (role === 'professor') {
+      try {
+        const { data } = await supabase.auth.getSession();
+        const resposta = await fetch('/api/professor/perfil', {
+          method: 'PATCH', headers: { Authorization: `Bearer ${data.session?.access_token || ''}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(perfilAtualizado),
+        });
+        const resultado = await resposta.json();
+        if (!resposta.ok) error = { message: resultado.error || 'Não foi possível salvar o professor.' };
+      } catch { error = { message: 'Não foi possível salvar agora. Tente novamente.' }; }
+    } else {
+      ({ error } = await supabase.from("atletas").upsert(perfilAtualizado));
+    }
 
     if (error) {
       setErro(error.message.includes("duplicate key") ? "Este CPF já está em uso." : "Erro ao salvar: " + error.message);
@@ -806,7 +821,7 @@ export default function PerfilPage() {
     }
     setAlunosOcultos(atual => oculto ? atual.filter(id => id !== aluno.user_id) : [...atual, aluno.user_id]);
   }
-  const vinculoEquipePendente = !nome.trim() || !equipePreenchida(equipe) || !academia.trim();
+  const vinculoEquipePendente = !nome.trim() || !equipePreenchida(equipe) || !academiaPreenchida(academia);
   const categoriaDestinoEdicao: CategoriaCompeticao | undefined = editandoInscricao?.categoriasDisponiveis?.find((c: CategoriaCompeticao) => c.id === editandoInscricao.categoriaNova);
   const pesoEdicaoInformado = String(editandoInscricao?.pesoAtual ?? '').trim();
   const pesoCompativelComDestino = Boolean(categoriaDestinoEdicao && categoriaCompativel(categoriaDestinoEdicao, {
@@ -1217,8 +1232,8 @@ export default function PerfilPage() {
                 {role === "professor" ? (
                   <>
                     <div><label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 pl-1 cursor-default">Data de Nascimento</label><input type="date" value={nascimento} onChange={(e) => setNascimento(e.target.value)} max={new Date().toISOString().slice(0, 10)} className="cursor-pointer w-full bg-black/50 border border-white/5 focus:border-yellow-500/50 outline-none rounded-xl px-3 py-2 text-xs text-white transition-colors [&::-webkit-calendar-picker-indicator]:invert" /></div>
-                    <div className="md:col-span-2"><CampoNomeOficial rotulo="Bandeira / equipe oficial *" valor={equipe} onChange={setEquipe} existentes={listaEquipes} placeholder="Busque a equipe ou cadastre uma nova" destaque="amarelo" /></div>
-                    <div className="md:col-span-2"><CampoNomeOficial rotulo="Academia / CT local *" valor={academia} onChange={setAcademia} existentes={listaAcademias} placeholder="Busque a academia desta equipe ou cadastre a sua" destaque="amarelo" /></div>
+                    <div className="md:col-span-2"><CampoNomeOficial required rotulo="Bandeira / equipe oficial *" valor={equipe} onChange={setEquipe} existentes={listaEquipes} placeholder="Busque a equipe ou cadastre uma nova" destaque="amarelo" /></div>
+                    <div className="md:col-span-2"><CampoNomeOficial required rotulo="Academia / CT local *" valor={academia} onChange={setAcademia} existentes={listaAcademias} placeholder="Busque a academia desta equipe ou cadastre a sua" destaque="amarelo" /></div>
                     <div>
                       <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 pl-1 cursor-default">Sua Faixa de Mestre</label>
                       <select value={faixa} onChange={(e) => setFaixa(e.target.value)} className="cursor-pointer w-full bg-black/50 border border-white/5 outline-none rounded-xl px-3 py-2 text-xs text-white transition-colors appearance-none focus:border-yellow-500">
