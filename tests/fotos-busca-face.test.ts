@@ -19,11 +19,12 @@ test("busca facial informa download gratuito mesmo com preço cadastrado", async
   globalThis.fetch = async input => {
     const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
     assert.equal(url.origin, "https://supabase.test", "Não acessar serviços reais");
-    if (url.pathname === "/rest/v1/foto_arquivos") return Response.json([{ id: fotoId, evento_id: eventoId, titulo: "Foto", preco_centavos: 3500, mime_type: "image/jpeg" }]);
+    if (url.pathname === "/rest/v1/foto_arquivos") return Response.json([{ id: fotoId, evento_id: eventoId, titulo: "Foto", preco_centavos: 3500, mime_type: "image/jpeg", fotografo_id: "fotografo-teste" }]);
     assert.equal(url.pathname, "/rest/v1/foto_eventos");
     assert.ok(url.searchParams.get("select")?.includes("permite_download_gratis"));
+    assert.ok(url.searchParams.get("select")?.includes("descontos_progressivos"));
     assert.equal(url.searchParams.get("acesso_por_link"), "eq.false");
-    return Response.json([{ id: eventoId, nome: "Gratuita", cidade: "Cuiabá", estado: "MT", permite_download_gratis: true }]);
+    return Response.json([{ id: eventoId, nome: "Gratuita", cidade: "Cuiabá", estado: "MT", permite_download_gratis: true, descontos_progressivos: [{ quantidade: 3, percentual: 20 }] }]);
   };
   try {
     const form = new FormData();
@@ -35,6 +36,8 @@ test("busca facial informa download gratuito mesmo com preço cadastrado", async
     assert.equal(body.resultados.length, 1);
     assert.equal(body.resultados[0].evento.permite_download_gratis, true);
     assert.equal(body.resultados[0].precoCentavos, 3500);
+    assert.equal(body.resultados[0].fotografoId, "fotografo-teste");
+    assert.deepEqual(body.resultados[0].evento.descontos_progressivos, [{ quantidade: 3, percentual: 20 }]);
     assert.equal(response.headers.get("Cache-Control"), "no-store");
   } finally {
     globalThis.fetch = fetchAnterior;

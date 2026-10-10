@@ -6,6 +6,8 @@ import { createPortal } from "react-dom";
 import { supabase } from "@/app/lib/supabase";
 import { chaveLocalidade, type Localidade } from "@/app/lib/localidades";
 import CameraSelfie from "./CameraSelfie";
+import ProgressoDesconto from "./ProgressoDesconto";
+import { faixasDoEvento } from "@/app/lib/fotos-descontos";
 import { Camera, CheckCircle2, ChevronLeft, ChevronRight, ImagePlus, Loader2, Play, ScanFace, ShieldCheck, ShoppingCart, Download, X } from "lucide-react";
 
 type ResultadoFace = {
@@ -14,9 +16,10 @@ type ResultadoFace = {
   titulo: string | null;
   precoCentavos: number;
   mimeType: string | null;
+  fotografoId: string | null;
   similaridade: number;
   nivel: "forte" | "provavel" | "possivel";
-  evento: { id: string; nome: string; data_evento: string | null; cidade: string | null; estado: string | null; permite_download_gratis: boolean } | null;
+  evento: { id: string; nome: string; data_evento: string | null; cidade: string | null; estado: string | null; permite_download_gratis: boolean; desconto_combo_qtd?: number | null; desconto_combo_percentual?: number | null; descontos_progressivos?: unknown } | null;
 };
 
 const MAX_BUSCA_BYTES = 300 * 1024;
@@ -90,6 +93,7 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
   const [erro, setErro] = useState("");
   const [resultados, setResultados] = useState<ResultadoFace[] | null>(null);
   const [fotosNoCarrinho, setFotosNoCarrinho] = useState<string[]>([]);
+  const [midiasCarrinho, setMidiasCarrinho] = useState<{ id: string; evento_id: string; fotografo_id: string | null; mime_type: string | null }[]>([]);
   const [indiceAberto, setIndiceAberto] = useState<number | null>(null);
   const toqueInicial = useRef<number | null>(null);
   const previewsEmCache = useRef<Map<string, HTMLImageElement>>(new Map());
@@ -168,6 +172,22 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
     return () => window.removeEventListener("keydown", fechar);
   }, [aberto, cameraAberta, indiceAberto, resultados?.length]);
 
+  useEffect(() => {
+    if (!aberto || !fotosNoCarrinho.length) return;
+    let ativo = true;
+    void (async () => {
+      const midias = [];
+      for (let inicio = 0; inicio < fotosNoCarrinho.length; inicio += 100) {
+        const { data } = await supabase.from("foto_arquivos")
+          .select("id, evento_id, fotografo_id, mime_type")
+          .in("id", fotosNoCarrinho.slice(inicio, inicio + 100)).eq("status", "publicada");
+        midias.push(...(data || []));
+      }
+      if (ativo) setMidiasCarrinho(midias);
+    })();
+    return () => { ativo = false; };
+  }, [aberto, fotosNoCarrinho]);
+
   function selecionar(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
@@ -243,6 +263,21 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
   const idsResultados = resultados?.filter((foto) => !foto.evento?.permite_download_gratis).map((foto) => String(foto.id)) || [];
   const quantidadeSelecionada = idsResultados.filter((id) => fotosNoCarrinho.includes(id)).length;
   const todosResultadosSelecionados = idsResultados.length > 0 && quantidadeSelecionada === idsResultados.length;
+
+  function quantidadeParaDesconto(foto: ResultadoFace) {
+    const midias = new Map(midiasCarrinho.map((item) => [String(item.id), { eventoId: item.evento_id, fotografoId: item.fotografo_id, mimeType: item.mime_type }]));
+    for (const item of resultados || []) midias.set(String(item.id), item);
+    return fotosNoCarrinho.filter((id) => {
+      const item = midias.get(id);
+      return item?.eventoId === foto.eventoId && (item.fotografoId ?? null) === (foto.fotografoId ?? null) && !item.mimeType?.startsWith("video/");
+    }).length;
+  }
+  const gruposDesconto = new Map<string, ResultadoFace>();
+  for (const foto of resultados || []) {
+    if (foto.evento && !foto.evento.permite_download_gratis && !foto.mimeType?.startsWith("video/") && faixasDoEvento(foto.evento).length && quantidadeParaDesconto(foto) > 0) {
+      gruposDesconto.set(`${foto.eventoId}|${foto.fotografoId ?? ""}`, foto);
+    }
+  }
 
   function alternarTodosResultados() {
     const idsAtuais = new Set(fotosNoCarrinho);
@@ -347,6 +382,12 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
                         {todosResultadosSelecionados ? "Desmarcar todas" : "Selecionar todas as pagas"}
                       </button>}
                     </div>
+                    {gruposDesconto.size > 0 && <div className="mb-4 space-y-2">
+                      {[...gruposDesconto].map(([chave, foto]) => <div key={chave}>
+                        <p className="mb-1 text-[10px] font-bold text-zinc-300">{foto.evento?.nome}</p>
+                        <ProgressoDesconto faixas={faixasDoEvento(foto.evento!)} quantidade={quantidadeParaDesconto(foto)} />
+                      </div>)}
+                    </div>}
                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
                       {resultados.map((foto) => {
                         const fotoId = String(foto.id);
@@ -354,7 +395,7 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
                         const noCarrinho = !gratuita && fotosNoCarrinho.includes(fotoId);
                         const ehVideo = Boolean(foto.mimeType?.startsWith("video/"));
                         return (
-                          <article key={foto.id} className={`relative overflow-hidden rounded-xl border bg-black transition-colors ${noCarrinho ? "border-emerald-400 shadow-[0_0_18px_rgba(52,211,153,0.15)]" : "border-white/10 hover:border-retratt/50"}`}>
+                          <article key={foto.id} className={`relative flex flex-col overflow-hidden rounded-xl border bg-black transition-colors ${noCarrinho ? "border-emerald-400 shadow-[0_0_18px_rgba(52,211,153,0.15)]" : "border-white/10 hover:border-retratt/50"}`}>
                             {!gratuita && <label className={`absolute right-2 top-2 z-20 flex h-9 w-9 cursor-pointer items-center justify-center rounded-xl border backdrop-blur-md ${noCarrinho ? "border-emerald-300 bg-emerald-400 text-black" : "border-white/20 bg-black/70 text-white"}`}>
                               <input
                                 type="checkbox"
@@ -364,7 +405,7 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
                                 aria-label={`${noCarrinho ? "Remover" : "Adicionar"} ${foto.titulo || "foto"} ${noCarrinho ? "do" : "ao"} carrinho`}
                               />
                             </label>}
-                            <button type="button" onClick={() => setIndiceAberto(resultados.indexOf(foto))} className="group block w-full text-left">
+                            <button type="button" onClick={() => setIndiceAberto(resultados.indexOf(foto))} className="group block w-full flex-1 text-left">
                               <div className="relative aspect-[4/5] overflow-hidden bg-zinc-950">
                                 <img data-foto-protegida-imagem src={`/api/fotos/arquivo/${foto.id}?tipo=thumb`} alt={foto.titulo || "Foto encontrada"} loading="lazy" className={`h-full w-full object-cover transition duration-300 group-hover:scale-105 ${noCarrinho ? "opacity-70" : ""}`} />
                                 <MarcaBuscaFacial />
@@ -373,9 +414,10 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
                               </div>
                               <div className="p-2.5">
                                 <p className="line-clamp-2 text-[9px] font-black uppercase leading-4 text-white">{foto.evento?.nome || "Galeria Retratt"}</p>
-                                <p className="mt-1 text-[8px] font-black uppercase tracking-wider text-retratt">Abrir {ehVideo ? "este vídeo" : "esta foto"}</p>
+
                               </div>
                             </button>
+                            {!gratuita && <button type="button" onClick={() => setIndiceAberto(resultados.indexOf(foto))} className="flex w-full items-center justify-center gap-1 border-t border-retratt/30 bg-retratt/15 px-2 py-3 text-[10px] font-black uppercase text-orange-300">Abrir {ehVideo ? "vídeo" : "foto"}</button>}
                             {gratuita && <a href={`/api/fotos/evento/${foto.eventoId}/download-gratuito/${foto.id}`} className="flex items-center justify-center gap-1 border-t border-emerald-400/20 bg-emerald-400/10 px-2 py-3 text-[10px] font-black text-emerald-300"><Download size={13} /> Baixar grátis</a>}
                           </article>
                         );
@@ -422,8 +464,9 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
                 </div>
                 <div className="flex w-full items-center justify-between gap-3 pb-4">
                   <button type="button" onClick={() => setIndiceAberto((atual) => Math.max(0, (atual ?? 0) - 1))} disabled={indiceAberto === 0} aria-label="Foto anterior" className="rounded-full bg-zinc-800 p-3 text-white disabled:opacity-30"><ChevronLeft /></button>
-                  <div className="text-center text-xs text-white">
+                  <div className="min-w-0 flex-1 text-center text-xs text-white">
                     <p>{indiceAberto + 1} de {resultados.length} · {resultados[indiceAberto].evento?.nome || "Galeria Retratt"}</p>
+                    {resultados[indiceAberto].evento && !resultados[indiceAberto].evento?.permite_download_gratis && !resultados[indiceAberto].mimeType?.startsWith("video/") && <div className="mx-auto mt-2 max-w-sm text-left"><ProgressoDesconto faixas={faixasDoEvento(resultados[indiceAberto].evento!)} quantidade={quantidadeParaDesconto(resultados[indiceAberto])} /></div>}
                     {resultados[indiceAberto].evento?.permite_download_gratis ? (
                       <a href={`/api/fotos/evento/${resultados[indiceAberto].eventoId}/download-gratuito/${resultados[indiceAberto].id}`} className="mt-2 inline-flex items-center gap-2 rounded-lg bg-emerald-400 px-4 py-3 font-bold text-black"><Download size={16} /> Baixar original grátis</a>
                     ) : (

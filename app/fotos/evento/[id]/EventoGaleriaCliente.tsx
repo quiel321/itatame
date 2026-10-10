@@ -158,6 +158,14 @@ export default function EventoGaleriaCliente({ initialData, acesso }: { initialD
     } finally {
       setCarrinhoCarregado(true);
     }
+    const sincronizar = (event: Event) => {
+      const ids = (event as CustomEvent<unknown>).detail;
+      if (!Array.isArray(ids)) return;
+      const novos = ids.map(String);
+      setCarrinho((atual) => atual.length === novos.length && atual.every((id, indice) => id === novos[indice]) ? atual : novos);
+    };
+    window.addEventListener("carrinho-fotos-atualizado", sincronizar);
+    return () => window.removeEventListener("carrinho-fotos-atualizado", sincronizar);
   }, []);
 
   useEffect(() => {

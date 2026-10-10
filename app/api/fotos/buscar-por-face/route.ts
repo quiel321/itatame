@@ -115,12 +115,13 @@ export async function POST(request: Request) {
       titulo: string | null;
       preco_centavos: number;
       mime_type: string | null;
+      fotografo_id: string | null;
     }> = [];
 
     for (let inicio = 0; inicio < ids.length; inicio += 100) {
       let consultaFotos = supabase
         .from("foto_arquivos")
-        .select("id, evento_id, titulo, preco_centavos, mime_type")
+        .select("id, evento_id, titulo, preco_centavos, mime_type, fotografo_id")
         .in("id", ids.slice(inicio, inicio + 100))
         .eq("status", "publicada");
       if (eventoId) consultaFotos = consultaFotos.eq("evento_id", eventoId);
@@ -132,7 +133,7 @@ export async function POST(request: Request) {
     const eventoIds = [...new Set(fotos.map((foto) => foto.evento_id))];
     const { data: eventos, error: eventosError } = eventoIds.length
       ? await (() => {
-          return supabase.from("foto_eventos").select("id, nome, data_evento, cidade, estado, permite_download_gratis")
+          return supabase.from("foto_eventos").select("id, nome, data_evento, cidade, estado, permite_download_gratis, desconto_combo_qtd, desconto_combo_percentual, descontos_progressivos")
             .in("id", eventoIds).eq("status", "publicado").eq("acesso_por_link", false);
         })()
       : { data: [], error: null };
@@ -152,6 +153,7 @@ export async function POST(request: Request) {
         titulo: foto.titulo,
         precoCentavos: foto.preco_centavos,
         mimeType: foto.mime_type,
+        fotografoId: foto.fotografo_id,
         similaridade,
         nivel: similaridade >= 90 ? "forte" : similaridade >= 82 ? "provavel" : "possivel",
         evento: eventoPorId.get(foto.evento_id) || null,
