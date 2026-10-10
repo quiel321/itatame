@@ -3,6 +3,8 @@ import { formatarTelefone } from "@/app/lib/formatar-telefone";
 import { getPlanoComercial } from "@/app/lib/planos-comerciais";
 import { pacoteInscricao, rotuloPacoteInscricao } from "@/app/lib/valor-inscricao";
 
+import { dataHoraInscricao, type IdentidadeInscricao } from './inscricao-identificacao';
+
 export type LinhaSuporteItatame = {
   inscricao: string;
   cupom: string;
@@ -14,6 +16,9 @@ export type LinhaSuporteItatame = {
   evento: string;
   dataEvento: string;
   atleta: string;
+  responsavel: string;
+  contatoResponsavel: string;
+  dataInscricao: string;
   equipe: string;
   categoria: string;
   faixa: string;
@@ -61,7 +66,7 @@ export type EventoEmbutido = {
   cidade?: string | null;
 };
 
-export type InscricaoPainel = DadosFinanceirosInscricao & {
+export type InscricaoPainel = DadosFinanceirosInscricao & IdentidadeInscricao & {
   id: string | number;
   atleta?: string | null;
   equipe?: string | null;
@@ -296,6 +301,9 @@ export function montarLinhaSuporte(item: InscricaoPainel, organizador?: Organiza
     evento: evento?.nome || embutido?.nome || "Evento não identificado",
     dataEvento: dataCurta(evento?.data_evento || embutido?.data_evento),
     atleta: item.atleta || "—",
+    responsavel: item.responsavel_nome || "—",
+    contatoResponsavel: item.responsavel_contato || "",
+    dataInscricao: dataHoraInscricao(item.created_at),
     equipe: item.equipe || "—",
     categoria: item.categoria || "—",
     faixa: item.faixa || "—",

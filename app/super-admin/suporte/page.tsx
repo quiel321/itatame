@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Copy, FileText, MapPin, MessageCircle, Search, ShieldCheck } from "lucide-react";
+import { carregarResponsaveisInscricoes } from '@/app/lib/responsaveis-inscricoes';
 import { supabase } from "@/app/lib/supabase";
 import { formatarTelefone } from "@/app/lib/formatar-telefone";
 import { getPlanoComercial } from "@/app/lib/planos-comerciais";
@@ -79,16 +80,17 @@ export default function SuporteOrganizadorPage() {
           buscarPaginas<InscricaoPainel>(async (inicio, fim) => {
             const resultado = await supabase
               .from("inscricoes")
-              .select("id, atleta, equipe, categoria, faixa, peso, idade, absoluto, pagamento_ok, pesagem_ok, valor_inscricao, valor_total, mp_payment_id, estorno_status, estorno_valor, created_at, evento_id, eventos(nome, organizador_id, data_evento, cidade)")
+              .select("id, atleta_id, user_id, atleta, equipe, categoria, faixa, peso, idade, absoluto, pagamento_ok, pesagem_ok, valor_inscricao, valor_total, mp_payment_id, estorno_status, estorno_valor, created_at, evento_id, eventos(nome, organizador_id, data_evento, cidade)")
               .order("id", { ascending: false })
               .range(inicio, fim);
             return { data: resultado.data as InscricaoPainel[] | null, error: resultado.error };
           }),
         ]);
+        const identificadas = await carregarResponsaveisInscricoes(listaInscricoes);
         if (!ativo) return;
         setOrganizadores(listaOrganizadores);
         setEventos(listaEventos);
-        setInscricoes(listaInscricoes);
+        setInscricoes(identificadas);
       } catch (falha) {
         if (ativo) setErro(falha instanceof Error ? falha.message : "Não foi possível abrir o painel de suporte.");
       } finally {
@@ -154,8 +156,8 @@ export default function SuporteOrganizadorPage() {
     if (formato === "csv") {
       baixarCsv(
         `suporte-${(organizador.nome || "organizador").toLowerCase().replace(/\s+/g, "-")}.csv`,
-        ["Organizador", "Academia", "Contato", "Plano", "Mercado Pago", "Evento", "Data", "Atleta", "Equipe", "Categoria", "Faixa", "Peso", "Pacote", "Valor", "Pagamento", "Pesagem", "ID Mercado Pago"],
-        linhas.map((linha) => [linha.organizador, linha.academia, linha.contato, linha.plano, linha.mercadoPago, linha.evento, linha.dataEvento, linha.atleta, linha.equipe, linha.categoria, linha.faixa, linha.peso, linha.pacote, linha.valor, linha.pagamento, linha.pesagem, linha.mercadoPagoId]),
+        ["Organizador", "Academia", "Contato", "Plano", "Mercado Pago", "Evento", "Data do evento", "Atleta", "Responsável adulto", "Contato do responsável", "Inscrito em (Cuiabá)", "Equipe", "Categoria", "Faixa", "Peso", "Pacote", "Valor", "Pagamento", "Pesagem", "ID Mercado Pago"],
+        linhas.map((linha) => [linha.organizador, linha.academia, linha.contato, linha.plano, linha.mercadoPago, linha.evento, linha.dataEvento, linha.atleta, linha.responsavel, linha.contatoResponsavel, linha.dataInscricao, linha.equipe, linha.categoria, linha.faixa, linha.peso, linha.pacote, linha.valor, linha.pagamento, linha.pesagem, linha.mercadoPagoId]),
       );
       return;
     }
@@ -308,6 +310,8 @@ export default function SuporteOrganizadorPage() {
                 <thead className="bg-black text-[9px] uppercase tracking-widest text-zinc-500">
                   <tr>
                     <th className="p-3">Atleta</th>
+                    <th className="p-3">Responsável adulto</th>
+                    <th className="p-3">Inscrito em (Cuiabá)</th>
                     <th className="p-3">Campeonato</th>
                     <th className="p-3">Categoria</th>
                     <th className="p-3">Valor</th>
@@ -317,13 +321,15 @@ export default function SuporteOrganizadorPage() {
                 </thead>
                 <tbody>
                   {inscricoesFoco.length === 0 ? (
-                    <tr><td colSpan={6} className="p-8 text-center text-zinc-500">Nenhuma inscrição neste recorte.</td></tr>
+                    <tr><td colSpan={8} className="p-8 text-center text-zinc-500">Nenhuma inscrição neste recorte.</td></tr>
                   ) : inscricoesFoco.map((item) => {
                     const linha = montarLinhaSuporte(item, organizador, eventosDeste.find((evento) => String(evento.id) === String(item.evento_id)));
                     const atual = situacaoInscricao(item);
                     return (
                       <tr key={item.id} className="border-t border-white/5">
                         <td className="p-3"><p className="font-bold">{linha.atleta}</p><p className="text-[10px] text-zinc-500">{linha.equipe}</p></td>
+                        <td className="p-3"><p>{linha.responsavel}</p><p className="text-[10px] text-zinc-500">{linha.contatoResponsavel}</p></td>
+                        <td className="p-3 text-zinc-400">{linha.dataInscricao}</td>
                         <td className="p-3"><p>{linha.evento}</p><p className="text-[10px] text-zinc-500">{linha.dataEvento}</p></td>
                         <td className="p-3"><p>{linha.categoria}</p><p className="text-[10px] text-zinc-500">{linha.faixa} · {linha.peso} · {linha.pacote}{item.idade ? ` · ${item.idade} anos` : ""}</p></td>
                         <td className="p-3 font-bold">{linha.valor}</td>

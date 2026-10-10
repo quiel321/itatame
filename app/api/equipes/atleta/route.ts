@@ -1,3 +1,4 @@
+import { equipePreenchida } from '@/app/lib/alunos-sugeridos';
 import { NextResponse } from "next/server";
 import { autenticarRequest } from "@/app/lib/api-auth";
 import { encontrarEquipeSemelhante } from "@/app/lib/equipes-nome";
@@ -25,7 +26,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Informe o professor no perfil do atleta antes de concluir a inscrição." }, { status: 400 });
   }
   const nome = String(atleta.equipe || "").trim();
-  if (!nome || nome.length > 120) return NextResponse.json({ error: "Informe uma equipe válida no cadastro do atleta." }, { status: 400 });
+  if (!equipePreenchida(nome) || nome.length > 120) return NextResponse.json({ error: "Informe uma equipe válida no cadastro do atleta." }, { status: 400 });
 
   const { data: equipes, error: erroBusca } = await db.from("equipes_evento")
     .select("id,nome,ativa").eq("evento_id", eventoId);

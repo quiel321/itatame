@@ -12,6 +12,9 @@ import { CategoriaCompeticao, categoriaCompativel, categoriaCompativelSemPeso, r
 import { ChatEvento, BotaoChatInscricao, useMensagensNaoLidas, SeloNaoLidas } from '@/app/components/ChatEvento';
 import { comprimirAvatar } from '@/app/lib/comprimir-avatar';
 import { academiasDaEquipe, equipesOficiais, nomeOficial } from '@/app/lib/vinculo-equipe';
+import AvisosCelular from '@/app/components/AvisosCelular';
+import AlunosSugeridos from '@/app/components/AlunosSugeridos';
+import { equipePreenchida } from '@/app/lib/alunos-sugeridos';
 import CampoNomeOficial from '@/app/components/CampoNomeOficial';
 import CidadeEstadoInput from '@/app/components/CidadeEstadoInput';
 import { cidadeComEstado, separarCidadeEstado } from '@/app/lib/localidades';
@@ -44,6 +47,7 @@ export default function PerfilPage() {
   const [erroCarteiraPdf, setErroCarteiraPdf] = useState("");
   const qrCarteiraRef = useRef<HTMLAnchorElement>(null);
   const conteudoRef = useRef<HTMLDivElement>(null);
+  const avisosCelularRef = useRef<{ abrir: () => void }>(null);
   const rolarAoAbrir = useRef(false);
 
   function rolarParaConteudo() {
@@ -102,8 +106,6 @@ export default function PerfilPage() {
   const [professoresDisponiveis, setProfessoresDisponiveis] = useState<any[]>([]);
   const [professorPersonalizado, setProfessorPersonalizado] = useState(false);
   
-  // 🔥 NOVO: Estado para controlar o Popup de Notificações
-  const [mostrarPopupNotificacao, setMostrarPopupNotificacao] = useState(false);
 
   const calcularIdade = (dataNasc: string) => {
     if (!dataNasc) return "?";
@@ -130,74 +132,11 @@ export default function PerfilPage() {
     return "bg-zinc-800 text-zinc-300 border border-zinc-700";
   };
 
-  const urlBase64ToUint8Array = (base64String: string) => {
-    const padding = '='.repeat((4 - base64String.length % 4) % 4);
-    const b64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-    const rawData = window.atob(b64);
-    return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
-  };
-
-  const inscreverParaNotificacoes = async () => {
-    if (!('serviceWorker' in navigator && 'PushManager' in window)) {
-      alert("Seu navegador não suporta notificações.");
-      return;
-    }
-    try {
-      const permission = await Notification.requestPermission();
-      if (permission !== 'granted') {
-        alert("Você precisa permitir as notificações no cadeado ao lado da URL.");
-        return;
-      }
-      const registration = await navigator.serviceWorker.register('/sw.js');
-      await navigator.serviceWorker.ready;
-      const existingSub = await registration.pushManager.getSubscription();
-      if (existingSub) {
-        await existingSub.unsubscribe();
-      }
-      const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-      if (!vapidKey) throw new Error("A CHAVE VAPID sumiu ou não foi lida do .env.local!");
-      const subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(vapidKey.trim())
-      });
-      const subData = subscription.toJSON();
-      const { data: jaExiste } = await supabase.from("assinaturas_push").select("id").eq("user_id", userId).maybeSingle();
-      if (jaExiste) {
-        const { error: errUpdate } = await supabase.from("assinaturas_push").update({ subscription: subData }).eq("id", jaExiste.id);
-        if (errUpdate) throw errUpdate;
-      } else {
-        const { error: errInsert } = await supabase.from("assinaturas_push").insert({ user_id: userId, subscription: subData });
-        if (errInsert) throw errInsert;
-      }
-      alert("✅ SUCESSO! Você receberá os avisos de luta.");
-      setMostrarPopupNotificacao(false); // Fecha o modal após sucesso
-    } catch (err: any) {
-      alert("ERRO: " + (err.message || err.name || "Verifique se não está em aba anônima."));
-    }
-  };
-
   useEffect(() => {
-    carregarDadosCompletos();
+    void carregarDadosCompletos();
   }, []);
 
-  useEffect(() => {
-    carregarDadosCompletos();
-  }, []);
-
-  useEffect(() => {
-    if (typeof window !== "undefined" && 'Notification' in window) {
-      // Se o utilizador ainda não tomou uma decisão (nem aceitou, nem bloqueou)
-      if (Notification.permission === 'default') {
-        // Dá 1.5 segundos para a página carregar bonita antes de saltar o Popup
-        const timer = setTimeout(() => {
-          setMostrarPopupNotificacao(true);
-        }, 1500);
-        return () => clearTimeout(timer);
-      }
-    }
-  }, []);
-
-  async function carregarDadosCompletos() {
+  async function carregarDadosCompletos(preservarAba = false) {
     const { data: authData } = await supabase.auth.getUser();
     if (!authData.user) {
       window.location.href = "/login";
@@ -268,7 +207,7 @@ export default function PerfilPage() {
         if (!conta.ok && conta.erro === MENSAGEM_MENOR_DE_IDADE) setErro(conta.erro);
       }
       setTelefone(formatarTelefone(perfilData.telefone || ""));
-      setEquipe(perfilData.equipe || "");
+      setEquipe(equipePreenchida(perfilData.equipe) ? perfilData.equipe : "");
       setAcademia(perfilData.academia || "");
       setProfessor(perfilData.professor || "");
       setProfessorId(perfilData.professor_id || "");
@@ -346,15 +285,13 @@ export default function PerfilPage() {
       }
 
       if (userRole === "atleta" && perfilData.professor) {
-        // Cadastros antigos guardavam so o nome: reconecta ao id quando o nome bate com um professor da lista.
-        const profDaLista = profsData?.find(p => p.nome === perfilData.professor);
-        if (profDaLista && !perfilData.professor_id) setProfessorId(profDaLista.user_id);
-        if (!profDaLista) setProfessorPersonalizado(true);
+        // Nomes antigos continuam livres até uma escolha ou confirmação explícita.
+        setProfessorPersonalizado(!perfilData.professor_id || !profsData?.some(p => p.user_id === perfilData.professor_id));
       }
 
-      if (userRole !== "super-admin" && (!perfilData.nome || (!perfilData.cpf && !authData.user.user_metadata?.cpf))) {
+      if (!preservarAba && userRole !== "super-admin" && (!perfilData.nome || (!perfilData.cpf && !authData.user.user_metadata?.cpf))) {
         setAbaAtiva("editar");
-      } else {
+      } else if (!preservarAba) {
         setAbaAtiva("resumo");
       }
 
@@ -384,7 +321,7 @@ export default function PerfilPage() {
           ...formDependente,
           professor: profEncontrado.nome || "",
           professor_id: profEncontrado.user_id,
-          equipe: profEncontrado.equipe || "",
+          equipe: equipePreenchida(profEncontrado.equipe) ? profEncontrado.equipe : "",
           academia: profEncontrado.academia || "",
           modalidade: profEncontrado.modalidade || formDependente.modalidade,
           professorPersonalizado: false
@@ -398,7 +335,7 @@ export default function PerfilPage() {
         setProfessorPersonalizado(false);
         setProfessor(profEncontrado.nome || "");
         setProfessorId(profEncontrado.user_id);
-        setEquipe(profEncontrado.equipe || "");
+        setEquipe(equipePreenchida(profEncontrado.equipe) ? profEncontrado.equipe : "");
         setAcademia(profEncontrado.academia || "");
         if (profEncontrado.modalidade) setModalidade(profEncontrado.modalidade);
       }
@@ -410,6 +347,9 @@ export default function PerfilPage() {
     if (cidade.trim() && !estadoCidade && cidade.trim() !== cidadeLegadaOriginal.trim()) { setErro("Selecione a cidade na lista."); setSalvando(false); return; }
     if (!nome || !cpf) { setErro("Nome e CPF são obrigatórios."); setSalvando(false); return; }
     if (role === 'atleta' && !professor.trim()) { setErro("Informe o professor responsável antes de salvar seu cadastro."); setSalvando(false); return; }
+
+    if (role !== 'super-admin' && !equipePreenchida(equipe)) { setErro('Informe a equipe antes de salvar seu cadastro.'); setSalvando(false); return; }
+    if (role === 'professor' && !academia.trim()) { setErro('Informe sua academia / CT antes de salvar.'); setSalvando(false); return; }
 
     const cpfFormatado = formatarCpf(cpf);
     const telefoneDigitos = telefone.replace(/\D/g, "");
@@ -508,12 +448,22 @@ export default function PerfilPage() {
       setErro("Informe o professor responsável pelo dependente antes de salvar.");
       setSalvando(false); return;
     }
+    if (!equipePreenchida(formDependente.equipe)) {
+      setErro('Informe a equipe do dependente antes de salvar.'); setSalvando(false); return;
+    }
     if (formDependente.cpf && !cpfValido(formDependente.cpf)) {
       setErro("O CPF do dependente não existe. Confira os números ou deixe o campo em branco.");
       setSalvando(false); return;
     }
     if (new Date(formDependente.nascimento) > new Date()) {
       setErro("A data de nascimento não pode estar no futuro.");
+      setSalvando(false); return;
+    }
+
+    const { data: adulto, error: erroAdulto } = await supabase.from('atletas').select('nome,nascimento').eq('user_id', userId).maybeSingle();
+    const nascimentoAdulto = validarNascimentoTitular(String(adulto?.nascimento || ''));
+    if (erroAdulto || !adulto?.nome?.trim() || !nascimentoAdulto.ok) {
+      setErro('Complete e salve seu cadastro de adulto responsável, com nome e data de nascimento, antes de salvar o dependente.');
       setSalvando(false); return;
     }
 
@@ -856,7 +806,7 @@ export default function PerfilPage() {
     }
     setAlunosOcultos(atual => oculto ? atual.filter(id => id !== aluno.user_id) : [...atual, aluno.user_id]);
   }
-  const vinculoEquipePendente = !nome.trim() || (!equipe.trim() && !academia.trim());
+  const vinculoEquipePendente = !nome.trim() || !equipePreenchida(equipe) || !academia.trim();
   const categoriaDestinoEdicao: CategoriaCompeticao | undefined = editandoInscricao?.categoriasDisponiveis?.find((c: CategoriaCompeticao) => c.id === editandoInscricao.categoriaNova);
   const pesoEdicaoInformado = String(editandoInscricao?.pesoAtual ?? '').trim();
   const pesoCompativelComDestino = Boolean(categoriaDestinoEdicao && categoriaCompativel(categoriaDestinoEdicao, {
@@ -978,7 +928,7 @@ export default function PerfilPage() {
           <button onClick={sairConta} className="cursor-pointer mt-auto w-full border border-red-500/20 text-red-500 hover:bg-red-500 hover:text-white py-2.5 rounded-xl font-bold transition-all text-[11px]">Sair da Conta</button>
           
           {/* 🔥 GATILHO DO MODAL DE NOTIFICAÇÃO (Substitui o botão agressivo antigo) */}
-          <button onClick={() => setMostrarPopupNotificacao(true)} className="cursor-pointer mt-3 w-full bg-[#0a0a0e] border border-white/10 hover:border-red-500/50 text-zinc-400 hover:text-white py-2.5 rounded-xl font-bold transition-all text-[11px] flex justify-center items-center gap-2">
+          <button onClick={() => avisosCelularRef.current?.abrir()} className="cursor-pointer mt-3 w-full bg-[#0a0a0e] border border-white/10 hover:border-red-500/50 text-zinc-400 hover:text-white py-2.5 rounded-xl font-bold transition-all text-[11px] flex justify-center items-center gap-2">
             <svg className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg> Alertas no Celular
           </button>
         </div>
@@ -1267,8 +1217,8 @@ export default function PerfilPage() {
                 {role === "professor" ? (
                   <>
                     <div><label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 pl-1 cursor-default">Data de Nascimento</label><input type="date" value={nascimento} onChange={(e) => setNascimento(e.target.value)} max={new Date().toISOString().slice(0, 10)} className="cursor-pointer w-full bg-black/50 border border-white/5 focus:border-yellow-500/50 outline-none rounded-xl px-3 py-2 text-xs text-white transition-colors [&::-webkit-calendar-picker-indicator]:invert" /></div>
-                    <div className="md:col-span-2"><CampoNomeOficial rotulo="Bandeira / equipe oficial" valor={equipe} onChange={setEquipe} existentes={listaEquipes} placeholder="Busque a equipe ou cadastre uma nova" destaque="amarelo" /></div>
-                    <div className="md:col-span-2"><CampoNomeOficial rotulo="Academia / CT local" valor={academia} onChange={setAcademia} existentes={listaAcademias} placeholder="Busque a academia desta equipe ou cadastre a sua" destaque="amarelo" /></div>
+                    <div className="md:col-span-2"><CampoNomeOficial rotulo="Bandeira / equipe oficial *" valor={equipe} onChange={setEquipe} existentes={listaEquipes} placeholder="Busque a equipe ou cadastre uma nova" destaque="amarelo" /></div>
+                    <div className="md:col-span-2"><CampoNomeOficial rotulo="Academia / CT local *" valor={academia} onChange={setAcademia} existentes={listaAcademias} placeholder="Busque a academia desta equipe ou cadastre a sua" destaque="amarelo" /></div>
                     <div>
                       <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 pl-1 cursor-default">Sua Faixa de Mestre</label>
                       <select value={faixa} onChange={(e) => setFaixa(e.target.value)} className="cursor-pointer w-full bg-black/50 border border-white/5 outline-none rounded-xl px-3 py-2 text-xs text-white transition-colors appearance-none focus:border-yellow-500">
@@ -1326,7 +1276,7 @@ export default function PerfilPage() {
                       )}
                     </div>
                     <div>
-                      <CampoNomeOficial rotulo="Bandeira / equipe" valor={equipe} onChange={setEquipe} existentes={listaEquipes} placeholder={professor && !professorPersonalizado ? "Vem do professor" : "Busque a equipe"} disabled={!professorPersonalizado && professor !== ""} destaque="ciano" />
+                      <CampoNomeOficial rotulo="Bandeira / equipe *" valor={equipe} onChange={setEquipe} existentes={listaEquipes} placeholder={professorId && !professorPersonalizado && equipe ? "Vem do professor" : "Busque a equipe"} disabled={!professorPersonalizado && Boolean(professorId) && equipePreenchida(professoresDisponiveis.find(p => p.user_id === professorId)?.equipe)} destaque="ciano" />
                     </div>
                     <div>
                       <CampoNomeOficial rotulo="Academia / CT" valor={academia} onChange={setAcademia} existentes={listaAcademias} placeholder={professor && !professorPersonalizado ? "Vem do professor" : "Busque a academia"} disabled={!professorPersonalizado && professor !== ""} destaque="ciano" />
@@ -1441,7 +1391,7 @@ export default function PerfilPage() {
                           <div className="mt-4 grid grid-cols-2 gap-2">
                             <a href={`/atleta/${dep.user_id}`} className="rounded-xl border border-white/10 px-3 py-2 text-center text-[9px] font-black uppercase tracking-widest text-zinc-300 hover:text-white hover:border-cyan-500/40">Ver no ranking</a>
                             <button
-                              onClick={() => setFormDependente({ ...dep, professorPersonalizado: Boolean(dep.professor) && !professoresDisponiveis.some(p => p.user_id === dep.professor_id) })}
+                              onClick={() => setFormDependente({ ...dep, equipe: equipePreenchida(dep.equipe) ? dep.equipe : "", professorPersonalizado: Boolean(dep.professor) && !professoresDisponiveis.some(p => p.user_id === dep.professor_id) })}
                               className="cursor-pointer rounded-xl border border-white/10 px-3 py-2 text-[9px] font-black uppercase tracking-widest text-zinc-300 hover:text-white"
                             >
                               Editar perfil
@@ -1503,7 +1453,7 @@ export default function PerfilPage() {
                     </div>
 
                     <div>
-                      <CampoNomeOficial rotulo="Equipe" valor={formDependente.equipe || ""} onChange={(valor) => setFormDependente({ ...formDependente, equipe: valor })} existentes={listaEquipes} placeholder="Busque a equipe" disabled={!formDependente.professorPersonalizado && formDependente.professor !== ""} destaque="ciano" />
+                      <CampoNomeOficial rotulo="Equipe *" valor={formDependente.equipe || ""} onChange={(valor) => setFormDependente({ ...formDependente, equipe: valor })} existentes={listaEquipes} placeholder="Busque a equipe" disabled={!formDependente.professorPersonalizado && Boolean(formDependente.professor_id) && equipePreenchida(professoresDisponiveis.find(p => p.user_id === formDependente.professor_id)?.equipe)} destaque="ciano" />
                     </div>
                     <div>
                       <CampoNomeOficial rotulo="Academia" valor={formDependente.academia || ""} onChange={(valor) => setFormDependente({ ...formDependente, academia: valor })} existentes={academiasDaEquipe(formDependente.equipe || "", professoresDisponiveis)} placeholder="Busque a academia" disabled={!formDependente.professorPersonalizado && formDependente.professor !== ""} destaque="ciano" />
@@ -1679,6 +1629,8 @@ export default function PerfilPage() {
               </div>
               {erroOcultos && <p role="alert" className="mb-4 text-xs text-red-300">{erroOcultos}</p>}
 
+              <AlunosSugeridos onVinculou={() => { void carregarDadosCompletos(true); }} />
+
               {alunosExibidos.length === 0 ? (
                 <div className="bg-black/30 border border-dashed border-white/10 p-10 rounded-2xl text-center">
                   <p className="text-zinc-500 text-sm font-medium">Ainda não há alunos cadastrados no sistema sob a sua supervisão.</p>
@@ -1844,56 +1796,7 @@ export default function PerfilPage() {
         </div>
       )}
 
-      {/* 🔥 NOVO: MODAL POPUP DE NOTIFICAÇÕES IQUAL AO PRINT */}
-      {mostrarPopupNotificacao && (
-        <div className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-300">
-          <div className="absolute inset-0 cursor-pointer" onClick={() => setMostrarPopupNotificacao(false)}></div>
-          <div className="bg-[#0a0a0e] border border-white/10 rounded-t-[2rem] sm:rounded-[2rem] w-full max-w-sm shadow-2xl relative z-10 p-6 pt-8 flex flex-col animate-in slide-in-from-bottom-8 sm:zoom-in-95 duration-300">
-            <button onClick={() => setMostrarPopupNotificacao(false)} className="absolute top-5 right-5 text-zinc-500 hover:text-white transition-colors cursor-pointer">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"></path></svg>
-            </button>
-
-            <div className="flex items-center gap-4 mb-2">
-              <div className="relative flex items-center justify-center w-12 h-12 rounded-full bg-red-500/10 border border-red-500/20 shrink-0">
-                <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
-                <span className="absolute top-2.5 right-3 w-2 h-2 rounded-full bg-red-500 border border-[#0a0a0e]"></span>
-              </div>
-              <div>
-                <h2 className="text-xl font-black text-white tracking-tight">Ativar Notificações</h2>
-                <p className="text-zinc-400 text-xs mt-0.5">Fique por dentro de tudo que acontece</p>
-              </div>
-            </div>
-
-            <div className="mt-6 space-y-4">
-              <div className="flex items-start gap-3">
-                <span className="text-red-500 text-lg leading-none mt-0.5">•</span>
-                <p className="text-zinc-300 text-xs font-medium leading-relaxed">Receba alertas do horário e tatame das suas lutas</p>
-              </div>
-              <div className="flex items-start gap-3">
-                <span className="text-red-500 text-lg leading-none mt-0.5">•</span>
-                <p className="text-zinc-300 text-xs font-medium leading-relaxed">Acompanhe os resultados das suas chaves ao vivo</p>
-              </div>
-              <div className="flex items-start gap-3">
-                <span className="text-red-500 text-lg leading-none mt-0.5">•</span>
-                <p className="text-zinc-300 text-xs font-medium leading-relaxed">Saiba imediatamente se o seu peso foi aprovado</p>
-              </div>
-              <div className="flex items-start gap-3">
-                <span className="text-red-500 text-lg leading-none mt-0.5">•</span>
-                <p className="text-zinc-300 text-xs font-medium leading-relaxed">Não perca os prazos de virada de lote e checagem</p>
-              </div>
-            </div>
-
-            <div className="flex gap-3 mt-8">
-              <button onClick={() => setMostrarPopupNotificacao(false)} className="flex-1 py-3.5 rounded-xl border border-white/10 text-zinc-400 hover:text-white hover:bg-white/5 font-black text-[10px] uppercase tracking-widest transition-colors cursor-pointer">
-                Agora Não
-              </button>
-              <button onClick={inscreverParaNotificacoes} className="flex-1 py-3.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-black text-[10px] uppercase tracking-widest shadow-[0_0_20px_rgba(239,68,68,0.3)] transition-all cursor-pointer flex items-center justify-center gap-2">
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg> Ativar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <AvisosCelular ref={avisosCelularRef} userId={userId} role={role} />
 
       {chatEvento && (
         <ChatEvento

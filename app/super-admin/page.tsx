@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Activity, AlertTriangle, ChevronDown, FileText, Search, ShieldCheck } from "lucide-react";
+import { carregarResponsaveisInscricoes } from '@/app/lib/responsaveis-inscricoes';
 import { supabase } from "@/app/lib/supabase";
 import { baixarCsv, exportarPdfRetratt, exportarPdfSuporte } from "@/app/lib/super-admin-relatorio";
 import {
@@ -126,16 +127,17 @@ export default function SuperAdminMasterPage() {
           buscarPaginas<InscricaoPainel>(async (inicio, fim) => {
             const resultado = await supabase
               .from("inscricoes")
-              .select("id, atleta, equipe, categoria, faixa, peso, idade, absoluto, pagamento_ok, pesagem_ok, valor_inscricao, valor_total, cupom_id, cupom_codigo, desconto_valor, cortesia, mp_payment_id, estorno_status, estorno_valor, created_at, evento_id, eventos(nome, organizador_id, data_evento, cidade)")
+              .select("id, atleta_id, user_id, atleta, equipe, categoria, faixa, peso, idade, absoluto, pagamento_ok, pesagem_ok, valor_inscricao, valor_total, cupom_id, cupom_codigo, desconto_valor, cortesia, mp_payment_id, estorno_status, estorno_valor, created_at, evento_id, eventos(nome, organizador_id, data_evento, cidade)")
               .order("id", { ascending: false })
               .range(inicio, fim);
             return { data: resultado.data as InscricaoPainel[] | null, error: resultado.error };
           }),
         ]);
+        const identificadas = await carregarResponsaveisInscricoes(listaInscricoes);
         if (!ativo) return;
         setOrganizadores(listaOrganizadores);
         setEventos(listaEventos);
-        setInscricoes(listaInscricoes);
+        setInscricoes(identificadas);
       } catch (falha) {
         if (ativo) setErro(falha instanceof Error ? falha.message : "Não foi possível carregar o Itatame.");
       } finally {
@@ -268,8 +270,8 @@ export default function SuperAdminMasterPage() {
     if (formato === "csv") {
       baixarCsv(
         `itatame-suporte-${new Date().toISOString().slice(0, 10)}.csv`,
-        ["Nº inscrição", "Cupom / Desconto", "Organizador", "Academia", "Contato", "Plano", "Mercado Pago", "Evento", "Data", "Atleta", "Equipe", "Categoria", "Faixa", "Peso", "Pacote", "Valor", "Pagamento", "Pesagem", "ID Mercado Pago"],
-        linhas.map((linha) => [linha.inscricao, linha.cupom, linha.organizador, linha.academia, linha.contato, linha.plano, linha.mercadoPago, linha.evento, linha.dataEvento, linha.atleta, linha.equipe, linha.categoria, linha.faixa, linha.peso, linha.pacote, linha.valor, linha.pagamento, linha.pesagem, linha.mercadoPagoId]),
+        ["Nº inscrição", "Cupom / Desconto", "Organizador", "Academia", "Contato", "Plano", "Mercado Pago", "Evento", "Data do evento", "Atleta", "Responsável adulto", "Contato do responsável", "Inscrito em (Cuiabá)", "Equipe", "Categoria", "Faixa", "Peso", "Pacote", "Valor", "Pagamento", "Pesagem", "ID Mercado Pago"],
+        linhas.map((linha) => [linha.inscricao, linha.cupom, linha.organizador, linha.academia, linha.contato, linha.plano, linha.mercadoPago, linha.evento, linha.dataEvento, linha.atleta, linha.responsavel, linha.contatoResponsavel, linha.dataInscricao, linha.equipe, linha.categoria, linha.faixa, linha.peso, linha.pacote, linha.valor, linha.pagamento, linha.pesagem, linha.mercadoPagoId]),
       );
       return;
     }
@@ -481,7 +483,10 @@ export default function SuperAdminMasterPage() {
                   const situacaoAtual = situacaoInscricao(item);
                   const zap = whatsappDe(organizadoresPorUsuario.get(userId)?.telefone);
                   return <article key={item.id} className="py-3 text-xs">
-                    <div className="flex items-start justify-between gap-3"><h3 className="min-w-0 font-semibold text-white">{linha.atleta}</h3><span className={`shrink-0 ${situacaoAtual === "pago" ? "text-emerald-400" : situacaoAtual === "estornado" ? "text-red-400" : "text-amber-300"}`}>{linha.pagamento} · {linha.valor}</span></div>
+                    <div className="flex items-start justify-between gap-3"><h3 className="min-w-0 font-semibold text-white">{linha.atleta}</h3>
+<span className={`shrink-0 ${situacaoAtual === "pago" ? "text-emerald-400" : situacaoAtual === "estornado" ? "text-red-400" : "text-amber-300"}`}>{linha.pagamento} · {linha.valor}</span></div>
+                    <p className="mt-1 text-[10px] text-zinc-400">Responsável: {linha.responsavel}{linha.contatoResponsavel ? ` · ${linha.contatoResponsavel}` : ""}</p>
+                    <p className="text-[10px] text-zinc-500">Inscrito em {linha.dataInscricao} (Cuiabá)</p>
                     <p className="mt-1 text-zinc-400">{linha.evento}</p>
                     <p className="mt-0.5 text-[11px] text-zinc-500">{linha.organizador} · {linha.equipe}</p>
                     <details className="mt-2 text-zinc-400"><summary className="cursor-pointer text-[11px]">Categoria e pagamento</summary><p className="mt-2 leading-relaxed">{linha.categoria}<br />{linha.faixa} · {linha.peso} · {linha.pacote}<br />{linha.pesagem}<br />{item.mp_payment_id ? `MP ${item.mp_payment_id}` : "Sem ID Mercado Pago"}</p></details>
@@ -495,6 +500,8 @@ export default function SuperAdminMasterPage() {
                     <tr>
                       <th className="p-3">Organizador</th>
                       <th className="p-3">Atleta</th>
+                      <th className="p-3">Responsável adulto</th>
+                      <th className="p-3">Inscrito em (Cuiabá)</th>
                       <th className="p-3">Campeonato</th>
                       <th className="p-3">Chave</th>
                       <th className="p-3">Valor</th>
@@ -504,7 +511,7 @@ export default function SuperAdminMasterPage() {
                 </thead>
                   <tbody>
                     {visiveis.length === 0 ? (
-                      <tr><td colSpan={7} className="p-10 text-center text-[10px] font-bold uppercase tracking-widest text-zinc-500">Nenhuma inscrição do Itatame neste filtro.</td></tr>
+                      <tr><td colSpan={9} className="p-10 text-center text-[10px] font-bold uppercase tracking-widest text-zinc-500">Nenhuma inscrição do Itatame neste filtro.</td></tr>
                     ) : visiveis.map((item) => {
                       const linha = linhaDaInscricao(item);
                       const evento = item.evento_id != null ? eventosPorId.get(String(item.evento_id)) : undefined;
@@ -523,6 +530,8 @@ export default function SuperAdminMasterPage() {
                             <p className="font-bold">{linha.atleta}</p>
                             <p className="text-[10px] text-zinc-500">{linha.equipe}</p>
                           </td>
+                          <td className="p-3"><p>{linha.responsavel}</p><p className="text-[10px] text-zinc-500">{linha.contatoResponsavel}</p></td>
+                          <td className="p-3 text-zinc-400">{linha.dataInscricao}</td>
                           <td className="p-3">
                             <p>{linha.evento}</p>
                             <p className="text-[10px] text-zinc-500">{linha.dataEvento}{evento?.cidade ? ` · ${evento.cidade}` : ""}</p>

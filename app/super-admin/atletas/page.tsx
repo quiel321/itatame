@@ -6,7 +6,11 @@ import Link from "next/link"
 import { baixarCsv } from "@/app/lib/super-admin-relatorio"
 import { buscarPaginas } from "@/app/lib/super-admin-painel"
 
-type InscricaoAuditoria = {
+import { carregarResponsaveisInscricoes } from '@/app/lib/responsaveis-inscricoes'
+import { dataHoraInscricao, type IdentidadeInscricao } from '@/app/lib/inscricao-identificacao'
+
+type InscricaoAuditoria = IdentidadeInscricao & {
+  created_at?: string | null
   id: number
   atleta: string | null
   nome?: string | null
@@ -34,11 +38,11 @@ export default function SuperAdminInscricoesPage() {
       try {
         const data = await buscarPaginas<InscricaoAuditoria>(async (inicio, fim) => {
           const resultado = await supabase.from("inscricoes")
-            .select("id, atleta, equipe, faixa, categoria, idade, peso, pagamento_ok, pesagem_ok")
+            .select("id, atleta_id, user_id, created_at, atleta, equipe, faixa, categoria, idade, peso, pagamento_ok, pesagem_ok")
             .order("id", { ascending: false }).range(inicio, fim)
           return { data: resultado.data as InscricaoAuditoria[] | null, error: resultado.error }
         })
-        setInscricoes(data)
+        setInscricoes(await carregarResponsaveisInscricoes(data))
       } catch (falha) {
         setErro(falha instanceof Error ? falha.message : "Falha ao carregar inscrições.")
       }
@@ -63,8 +67,8 @@ export default function SuperAdminInscricoesPage() {
   function exportarCsv() {
     if (inscricoesFiltradas.length === 0) return
     baixarCsv(`auditoria-atletas-${new Date().toISOString().slice(0, 10)}.csv`,
-      ["ID inscrição", "Atleta", "Equipe", "Faixa", "Categoria", "Idade", "Peso", "Pagamento", "Pesagem"],
-      inscricoesFiltradas.map((item) => [String(item.id), item.atleta || item.nome || "", item.equipe || "", item.faixa || "", item.categoria || "", String(item.idade ?? ""), String(item.peso ?? ""), item.pagamento_ok ? "Confirmado" : "Pendente", item.pesagem_ok ? "OK" : "Pendente"]))
+      ["ID inscrição", "Atleta", "Responsável adulto", "Contato do responsável", "Inscrito em (Cuiabá)", "Equipe", "Faixa", "Categoria", "Idade", "Peso", "Pagamento", "Pesagem"],
+      inscricoesFiltradas.map((item) => [String(item.id), item.atleta || item.nome || "", item.responsavel_nome || "—", item.responsavel_contato || "", dataHoraInscricao(item.created_at), item.equipe || "", item.faixa || "", item.categoria || "", String(item.idade ?? ""), String(item.peso ?? ""), item.pagamento_ok ? "Confirmado" : "Pendente", item.pesagem_ok ? "OK" : "Pendente"]))
   }
 
   return (
@@ -165,6 +169,8 @@ export default function SuperAdminInscricoesPage() {
               <thead className="bg-black/40 border-b border-white/5 text-zinc-500 text-[9px] uppercase tracking-widest font-black">
                 <tr>
                   <th className="p-4 pl-5">Atleta</th>
+                  <th className="p-4">Responsável adulto</th>
+                  <th className="p-4">Inscrito em (Cuiabá)</th>
                   <th className="p-4">Equipe</th>
                   <th className="p-4">Faixa</th>
                   <th className="p-4">Categoria / Idade</th>
@@ -180,6 +186,8 @@ export default function SuperAdminInscricoesPage() {
                       <td className="p-4 pl-5 text-white font-bold group-hover:text-indigo-400 transition-colors">
                         {item.atleta || item.nome}
                       </td>
+                      <td className="p-4"><p>{item.responsavel_nome || "—"}</p><p className="text-[10px] text-zinc-500">{item.responsavel_contato}</p></td>
+                      <td className="p-4 text-zinc-400">{dataHoraInscricao(item.created_at)}</td>
                       <td className="p-4 text-zinc-400">{item.equipe || "-"}</td>
                       <td className="p-4">
                         <span className="bg-white/10 px-2 py-1 rounded text-[10px] font-bold text-white border border-white/5">
@@ -199,7 +207,7 @@ export default function SuperAdminInscricoesPage() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={6} className="p-10 text-center text-zinc-500 font-bold uppercase tracking-widest text-xs border-none">
+                    <td colSpan={8} className="p-10 text-center text-zinc-500 font-bold uppercase tracking-widest text-xs border-none">
                       Nenhum registro encontrado.
                     </td>
                   </tr>

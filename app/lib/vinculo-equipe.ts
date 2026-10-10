@@ -1,3 +1,4 @@
+import { equipePreenchida } from './alunos-sugeridos';
 import { chaveEquipeFlexivel, chaveRankingEquipe, encontrarEquipeSemelhante, nomeExibicaoEquipe } from "@/app/lib/equipes-nome";
 
 export type VinculoEquipe = {
@@ -17,7 +18,7 @@ function nomesUnicos(valores: string[]) {
 }
 
 export function equipesOficiais(vinculos: VinculoEquipe[]) {
-  return nomesUnicos(vinculos.map((item) => String(item.equipe || "")));
+  return nomesUnicos(vinculos.map((item) => String(item.equipe || "")).filter(equipePreenchida));
 }
 
 export function academiasDaEquipe(equipe: string, vinculos: VinculoEquipe[]) {
