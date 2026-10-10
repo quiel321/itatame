@@ -1,11 +1,12 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { ChangeEvent, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "@/app/lib/supabase";
 import { chaveLocalidade, type Localidade } from "@/app/lib/localidades";
-import { Camera, CheckCircle2, ChevronLeft, ChevronRight, ImagePlus, Loader2, Play, ScanFace, ShieldCheck, ShoppingCart, X } from "lucide-react";
+import CameraSelfie from "./CameraSelfie";
+import { Camera, CheckCircle2, ChevronLeft, ChevronRight, ImagePlus, Loader2, Play, ScanFace, ShieldCheck, ShoppingCart, Download, X } from "lucide-react";
 
 type ResultadoFace = {
   id: string;
@@ -15,7 +16,7 @@ type ResultadoFace = {
   mimeType: string | null;
   similaridade: number;
   nivel: "forte" | "provavel" | "possivel";
-  evento: { id: string; nome: string; data_evento: string | null; cidade: string | null; estado: string | null } | null;
+  evento: { id: string; nome: string; data_evento: string | null; cidade: string | null; estado: string | null; permite_download_gratis: boolean } | null;
 };
 
 const MAX_BUSCA_BYTES = 300 * 1024;
@@ -83,7 +84,8 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
   const [cidadeEvento, setCidadeEvento] = useState("");
   const [cidades, setCidades] = useState<{ cidade: string; estado: string }[]>([]);
   const [preview, setPreview] = useState("");
-  const [consentiu, setConsentiu] = useState(false);
+  const [cameraAberta, setCameraAberta] = useState(false);
+  const cidadeSelect = useRef<HTMLSelectElement>(null);
   const [buscando, setBuscando] = useState(false);
   const [erro, setErro] = useState("");
   const [resultados, setResultados] = useState<ResultadoFace[] | null>(null);
@@ -116,8 +118,9 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
     const overflowAnterior = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     conteudoModal.current?.scrollTo({ top: 0 });
+    if (!eventoId) cidadeSelect.current?.focus();
     return () => { document.body.style.overflow = overflowAnterior; };
-  }, [aberto]);
+  }, [aberto, eventoId]);
 
   useEffect(() => {
     if (!aberto || eventoId) return;
@@ -154,19 +157,24 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
     if (!aberto) return;
     const fechar = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        if (indiceAberto !== null) setIndiceAberto(null);
-        else setAberto(false);
+        if (cameraAberta) setCameraAberta(false);
+        else if (indiceAberto !== null) setIndiceAberto(null);
+        else { setCameraAberta(false); setAberto(false); }
       }
       if (indiceAberto !== null && event.key === "ArrowRight") setIndiceAberto((atual) => Math.min((resultados?.length || 1) - 1, (atual ?? 0) + 1));
       if (indiceAberto !== null && event.key === "ArrowLeft") setIndiceAberto((atual) => Math.max(0, (atual ?? 0) - 1));
     };
     window.addEventListener("keydown", fechar);
     return () => window.removeEventListener("keydown", fechar);
-  }, [aberto, indiceAberto, resultados?.length]);
+  }, [aberto, cameraAberta, indiceAberto, resultados?.length]);
 
   function selecionar(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
-    if (!file) return;
+    event.target.value = "";
+    if (file) usarSelfie(file);
+  }
+
+  function usarSelfie(file: File) {
     if (preview) URL.revokeObjectURL(preview);
     setArquivo(file);
     setPreview(URL.createObjectURL(file));
@@ -176,7 +184,7 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
   }
 
   async function buscar() {
-    if (!arquivo || !consentiu || (!eventoId && !cidadeEvento)) return;
+    if (!arquivo || (!eventoId && !cidadeEvento)) return;
     setBuscando(true);
     setErro("");
     setResultados(null);
@@ -194,6 +202,16 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
       setErro(error instanceof Error ? error.message : "Nao foi possivel buscar suas fotos.");
     } finally {
       setBuscando(false);
+    }
+  }
+
+  function abrirCamera() {
+    if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+      inputCamera.current?.click();
+    } else if (typeof navigator.mediaDevices?.getUserMedia === "function") {
+      setCameraAberta(true);
+    } else {
+      inputGaleria.current?.click();
     }
   }
 
@@ -222,7 +240,7 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
     );
   }
 
-  const idsResultados = resultados?.map((foto) => String(foto.id)) || [];
+  const idsResultados = resultados?.filter((foto) => !foto.evento?.permite_download_gratis).map((foto) => String(foto.id)) || [];
   const quantidadeSelecionada = idsResultados.filter((id) => fotosNoCarrinho.includes(id)).length;
   const todosResultadosSelecionados = idsResultados.length > 0 && quantidadeSelecionada === idsResultados.length;
 
@@ -255,13 +273,13 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
                 <p className="flex items-center gap-1.5 text-[8px] font-black uppercase tracking-[0.18em] text-retratt md:text-[9px]"><ScanFace size={13} /> Busca facial inteligente</p>
                 <h2 className="mt-1 text-base font-black uppercase leading-tight sm:text-lg md:text-xl">Encontre todas as suas fotos</h2>
               </div>
-              <button type="button" onClick={() => setAberto(false)} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 text-zinc-400 hover:bg-white hover:text-black" aria-label="Fechar"><X size={18} /></button>
+              <button type="button" onClick={() => { setCameraAberta(false); setAberto(false); }} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 text-zinc-400 hover:bg-white hover:text-black" aria-label="Fechar"><X size={18} /></button>
             </div>
 
             <div ref={conteudoModal} className="grid flex-1 gap-4 overflow-y-auto p-3 md:grid-cols-[260px_minmax(0,1fr)] md:p-5">
               <div className="space-y-3">
-                {!eventoId && <label className="block text-[10px] font-bold text-zinc-300">Cidade do evento
-                  <select value={cidadeEvento} onChange={(event) => setCidadeEvento(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-white/15 bg-[#18181b] px-3 text-xs text-white">
+                {!eventoId && <label className="block text-[10px] font-bold text-zinc-300">1. Selecione a cidade do evento
+                  <select ref={cidadeSelect} value={cidadeEvento} onChange={(event) => setCidadeEvento(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-white/15 bg-[#18181b] px-3 text-xs text-white">
                     <option value="">Selecione a cidade</option>
                     {cidades.map(({ cidade, estado }) => <option key={`${cidade}|${estado}`} value={`${cidade}|${estado}`}>{cidade}{estado ? ` / ${estado}` : ""}</option>)}
                   </select>
@@ -281,16 +299,16 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
                 <input ref={inputCamera} type="file" accept="image/jpeg,image/png,image/webp" capture="user" onChange={selecionar} className="hidden" />
                 <input ref={inputGaleria} type="file" accept="image/jpeg,image/png,image/webp" onChange={selecionar} className="hidden" />
                 <div className="grid grid-cols-2 gap-2">
-                  <button type="button" onClick={() => inputCamera.current?.click()} className="flex h-10 items-center justify-center gap-2 rounded-xl bg-retratt text-[8px] font-black uppercase tracking-wider hover:bg-retratt"><Camera size={14} /> Tirar selfie</button>
+                  <button type="button" onClick={abrirCamera} className="flex h-10 items-center justify-center gap-2 rounded-xl bg-retratt text-[8px] font-black uppercase tracking-wider hover:bg-retratt"><Camera size={14} /> Tirar selfie</button>
                   <button type="button" onClick={() => inputGaleria.current?.click()} className="flex h-10 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 text-[8px] font-black uppercase tracking-wider hover:bg-white/10"><ImagePlus size={14} /> Galeria</button>
                 </div>
 
-                <label className="flex cursor-pointer gap-2.5 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-2.5 text-[10px] leading-4 text-zinc-300">
-                  <input type="checkbox" checked={consentiu} onChange={(event) => setConsentiu(event.target.checked)} className="mt-1 h-4 w-4 accent-emerald-500" />
-                  <span>Autorizo o uso desta imagem somente para localizar minhas fotos. A selfie não será armazenada.</span>
-                </label>
+                <p className="flex gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-2.5 text-[10px] leading-4 text-zinc-300">
+                  <ShieldCheck size={14} className="mt-0.5 shrink-0 text-emerald-400" />
+                  A imagem é usada somente para localizar suas fotos. A selfie não será armazenada.
+                </p>
 
-                <button type="button" onClick={() => void buscar()} disabled={!arquivo || !consentiu || (!eventoId && !cidadeEvento) || buscando} className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-retratt text-[9px] font-black uppercase tracking-widest text-black disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500">
+                <button type="button" onClick={() => void buscar()} disabled={!arquivo || (!eventoId && !cidadeEvento) || buscando} className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-retratt text-[9px] font-black uppercase tracking-widest text-black disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500">
                   {buscando ? <><Loader2 size={17} className="animate-spin" /> Comparando rostos</> : <><ScanFace size={17} /> Encontrar minhas fotos</>}
                 </button>
                 <p className="flex items-start gap-2 text-[10px] leading-4 text-zinc-500"><ShieldCheck size={14} className="mt-0.5 shrink-0 text-emerald-400" /> A busca inclui resultados fortes, prováveis e possíveis para reduzir a chance de alguma foto ficar de fora.</p>
@@ -325,18 +343,19 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
                         <p className="flex items-center gap-2 text-sm font-black uppercase"><CheckCircle2 size={17} className="text-emerald-400" /> {resultados.length} mídia(s) encontrada(s)</p>
                         <p className="mt-1 text-[10px] text-zinc-500">Ordenadas pela maior semelhança facial.</p>
                       </div>
-                      <button type="button" onClick={alternarTodosResultados} className={`rounded-xl border px-3 py-2 text-[8px] font-black uppercase tracking-wider transition-colors ${todosResultadosSelecionados ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300" : "border-white/10 bg-white/5 text-zinc-300 hover:bg-white/10"}`}>
-                        {todosResultadosSelecionados ? "Desmarcar todas" : "Selecionar todas"}
-                      </button>
+                      {idsResultados.length > 0 && <button type="button" onClick={alternarTodosResultados} className={`rounded-xl border px-3 py-2 text-[8px] font-black uppercase tracking-wider transition-colors ${todosResultadosSelecionados ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300" : "border-white/10 bg-white/5 text-zinc-300 hover:bg-white/10"}`}>
+                        {todosResultadosSelecionados ? "Desmarcar todas" : "Selecionar todas as pagas"}
+                      </button>}
                     </div>
                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
                       {resultados.map((foto) => {
                         const fotoId = String(foto.id);
-                        const noCarrinho = fotosNoCarrinho.includes(fotoId);
+                        const gratuita = Boolean(foto.evento?.permite_download_gratis);
+                        const noCarrinho = !gratuita && fotosNoCarrinho.includes(fotoId);
                         const ehVideo = Boolean(foto.mimeType?.startsWith("video/"));
                         return (
                           <article key={foto.id} className={`relative overflow-hidden rounded-xl border bg-black transition-colors ${noCarrinho ? "border-emerald-400 shadow-[0_0_18px_rgba(52,211,153,0.15)]" : "border-white/10 hover:border-retratt/50"}`}>
-                            <label className={`absolute right-2 top-2 z-20 flex h-9 w-9 cursor-pointer items-center justify-center rounded-xl border backdrop-blur-md ${noCarrinho ? "border-emerald-300 bg-emerald-400 text-black" : "border-white/20 bg-black/70 text-white"}`}>
+                            {!gratuita && <label className={`absolute right-2 top-2 z-20 flex h-9 w-9 cursor-pointer items-center justify-center rounded-xl border backdrop-blur-md ${noCarrinho ? "border-emerald-300 bg-emerald-400 text-black" : "border-white/20 bg-black/70 text-white"}`}>
                               <input
                                 type="checkbox"
                                 checked={noCarrinho}
@@ -344,7 +363,7 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
                                 className="h-5 w-5 cursor-pointer accent-emerald-500"
                                 aria-label={`${noCarrinho ? "Remover" : "Adicionar"} ${foto.titulo || "foto"} ${noCarrinho ? "do" : "ao"} carrinho`}
                               />
-                            </label>
+                            </label>}
                             <button type="button" onClick={() => setIndiceAberto(resultados.indexOf(foto))} className="group block w-full text-left">
                               <div className="relative aspect-[4/5] overflow-hidden bg-zinc-950">
                                 <img data-foto-protegida-imagem src={`/api/fotos/arquivo/${foto.id}?tipo=thumb`} alt={foto.titulo || "Foto encontrada"} loading="lazy" className={`h-full w-full object-cover transition duration-300 group-hover:scale-105 ${noCarrinho ? "opacity-70" : ""}`} />
@@ -357,6 +376,7 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
                                 <p className="mt-1 text-[8px] font-black uppercase tracking-wider text-retratt">Abrir {ehVideo ? "este vídeo" : "esta foto"}</p>
                               </div>
                             </button>
+                            {gratuita && <a href={`/api/fotos/evento/${foto.eventoId}/download-gratuito/${foto.id}`} className="flex items-center justify-center gap-1 border-t border-emerald-400/20 bg-emerald-400/10 px-2 py-3 text-[10px] font-black text-emerald-300"><Download size={13} /> Baixar grátis</a>}
                           </article>
                         );
                       })}
@@ -368,7 +388,7 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
                           <p className="mt-0.5 text-[8px] uppercase tracking-wider text-emerald-300">Já adicionada{quantidadeSelecionada === 1 ? "" : "s"} ao carrinho</p>
                         </div>
                         <Link href="/fotos/carrinho" className="flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-emerald-400 px-4 text-[8px] font-black uppercase tracking-wider text-black hover:bg-emerald-300">
-                          <ShoppingCart size={14} /> Abrir carrinho
+                          <ShoppingCart size={14} /> Concluir compra
                         </Link>
                       </div>
                     )}
@@ -378,6 +398,7 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
             </div>
             </div>
           </div>
+          {cameraAberta && <CameraSelfie onCapture={(file) => { usarSelfie(file); setCameraAberta(false); }} onClose={() => setCameraAberta(false)} onUnavailable={() => { setCameraAberta(false); inputGaleria.current?.click(); }} />}
           {indiceAberto !== null && resultados?.[indiceAberto] && (
             <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/95 p-3" onClick={() => setIndiceAberto(null)} role="dialog" aria-modal="true" aria-label="Foto encontrada">
               <div className="relative flex h-full w-full max-w-5xl flex-col items-center justify-center gap-3" onClick={(event) => event.stopPropagation()}
@@ -403,9 +424,16 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
                   <button type="button" onClick={() => setIndiceAberto((atual) => Math.max(0, (atual ?? 0) - 1))} disabled={indiceAberto === 0} aria-label="Foto anterior" className="rounded-full bg-zinc-800 p-3 text-white disabled:opacity-30"><ChevronLeft /></button>
                   <div className="text-center text-xs text-white">
                     <p>{indiceAberto + 1} de {resultados.length} · {resultados[indiceAberto].evento?.nome || "Galeria Retratt"}</p>
-                    <button type="button" onClick={() => alternarFotoNoCarrinho(String(resultados[indiceAberto].id))} className="mt-2 rounded-lg bg-retratt px-4 py-2 font-bold text-black">
-                      {fotosNoCarrinho.includes(String(resultados[indiceAberto].id)) ? "Remover do carrinho" : "Adicionar ao carrinho"}
-                    </button>
+                    {resultados[indiceAberto].evento?.permite_download_gratis ? (
+                      <a href={`/api/fotos/evento/${resultados[indiceAberto].eventoId}/download-gratuito/${resultados[indiceAberto].id}`} className="mt-2 inline-flex items-center gap-2 rounded-lg bg-emerald-400 px-4 py-3 font-bold text-black"><Download size={16} /> Baixar original grátis</a>
+                    ) : (
+                      <div className="mt-2 flex flex-wrap justify-center gap-2">
+                        <button type="button" onClick={() => alternarFotoNoCarrinho(String(resultados[indiceAberto].id))} className="rounded-lg border border-white/20 px-3 py-2 font-bold text-white">
+                          {fotosNoCarrinho.includes(String(resultados[indiceAberto].id)) ? "Remover do carrinho" : "Adicionar ao carrinho"}
+                        </button>
+                        <Link href="/fotos/carrinho" onClick={() => salvarCarrinho([...fotosNoCarrinho, String(resultados[indiceAberto].id)])} className="inline-flex items-center gap-2 rounded-lg bg-emerald-400 px-3 py-2 font-bold text-black"><ShoppingCart size={15} /> Concluir compra</Link>
+                      </div>
+                    )}
                   </div>
                   <button type="button" onClick={() => setIndiceAberto((atual) => Math.min(resultados.length - 1, (atual ?? 0) + 1))} disabled={indiceAberto === resultados.length - 1} aria-label="Próxima foto" className="rounded-full bg-zinc-800 p-3 text-white disabled:opacity-30"><ChevronRight /></button>
                 </div>

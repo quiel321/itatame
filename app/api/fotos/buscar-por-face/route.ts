@@ -132,7 +132,7 @@ export async function POST(request: Request) {
     const eventoIds = [...new Set(fotos.map((foto) => foto.evento_id))];
     const { data: eventos, error: eventosError } = eventoIds.length
       ? await (() => {
-          return supabase.from("foto_eventos").select("id, nome, data_evento, cidade, estado")
+          return supabase.from("foto_eventos").select("id, nome, data_evento, cidade, estado, permite_download_gratis")
             .in("id", eventoIds).eq("status", "publicado").eq("acesso_por_link", false);
         })()
       : { data: [], error: null };
