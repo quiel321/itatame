@@ -54,7 +54,10 @@ export async function POST(request: Request) {
     if (!['atleta', 'professor', 'organizador'].includes(perfil)) {
       return NextResponse.json({ error: "Tipo de cadastro inválido." }, { status: 400 });
     }
-    if (perfil === "organizador" && (!nome || telefone.length < 10 || telefone.length > 11)) {
+    if (!nome) {
+      return NextResponse.json({ error: "Informe o nome completo do titular da conta." }, { status: 400 });
+    }
+    if (perfil === "organizador" && (telefone.length < 10 || telefone.length > 11)) {
       return NextResponse.json({ error: "Informe nome e telefone do organizador." }, { status: 400 });
     }
     if (perfil !== "organizador" && (telefone.length < 10 || telefone.length > 11)) {
@@ -138,7 +141,7 @@ export async function POST(request: Request) {
           cpf,
           telefone,
           role: "atleta",
-          nome: "",
+          nome,
           equipe: "",
           professor: "",
           faixa: "",
@@ -180,7 +183,7 @@ export async function POST(request: Request) {
           cpf,
           telefone,
           role: "professor",
-          nome: String(organizador.nome || "").trim(),
+          nome,
           equipe: "",
           academia,
           professor: "",
@@ -239,7 +242,7 @@ export async function POST(request: Request) {
           cpf,
           telefone,
           role: perfil,
-          nome: "",
+          nome,
           equipe: "",
           professor: "",
           faixa: "",

@@ -23,6 +23,7 @@ function FormularioLogin() {
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [cpf, setCpf] = useState("");
+  const [nome, setNome] = useState("");
   const [telefone, setTelefone] = useState('');
   const [nascimento, setNascimento] = useState("");
   const [mostrarSenha, setMostrarSenha] = useState(false);
@@ -106,6 +107,10 @@ function FormularioLogin() {
       // ==========================================
       // LÓGICA DE CADASTRO (ATLETA / PROFESSOR)
       // ==========================================
+      if (!nome.trim()) {
+        setErro("Informe seu nome completo para concluir o cadastro.");
+        setLoading(false); return;
+      }
       if (!cpfValido(cpf)) {
         setErro("Este CPF não existe. Confira os números digitados.");
         setLoading(false);
@@ -126,6 +131,7 @@ function FormularioLogin() {
       try {
         const cadastro = new FormData();
         cadastro.set("perfil", tipoConta);
+        cadastro.set("nome", nome.trim());
         cadastro.set("email", email);
         cadastro.set("password", senha);
         cadastro.set("cpf", cpf);
@@ -143,6 +149,7 @@ function FormularioLogin() {
           setIsLogin(true);
           setSenha("");
           setCpf("");
+          setNome("");
           setTelefone('');
           setNascimento("");
         }
@@ -296,6 +303,15 @@ function FormularioLogin() {
           )}
 
           {/* CAMPO: CPF (APENAS CADASTRO) */}
+          {!isLogin && (
+            <div>
+              <label htmlFor="nome-cadastro" className="block text-[9px] font-black text-zinc-500 uppercase tracking-widest mb-1 ml-1">Nome completo do titular *</label>
+              <input id="nome-cadastro" name="nome" type="text" required autoComplete="name" value={nome} onChange={e => setNome(e.target.value)}
+                placeholder="Seu nome completo" className="w-full bg-black/60 border border-white/10 focus:border-red-500 outline-none rounded-lg px-3 py-2.5 text-white text-xs font-bold" />
+              <p className="mt-1.5 text-[9px] leading-relaxed text-zinc-500">Se for responsável por um menor, informe o seu nome. O atleta será cadastrado depois como dependente.</p>
+            </div>
+          )}
+
           {!isLogin && (
             <div className="animate-in fade-in duration-300">
               <label className="block text-[9px] font-black text-zinc-500 uppercase tracking-widest mb-1 ml-1">Documento (CPF)</label>

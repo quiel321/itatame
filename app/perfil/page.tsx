@@ -289,7 +289,7 @@ export default function PerfilPage() {
         setProfessorPersonalizado(!perfilData.professor_id || !profsData?.some(p => p.user_id === perfilData.professor_id));
       }
 
-      if (!preservarAba && userRole !== "super-admin" && (!perfilData.nome || (!perfilData.cpf && !authData.user.user_metadata?.cpf))) {
+      if (!preservarAba && userRole !== "super-admin" && (!String(perfilData.nome || "").trim() || (!perfilData.cpf && !authData.user.user_metadata?.cpf))) {
         setAbaAtiva("editar");
       } else if (!preservarAba) {
         setAbaAtiva("resumo");
@@ -345,7 +345,7 @@ export default function PerfilPage() {
   async function salvarPerfil() {
     setSalvando(true); setMensagem(""); setErro("");
     if (cidade.trim() && !estadoCidade && cidade.trim() !== cidadeLegadaOriginal.trim()) { setErro("Selecione a cidade na lista."); setSalvando(false); return; }
-    if (!nome || !cpf) { setErro("Nome e CPF são obrigatórios."); setSalvando(false); return; }
+    if (!nome.trim() || !cpf) { setErro("Nome e CPF são obrigatórios."); setSalvando(false); return; }
     if (role === 'atleta' && !professor.trim()) { setErro("Informe o professor responsável antes de salvar seu cadastro."); setSalvando(false); return; }
 
     if (role !== 'super-admin' && !equipePreenchida(equipe)) { setErro('Informe a equipe antes de salvar seu cadastro.'); setSalvando(false); return; }
@@ -386,7 +386,7 @@ export default function PerfilPage() {
     const perfilAtualizado: any = {
       user_id: userId,
       email,
-      nome,
+      nome: nome.trim(),
       cpf: cpfFormatado,
       telefone: telefoneDigitos,
       equipe: equipeSalva,
