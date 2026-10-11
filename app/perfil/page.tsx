@@ -253,17 +253,25 @@ export default function PerfilPage() {
           else setAlunosOcultos((ocultos || []).map(item => item.aluno_user_id));
         }
         const equipeProfessor = (perfilData.equipe || "").trim();
-        let query = supabase.from("atletas_publico").select("id, user_id, nome, faixa, peso, nascimento, foto_url, ouro, prata, bronze, professor, professor_id, equipe, academia").neq("user_id", authData.user.id);
+        const query = supabase.from("atletas_publico").select("id, user_id, nome, faixa, peso, nascimento, foto_url, ouro, prata, bronze, professor, professor_id, equipe, academia").neq("user_id", authData.user.id);
 
-        // O vinculo e o professor_id do aluno: cada mestre ve apenas quem escolheu a conta dele.
+        let alunosData: any[] = [];
         if (userRole === "professor") {
-          query = query.eq("professor_id", authData.user.id);
-        } else {
-          query = query.eq("equipe", equipeProfessor);
+          try {
+            const { data: sessao } = await supabase.auth.getSession();
+            const resposta = await fetch('/api/professor/alunos', {
+              headers: { Authorization: `Bearer ${sessao.session?.access_token || ''}` }, cache: 'no-store',
+            });
+            const dados = await resposta.json();
+            if (!resposta.ok) throw new Error(dados.error || 'Não foi possível carregar os alunos.');
+            alunosData = dados.alunos;
+          } catch (falha) {
+            setErro(falha instanceof Error ? falha.message : 'Não foi possível carregar os alunos.');
+          }
+        } else if (equipeProfessor) {
+          const { data } = await query.eq("equipe", equipeProfessor);
+          alunosData = data || [];
         }
-
-        const podeListar = userRole === "professor" || Boolean(equipeProfessor);
-        const { data: alunosData } = podeListar ? await query : { data: [] as any[] };
 
         if (alunosData && alunosData.length > 0) {
           const alunosIds = alunosData.map(a => a.user_id).filter(id => id);
@@ -1647,10 +1655,11 @@ export default function PerfilPage() {
 
               <AlunosSugeridos onVinculou={() => { void carregarDadosCompletos(true); }} />
 
+              {role === "professor" && <p className="mb-4 text-xs text-zinc-400">Você vê seus alunos e os atletas da mesma equipe e academia / CT. O professor responsável de cada aluno é mantido. Ocultar um aluno afeta apenas a sua grade.</p>}
               {alunosExibidos.length === 0 ? (
                 <div className="bg-black/30 border border-dashed border-white/10 p-10 rounded-2xl text-center">
-                  <p className="text-zinc-500 text-sm font-medium">Ainda não há alunos cadastrados no sistema sob a sua supervisão.</p>
-                  <p className="text-zinc-600 text-[10px] mt-2 uppercase tracking-widest">Peça para seus alunos escolherem o seu nome na lista durante o cadastro.</p>
+                  <p className="text-zinc-500 text-sm font-medium">Ainda não há alunos cadastrados para sua equipe e academia / CT.</p>
+                  <p className="text-zinc-600 text-[10px] mt-2 uppercase tracking-widest">Peça para os alunos selecionarem a equipe, a academia / CT e o professor responsável no cadastro.</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1663,6 +1672,7 @@ export default function PerfilPage() {
                         </div>
                         <div className="flex-1 overflow-hidden">
                           <h5 className="text-white font-black text-sm truncate">{aluno.nome}</h5>
+                          {role === "professor" && <p className="mt-1 text-[10px] text-zinc-400">Professor responsável: {aluno.professor || "Não informado"}</p>}
                           <div className="flex items-center gap-2 mt-1">
                             <span className={`text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded pointer-events-none ${getCorFaixa(aluno.faixa)}`}>{aluno.faixa || "S/ Faixa"}</span>
                             <span className="text-zinc-500 text-[10px] font-bold">{aluno.peso ? `${aluno.peso}kg` : "S/ Peso"}</span>
@@ -1711,7 +1721,7 @@ export default function PerfilPage() {
                                   <button onClick={() => window.location.href = `/evento/${insc.evento_id}/ao-vivo`} className="cursor-pointer bg-red-600 hover:bg-red-500 border border-red-400/30 text-white px-2 py-1 rounded text-[8px] font-black uppercase tracking-widest transition-colors">
                                     Ao vivo
                                   </button>
-                                  {prazoCancelamentoAberto(insc) && <button onClick={() => { setAvisoCancelamento(''); setConfirmandoCancelamento(insc); }} disabled={cancelandoInscricaoId === insc.id} className="rounded border border-red-500/30 px-2 py-1 text-[8px] font-black uppercase text-red-300 disabled:opacity-50">Cancelar</button>}
+                                  {(role !== "professor" || aluno.professor_id === userId) && prazoCancelamentoAberto(insc) && <button onClick={() => { setAvisoCancelamento(''); setConfirmandoCancelamento(insc); }} disabled={cancelandoInscricaoId === insc.id} className="rounded border border-red-500/30 px-2 py-1 text-[8px] font-black uppercase text-red-300 disabled:opacity-50">Cancelar</button>}
                                 </div>
                               </div>
                             ))}
