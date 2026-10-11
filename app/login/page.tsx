@@ -324,8 +324,8 @@ function FormularioLogin() {
           )}
 
           {!isLogin && <div className="space-y-3 rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-3">
-            <CampoNomeOficial required rotulo="Equipe / bandeira *" valor={equipe} onChange={(valor) => { if (valor !== equipe) setAcademia(''); setEquipe(valor); }} existentes={equipesOficiais(vinculosCadastro)} placeholder="Ex.: AAMEP ou Legado Jiu-Jitsu" />
-            <CampoNomeOficial required rotulo="Academia / CT local *" valor={academia} onChange={setAcademia} existentes={academiasDaEquipe(equipe, vinculosCadastro)} placeholder="Ex.: AAMEP ou Spartan" />
+            <CampoNomeOficial required rotulo="Equipe / bandeira *" valor={equipe} onChange={(valor) => { if (valor !== equipe) setAcademia(''); setEquipe(valor); }} existentes={equipesOficiais(vinculosCadastro)} placeholder="Insira sua Equipe" />
+            <CampoNomeOficial required rotulo="Academia / CT local *" valor={academia} onChange={setAcademia} existentes={academiasDaEquipe(equipe, vinculosCadastro)} placeholder="Insira sua Academia de treino" />
             <p className="text-[10px] leading-relaxed text-zinc-400">Equipe é a bandeira. Academia / CT é o local onde os alunos treinam. Escolha os nomes oficiais do CT onde você treina. Responsáveis devem informar o CT do atleta; cada dependente terá seu próprio cadastro.</p>
           </div>}
 
