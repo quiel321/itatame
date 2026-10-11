@@ -19,6 +19,7 @@ import CampoNomeOficial from '@/app/components/CampoNomeOficial';
 import CidadeEstadoInput from '@/app/components/CidadeEstadoInput';
 import { cidadeComEstado, separarCidadeEstado } from '@/app/lib/localidades';
 import { dataOperacionalEvento } from '@/app/lib/evento-datas';
+import { contaSomenteResponsavel } from '@/app/lib/conta-responsavel';
 
 type InscricaoCancelavel = {
   id: number;
@@ -70,6 +71,8 @@ export default function PerfilPage() {
 
   const [userId, setUserId] = useState("");
   const [role, setRole] = useState("atleta");
+  const [somenteResponsavel, setSomenteResponsavel] = useState(false);
+  const [querCompetir, setQuerCompetir] = useState(false);
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
   const [cpf, setCpf] = useState("");
@@ -102,6 +105,9 @@ export default function PerfilPage() {
 
   const [dependentes, setDependentes] = useState<any[]>([]);
   const [formDependente, setFormDependente] = useState<any>(null);
+  function novoDependente() {
+    return { user_id: crypto.randomUUID(), nome: "", cpf: "", nascimento: "", sexo: "", professor: "", professor_id: "", equipe: "", academia: "", faixa: "", peso: "", modalidade: "", foto_url: "", professorPersonalizado: false };
+  }
 
   const [professoresDisponiveis, setProfessoresDisponiveis] = useState<any[]>([]);
   const [professorPersonalizado, setProfessorPersonalizado] = useState(false);
@@ -167,6 +173,8 @@ export default function PerfilPage() {
 
     const userRole = perfilData?.role || authData.user.user_metadata?.role || "atleta";
     setRole(userRole);
+    const modoResponsavel = contaSomenteResponsavel(userRole, authData.user.user_metadata);
+    setSomenteResponsavel(modoResponsavel);
 
     if (orgData && userRole !== "super-admin" && userRole !== "professor") {
       window.location.href = "/admin";
@@ -297,7 +305,10 @@ export default function PerfilPage() {
         setProfessorPersonalizado(!perfilData.professor_id || !profsData?.some(p => p.user_id === perfilData.professor_id));
       }
 
-      if (!preservarAba && userRole !== "super-admin" && (!equipePreenchida(perfilData.equipe) || !academiaPreenchida(perfilData.academia))) {
+      if (!preservarAba && modoResponsavel && String(perfilData.nome || '').trim() && (perfilData.cpf || authData.user.user_metadata?.cpf)) {
+        setAbaAtiva('dependentes');
+        if (!depsData?.length) setFormDependente(novoDependente());
+      } else if (!preservarAba && !modoResponsavel && userRole !== "super-admin" && (!equipePreenchida(perfilData.equipe) || !academiaPreenchida(perfilData.academia))) {
         setAbaAtiva("editar");
       } else if (!preservarAba && userRole !== "super-admin" && (!String(perfilData.nome || "").trim() || (!perfilData.cpf && !authData.user.user_metadata?.cpf))) {
         setAbaAtiva("editar");
@@ -356,11 +367,14 @@ export default function PerfilPage() {
     setSalvando(true); setMensagem(""); setErro("");
     if (cidade.trim() && !estadoCidade && cidade.trim() !== cidadeLegadaOriginal.trim()) { setErro("Selecione a cidade na lista."); setSalvando(false); return; }
     if (!nome.trim() || !cpf) { setErro("Nome e CPF são obrigatórios."); setSalvando(false); return; }
-    if (role === 'atleta' && !professor.trim()) { setErro("Informe o professor responsável antes de salvar seu cadastro."); setSalvando(false); return; }
+    if (role === 'atleta' && (!somenteResponsavel || querCompetir) && !professor.trim()) { setErro("Informe o professor responsável antes de salvar seu cadastro."); setSalvando(false); return; }
 
-    if (role !== 'super-admin' && !equipePreenchida(equipe)) { setErro('Informe a equipe antes de salvar seu cadastro.'); setSalvando(false); return; }
-    if (role !== 'super-admin' && !academiaPreenchida(academia)) { setErro('Informe a academia / CT antes de salvar.'); setSalvando(false); return; }
+    if (role !== 'super-admin' && (!somenteResponsavel || querCompetir) && !equipePreenchida(equipe)) { setErro('Informe a equipe antes de salvar seu cadastro.'); setSalvando(false); return; }
+    if (role !== 'super-admin' && (!somenteResponsavel || querCompetir) && !academiaPreenchida(academia)) { setErro('Informe a academia / CT antes de salvar.'); setSalvando(false); return; }
 
+    if (somenteResponsavel && querCompetir && (!faixa || !sexo || !modalidade || !Number.isFinite(Number(peso)) || Number(peso) <= 0)) {
+      setErro('Complete faixa, peso, sexo e modalidade para competir com sua conta.'); setSalvando(false); return;
+    }
     const cpfFormatado = formatarCpf(cpf);
     const telefoneDigitos = telefone.replace(/\D/g, "");
     if (!cpfValido(cpf)) {
@@ -435,11 +449,16 @@ export default function PerfilPage() {
     if (error) {
       setErro(error.message.includes("duplicate key") ? "Este CPF já está em uso." : "Erro ao salvar: " + error.message);
     } else {
+      if (somenteResponsavel && querCompetir) {
+        const { error: erroModo } = await supabase.auth.updateUser({ data: { somente_responsavel: false } });
+        if (erroModo) { setErro('Dados salvos. Não foi possível habilitar seu cadastro de atleta agora; tente salvar novamente.'); setSalvando(false); return; }
+        setSomenteResponsavel(false); setQuerCompetir(false);
+      }
       setCidadeLegadaOriginal(estadoCidade ? "" : cidade.trim());
       const sincronizacao = await sincronizarNomeInscricoes(userId);
       const uniuNomes = equipeSalva !== equipe.trim() || academiaSalva !== academia.trim();
       setMensagem(!sincronizacao.ok ? "Cadastro salvo, mas não foi possível conferir os nomes das inscrições. Tente salvar novamente." : sincronizacao.pendentesRevisao ? "Cadastro salvo. Inscrições com pagamento e nome diferente precisam de revisão da organização; o pagamento não foi alterado." : uniuNomes ? "Dados salvos. Equipe e academia foram unidas aos nomes que já existiam." : "Dados atualizados com sucesso!");
-      if (sincronizacao.ok && !sincronizacao.pendentesRevisao) setTimeout(() => { setMensagem(""); setAbaAtiva("resumo"); }, 2000);
+      if (sincronizacao.ok && !sincronizacao.pendentesRevisao) setTimeout(() => { setMensagem(""); setAbaAtiva(somenteResponsavel && !querCompetir ? 'dependentes' : 'resumo'); }, 2000);
     }
     setSalvando(false);
   }
@@ -892,11 +911,18 @@ export default function PerfilPage() {
 
           <h2 className="text-base font-bold text-white text-center leading-tight mb-1 truncate w-full px-2">{nome || "Novo Usuário"}</h2>
           <span className={`text-[9px] font-black uppercase tracking-wider mb-6 text-center truncate w-full block ${role === 'professor' ? 'text-yellow-500' : 'text-cyan-500'}`}>
-            {academia ? `${equipe} - ${academia}` : equipe || "Sem Equipe"}
+            {somenteResponsavel ? 'Responsável por dependentes' : academia ? `${equipe} - ${academia}` : equipe || "Sem Equipe"}
           </span>
 
           <div className="w-full flex flex-col gap-1.5">
-            {role === "professor" ? (
+            {somenteResponsavel ? (
+              <>
+                <button onClick={() => abrirAba('dependentes')} className="rounded-xl px-4 py-2.5 text-left text-xs font-bold text-cyan-400">Meus dependentes</button>
+                <button onClick={() => abrirAba('editar')} className="rounded-xl px-4 py-2.5 text-left text-xs font-bold text-zinc-300">Meus dados</button>
+                <button onClick={() => abrirAba('inscricoes')} className="rounded-xl px-4 py-2.5 text-left text-xs font-bold text-zinc-300">Inscrições dos dependentes</button>
+                <button onClick={() => { setQuerCompetir(true); abrirAba('editar'); }} className="rounded-xl border border-white/10 px-4 py-2.5 text-left text-xs font-bold text-zinc-400">Também quero competir</button>
+              </>
+            ) : role === "professor" ? (
               <>
                 <button onClick={() => abrirAba("resumo")} className={`cursor-pointer w-full py-2.5 px-4 rounded-xl text-[11px] font-bold text-left transition-colors flex items-center gap-3 ${abaAtiva === "resumo" ? "bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 shadow-sm" : "text-zinc-500 hover:text-white hover:bg-white/5"}`}>
                   <svg className="w-3.5 h-3.5 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg> Dashboard Academia
@@ -1228,9 +1254,10 @@ export default function PerfilPage() {
           {abaAtiva === "editar" && (
             <div className="animate-in fade-in slide-in-from-right-4 duration-500 w-full">
               <div className="flex items-center justify-between mb-5">
-                <h3 className="text-xl font-black text-white">{role === "professor" ? "Dados da Academia" : "Alterar Cadastro"}</h3>
+                <h3 className="text-xl font-black text-white">{somenteResponsavel && !querCompetir ? "Meus dados de responsável" : role === "professor" ? "Dados da Academia" : "Alterar Cadastro"}</h3>
               </div>
 
+              {somenteResponsavel && querCompetir && <div className="mb-4 text-xs text-cyan-300"><p>Complete seus dados esportivos para competir usando esta mesma conta. Seus dependentes serão mantidos.</p><button type="button" onClick={() => { setQuerCompetir(false); abrirAba('dependentes'); }} className="mt-2 underline">Continuar apenas como responsável</button></div>}
               <div className="grid md:grid-cols-2 gap-3 mb-5 w-full">
                 <div><label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 pl-1 cursor-default">Nome Completo *</label><input type="text" value={nome} onChange={(e) => setNome(e.target.value)} className={`cursor-text w-full bg-black/50 border border-white/5 outline-none rounded-xl px-3 py-2 text-xs text-white transition-colors ${role === 'professor' ? 'focus:border-yellow-500/50' : 'focus:border-cyan-500/50'}`} /></div>
                 <div><label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 pl-1 cursor-default">E-mail</label><input type="email" value={email} disabled className="w-full bg-black/20 border border-transparent outline-none rounded-xl px-3 py-2 text-xs text-zinc-500 cursor-not-allowed" /></div>
@@ -1275,6 +1302,8 @@ export default function PerfilPage() {
                     </div>
                     <div><label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 pl-1 cursor-default">Peso (KG)</label><input type="number" step="0.1" min="0.1" max="500" value={peso} onChange={(e) => setPeso(e.target.value)} placeholder="Necessário para se inscrever como competidor" className="cursor-text w-full bg-black/50 border border-white/5 focus:border-yellow-500/50 outline-none rounded-xl px-3 py-2 text-xs text-white transition-colors" /></div>
                   </>
+                ) : somenteResponsavel && !querCompetir ? (
+                  <div><label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">Seu nascimento</label><input type="date" value={nascimento} onChange={e => setNascimento(e.target.value)} className="w-full rounded-xl border border-white/10 bg-black/50 px-3 py-2 text-xs text-white" /></div>
                 ) : (
                   <>
                     <div><label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 pl-1 cursor-default">Data de Nascimento</label><input type="date" value={nascimento} onChange={(e) => setNascimento(e.target.value)} className="cursor-pointer w-full bg-black/50 border border-white/5 focus:border-cyan-500/50 outline-none rounded-xl px-3 py-2 text-xs text-white transition-colors [&::-webkit-calendar-picker-indicator]:invert" /></div>
@@ -1368,12 +1397,12 @@ export default function PerfilPage() {
                     <div>
                       <h3 className="text-xl font-black text-white flex items-center gap-2">
                         <svg className="w-5 h-5 text-cyan-500 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
-                        Família / Dependentes
+                        Meus dependentes
                       </h3>
                       <p className="text-zinc-400 text-xs mt-1">Cadastre os filhos aqui. Você não precisa competir: na inscrição do campeonato escolha só a criança, ou os dois em inscrições separadas.</p>
                     </div>
                     <button
-                      onClick={() => setFormDependente({ user_id: crypto.randomUUID(), nome: "", cpf: "", nascimento: "", sexo: "", professor: "", professor_id: "", equipe: "", academia: "", faixa: "", peso: "", modalidade: "", foto_url: "", professorPersonalizado: false })}
+                      onClick={() => setFormDependente(novoDependente())}
                       className="cursor-pointer bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest shadow-[0_0_15px_rgba(6,182,212,0.2)] shrink-0"
                     >
                       + Adicionar Dependente
@@ -1429,10 +1458,11 @@ export default function PerfilPage() {
               ) : (
                 <div className="animate-in slide-in-from-bottom-4">
                   <div className="flex items-center justify-between mb-6 border-b border-white/5 pb-4">
-                    <h3 className="text-xl font-black text-white">{formDependente.id ? "Editar Dependente" : "Novo Dependente"}</h3>
+                    <h3 className="text-xl font-black text-white">{formDependente.id ? "Editar Dependente" : "Cadastrar filho ou dependente"}</h3>
                     <button onClick={() => setFormDependente(null)} className="cursor-pointer text-zinc-500 hover:text-white text-xs font-bold uppercase tracking-widest">Voltar</button>
                   </div>
 
+                  {somenteResponsavel && !formDependente.id && <p className="mb-4 text-xs text-cyan-300">Sua conta está pronta. Agora informe os dados de quem vai competir.</p>}
                   <label className="mb-6 flex cursor-pointer items-center gap-4 rounded-2xl border border-white/5 bg-black/40 p-4 hover:border-cyan-500/30">
                     <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-full border border-zinc-700 bg-zinc-800">
                       {uploadingFoto && fotoAlvoId === formDependente.user_id ? (

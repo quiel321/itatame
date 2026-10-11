@@ -8,6 +8,7 @@ import { absolutoDaInscricao, categoriaCompativel, idadeCompetitiva, rotuloCateg
 import { tarifaInfantilAplicavel, valorAbsolutoAvulso, valorAddonAbsoluto, valorLoteVigente, pacoteInscricao, pacoteDoTipoInscricao, podeAmpliarPacote, pacoteAposAmpliar, rotuloPacoteInscricao, calcularValorInscricao, valorAindaDevido, type EventoValoresInscricao } from '@/app/lib/valor-inscricao';
 import { urlLoginComRetorno } from '@/app/lib/destino-interno';
 import { encontrarEquipeSemelhante } from '@/app/lib/equipes-nome';
+import { contaSomenteResponsavel, competidoresDaConta } from '@/app/lib/conta-responsavel';
 
 type PerfilCompetidor = {
   id: number;
@@ -193,10 +194,12 @@ function FormularioInscricao() {
       const { data: depsData } = await supabase.from("atletas").select("id,user_id,nome,equipe,professor,faixa,peso,sexo,modalidade,foto_url,cpf,nascimento").eq("responsavel_id", authData.user.id).order("nome");
       const titular = !error && atleta ? atleta as PerfilCompetidor : null;
       const dependentes = (depsData || []) as PerfilCompetidor[];
-      const pessoas = [...(titular ? [titular] : []), ...dependentes];
+      const somenteResponsavel = contaSomenteResponsavel(atleta?.role, authData.user.user_metadata);
+      const pessoas = competidoresDaConta(titular, dependentes, somenteResponsavel);
+      if (somenteResponsavel && !dependentes.length) { router.replace('/perfil'); return; }
       setFamilia(pessoas);
       if (dependentes[0]) aplicarCompetidor(dependentes[0], equipesCarregadas, dataEventoAtual);
-      else if (titular) aplicarCompetidor(titular, equipesCarregadas, dataEventoAtual);
+      else if (titular && !somenteResponsavel) aplicarCompetidor(titular, equipesCarregadas, dataEventoAtual);
 
       setLoading(false);
     }

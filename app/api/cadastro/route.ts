@@ -35,32 +35,34 @@ async function confirmarSenhaDaConta(email: string, password: string) {
   if (error?.code === "email_not_confirmed") return { erro: "nao-confirmado" as const };
   if (error || !data.user) return { erro: "senha" as const };
   await anon.auth.signOut();
-  return { userId: data.user.id };
+  return { userId: data.user.id, userMetadata: data.user.user_metadata };
 }
 
 export async function POST(request: Request) {
   try {
     const form = await request.formData();
     const perfil = texto(form.get("perfil"));
+    const somenteResponsavel = perfil === 'responsavel';
+    const roleSalvo = somenteResponsavel ? 'atleta' : perfil;
     const email = texto(form.get("email")).toLowerCase();
     const password = texto(form.get("password"));
     const nome = texto(form.get("nome"));
     const cpf = texto(form.get("cpf")).replace(/\D/g, "");
     const telefone = texto(form.get("telefone")).replace(/\D/g, "");
-    const academia = texto(form.get("academia"));
-    const equipe = texto(form.get("equipe"));
+    const academia = somenteResponsavel ? '' : texto(form.get("academia"));
+    const equipe = somenteResponsavel ? '' : texto(form.get("equipe"));
     const foto = form.get("foto");
 
     if (!email || !email.includes("@") || password.length < 6) {
       return NextResponse.json({ error: "Informe um e-mail válido e uma senha com pelo menos 6 caracteres." }, { status: 400 });
     }
-    if (!['atleta', 'professor', 'organizador'].includes(perfil)) {
+    if (!['atleta', 'professor', 'responsavel', 'organizador'].includes(perfil)) {
       return NextResponse.json({ error: "Tipo de cadastro inválido." }, { status: 400 });
     }
     if (!nome) {
       return NextResponse.json({ error: "Informe o nome completo do titular da conta." }, { status: 400 });
     }
-    if (perfil !== "organizador" && (!equipePreenchida(equipe) || !academiaPreenchida(academia))) {
+    if (perfil !== "organizador" && !somenteResponsavel && (!equipePreenchida(equipe) || !academiaPreenchida(academia))) {
       return NextResponse.json({ error: "Informe a equipe e a academia / CT antes de criar o cadastro." }, { status: 400 });
     }
     if (perfil === "organizador" && (telefone.length < 10 || telefone.length > 11)) {
@@ -88,7 +90,7 @@ export async function POST(request: Request) {
       const { data: existentes, error: buscaError } = await supabase.from("atletas").select("cpf").in("cpf", variantesCpf(cpf)).limit(1);
       if (buscaError) return NextResponse.json({ error: "Não foi possível validar o CPF agora." }, { status: 500 });
       if ((existentes || []).some(item => String(item.cpf || "").replace(/\D/g, "") === cpf)) {
-        return NextResponse.json({ error: "Este CPF já possui cadastro. Entre na conta existente ou recupere a senha." }, { status: 409 });
+        return NextResponse.json({ error: somenteResponsavel ? "Este CPF já possui conta. Entre nela e acesse Meus dependentes; não é preciso outro cadastro." : "Este CPF já possui cadastro. Entre na conta existente ou recupere a senha." }, { status: 409 });
       }
     } else {
       const telefoneFormatado = telefone.length === 11
@@ -116,10 +118,10 @@ export async function POST(request: Request) {
       email,
       password,
       email_confirm: false,
-      user_metadata: { role: perfil, cpf: cpf || undefined, nome: nome || undefined },
+      user_metadata: { role: roleSalvo, cpf: cpf || undefined, nome: nome || undefined, ...(somenteResponsavel ? { somente_responsavel: true } : {}) },
     });
     if (signUpError) {
-      if (perfil === "atleta" && emailJaExiste(signUpError)) {
+      if ((perfil === "atleta" || somenteResponsavel) && emailJaExiste(signUpError)) {
         const conta = await confirmarSenhaDaConta(email, password);
         if ("erro" in conta) {
           if (conta.erro === "indisponivel") return NextResponse.json({ error: "Cadastro temporariamente indisponível." }, { status: 503 });
@@ -136,7 +138,7 @@ export async function POST(request: Request) {
         if (atletaExistente.error || comprador.error || fotografo.error || organizadorFotos.error) {
           return NextResponse.json({ error: "Não foi possível validar a conta agora. Tente novamente." }, { status: 503 });
         }
-        if (atletaExistente.data) return NextResponse.json({ error: "Este e-mail já possui cadastro de atleta. Entre na conta existente." }, { status: 409 });
+        if (atletaExistente.data) return NextResponse.json({ error: somenteResponsavel ? "Este e-mail já possui conta. Entre nela e acesse Meus dependentes; não é preciso outro cadastro." : "Este e-mail já possui cadastro de atleta. Entre na conta existente." }, { status: 409 });
         if (!comprador.data && !fotografo.data && !organizadorFotos.data) {
           return NextResponse.json({ error: "Este e-mail já possui outra conta no iTatame. Entre na conta existente ou recupere a senha." }, { status: 409 });
         }
@@ -153,10 +155,18 @@ export async function POST(request: Request) {
           professor: "",
           faixa: "",
           cidade: "",
-          modalidade: "Jiu-Jitsu",
+          modalidade: somenteResponsavel ? '' : "Jiu-Jitsu",
           ...(nascimento && nascimento.ok ? { nascimento: nascimento.iso } : {}),
         });
         if (vinculo.error) return NextResponse.json({ error: erroIdentidade(vinculo.error) }, { status: 400 });
+        if (somenteResponsavel) {
+          const { error: erroModo } = await supabase.auth.admin.updateUserById(conta.userId, { user_metadata: { ...conta.userMetadata, somente_responsavel: true } });
+          if (erroModo) {
+            await supabase.from('atletas').delete().eq('user_id', conta.userId);
+            return NextResponse.json({ error: 'Não foi possível preparar o cadastro de responsável. Tente novamente.' }, { status: 503 });
+          }
+          return NextResponse.json({ success: true, requiresEmailConfirmation: false, message: 'Conta de responsável vinculada ao Retratt. Entre com o mesmo e-mail e senha para cadastrar seus dependentes.' });
+        }
         return NextResponse.json({ success: true, requiresEmailConfirmation: false, message: "Perfil de atleta vinculado à sua conta Retratt. Entre no iTatame com o mesmo e-mail e senha." });
       }
       if (perfil === "professor" && emailJaExiste(signUpError)) {
@@ -248,14 +258,14 @@ export async function POST(request: Request) {
           email,
           cpf,
           telefone,
-          role: perfil,
+          role: roleSalvo,
           nome,
           equipe,
           academia,
           professor: "",
           faixa: "",
           cidade: "",
-          modalidade: "Jiu-Jitsu",
+          modalidade: somenteResponsavel ? '' : "Jiu-Jitsu",
           ...(nascimento && nascimento.ok ? { nascimento: nascimento.iso } : {}),
         });
 

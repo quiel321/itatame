@@ -10,6 +10,7 @@ import { formatarTelefone } from '@/app/lib/formatar-telefone';
 import { cpfValido, formatarCpf } from '@/app/lib/validar-cpf';
 import { MENSAGEM_MENOR_DE_IDADE, validarNascimentoTitular } from '@/app/lib/idade-cadastro';
 import { destinoInterno } from '@/app/lib/destino-interno';
+import { TIPOS_CONTA_CADASTRO, type TipoContaCadastro } from '@/app/lib/conta-responsavel';
 
 import CampoNomeOficial from '@/app/components/CampoNomeOficial';
 import { academiaPreenchida, equipePreenchida } from '@/app/lib/alunos-sugeridos';
@@ -36,8 +37,8 @@ function FormularioLogin() {
   const [mostrarSenha, setMostrarSenha] = useState(false);
   const [emailPendente, setEmailPendente] = useState(false);
   
-  // ESTADO PARA DEFINIR O TIPO DE CONTA (ATLETA OU PROFESSOR)
-  const [tipoConta, setTipoConta] = useState<"atleta" | "professor">("atleta");
+  // ESTADO DO FLUXO DE CADASTRO
+  const [tipoConta, setTipoConta] = useState<TipoContaCadastro>("atleta");
 
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState("");
@@ -112,7 +113,7 @@ function FormularioLogin() {
 
         if (atletaError || !atleta) {
           await supabase.auth.signOut();
-          setErro("Esta conta ainda não tem perfil de atleta. Abra Criar Cadastro e, se você já usa o Retratt, informe o mesmo e-mail e senha.");
+          setErro("Esta conta ainda não tem cadastro no iTatame. Abra Criar Cadastro e, se você já usa o Retratt, informe o mesmo e-mail e senha.");
           setLoading(false);
           return;
         }
@@ -121,13 +122,13 @@ function FormularioLogin() {
       }
     } else {
       // ==========================================
-      // LÓGICA DE CADASTRO (ATLETA / PROFESSOR)
+      // LÓGICA DE CADASTRO
       // ==========================================
       if (!nome.trim()) {
         setErro("Informe seu nome completo para concluir o cadastro.");
         setLoading(false); return;
       }
-      if (!equipePreenchida(equipe) || !academiaPreenchida(academia)) {
+      if (tipoConta !== 'responsavel' && (!equipePreenchida(equipe) || !academiaPreenchida(academia))) {
         setErro('Informe a equipe e a academia / CT para concluir o cadastro.');
         setLoading(false); return;
       }
@@ -152,7 +153,7 @@ function FormularioLogin() {
         const cadastro = new FormData();
         cadastro.set("perfil", tipoConta);
         cadastro.set("nome", nome.trim());
-        cadastro.set("equipe", equipe.trim()); cadastro.set("academia", academia.trim());
+        if (tipoConta !== 'responsavel') { cadastro.set("equipe", equipe.trim()); cadastro.set("academia", academia.trim()); }
         cadastro.set("email", email);
         cadastro.set("password", senha);
         cadastro.set("cpf", cpf);
@@ -259,56 +260,23 @@ function FormularioLogin() {
         {/* FORMULÁRIO */}
         <form onSubmit={handleAuth} className="space-y-4 relative z-10">
           
-          {/* ======================================================== */}
-          {/* PERGUNTA VIP NO CADASTRO: VOCÊ É ATLETA OU PROFESSOR?    */}
-          {/* ======================================================== */}
           {!isLogin && (
-            <div className="mb-5 animate-in fade-in slide-in-from-bottom-2 duration-300">
-              <label className="block text-[9px] font-black text-zinc-500 uppercase tracking-widest mb-2 ml-1">Tipo de Conta</label>
-              <div className="grid grid-cols-2 gap-2">
-                
-                {/* OPÇÃO 1: ATLETA */}
-                <label className={`cursor-pointer border p-2.5 rounded-lg flex flex-col gap-1 transition-all ${tipoConta === 'atleta' ? 'border-red-500 bg-red-500/10 shadow-[0_0_15px_rgba(239,68,68,0.1)]' : 'border-white/5 bg-black/40 hover:border-white/20'}`}>
-                  <input type="radio" className="hidden" checked={tipoConta === 'atleta'} onChange={() => setTipoConta('atleta')} />
-                  <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-1.5">
-                      <svg className={`w-3.5 h-3.5 ${tipoConta === 'atleta' ? 'text-red-500' : 'text-zinc-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
-                      <span className={`font-black uppercase tracking-widest text-[9px] ${tipoConta === 'atleta' ? 'text-red-500' : 'text-zinc-300'}`}>Atleta</span>
-                    </div>
-                    <div className={`w-2.5 h-2.5 rounded-full border-2 flex items-center justify-center transition-colors ${tipoConta === 'atleta' ? 'border-red-500' : 'border-zinc-700'}`}>
-                      {tipoConta === 'atleta' && <div className="w-1 h-1 rounded-full bg-red-500"></div>}
-                    </div>
-                  </div>
-                  <span className="text-[8px] text-zinc-500 font-medium mt-0.5 leading-tight">Competir e ver histórico.</span>
-                </label>
-
-                {/* OPÇÃO 2: PROFESSOR (MESTRE) */}
-                <label className={`cursor-pointer border p-2.5 rounded-lg flex flex-col gap-1 transition-all ${tipoConta === 'professor' ? 'border-yellow-500 bg-yellow-500/10 shadow-[0_0_15px_rgba(234,179,8,0.1)]' : 'border-white/5 bg-black/40 hover:border-white/20'}`}>
-                  <input type="radio" className="hidden" checked={tipoConta === 'professor'} onChange={() => setTipoConta('professor')} />
-                  <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-1.5">
-                      <svg className={`w-3.5 h-3.5 ${tipoConta === 'professor' ? 'text-yellow-500' : 'text-zinc-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
-                      <span className={`font-black uppercase tracking-widest text-[9px] ${tipoConta === 'professor' ? 'text-yellow-500' : 'text-zinc-300'}`}>Professor</span>
-                    </div>
-                    <div className={`w-2.5 h-2.5 rounded-full border-2 flex items-center justify-center transition-colors ${tipoConta === 'professor' ? 'border-yellow-500' : 'border-zinc-700'}`}>
-                      {tipoConta === 'professor' && <div className="w-1 h-1 rounded-full bg-yellow-500"></div>}
-                    </div>
-                  </div>
-                  <span className="text-[8px] text-zinc-500 font-medium mt-0.5 leading-tight">Gerir sua academia.</span>
-                </label>
+            <fieldset className="min-w-0">
+              <legend className="mb-2 text-[9px] font-black uppercase tracking-widest text-zinc-500">Tipo de conta</legend>
+              <div className="grid grid-cols-3 gap-1.5">
+                {TIPOS_CONTA_CADASTRO.map(opcao => (
+                  <label key={opcao.valor} className={`relative flex min-w-0 cursor-pointer items-center justify-center rounded-lg border px-1 py-3 text-[10px] font-bold transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-white ${tipoConta === opcao.valor ? 'border-red-500 bg-red-500/10 text-red-400' : 'border-white/10 bg-black/40 text-zinc-300'}`}>
+                    <input type="radio" name="tipo-conta" value={opcao.valor} className="sr-only" checked={tipoConta === opcao.valor} onChange={() => setTipoConta(opcao.valor)} aria-describedby="descricao-tipo-conta" />
+                    {opcao.rotulo}
+                  </label>
+                ))}
               </div>
-
-              {/* AVISO IMPORTANTE PARA RESPONSÁVEIS DE MENORES */}
-              <div className="mt-3 bg-cyan-900/10 border border-cyan-500/20 rounded-lg p-2.5 flex items-start gap-2">
-                <svg className="w-3.5 h-3.5 text-cyan-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                <p className="text-[9px] text-zinc-400 leading-relaxed">
-                  <strong className="text-cyan-400 block mb-0.5">É responsável por um menor?</strong>
-                  Crie a conta com os <span className="text-white">seus dados</span>. Você não precisa competir: no painel adiciona os filhos e inscreve só eles.
-                </p>
-              </div>
-            </div>
+              <p id="descricao-tipo-conta" className="mt-2 text-[10px] leading-relaxed text-zinc-400">{TIPOS_CONTA_CADASTRO.find(opcao => opcao.valor === tipoConta)?.descricao}</p>
+              <p className="mt-2 text-[9px] text-zinc-500">Já tem conta? <button type="button" onClick={() => { setIsLogin(true); setErro(''); }} className="text-cyan-400 underline">Entre para adicionar seus dependentes.</button></p>
+            </fieldset>
           )}
 
+          {/* ======================================================== */}
           {/* ======================================================== */}
           {/* AVISO DE LOGIN PARA PAIS/RESPONSÁVEIS                    */}
           {/* ======================================================== */}
@@ -323,19 +291,19 @@ function FormularioLogin() {
             </div>
           )}
 
-          {!isLogin && <div className="space-y-3 rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-3">
+          {!isLogin && tipoConta !== 'responsavel' && <div className="space-y-3 rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-3">
             <CampoNomeOficial required rotulo="Equipe / bandeira *" valor={equipe} onChange={(valor) => { if (valor !== equipe) setAcademia(''); setEquipe(valor); }} existentes={equipesOficiais(vinculosCadastro)} placeholder="Insira sua Equipe" />
             <CampoNomeOficial required rotulo="Academia / CT local *" valor={academia} onChange={setAcademia} existentes={academiasDaEquipe(equipe, vinculosCadastro)} placeholder="Insira sua Academia de treino" />
-            <p className="text-[10px] leading-relaxed text-zinc-400">Equipe é a bandeira. Academia / CT é o local onde os alunos treinam. Escolha os nomes oficiais do CT onde você treina. Responsáveis devem informar o CT do atleta; cada dependente terá seu próprio cadastro.</p>
+            <p className="text-[10px] leading-relaxed text-zinc-400">Equipe é a bandeira. Academia / CT é o local onde os alunos treinam. Escolha os nomes oficiais do CT onde você treina. Cada dependente terá seu próprio cadastro.</p>
           </div>}
 
           {/* CAMPO: CPF (APENAS CADASTRO) */}
           {!isLogin && (
             <div>
-              <label htmlFor="nome-cadastro" className="block text-[9px] font-black text-zinc-500 uppercase tracking-widest mb-1 ml-1">Nome completo do titular *</label>
+              <label htmlFor="nome-cadastro" className="block text-[9px] font-black text-zinc-500 uppercase tracking-widest mb-1 ml-1">{tipoConta === 'responsavel' ? 'Seu nome completo (responsável) *' : 'Nome completo do titular *'}</label>
               <input id="nome-cadastro" name="nome" type="text" required autoComplete="name" value={nome} onChange={e => setNome(e.target.value)}
                 placeholder="Seu nome completo" className="w-full bg-black/60 border border-white/10 focus:border-red-500 outline-none rounded-lg px-3 py-2.5 text-white text-xs font-bold" />
-              <p className="mt-1.5 text-[9px] leading-relaxed text-zinc-500">Se for responsável por um menor, informe o seu nome. O atleta será cadastrado depois como dependente.</p>
+              <p className="mt-1.5 text-[9px] leading-relaxed text-zinc-500">{tipoConta === 'responsavel' ? 'Informe seus dados de adulto. Os dados do menor serão preenchidos depois.' : 'Use seus dados. Seus filhos podem ser adicionados depois como dependentes.'}</p>
             </div>
           )}
 
@@ -446,7 +414,7 @@ function FormularioLogin() {
             ) : tipoConta === 'professor' ? (
               "Criar Conta de Professor"
             ) : (
-              "Criar Conta de Atleta"
+              tipoConta === 'responsavel' ? "Criar Conta de Responsável" : "Criar Conta de Atleta"
             )}
           </button>
         </form>
@@ -459,7 +427,7 @@ function FormularioLogin() {
               onClick={() => { setIsLogin(false); setErro(""); setMensagem(""); }}
               className="mt-2 cursor-pointer text-[10px] font-black uppercase tracking-widest text-red-400 transition-colors hover:text-red-300"
             >
-              Fazer cadastro de atleta
+              Criar minha conta
             </button>
           </div>
         )}
