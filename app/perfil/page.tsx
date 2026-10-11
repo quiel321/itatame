@@ -289,7 +289,7 @@ export default function PerfilPage() {
         setProfessorPersonalizado(!perfilData.professor_id || !profsData?.some(p => p.user_id === perfilData.professor_id));
       }
 
-      if (!preservarAba && userRole === "professor" && (!equipePreenchida(perfilData.equipe) || !academiaPreenchida(perfilData.academia))) {
+      if (!preservarAba && userRole !== "super-admin" && (!equipePreenchida(perfilData.equipe) || !academiaPreenchida(perfilData.academia))) {
         setAbaAtiva("editar");
       } else if (!preservarAba && userRole !== "super-admin" && (!String(perfilData.nome || "").trim() || (!perfilData.cpf && !authData.user.user_metadata?.cpf))) {
         setAbaAtiva("editar");
@@ -351,7 +351,7 @@ export default function PerfilPage() {
     if (role === 'atleta' && !professor.trim()) { setErro("Informe o professor responsável antes de salvar seu cadastro."); setSalvando(false); return; }
 
     if (role !== 'super-admin' && !equipePreenchida(equipe)) { setErro('Informe a equipe antes de salvar seu cadastro.'); setSalvando(false); return; }
-    if (role === 'professor' && !academiaPreenchida(academia)) { setErro('Informe sua academia / CT antes de salvar.'); setSalvando(false); return; }
+    if (role !== 'super-admin' && !academiaPreenchida(academia)) { setErro('Informe a academia / CT antes de salvar.'); setSalvando(false); return; }
 
     const cpfFormatado = formatarCpf(cpf);
     const telefoneDigitos = telefone.replace(/\D/g, "");
@@ -466,6 +466,7 @@ export default function PerfilPage() {
     if (!equipePreenchida(formDependente.equipe)) {
       setErro('Informe a equipe do dependente antes de salvar.'); setSalvando(false); return;
     }
+    if (!academiaPreenchida(formDependente.academia)) { setErro('Informe a academia / CT do dependente antes de salvar.'); setSalvando(false); return; }
     if (formDependente.cpf && !cpfValido(formDependente.cpf)) {
       setErro("O CPF do dependente não existe. Confira os números ou deixe o campo em branco.");
       setSalvando(false); return;
@@ -1291,10 +1292,10 @@ export default function PerfilPage() {
                       )}
                     </div>
                     <div>
-                      <CampoNomeOficial rotulo="Bandeira / equipe *" valor={equipe} onChange={setEquipe} existentes={listaEquipes} placeholder={professorId && !professorPersonalizado && equipe ? "Vem do professor" : "Busque a equipe"} disabled={!professorPersonalizado && Boolean(professorId) && equipePreenchida(professoresDisponiveis.find(p => p.user_id === professorId)?.equipe)} destaque="ciano" />
+                      <CampoNomeOficial required rotulo="Bandeira / equipe *" valor={equipe} onChange={setEquipe} existentes={listaEquipes} placeholder={professorId && !professorPersonalizado && equipe ? "Vem do professor" : "Busque a equipe"} disabled={!professorPersonalizado && Boolean(professorId) && equipePreenchida(professoresDisponiveis.find(p => p.user_id === professorId)?.equipe)} destaque="ciano" />
                     </div>
                     <div>
-                      <CampoNomeOficial rotulo="Academia / CT" valor={academia} onChange={setAcademia} existentes={listaAcademias} placeholder={professor && !professorPersonalizado ? "Vem do professor" : "Busque a academia"} disabled={!professorPersonalizado && professor !== ""} destaque="ciano" />
+                      <CampoNomeOficial required rotulo="Academia / CT *" valor={academia} onChange={setAcademia} existentes={listaAcademias} placeholder={professor && !professorPersonalizado ? "Vem do professor" : "Busque a academia"} disabled={!professorPersonalizado && Boolean(professorId) && academiaPreenchida(professoresDisponiveis.find(p => p.user_id === professorId)?.academia)} destaque="ciano" />
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 pl-1 cursor-default">Faixa</label>
@@ -1468,10 +1469,10 @@ export default function PerfilPage() {
                     </div>
 
                     <div>
-                      <CampoNomeOficial rotulo="Equipe *" valor={formDependente.equipe || ""} onChange={(valor) => setFormDependente({ ...formDependente, equipe: valor })} existentes={listaEquipes} placeholder="Busque a equipe" disabled={!formDependente.professorPersonalizado && Boolean(formDependente.professor_id) && equipePreenchida(professoresDisponiveis.find(p => p.user_id === formDependente.professor_id)?.equipe)} destaque="ciano" />
+                      <CampoNomeOficial required rotulo="Equipe *" valor={formDependente.equipe || ""} onChange={(valor) => setFormDependente({ ...formDependente, equipe: valor })} existentes={listaEquipes} placeholder="Busque a equipe" disabled={!formDependente.professorPersonalizado && Boolean(formDependente.professor_id) && equipePreenchida(professoresDisponiveis.find(p => p.user_id === formDependente.professor_id)?.equipe)} destaque="ciano" />
                     </div>
                     <div>
-                      <CampoNomeOficial rotulo="Academia" valor={formDependente.academia || ""} onChange={(valor) => setFormDependente({ ...formDependente, academia: valor })} existentes={academiasDaEquipe(formDependente.equipe || "", professoresDisponiveis)} placeholder="Busque a academia" disabled={!formDependente.professorPersonalizado && formDependente.professor !== ""} destaque="ciano" />
+                      <CampoNomeOficial required rotulo="Academia / CT *" valor={formDependente.academia || ""} onChange={(valor) => setFormDependente({ ...formDependente, academia: valor })} existentes={academiasDaEquipe(formDependente.equipe || "", professoresDisponiveis)} placeholder="Busque a academia" disabled={!formDependente.professorPersonalizado && Boolean(formDependente.professor_id) && academiaPreenchida(professoresDisponiveis.find(p => p.user_id === formDependente.professor_id)?.academia)} destaque="ciano" />
                     </div>
 
                     <div><label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 pl-1 cursor-default">Faixa Atual *</label><select value={formDependente.faixa || ""} onChange={(e) => setFormDependente({...formDependente, faixa: e.target.value})} className="cursor-pointer w-full bg-black/50 border border-white/5 focus:border-cyan-500/50 outline-none rounded-xl px-3 py-2 text-xs text-white transition-colors appearance-none"><option value="" className="bg-[#0a0a0e] text-white">Selecione...</option><option value="Cinza" className="bg-[#0a0a0e] text-white">Cinza</option><option value="Amarela" className="bg-[#0a0a0e] text-white">Amarela</option><option value="Laranja" className="bg-[#0a0a0e] text-white">Laranja</option><option value="Verde" className="bg-[#0a0a0e] text-white">Verde</option><option value="Branca" className="bg-[#0a0a0e] text-white">Branca</option><option value="Azul" className="bg-[#0a0a0e] text-white">Azul</option></select></div>

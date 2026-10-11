@@ -132,3 +132,17 @@ test('API recusa aluno de outra academia mesmo na mesma equipe', async () => {
     assert.equal(writes.length, 0);
   });
 });
+
+test('API mostra legados do Eber para Murilo em Sapezal e exige confirmação', async () => {
+  const murilo = { ...professor, nome: 'Erick Murilo', academia: 'AAMEP SAPEZAL' };
+  const legado = { ...aluno, professor: 'Eberson godofredo', equipe: '', academia: 'AAMEP' };
+  await simular({ professor: murilo, aluno: legado, professores: [murilo] }, async writes => {
+    const consulta = await GET(new Request('http://localhost/api/professor/alunos-sugeridos', { headers: { Authorization: 'Bearer teste' } }));
+    assert.equal((await consulta.json()).alunos[0].motivo_sugestao, 'cadastro-antigo-ct');
+    const payload = { professor: murilo, aluno: legado, confirmado: true };
+    assert.equal((await POST(requisicao({ ...payload, confirmado: false }))).status, 400);
+    assert.equal(writes.length, 0);
+    assert.equal((await POST(requisicao(payload))).status, 200);
+    assert.equal(writes[0] && (writes[0] as Record<string, unknown>).academia, 'AAMEP SAPEZAL');
+  });
+});

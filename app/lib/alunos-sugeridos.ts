@@ -1,4 +1,5 @@
 import { nomesEquipeIguais } from './equipes-nome';
+import { ACADEMIAS_LEGADAS } from './academias-legadas';
 export type ProfessorVinculo = { user_id: string; nome: string; equipe: string; academia: string };
 export type AlunoSemVinculo = {
   id: number; user_id: string; nome: string; professor: string | null;
@@ -42,7 +43,7 @@ export function nomesProfessoresSemelhantes(informado: string, cadastrado: strin
   return distancia(primeiroA.slice(0, tamanho), primeiroB.slice(0, tamanho)) <= 1;
 }
 
-export type MotivoSugestao = 'nome' | 'academia' | 'professor-academia';
+export type MotivoSugestao = 'nome' | 'academia' | 'professor-academia' | 'cadastro-antigo-ct';
 
 export function academiaPreenchida(academia: string | null | undefined) {
   return equipePreenchida(academia);
@@ -54,6 +55,14 @@ export function mesmaAcademia(a: string | null | undefined, b: string | null | u
 
 export function motivoSugestaoAluno(aluno: AlunoSemVinculo, professor: ProfessorVinculo, busca = '', professores: ProfessorVinculo[] = []): MotivoSugestao | null {
   if (aluno.role !== 'atleta' || !aluno.nome?.trim() || aluno.user_id === professor.user_id || aluno.professor_id) return null;
+  const legado = ACADEMIAS_LEGADAS.find(ct => nomesEquipeIguais(ct.equipe, professor.equipe) && mesmaAcademia(ct.academia, professor.academia));
+  if (legado && legado.professoresAnteriores.some(nome => normalizarNomeProfessor(nome) === normalizarNomeProfessor(aluno.professor || ''))) {
+    const equipeCompativel = !equipePreenchida(aluno.equipe) || nomesEquipeIguais(aluno.equipe, legado.equipe);
+    const academiaAnterior = legado.academiasAnteriores.some(nome => mesmaAcademia(nome, aluno.academia));
+    const academiaCompativel = !academiaPreenchida(aluno.academia) || academiaAnterior || mesmaAcademia(aluno.academia, professor.academia);
+    const evidencia = nomesEquipeIguais(aluno.equipe, legado.equipe) || academiaAnterior || mesmaAcademia(aluno.academia, professor.academia);
+    if (equipeCompativel && academiaCompativel && evidencia) return 'cadastro-antigo-ct';
+  }
   // Um CT informado e diferente impede misturar filiais da mesma equipe.
   if (academiaPreenchida(aluno.academia) && !mesmaAcademia(aluno.academia, professor.academia)) return null;
   if (nomesProfessoresSemelhantes(aluno.professor || '', busca.trim() || professor.nome)) return 'nome';

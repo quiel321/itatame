@@ -9,9 +9,9 @@ test('cadastro inicial recusa equipe ou CT vazio antes de criar conta', async ()
   const fetchAnterior = globalThis.fetch;
   globalThis.fetch = async () => { throw new Error('Não criar conta ou enviar e-mail com cadastro incompleto'); };
   try {
-    for (const campo of ['equipe', 'academia']) for (const valor of ['', '  ', 'Independente']) {
+    for (const perfil of ['professor', 'atleta']) for (const campo of ['equipe', 'academia']) for (const valor of ['', '  ', 'Independente']) {
       const form = new FormData();
-      for (const [key, value] of Object.entries({ ...dados, perfil: 'professor', email: 'erick@example.test', password: 'ficticia', [campo]: valor })) form.set(key, String(value));
+      for (const [key, value] of Object.entries({ ...dados, perfil, email: 'erick@example.test', password: 'ficticia', [campo]: valor })) form.set(key, String(value));
       const resposta = await POST(new Request('http://localhost/api/cadastro', { method: 'POST', body: form }));
       assert.equal(resposta.status, 400);
       assert.match((await resposta.json()).error, /equipe e a academia/);

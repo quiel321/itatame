@@ -85,7 +85,7 @@ export default function AlunosSugeridos({ onVinculou }: { onVinculou: () => void
       {!carregando && alunos.map(aluno => (
         <div key={aluno.id} className="mt-3 rounded-xl border border-white/10 bg-black/30 p-3 text-xs">
           <p className="font-bold text-white">{aluno.nome}</p>
-          <p className="mt-1 text-yellow-300">{aluno.motivo_sugestao === 'academia' ? 'Mesma equipe e academia / CT' : aluno.motivo_sugestao === 'professor-academia' ? 'Professor informado pertence ao mesmo CT. Academia do aluno ainda não informada.' : 'Nome do professor semelhante ao informado'}</p>
+          <p className="mt-1 text-yellow-300">{aluno.motivo_sugestao === 'cadastro-antigo-ct' ? 'Cadastro antigo identificado para este CT. Confirme se o aluno treina nesta academia.' : aluno.motivo_sugestao === 'academia' ? 'Mesma equipe e academia / CT' : aluno.motivo_sugestao === 'professor-academia' ? 'Professor informado pertence ao mesmo CT. Academia do aluno ainda não informada.' : 'Nome do professor semelhante ao informado'}</p>
           <p className="mt-1 text-zinc-400">Professor informado: {aluno.professor || 'Não informado'}</p>
           <p className="text-zinc-400">Equipe: {aluno.equipe || 'Não informada'} · Academia: {aluno.academia || 'Não informada'}</p>
           {confirmando?.id === aluno.id ? (

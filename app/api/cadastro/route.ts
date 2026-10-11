@@ -60,8 +60,8 @@ export async function POST(request: Request) {
     if (!nome) {
       return NextResponse.json({ error: "Informe o nome completo do titular da conta." }, { status: 400 });
     }
-    if (perfil === "professor" && (!equipePreenchida(equipe) || !academiaPreenchida(academia))) {
-      return NextResponse.json({ error: "Informe a equipe e a academia / CT do professor antes de criar o cadastro." }, { status: 400 });
+    if (perfil !== "organizador" && (!equipePreenchida(equipe) || !academiaPreenchida(academia))) {
+      return NextResponse.json({ error: "Informe a equipe e a academia / CT antes de criar o cadastro." }, { status: 400 });
     }
     if (perfil === "organizador" && (telefone.length < 10 || telefone.length > 11)) {
       return NextResponse.json({ error: "Informe nome e telefone do organizador." }, { status: 400 });
@@ -148,7 +148,8 @@ export async function POST(request: Request) {
           telefone,
           role: "atleta",
           nome,
-          equipe: "",
+          equipe,
+          academia,
           professor: "",
           faixa: "",
           cidade: "",
@@ -249,8 +250,8 @@ export async function POST(request: Request) {
           telefone,
           role: perfil,
           nome,
-          equipe: perfil === "professor" ? equipe : "",
-          ...(perfil === "professor" ? { academia } : {}),
+          equipe,
+          academia,
           professor: "",
           faixa: "",
           cidade: "",

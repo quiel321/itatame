@@ -61,3 +61,20 @@ test('Legado sozinha não mistura Spartan e outros CTs', () => {
   assert.equal(podeSugerirAluno({ ...aluno, professor: 'Jefferson Rony', equipe: 'Legado', academia: 'Matriz Centro' }, jefferson), false);
   assert.equal(podeSugerirAluno({ ...aluno, professor: null, equipe: 'Legado', academia: '' }, jefferson), false);
 });
+
+test('Murilo vê legados do Eber em AAMEP Sapezal mesmo sem cadastro do Eber', () => {
+  const murilo = { ...professor, user_id: 'murilo', nome: 'Erick Murilo Alencar Sousa', academia: 'AAMEP SAPEZAL' };
+  for (const professorAntigo of ['Eber', 'Éberson Amaro', 'Eberson godofredo', 'Ebarson Amaro']) {
+    for (const campos of [{ equipe: 'AAMEP', academia: '' }, { equipe: '', academia: 'AAMEP' }, { equipe: 'aamep', academia: 'aamep' }]) {
+      assert.equal(podeSugerirAluno({ ...aluno, professor: professorAntigo, ...campos }, murilo, '', [murilo]), true);
+    }
+  }
+});
+
+test('legado de Sapezal não mistura outras filiais nem alunos vinculados', () => {
+  const murilo = { ...professor, user_id: 'murilo', nome: 'Erick Murilo', academia: 'AAMEP SAPEZAL' };
+  for (const campos of [{ equipe: 'AAMEP', academia: 'AAMEP Cuiabá' }, { equipe: 'Legado', academia: 'AAMEP' }, { equipe: '', academia: '' }, { equipe: 'AAMEP', academia: '', professor: 'Eberson Outro Nome' }, { equipe: 'AAMEP', academia: '', professor_id: 'outro-professor' }]) {
+    assert.equal(podeSugerirAluno({ ...aluno, professor: 'Eberson Amaro', ...campos }, murilo), false);
+  }
+  assert.equal(podeSugerirAluno({ ...aluno, professor: 'Eberson Amaro', academia: 'AAMEP' }, { ...murilo, academia: 'AAMEP Cuiabá' }), false);
+});

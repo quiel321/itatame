@@ -60,7 +60,7 @@ function FormularioLogin() {
   }, [redirecionarPara, router]);
 
   useEffect(() => {
-    if (isLogin || tipoConta !== 'professor') return;
+    if (isLogin) return;
     let ativo = true;
     void supabase.from('atletas_publico').select('equipe,academia').eq('role', 'professor').then(({ data }) => {
       if (ativo) setVinculosCadastro(data || []);
@@ -127,8 +127,8 @@ function FormularioLogin() {
         setErro("Informe seu nome completo para concluir o cadastro.");
         setLoading(false); return;
       }
-      if (tipoConta === 'professor' && (!equipePreenchida(equipe) || !academiaPreenchida(academia))) {
-        setErro('Informe a equipe e a academia / CT para concluir o cadastro de professor.');
+      if (!equipePreenchida(equipe) || !academiaPreenchida(academia)) {
+        setErro('Informe a equipe e a academia / CT para concluir o cadastro.');
         setLoading(false); return;
       }
       if (!cpfValido(cpf)) {
@@ -152,7 +152,7 @@ function FormularioLogin() {
         const cadastro = new FormData();
         cadastro.set("perfil", tipoConta);
         cadastro.set("nome", nome.trim());
-        if (tipoConta === "professor") { cadastro.set("equipe", equipe.trim()); cadastro.set("academia", academia.trim()); }
+        cadastro.set("equipe", equipe.trim()); cadastro.set("academia", academia.trim());
         cadastro.set("email", email);
         cadastro.set("password", senha);
         cadastro.set("cpf", cpf);
@@ -323,10 +323,10 @@ function FormularioLogin() {
             </div>
           )}
 
-          {!isLogin && tipoConta === 'professor' && <div className="space-y-3 rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-3">
+          {!isLogin && <div className="space-y-3 rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-3">
             <CampoNomeOficial required rotulo="Equipe / bandeira *" valor={equipe} onChange={(valor) => { if (valor !== equipe) setAcademia(''); setEquipe(valor); }} existentes={equipesOficiais(vinculosCadastro)} placeholder="Ex.: AAMEP ou Legado Jiu-Jitsu" />
             <CampoNomeOficial required rotulo="Academia / CT local *" valor={academia} onChange={setAcademia} existentes={academiasDaEquipe(equipe, vinculosCadastro)} placeholder="Ex.: AAMEP ou Spartan" />
-            <p className="text-[10px] leading-relaxed text-zinc-400">Equipe é a bandeira. Academia / CT é o local onde os alunos treinam. Professores do mesmo CT devem escolher os mesmos nomes.</p>
+            <p className="text-[10px] leading-relaxed text-zinc-400">Equipe é a bandeira. Academia / CT é o local onde os alunos treinam. Escolha os nomes oficiais do CT onde você treina. Responsáveis devem informar o CT do atleta; cada dependente terá seu próprio cadastro.</p>
           </div>}
 
           {/* CAMPO: CPF (APENAS CADASTRO) */}
