@@ -9,8 +9,8 @@
   theme_color: "#ff5a1f",
   orientation: "portrait-primary",
   icons: [
-    { src: "/retratt/app-icon.png", sizes: "1024x1024", type: "image/png", purpose: "any" },
-    { src: "/retratt/icon-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+    { src: "/retratt/app-icon.png?v=2", sizes: "1024x1024", type: "image/png", purpose: "any" },
+    { src: "/retratt/icon-512.png?v=2", sizes: "512x512", type: "image/png", purpose: "maskable" },
   ],
 };
 

@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import { cache } from "react";
+import { acessoAlbumPermitido } from './fotos-acesso-album';
+import { versaoDaCapa } from './fotos-compartilhamento';
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
 
 export type AlvoOgFotos =
-  | { tipo: "evento"; eventoId: string; albumId?: string | null }
+  | { tipo: "evento"; eventoId: string; albumId?: string | null; acesso?: string | null }
   | { tipo: "organizador"; slug: string };
 
 export type DadosOgFotos = {
@@ -11,6 +13,7 @@ export type DadosOgFotos = {
   descricao: string;
   capaUrl: string | null;
   caminho: string;
+  acessoRestrito?: boolean;
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -44,10 +47,10 @@ export const carregarDadosOgFotos = cache(async (alvo: AlvoOgFotos): Promise<Dad
   if (!UUID.test(alvo.eventoId)) return null;
   const { data: evento } = await supabase
     .from("foto_eventos")
-    .select("id, nome, local, cidade, estado, data_evento, capa_url, status, acesso_por_link")
+    .select("id, nome, local, cidade, estado, data_evento, capa_url, status, acesso_por_link, acesso_token")
     .eq("id", alvo.eventoId)
     .maybeSingle();
-  if (!evento || evento.status !== "publicado" || evento.acesso_por_link) return null;
+  if (!evento || !acessoAlbumPermitido(evento, alvo.acesso)) return null;
 
   const album = alvo.albumId && UUID.test(alvo.albumId)
     ? (await supabase
@@ -59,13 +62,17 @@ export const carregarDadosOgFotos = cache(async (alvo: AlvoOgFotos): Promise<Dad
         .maybeSingle()).data
     : null;
 
+  const parametros = new URLSearchParams();
+  if (album) parametros.set('album', album.id);
+  if (evento.acesso_por_link && alvo.acesso) parametros.set('acesso', alvo.acesso);
   const onde = [evento.local, evento.cidade, evento.estado].filter(Boolean).join(" - ");
   const detalhes = [formatarData(evento.data_evento), onde].filter(Boolean).join(" · ");
   return {
     titulo: album ? `${album.titulo} · ${evento.nome}` : evento.nome,
     descricao: `${detalhes ? `${detalhes}. ` : ""}Encontre suas fotos por reconhecimento facial e compre em alta resolução.`,
     capaUrl: album?.capa_url || evento.capa_url || null,
-    caminho: `/evento/${evento.id}${album ? `?album=${album.id}` : ""}`,
+    caminho: `/evento/${evento.id}${parametros.size ? `?${parametros}` : ''}`,
+    acessoRestrito: Boolean(evento.acesso_por_link),
   };
 });
 
@@ -91,12 +98,6 @@ function hostsDeCapaPermitidos() {
   return hosts;
 }
 
-function versaoDaCapa(url: string) {
-  let hash = 0;
-  for (let i = 0; i < url.length; i += 1) hash = (hash * 31 + url.charCodeAt(i)) | 0;
-  return (hash >>> 0).toString(36);
-}
-
 export function urlImagemOg(alvo: AlvoOgFotos, dados: DadosOgFotos | null) {
   if (!dados || !capaOgPermitida(dados.capaUrl)) return "/opengraph-image";
   const params = new URLSearchParams();
@@ -104,6 +105,7 @@ export function urlImagemOg(alvo: AlvoOgFotos, dados: DadosOgFotos | null) {
   else {
     params.set("evento", alvo.eventoId);
     if (alvo.albumId) params.set("album", alvo.albumId);
+    if (dados.acessoRestrito && alvo.acesso) params.set("acesso", alvo.acesso);
   }
   params.set("v", versaoDaCapa(dados.capaUrl));
   return `/api/fotos/og?${params.toString()}`;
@@ -116,7 +118,7 @@ export async function metadataCompartilhamentoFotos(alvo: AlvoOgFotos): Promise<
   return {
     title: dados.titulo,
     description: dados.descricao,
-    alternates: { canonical: dados.caminho },
+    ...(dados.acessoRestrito ? { robots: { index: false, follow: false } } : { alternates: { canonical: dados.caminho } }),
     openGraph: {
       title: dados.titulo,
       description: dados.descricao,

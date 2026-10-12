@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
   const alvo: AlvoOgFotos | null = organizador
     ? { tipo: "organizador", slug: organizador }
     : evento
-      ? { tipo: "evento", eventoId: evento, albumId: params.get("album") }
+      ? { tipo: "evento", eventoId: evento, albumId: params.get("album"), acesso: params.get("acesso") }
       : null;
   if (!alvo) return imagemPadrao();
 
@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
     return new Response(new Uint8Array(jpeg), {
       headers: {
         "Content-Type": "image/jpeg",
-        "Cache-Control": "public, max-age=86400, s-maxage=604800, stale-while-revalidate=86400",
+        "Cache-Control": dados.acessoRestrito ? "private, no-store" : "public, max-age=86400, s-maxage=604800, stale-while-revalidate=86400",
       },
     });
   } catch {

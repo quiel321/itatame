@@ -12,9 +12,9 @@ function LogoFotos() {
   return (
     <div className="group flex select-none items-center">
       <img
-        src="/retratt/logo-white.png"
+        src="/retratt/logo-white.svg"
         alt="Retratt"
-        className="h-7 w-auto object-contain transition-all duration-300 group-hover:brightness-110 md:h-8"
+        className="h-[19.6px] w-auto object-contain transition-all duration-300 group-hover:brightness-110 md:h-[22.4px]"
       />
     </div>
   );

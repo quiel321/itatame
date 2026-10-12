@@ -1,4 +1,5 @@
 ﻿"use client";
+import { linkCompartilhamentoGaleria } from '@/app/lib/fotos-compartilhamento';
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -314,11 +315,8 @@ export default function EventoGaleriaCliente({ initialData, acesso }: { initialD
   };
 
   const compartilharGaleria = async () => {
-    const url = new URL(window.location.href);
-    url.searchParams.delete("foto");
-    url.searchParams.delete("origem");
-    const link = url.toString();
     const albumAtual = albuns.find((album) => album.id === albumAtivo);
+    const link = linkCompartilhamentoGaleria(window.location.href, albumAtual?.capa_url || evento?.capa_url);
     const titulo = [evento?.nome, albumAtual?.titulo].filter(Boolean).join(" · ") || "Galeria Retratt";
 
     if (typeof navigator.share === "function" && window.matchMedia("(pointer: coarse)").matches) {

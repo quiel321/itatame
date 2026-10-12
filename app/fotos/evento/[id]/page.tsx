@@ -14,9 +14,10 @@ export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params, searchParams }: Props): Promise<Metadata> {
   const [{ id }, busca] = await Promise.all([params, searchParams]);
-  if (typeof busca.acesso === "string") return { robots: { index: false, follow: false } };
+  const acesso = typeof busca.acesso === "string" ? busca.acesso : null;
   const album = typeof busca.album === "string" ? busca.album : null;
-  return metadataCompartilhamentoFotos({ tipo: "evento", eventoId: id, albumId: album });
+  const metadata = await metadataCompartilhamentoFotos({ tipo: "evento", eventoId: id, albumId: album, acesso });
+  return acesso ? { ...metadata, robots: { index: false, follow: false } } : metadata;
 }
 
 export default async function FotosEventoPage({ params, searchParams }: Props) {

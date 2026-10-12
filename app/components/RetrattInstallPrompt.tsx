@@ -83,7 +83,7 @@ export default function RetrattInstallPrompt({ consentimentoDefinido, mostrarCoo
         <button type="button" onClick={dispensar} aria-label="Fechar" className="absolute right-3 top-3 rounded-full border border-white/10 bg-white/5 p-1.5 text-zinc-500 transition hover:text-white"><X size={14} /></button>
         <div className="flex items-start gap-3 pr-8">
           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-orange-500/25 bg-orange-500/10">
-            <Image src="/retratt/icon-512.png" alt="" width={36} height={36} className="rounded-lg" />
+            <Image src="/retratt/icon-512.png?v=2" alt="" width={36} height={36} className="rounded-lg" />
           </div>
           <div className="min-w-0">
             <p className="text-[8px] font-black uppercase tracking-[0.22em] text-orange-400">Suas fotos sempre por perto</p>

@@ -20,11 +20,12 @@ export const metadata: Metadata = {
   category: "Fotografia de eventos",
   icons: {
     icon: [
-      { url: "/retratt/favicon.ico" },
-      { url: "/retratt/favicon-32.png", type: "image/png", sizes: "32x32" },
+      { url: "/retratt/favicon.svg?v=2", type: "image/svg+xml" },
+      { url: "/retratt/favicon.ico?v=2" },
+      { url: "/retratt/favicon-32.png?v=2", type: "image/png", sizes: "32x32" },
     ],
-    shortcut: "/retratt/favicon.ico",
-    apple: [{ url: "/retratt/apple-touch-icon.png", type: "image/png", sizes: "180x180" }],
+    shortcut: "/retratt/favicon.ico?v=2",
+    apple: [{ url: "/retratt/apple-touch-icon.png?v=2", type: "image/png", sizes: "180x180" }],
   },
   keywords: [
     "Retratt",

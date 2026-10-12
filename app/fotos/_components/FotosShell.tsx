@@ -27,7 +27,7 @@ export default function FotosShell({ children, area = "publico" }: { children: R
 
           <div className="flex flex-col items-center md:items-start gap-2">
             <Link href="/fotos" aria-label="Ir para a página inicial da Retratt" title="Retratt">
-              <img src="/retratt/logo-white.png" alt="Retratt" className="h-7 w-auto opacity-70 transition-all hover:opacity-100 md:h-8" />
+              <img src="/retratt/logo-white.svg" alt="Retratt" className="h-7 w-auto opacity-70 transition-all hover:opacity-100 md:h-8" />
             </Link>
             <p className="text-[9px] text-zinc-600 font-bold uppercase tracking-widest">
               &copy; {new Date().getFullYear()} Retratt. Todos os direitos reservados.
