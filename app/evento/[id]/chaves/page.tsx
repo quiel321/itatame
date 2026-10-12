@@ -7,6 +7,7 @@ import { rotuloLuta } from "@/app/lib/lutas-rotulos"
 import ArvoreChaveDesktop from "@/app/components/ArvoreChaveDesktop"
 import AvisoChaves from "@/app/components/AvisoChaves"
 import { dataOperacional, type EventoComEtapas } from "@/app/lib/evento-etapas"
+import { agendarChavesAutomaticas } from "@/app/lib/agendar-chaves-automaticas"
 import { totalAbasArvore } from "@/app/lib/chave-visual"
 
 export default function ChavesPage() {
@@ -46,22 +47,24 @@ export default function ChavesPage() {
   useEffect(() => {
     if (!params.id) return;
     let ativo = true;
+    let cancelarGeracao: (() => void) | undefined;
     async function carregar() {
       const { data, error } = await supabase.from("eventos").select("estado,data_divulgacao_chaves").eq("id", params.id).single();
       if (!ativo) return;
       if (error || !data) { setErroEvento("Não foi possível consultar o campeonato. Tente novamente."); setCarregandoEvento(false); return; }
       setEvento(data);
       const divulgacao = dataOperacional(data.data_divulgacao_chaves, false, data.estado);
-      if (!divulgacao || new Date() >= divulgacao) {
-        await fetch(`/api/eventos/${params.id}/gerar-chaves-auto`);
+      cancelarGeracao = agendarChavesAutomaticas(String(params.id), divulgacao, async () => {
         if (!ativo) return;
         await carregarCategorias();
         void carregarFotos();
-      }
+        // Atualiza a tela quando o horário chega sem precisar recarregar a aba.
+        if (ativo) setEvento({ ...data });
+      });
       if (ativo) setCarregandoEvento(false);
     }
     void carregar().catch(() => { if (ativo) { setErroEvento("Não foi possível carregar as chaves. Tente novamente."); setCarregandoEvento(false); } });
-    return () => { ativo = false; };
+    return () => { ativo = false; cancelarGeracao?.(); };
   }, [params.id])
 
   useEffect(() => { carregarChaves(); setAbaAtual(1) }, [categoriaSelecionada])

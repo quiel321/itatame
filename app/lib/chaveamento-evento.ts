@@ -188,6 +188,7 @@ export async function gravarChavesEvento(
   evento: EventoChaveamento,
   tipo: 'peso' | 'absoluto',
   lutas: unknown[],
+  automatico = false,
 ) {
   const { data: atuais, error: leitura } = await db
     .from('chaves')
@@ -199,19 +200,17 @@ export async function gravarChavesEvento(
     throw new Error('Já existem lutas iniciadas ou resultados neste tipo de chave. O chaveamento foi preservado.');
   }
 
-  const ids = alvo.map((luta) => luta.id).filter((id): id is string => Boolean(id));
-  for (let i = 0; i < ids.length; i += 80) {
-    const fatia = ids.slice(i, i + 80);
-    const { error } = await db.from('chaves').delete().eq('evento_id', evento.id).in('id', fatia);
-    if (error) throw new Error('Não foi possível substituir só este tipo de chave. O outro chaveamento foi preservado.');
-  }
-
   const linhas = (lutas as Record<string, unknown>[]).map(linhaInsertChave);
   if (!linhas.length) throw new Error('Chaveamento vazio. Nada foi gravado.');
-  const { error: insertError } = await db.from('chaves').insert(linhas);
-  if (insertError) throw new Error(insertError.message || 'Não foi possível gravar as novas chaves.');
+  // A substituição e a criação automática são transações no banco. Nunca
+  // recorrer a DELETE/INSERT separados quando a função estiver indisponível.
+  const { data: total, error } = await db.rpc(
+    automatico ? 'criar_chaves_evento_automaticas' : 'substituir_chaves_evento',
+    { p_evento: evento.id, p_tipo: tipo, p_lutas: linhas, p_organizador: evento.organizador_id },
+  );
+  if (error) throw new Error('Não foi possível gravar as chaves com segurança. Confira as funções de chaveamento no banco. ' + error.message);
   await processarAvancosAutomaticosChaves(db, evento.id);
-  return linhas.length;
+  return Number(total || 0);
 }
 
 export async function gerarChavesAutomaticasEvento(db: ClienteSupabase, evento: EventoChaveamento) {
@@ -220,9 +219,9 @@ export async function gerarChavesAutomaticasEvento(db: ClienteSupabase, evento: 
     try {
       const preparado = await prepararChavesEvento(db, evento.id, tipo, false);
       const jaExiste = chavesDoTipo((preparado.existentes || []) as LutaChaveExistente[], tipo).length > 0;
-      if (jaExiste && !preparado.precisaAtualizarTriangular) continue;
-      const total = await gravarChavesEvento(db, evento, tipo, preparado.lutas);
-      gerados.push({ tipo, total });
+      if (jaExiste) continue;
+      const total = await gravarChavesEvento(db, evento, tipo, preparado.lutas, true);
+      if (total > 0) gerados.push({ tipo, total });
     } catch (error) {
       if (error instanceof Error && (error.message.includes('Já existem lutas iniciadas') || error.message.includes('Nenhuma inscrição apta') || error.message.includes('O outro chaveamento foi preservado'))) continue;
       throw error;

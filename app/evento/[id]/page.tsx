@@ -13,6 +13,7 @@ import {
   type TomEtapaEvento,
 } from "@/app/lib/evento-etapas";
 import Link from "next/link";
+import { agendarChavesAutomaticas } from "@/app/lib/agendar-chaves-automaticas";
 import { formatarValorInscricao, idadeMaxInfantil, valorAbsolutoAvulso, valorAddonAbsoluto, valorComboPesoAbsoluto, valorInfantilLote, type EventoValoresInscricao, type RegrasValoresInscricao } from "@/app/lib/valor-inscricao";
 import { ChatEvento } from "@/app/components/ChatEvento";
 import type { InscricaoCompeticao } from "@/app/lib/categorias-competicao";
@@ -71,6 +72,7 @@ export default function EventoDetalhesPage() {
 
   useEffect(() => {
     let ativo = true;
+    let cancelarGeracao: (() => void) | undefined;
     async function carregarDados() {
       if (!params.id) return;
 
@@ -86,7 +88,7 @@ export default function EventoDetalhesPage() {
       setLoading(false);
 
       // Atualizações operacionais não bloqueiam a abertura da página pública.
-      void fetch(`/api/eventos/${params.id}/gerar-chaves-auto`);
+      cancelarGeracao = agendarChavesAutomaticas(String(params.id), dataOperacional(eventoData?.data_divulgacao_chaves, false, eventoData?.estado));
       if (eventoData?.organizador_id) {
         const resposta = await fetch(`/api/organizadores/${encodeURIComponent(eventoData.organizador_id)}/publico`);
         if (resposta.ok) {
@@ -96,7 +98,7 @@ export default function EventoDetalhesPage() {
       }
     }
     void carregarDados();
-    return () => { ativo = false; };
+    return () => { ativo = false; cancelarGeracao?.(); };
   }, [params.id]);
 
   useEffect(() => {
