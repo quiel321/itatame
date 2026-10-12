@@ -1,5 +1,6 @@
 import { limiteParcelas } from '@/app/lib/parcelamento';
 import { NextResponse } from "next/server";
+import { pagamentoEventoEncerrado } from "@/app/lib/prazo-pagamento";
 import { obterBaseUrlItatame } from "@/app/lib/itatame-url";
 import { calcularComissaoMarketplace } from "@/app/lib/planos-comerciais";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
@@ -62,6 +63,8 @@ export async function POST(request: Request) {
           id,
           nome,
           organizador_id,
+          estado,
+          data_fim_pagamento,
           lote1_valor,
           lote1_data_fim,
           lote2_valor,
@@ -87,6 +90,10 @@ export async function POST(request: Request) {
     const evento = Array.isArray(inscricao.eventos) ? inscricao.eventos[0] : inscricao.eventos;
     if (!evento?.organizador_id) {
       return NextResponse.json({ error: "Evento sem organizador vinculado." }, { status: 409 });
+    }
+
+    if (pagamentoEventoEncerrado(evento)) {
+      return NextResponse.json({ error: "O prazo de pagamento deste campeonato terminou. Procure a organização." }, { status: 409 });
     }
 
     const { data: organizador, error: orgError } = await supabase

@@ -16,6 +16,9 @@ export async function POST(request: Request) {
     if (eventoError || !evento) return NextResponse.json({ error: 'Evento não autorizado.' }, { status: 403 });
     const fim = fimInscricoesEvento(evento);
     if (!fim || fim > new Date()) throw new Error('Encerre as inscrições antes de gerar as chaves.');
+    if (evento.data_fim_checagem && (!Number.isFinite(new Date(evento.data_fim_checagem).getTime()) || new Date(evento.data_fim_checagem) > new Date())) {
+      throw new Error('Aguarde o encerramento da checagem antes de gerar as chaves.');
+    }
     const preparado = await prepararChavesEvento(db, evento.id, tipo, Boolean(ignorarPagamento));
     const assinatura = createHash('sha256').update(JSON.stringify({
       inscritos: preparado.inscritos,

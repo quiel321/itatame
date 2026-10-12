@@ -13,7 +13,7 @@ async function simular(opcoes:{ privado?: boolean; status?: string; album?: bool
   globalThis.fetch=async(input,init)=>{const url=new URL(typeof input==='string'?input:input instanceof URL?input.href:input.url);assert.equal(url.origin,'https://supabase.test','Sem acesso a serviços reais');assert.ok(!init?.method||init.method==='GET','Compartilhar não altera nenhum dado');
     if(url.pathname==='/rest/v1/foto_eventos'){assert.equal(url.searchParams.get('id'),`eq.${eventoId}`);return Response.json([{...evento,acesso_por_link:Boolean(opcoes.privado),status:opcoes.status||'publicado'}]);}
     if(url.pathname==='/rest/v1/foto_albuns'){assert.equal(url.searchParams.get('evento_id'),`eq.${eventoId}`);assert.equal(url.searchParams.get('status'),'eq.publicado');return Response.json(opcoes.album?[{id:albumId,titulo:'Álbum teste',capa_url:capa.replace('capa.jpg','album.jpg')}]:[]);}
-    if(url.pathname.startsWith('/storage/')){capas++;assert.equal(init?.redirect,'error');return opcoes.erroCapa?new Response(null,{status:404}):new Response(buffer,{headers:{'content-type':'image/jpeg'}});}
+    if(url.pathname.startsWith('/storage/')){capas++;assert.equal(init?.redirect,'error');return opcoes.erroCapa?new Response(null,{status:404}):new Response(Uint8Array.from(buffer),{headers:{'content-type':'image/jpeg'}});}
     throw Error('Requisição inesperada '+url.pathname);
   };
   try{await verificar(()=>capas)}finally{globalThis.fetch=originalFetch;for(const[k,v]of Object.entries(anteriores)){if(v===undefined)delete process.env[k];else process.env[k]=v;}}

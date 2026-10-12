@@ -3,7 +3,7 @@
 import Link from "next/link";
 // 1. Adicionado o useRef aqui nas importações
 import { useEffect, useMemo, useState, useRef } from "react";
-import { CalendarDays, Camera, ChevronRight, CirclePlay, Images, MapPin, MonitorDot, Search, Trophy } from "lucide-react";
+import { CalendarDays, Camera, ChevronRight, CirclePlay, MapPin, MonitorDot, Search, ShieldCheck, Trophy } from "lucide-react";
 import { supabase } from "./lib/supabase";
 import { obterEtapaEvento, type ResumoLutasEvento, type TomEtapaEvento } from "./lib/evento-etapas";
 import TutorialVideoCard from "./components/TutorialVideoCard";
@@ -67,7 +67,6 @@ function proximoResumo(
 
 export default function Home() {
   const [eventos, setEventos] = useState<any[]>([]);
-  const [galeriasRetratt, setGaleriasRetratt] = useState<{ id: string; nome: string; capa_url: string }[]>([]);
   const [resumosLutas, setResumosLutas] = useState<Record<string, ResumoLutasEvento>>({});
   const [busca, setBusca] = useState("");
   const [modalidadeFiltro, setModalidadeFiltro] = useState("Todas");
@@ -121,26 +120,6 @@ export default function Home() {
     };
   }, []);
 
-  useEffect(() => {
-    let ativo = true;
-    async function carregarGaleriasParceiro() {
-      const { data, error } = await supabase.from("foto_eventos")
-        .select("id,nome,capa_url")
-        .eq("status", "publicado").eq("acesso_por_link", false)
-        .not("capa_url", "is", null)
-        .order("data_evento", { ascending: false }).limit(6);
-      if (!ativo || error) return;
-      const capas = new Set<string>();
-      setGaleriasRetratt((data || []).filter((galeria) => {
-        if (!galeria.capa_url || capas.has(galeria.capa_url)) return false;
-        capas.add(galeria.capa_url);
-        return true;
-      }).slice(0, 2));
-    }
-    void carregarGaleriasParceiro();
-    return () => { ativo = false; };
-  }, []);
-
   // 3. O motor de arranque: Força o vídeo a reproduzir assim que a página é montada
   useEffect(() => {
     if (videoRef.current) {
@@ -169,7 +148,7 @@ export default function Home() {
     <main className="flex flex-col min-h-screen bg-[#020202] text-white selection:bg-red-500/30 overflow-x-hidden font-sans">
 
       {/* 🚀 HERO SECTION */}
-<section className="relative h-[60vh] min-h-[400px] md:h-[75vh] md:min-h-[550px] w-full flex items-center justify-center">
+<section className="relative h-[55vh] min-h-[400px] md:h-[60vh] md:min-h-[460px] w-full flex items-center justify-center">
   
   <div className="absolute -top-2 md:-top-1 bottom-0 left-0 right-0 bg-[#020202] pointer-events-none overflow-hidden">
     
@@ -253,9 +232,9 @@ export default function Home() {
   </div>
 </section>
 
-      <section className="relative z-20 mx-auto w-full max-w-7xl px-4 pb-12 pt-16 md:px-8">
+      <section className="relative z-20 mx-auto w-full max-w-7xl px-4 pb-8 pt-6 md:px-8 md:pt-8">
         
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between mb-5">
           <div>
              <p className="mb-1 text-[9px] font-extrabold uppercase tracking-[0.2em] text-red-500 flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span> Calendário
@@ -267,7 +246,7 @@ export default function Home() {
           </Link>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {eventosFiltrados.length === 0 && (
             <div className="col-span-full rounded-3xl border border-dashed border-white/10 bg-white/[0.02] py-20 text-center flex flex-col items-center justify-center">
               <CalendarDays size={32} className="text-zinc-700 mb-4" />
@@ -284,11 +263,11 @@ export default function Home() {
               <Link 
                 href={`/evento/${evento.id}`} 
                 key={evento.id}
-                className={`group flex flex-col bg-[#0a0a0e] border border-white/10 rounded-3xl overflow-hidden transition-all duration-500 shadow-xl hover:shadow-[0_10px_40px_rgba(0,0,0,0.5)] hover:-translate-y-1 ${estilo.borda}`}
+                className={`group mx-auto flex w-full max-w-sm flex-col bg-[#0a0a0e] border border-white/10 rounded-3xl overflow-hidden transition-all duration-500 shadow-xl hover:shadow-[0_10px_40px_rgba(0,0,0,0.5)] hover:-translate-y-1 ${estilo.borda}`}
               >
                 {/* Banner Largo do Evento */}
-                <div className="relative h-48 md:h-56 overflow-hidden bg-black">
-                  <div className={`absolute top-4 left-4 z-20 rounded-lg border px-3 py-1.5 text-[9px] font-black uppercase tracking-widest shadow-lg backdrop-blur-md ${estilo.badge}`}>
+                <div className="relative h-40 sm:h-44 overflow-hidden bg-black">
+                  <div className={`absolute top-3 left-3 z-20 rounded-md border px-2 py-1 text-[8px] font-black uppercase tracking-wide shadow-lg backdrop-blur-md ${estilo.badge}`}>
                      {etapa.titulo}
                   </div>
                   {lutasEmAndamento > 0 && <span className="absolute right-4 top-4 z-20 flex items-center gap-2 rounded-lg border border-red-400/40 bg-red-950/90 px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-red-100 shadow-[0_0_24px_rgba(239,68,68,0.35)] backdrop-blur-md"><span className="h-2 w-2 animate-pulse rounded-full bg-red-400" />{lutasEmAndamento} ao vivo <MonitorDot size={13} /></span>}
@@ -300,13 +279,13 @@ export default function Home() {
                   <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0e] via-transparent to-transparent"></div>
                 </div>
 
-                <div className="p-4 flex flex-col flex-1 relative -mt-4 bg-[#0a0a0e]/90 backdrop-blur-md rounded-t-3xl border-t border-white/5">
+                <div className="p-3 flex flex-col flex-1 relative -mt-3 bg-[#0a0a0e]/90 backdrop-blur-md rounded-t-3xl border-t border-white/5">
                   <span className="mb-1 text-[9px] font-extrabold uppercase tracking-[0.15em] text-zinc-500">{evento.descricao || "Jiu-Jitsu"}</span>
-                  <h3 className="text-base font-black uppercase tracking-tight text-white mb-2 line-clamp-2 leading-snug group-hover:text-red-400 transition-colors">
+                  <h3 className="text-sm font-black uppercase tracking-tight text-white mb-1.5 line-clamp-2 leading-snug group-hover:text-red-400 transition-colors">
                     {evento.nome}
                   </h3>
                   
-                  <div className="mt-auto flex flex-wrap items-center gap-x-4 gap-y-1.5 mb-3">
+                  <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 mb-2">
                     {evento.data_evento && (
                        <div className="flex items-center gap-1.5 text-[10px] font-medium text-zinc-400">
                          <CalendarDays size={13} className="text-red-500 shrink-0" /> {formatarData(evento.data_evento)}
@@ -319,7 +298,7 @@ export default function Home() {
                     )}
                   </div>
 
-                  <div className="mb-2">
+                  <div className="mb-1.5">
                     <div className="mb-1 flex items-center justify-between text-[8px] font-black uppercase tracking-[0.16em] text-zinc-500">
                       <span>{etapa.rotuloProgresso || (etapa.indice === 0 ? "Preparação" : `Etapa ${etapa.indice} de ${etapa.totalEtapas}`)}</span>
                       <span>{etapa.progresso}%</span>
@@ -329,10 +308,10 @@ export default function Home() {
                     </div>
                   </div>
 
-                  <div className={`flex w-full items-center justify-center gap-2 rounded-lg border py-2 text-center transition-colors ${estilo.acao}`}>
+                  <div className={`flex w-full items-center justify-center gap-2 rounded-lg border py-1.5 text-center transition-colors ${estilo.acao}`}>
                     <span className="flex flex-col">
-                      <strong className="text-[10px] font-black uppercase tracking-widest">{etapa.titulo}</strong>
-                      <small className="mt-0.5 text-[8px] font-bold tracking-wide opacity-75">{etapa.detalhe}</small>
+                      <strong className="text-[9px] font-black uppercase tracking-wide">{etapa.titulo}</strong>
+                      <small className="mt-0.5 text-[7px] font-bold tracking-wide opacity-75">{etapa.detalhe}</small>
                     </span>
                     <ChevronRight size={14} />
                   </div>
@@ -342,7 +321,7 @@ export default function Home() {
           })}
         </div>
 
-        <section aria-labelledby="tutoriais-titulo" className="mt-16 border-t border-white/10 pt-12">
+        <section aria-labelledby="tutoriais-titulo" className="mt-10 border-t border-white/10 pt-8">
           <div className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="mb-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-red-400">
@@ -360,8 +339,8 @@ export default function Home() {
             </Link>
           </div>
 
-          <div className="grid gap-5 md:grid-cols-2">
-            {tutoriais.slice(0, 2).map((tutorial) => <TutorialVideoCard key={tutorial.numero} tutorial={tutorial} />)}
+          <div className="mx-auto grid max-w-4xl justify-items-center gap-4 md:grid-cols-2">
+            {tutoriais.slice(0, 2).map((tutorial) => <div key={tutorial.numero} className="w-full max-w-sm md:max-w-none"><TutorialVideoCard tutorial={tutorial} /></div>)}
           </div>
 
           <a href={canalItatame} target="_blank" rel="noopener noreferrer" className="mt-6 flex flex-col gap-4 rounded-2xl border border-white/10 bg-[#101013] p-5 transition hover:border-red-500/35 sm:flex-row sm:items-center sm:justify-between">
@@ -382,32 +361,23 @@ export default function Home() {
       <section className="relative z-20 mx-auto w-full max-w-6xl px-4 pb-10 md:px-6" aria-labelledby="parceiros-titulo">
         <div className="border-t border-white/10 pt-6">
           <h3 id="parceiros-titulo" className="mb-4 text-sm font-semibold text-white">Parceiros oficiais</h3>
-          <div className="grid gap-3 lg:grid-cols-[1.5fr_1fr]">
-            <article className="relative overflow-hidden rounded-xl border border-white/10 bg-gradient-to-br from-[#151210] to-[#0a0a0e] p-3 transition hover:border-orange-400/30">
-              <div className="absolute -right-10 -top-16 h-32 w-32 rounded-full bg-orange-500/[0.06] blur-3xl" aria-hidden="true" />
-              <a href={process.env.NEXT_PUBLIC_FOTOS_URL || "https://retratt.com"} className="relative flex items-center justify-between gap-3">
-                <span className="flex min-w-0 items-center gap-3">
-                  <img src="/retratt/logo-white.png" alt="Retratt" className="h-6 w-20 shrink-0 object-contain" />
-                  <span><strong className="block text-xs font-semibold text-white">Seus momentos em fotos</strong><span className="mt-0.5 block text-[10px] text-zinc-400">Encontre suas fotos ou publique seus cliques.</span></span>
-                </span>
-                <ChevronRight size={18} className="shrink-0 text-orange-400" />
-              </a>
-              {galeriasRetratt.length > 0 && (
-                <div className="relative mt-2.5 grid grid-cols-2 gap-2">
-                  {galeriasRetratt.map((galeria) => (
-                    <a key={galeria.id} href={(process.env.NEXT_PUBLIC_FOTOS_URL || "https://retratt.com") + "/evento/" + galeria.id} className="group relative overflow-hidden h-20 sm:h-24 rounded-lg border border-white/[0.08] bg-black">
-                      <img src={galeria.capa_url} alt={galeria.nome} loading="lazy" className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
-                      <span className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/15 to-transparent" />
-                      <span className="absolute inset-x-0 bottom-0 p-2"><span className="mb-0.5 flex items-center gap-1 text-[8px] font-bold uppercase tracking-wider text-orange-300"><Images size={11} /> Ver álbum</span><strong className="block line-clamp-2 text-[10px] leading-snug text-white">{galeria.nome}</strong></span>
-                    </a>
-                  ))}
-                </div>
-              )}
-            </article>
-            <a href="https://spartanbjj.com.br/" target="_blank" rel="noopener noreferrer" className="group relative flex items-center gap-3 overflow-hidden rounded-xl border border-white/10 bg-gradient-to-br from-[#141112] to-[#0a0a0e] p-3 transition hover:border-red-400/30">
+          <div className="grid gap-3 md:grid-cols-3">
+            <a href={process.env.NEXT_PUBLIC_FOTOS_URL || "https://retratt.com"} className="group relative flex min-h-40 flex-col justify-center overflow-hidden rounded-xl border border-white/10 bg-gradient-to-br from-[#25140c] via-[#15100d] to-[#0a0a0e] p-4 transition hover:border-orange-400/40">
+              <Camera size={112} strokeWidth={1} className="pointer-events-none absolute -bottom-5 -right-3 -rotate-12 text-orange-400/[0.08]" aria-hidden="true" />
+              <div className="absolute -right-10 -top-16 h-40 w-40 rounded-full bg-orange-500/10 blur-3xl" aria-hidden="true" />
+              <img src="/retratt/logo-white.svg" alt="Retratt" className="relative mb-3 h-5 w-20 object-contain object-left" />
+              <strong className="relative text-sm font-bold text-white">Seu melhor momento merece uma foto.</strong>
+              <span className="relative mt-1 text-[11px] leading-relaxed text-zinc-400">Encontre suas fotos e reviva cada conquista.</span>
+              <span className="relative mt-3 inline-flex items-center gap-1 text-xs font-semibold text-orange-400 group-hover:text-orange-300">Encontrar minhas fotos <ChevronRight size={13} /></span>
+            </a>
+            <a href="https://spartanbjj.com.br/" target="_blank" rel="noopener noreferrer" className="group relative flex min-h-40 items-center gap-3 overflow-hidden rounded-xl border border-white/10 bg-gradient-to-br from-[#141112] to-[#0a0a0e] p-3 transition hover:border-red-400/30">
               <img src="/logo-spartan.svg" alt="" aria-hidden="true" className="pointer-events-none absolute -right-5 -bottom-8 h-36 w-36 object-contain opacity-[0.05]" />
               <span className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-black/40"><img src="/logo-spartan.svg" alt="Spartan Jiu-Jitsu" className="h-14 w-14 object-contain" /></span>
               <span className="relative"><span className="mb-1 block text-[8px] font-bold uppercase tracking-widest text-red-400">No esporte, juntos</span><strong className="block text-sm font-semibold text-white">Spartan Jiu-Jitsu</strong><span className="mt-0.5 block text-[11px] text-zinc-400">Parceiro oficial iTatame</span><span className="mt-2 inline-flex items-center gap-1 text-xs text-zinc-200 group-hover:text-red-300">Conhecer <ChevronRight size={13} /></span></span>
+            </a>
+            <a href="https://www.atalhogratis.com.br" target="_blank" rel="noopener noreferrer" className="group relative flex min-h-40 items-center gap-3 overflow-hidden rounded-xl border border-white/10 bg-gradient-to-br from-[#0d1829] to-[#0a0a0e] p-3 transition hover:border-blue-400/30">
+              <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl border border-blue-400/20 bg-blue-400/10 text-blue-400"><ShieldCheck size={32} aria-hidden="true" /></span>
+              <span className="min-w-0"><span className="mb-1 block text-[8px] font-bold uppercase tracking-widest text-blue-400">Seus atalhos</span><strong className="block text-sm font-semibold text-white">Atalhos<span className="text-blue-400">Grátis</span></strong><span className="mt-0.5 block text-[11px] text-zinc-400">Sistemas e serviços em um só lugar.</span><span className="mt-2 inline-flex items-center gap-1 text-xs text-zinc-200 group-hover:text-blue-300">Conhecer <ChevronRight size={13} /></span></span>
             </a>
           </div>
         </div>

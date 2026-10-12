@@ -35,7 +35,8 @@ async function simular(opcoes: { cpfExiste?: boolean; emailExiste?: boolean; per
 }
 test('responsável exige dados do adulto e recusa menor antes de criar conta', async()=>{
   const original=globalThis.fetch;globalThis.fetch=async()=>{throw Error('Não acessar serviços com dados inválidos')};
-  try{for(const campos of [{nome:''},{cpf:'123'},{nascimento:'2015-01-01'},{telefone:'123'}])assert.equal((await POST(req(campos))).status,400);}finally{globalThis.fetch=original;}
+  const camposInvalidos: Record<string, string>[] = [{nome:''},{cpf:'123'},{nascimento:'2015-01-01'},{telefone:'123'}];
+  try{for(const campos of camposInvalidos)assert.equal((await POST(req(campos))).status,400);}finally{globalThis.fetch=original;}
 });
 test('responsável não precisa de CT e usa conta compatível sem dados esportivos do filho', async()=>{
   await simular({},async writes=>{const resposta=await POST(req({equipe:'CT do filho',academia:'Academia do filho'}));assert.equal(resposta.status,200);assert.equal((await resposta.json()).requiresEmailConfirmation,true);

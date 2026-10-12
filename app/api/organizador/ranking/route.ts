@@ -35,30 +35,8 @@ export async function POST(request: Request) {
 
   const regras = lerRegrasPontuacao(evento.regras_pontuacao_equipes);
   const resultado = calcularResultadosChaves(lutas || [], { [eventoId]: regras });
-  let aplicados = 0;
-
-  if (!regras.ranking_aplicado) {
-    for (const atleta of resultado.atletas) {
-      const id = Number(atleta.atleta_id);
-      if (!Number.isFinite(id) || id <= 0) continue;
-      const { data: atual } = await db
-        .from('atletas')
-        .select('id, ouro, prata, bronze, vitorias, lutas')
-        .eq('id', id)
-        .maybeSingle();
-      if (!atual) continue;
-      const { error } = await db.from('atletas').update({
-        ouro: Number(atual.ouro || 0) + Number(atleta.ouro || 0),
-        prata: Number(atual.prata || 0) + Number(atleta.prata || 0),
-        bronze: Number(atual.bronze || 0) + Number(atleta.bronze || 0),
-        vitorias: Number(atual.vitorias || 0) + Number(atleta.vitorias || 0),
-        lutas: Number(atual.lutas || 0) + Number(atleta.lutas || 0),
-      }).eq('id', id);
-      if (!error) aplicados += 1;
-    }
-    regras.ranking_aplicado = true;
-  }
-
+  // O placar registra as medalhas. O ranking é calculado das chaves;
+  // publicar apenas libera o resultado, sem somar novamente nos cadastros.
   regras.ranking_publicado = true;
   const { error: salvarError } = await db.from('eventos').update({
     status: 'ENCERRADO',
@@ -70,7 +48,7 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     publicado: true,
-    aplicados,
+    aplicados: 0,
     pontuaram: resultado.atletas.length,
     lutas: (lutas || []).length,
   });
