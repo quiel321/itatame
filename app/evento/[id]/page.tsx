@@ -17,6 +17,7 @@ import { agendarChavesAutomaticas } from "@/app/lib/agendar-chaves-automaticas";
 import { formatarValorInscricao, idadeMaxInfantil, valorAbsolutoAvulso, valorAddonAbsoluto, valorComboPesoAbsoluto, valorInfantilLote, type EventoValoresInscricao, type RegrasValoresInscricao } from "@/app/lib/valor-inscricao";
 import { ChatEvento } from "@/app/components/ChatEvento";
 import type { InscricaoCompeticao } from "@/app/lib/categorias-competicao";
+import { existeComboCategorias, type CategoriaValoresPublicos } from "@/app/lib/valores-categorias-publicas";
 
 type EventoDetalhes = EventoComEtapas & Omit<EventoValoresInscricao, "regras_pontuacao_equipes"> & {
   id: string;
@@ -56,6 +57,7 @@ const estiloEtapa: Record<TomEtapaEvento, { badge: string; aviso: string; ponto:
 export default function EventoDetalhesPage() {
   const params = useParams();
   const [evento, setEvento] = useState<EventoDetalhes | null>(null);
+  const [categoriasValores, setCategoriasValores] = useState<CategoriaValoresPublicos[] | null>(null);
   const [organizador, setOrganizador] = useState<{ nome: string; foto_url: string | null } | null>(null);
   const [loading, setLoading] = useState(true);
   const [inscricoes, setInscricoes] = useState<Pick<InscricaoCompeticao, "atleta" | "equipe" | "faixa" | "categoria">[]>([]);
@@ -76,14 +78,17 @@ export default function EventoDetalhesPage() {
     async function carregarDados() {
       if (!params.id) return;
 
-      const [eventoResposta, inscritosResposta] = await Promise.all([
+      setCategoriasValores(null);
+      const [eventoResposta, inscritosResposta, categoriasResposta] = await Promise.all([
         supabase.from("eventos").select("*").eq("id", params.id).single(),
         supabase.from("inscricoes").select("atleta,equipe,faixa,categoria").eq("evento_id", params.id),
+        supabase.from("categorias_evento").select("tipo,ativa,modalidade,sexo,faixa,idade_min,idade_max,peso_min,peso_max").eq("evento_id", params.id).eq("ativa", true),
       ]);
       if (!ativo) return;
 
       const eventoData = eventoResposta.data;
       setEvento(eventoData);
+      if (!categoriasResposta.error) setCategoriasValores(categoriasResposta.data || []);
       if (!inscritosResposta.error) setInscricoes(inscritosResposta.data || []);
       setLoading(false);
 
@@ -146,14 +151,24 @@ export default function EventoDetalhesPage() {
     (etapaAtual.codigo === "INSCRICOES_ABERTAS" || etapaAtual.codigo === "AGUARDANDO_CHECAGEM") &&
     (!fimPagamento || agora <= fimPagamento);
   
-  const fimLote1 = dataOperacional(evento.lote1_data_fim, true, evento.estado);
-  const fimLote2 = dataOperacional(evento.lote2_data_fim, true, evento.estado);
-  const fimLote3 = dataOperacional(evento.lote3_data_fim, true, evento.estado);
-  let loteAtivo = 0;
-  if (fimLote1 && agora <= fimLote1) loteAtivo = 1;
-  else if (fimLote2 && agora <= fimLote2) loteAtivo = 2;
-  else if (fimLote3 && agora <= fimLote3) loteAtivo = 3;
-  else loteAtivo = 4; // Todos os lotes encerrados
+  const lotesValores = ([
+    { lote: 1 as const, titulo: "1º Lote (Promocional)", valor: evento.lote1_valor, ate: evento.lote1_data_fim || evento.data_fim_inscricoes },
+    { lote: 2 as const, titulo: "2º Lote", valor: evento.lote2_valor, ate: evento.lote2_data_fim || evento.data_fim_inscricoes },
+    { lote: 3 as const, titulo: "3º Lote (Final)", valor: evento.lote3_valor, ate: evento.lote3_data_fim || evento.data_fim_inscricoes },
+  ]).filter(item => Number(item.valor) > 0 || valorInfantilLote(evento, item.lote) !== undefined);
+  const loteAtivo = etapaAtual.inscricoesAbertas ? lotesValores.find(item => {
+    const fim = dataOperacional(item.ate, true, evento.estado);
+    return !item.ate || Boolean(fim && agora <= fim);
+  })?.lote : undefined;
+  const temPeso = categoriasValores === null || categoriasValores.some(c => c.tipo === 'peso');
+  const temAbsoluto = categoriasValores === null
+    ? valorAbsolutoAvulso(evento) > 0 || valorAddonAbsoluto(evento) > 0
+    : categoriasValores.some(c => c.tipo === 'absoluto');
+  const comboAdulto = existeComboCategorias(categoriasValores || [], idadeMaxInfantil(evento) + 1);
+  const comboInfantilDisponivel = existeComboCategorias(categoriasValores || [], 4, idadeMaxInfantil(evento));
+  const temCombo = comboAdulto || comboInfantilDisponivel;
+  const absolutoInfantilDisponivel = categoriasValores?.some(c => c.tipo === 'absoluto'
+    && c.idade_min <= idadeMaxInfantil(evento) && c.idade_max >= 4);
   const addonAbsoluto = valorAddonAbsoluto(evento);
   const addonAbsolutoInfantil = valorAddonAbsoluto(evento, idadeMaxInfantil(evento));
   const avulsoAbsoluto = valorAbsolutoAvulso(evento);
@@ -346,15 +361,13 @@ export default function EventoDetalhesPage() {
 
               {abaAtiva === "valores" && (
                 <div className="animate-in fade-in duration-500 text-zinc-400 text-xs md:text-sm leading-relaxed font-medium">
-                  <h3 className="text-base md:text-lg font-black text-white mb-4 uppercase tracking-wide border-l-2 border-red-500 pl-2">Lotes de Inscrição</h3>
+                  <h3 className="text-base md:text-lg font-black text-white mb-4 uppercase tracking-wide border-l-2 border-red-500 pl-2">Valores de inscrição</h3>
+                  <p className="mb-4 text-xs text-zinc-400">Preços por modalidade. A participação depende das categorias disponíveis para idade, sexo, faixa e peso.</p>
+                  {categoriasValores === null && <p className="mb-4 text-xs text-amber-200">Não foi possível verificar as categorias disponíveis. Atualize a página para consultar as opções combinadas.</p>}
                   
                   {/* LISTAGEM DINÂMICA DE LOTES */}
-                  <div className="space-y-3 mb-6">
-                    {([
-                      { lote: 1 as const, titulo: "1º Lote (Promocional)", valor: evento.lote1_valor, ate: evento.lote1_data_fim },
-                      { lote: 2 as const, titulo: "2º Lote", valor: evento.lote2_valor, ate: evento.lote2_data_fim },
-                      { lote: 3 as const, titulo: "3º Lote (Final)", valor: evento.lote3_valor, ate: evento.lote3_data_fim },
-                    ]).filter(item => Number(item.valor) > 0 || valorInfantilLote(evento, item.lote) !== undefined).map(item => {
+                  {temPeso && <div className="space-y-3 mb-6">
+                    {lotesValores.map(item => {
                       const combo = valorComboPesoAbsoluto(Number(item.valor), evento);
                       const infantil = valorInfantilLote(evento, item.lote);
                       const comboInfantil = infantil !== undefined ? valorComboPesoAbsoluto(infantil, evento, idadeMaxInfantil(evento)) : null;
@@ -362,39 +375,40 @@ export default function EventoDetalhesPage() {
                       <div key={item.lote} className={`p-4 rounded-xl border flex justify-between items-center gap-3 transition-all ${loteAtivo === item.lote ? 'bg-red-500/10 border-red-500/50 text-white shadow-[0_0_15px_rgba(239,68,68,0.1)]' : 'bg-[#050505] border-white/5 text-zinc-500 opacity-60'}`}>
                         <div>
                           <h4 className="font-black uppercase tracking-widest text-xs md:text-sm">{item.titulo}</h4>
-                          <p className="text-[10px] md:text-xs mt-1">Válido até: {formatarDataHora(item.ate)}</p>
+                          <p className="text-[10px] md:text-xs mt-1">Válido até: {formatarDataHoraEvento(item.ate, true, evento.estado)}</p>
                         </div>
                         <div className="text-right shrink-0">
                           <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-400">Categoria de peso</p>
                           <p className="font-black text-lg">{formatarValorInscricao(Number(item.valor))}</p>
-                          <p className="mt-1 text-[10px] font-bold text-amber-200/90">Peso + Absoluto: {formatarValorInscricao(combo)}</p>
+                          {comboAdulto && <p className="mt-1 text-[10px] font-bold text-amber-200/90">Peso + Absoluto: {formatarValorInscricao(combo)}</p>}
+                          {comboInfantilDisponivel && infantil === undefined && <p className="mt-1 text-[10px] font-bold text-cyan-300">Peso + Absoluto infantil: {formatarValorInscricao(valorComboPesoAbsoluto(Number(item.valor), evento, idadeMaxInfantil(evento)))}</p>}
                           {infantil !== undefined && (
-                            <p className="mt-1 text-[10px] font-bold text-cyan-300">Infantil até {idadeMaxInfantil(evento)} anos: {formatarValorInscricao(infantil)}{comboInfantil != null ? ` · peso + absoluto ${formatarValorInscricao(comboInfantil)}` : ""}</p>
+                            <p className="mt-1 text-[10px] font-bold text-cyan-300">Infantil até {idadeMaxInfantil(evento)} anos: {formatarValorInscricao(infantil)}{comboInfantilDisponivel && comboInfantil != null ? ` · peso + absoluto ${formatarValorInscricao(comboInfantil)}` : ""}</p>
                           )}
                           {loteAtivo === item.lote && <span className="text-[9px] bg-red-500 text-white px-2 py-0.5 rounded uppercase font-bold tracking-widest inline-block mt-1">Lote Vigente</span>}
                         </div>
                       </div>
                     );})}
-                  </div>
+                  </div>}
 
-                  {(addonAbsoluto > 0 || avulsoAbsoluto > 0) && (
+                  {temAbsoluto && (
                     <div className="p-4 rounded-xl border border-amber-500/20 bg-amber-500/5 mb-6 text-white">
                       <div className="flex justify-between items-start gap-3">
                         <div>
-                          <h4 className="font-black uppercase tracking-widest text-xs md:text-sm">Absoluto</h4>
-                          <p className="text-[10px] md:text-xs mt-1 text-zinc-400">Sozinho para quem não tem categoria de peso (ex.: mirim). No combo, soma só o extra ao lote.</p>
+                          <h4 className="font-black uppercase tracking-widest text-xs md:text-sm">Somente Absoluto</h4>
+                          <p className="text-[10px] md:text-xs mt-1 text-zinc-400">Inscrição exclusiva no Absoluto.{temCombo ? ' O combo está disponível para perfis aceitos nas duas modalidades.' : ''}</p>
                         </div>
                         <div className="text-right shrink-0">
-                          <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-400">Sozinho</p>
+                          <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-400">Valor da inscrição</p>
                           <p className="font-black text-lg">{formatarValorInscricao(avulsoAbsoluto)}</p>
-                          {avulsoAbsolutoInfantil !== avulsoAbsoluto && (
+                          {absolutoInfantilDisponivel && avulsoAbsolutoInfantil !== avulsoAbsoluto && (
                             <p className="mt-1 text-[10px] font-bold text-cyan-300">Infantil: {formatarValorInscricao(avulsoAbsolutoInfantil)}</p>
                           )}
-                          <p className="mt-2 text-[9px] font-bold uppercase tracking-widest text-zinc-400">Extra no combo</p>
-                          <p className="font-black text-sm">+ {formatarValorInscricao(addonAbsoluto)}</p>
-                          {addonAbsolutoInfantil !== addonAbsoluto && (
+                          {temCombo && <><p className="mt-2 text-[9px] font-bold uppercase tracking-widest text-zinc-400">Extra no combo{!comboAdulto ? ' infantil' : ''}</p>
+                          <p className="font-black text-sm">+ {formatarValorInscricao(comboAdulto ? addonAbsoluto : addonAbsolutoInfantil)}</p>
+                          {comboAdulto && comboInfantilDisponivel && addonAbsolutoInfantil !== addonAbsoluto && (
                             <p className="mt-1 text-[10px] font-bold text-cyan-300">Infantil: + {formatarValorInscricao(addonAbsolutoInfantil)}</p>
-                          )}
+                          )}</>}
                         </div>
                       </div>
                     </div>

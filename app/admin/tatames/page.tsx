@@ -4,17 +4,21 @@ import { obterEventoOrganizador, guardarEventoOrganizador } from '@/app/lib/even
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { AlertCircle, CheckCircle, Clock, Play, RefreshCw, Search, X } from 'lucide-react';
+import { AlertCircle, ArrowDown, ArrowUp, CheckCircle, Clock, Play, RefreshCw, Search, X } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { obterTempoRegulamentar } from '../../lib/cronograma';
 import { processarAvancosAutomaticosChaves } from '../../lib/chaves-auto-avanco';
 import { ehFaseChaveDeTres, ordemOperacionalChaveTriangular } from '@/app/lib/chave-de-tres';
+import { compararCategoriasIdadePeso, lutaIniciadaSequencia, metadadosCategoriaSequencia, planejarSequenciaTatames } from '@/app/lib/sequencia-tatames';
+import { dataHoraLocalParaIso, fusoHorarioEvento } from '@/app/lib/evento-datas';
+import type { CategoriaCompeticao } from '@/app/lib/categorias-competicao';
 
-type Evento = { id: string | number; nome: string; data_evento?: string | null };
+type Evento = { id: string | number; nome: string; data_evento?: string | null; estado?: string | null };
 type Luta = {
   tempo_minutos?: number | null;
   id: string | number;
   categoria: string;
+  categoria_id?: string | null;
   faixa: string;
   fase?: string | null;
   id_visual?: string | number | null;
@@ -38,6 +42,9 @@ type CategoriaTatame = {
   totalLutas: number;
   lutasConcluidas: number;
   proximaHora?: string | null;
+  ordem: number;
+  idadeMin?: number;
+  pesoMin?: number;
 };
 
 function limpar(value?: string | null) {
@@ -82,9 +89,9 @@ function statusConcluido(luta: Luta) {
   return luta.status_luta === 'concluida' || Boolean(luta.vencedor);
 }
 
-function formatarHorario(value?: string | null) {
+function formatarHorario(value?: string | null, estado?: string | null) {
   if (!value) return 'Sem horário';
-  return new Date(value).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  return new Date(value).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: fusoHorarioEvento(estado) });
 }
 
 const fasePeso: Record<string, number> = {
@@ -145,7 +152,7 @@ export default function GestaoTatames() {
 
       const { data } = await supabase
         .from('eventos')
-        .select('id, nome, data_evento')
+        .select('id, nome, data_evento, estado')
         .eq('organizador_id', authData.user.id)
         .order('id', { ascending: false });
 
@@ -177,10 +184,11 @@ export default function GestaoTatames() {
 
     await processarAvancosAutomaticosChaves(supabase, eventoSelecionado);
 
-    const { data: lutas, error } = await supabase
+    const [{ data: lutas, error }, { data: categoriasEvento }] = await Promise.all([supabase
       .from('chaves')
-      .select('id, categoria, faixa, fase, id_visual, proxima_luta, ordem, ordem_tatame, tatame, status_luta, vencedor, atleta_1, atleta_2, horario_estimado, iniciada_em, tempo_minutos')
-      .eq('evento_id', eventoSelecionado);
+      .select('id, categoria, categoria_id, faixa, fase, id_visual, proxima_luta, ordem, ordem_tatame, tatame, status_luta, vencedor, atleta_1, atleta_2, horario_estimado, iniciada_em, tempo_minutos')
+      .eq('evento_id', eventoSelecionado),
+      supabase.from('categorias_evento').select('*').eq('evento_id', eventoSelecionado)]);
 
     if (error) {
       setMensagem(`Erro ao carregar chaves: ${error.message}`);
@@ -196,7 +204,7 @@ export default function GestaoTatames() {
 
     lutasCarregadas.forEach((luta) => {
       const temAtletaReal = !isFantasma(luta.atleta_1) || !isFantasma(luta.atleta_2);
-      if (!temAtletaReal) return;
+      if (!temAtletaReal && ![luta.atleta_1, luta.atleta_2].some(nome => normalizar(nome) === 'TBD')) return;
 
       const chave = `${luta.categoria}__${luta.faixa}`;
       if (!grupos[chave]) {
@@ -208,17 +216,22 @@ export default function GestaoTatames() {
           totalLutas: 0,
           lutasConcluidas: 0,
           proximaHora: null,
+          ordem: luta.ordem_tatame ?? Infinity,
+          ...metadadosCategoriaSequencia(luta, (categoriasEvento || []) as CategoriaCompeticao[]),
         };
       }
+      grupos[chave].ordem = Math.min(grupos[chave].ordem, luta.ordem_tatame ?? Infinity);
 
-      if (isLutaReal(luta) || ehFaseChaveDeTres(luta.fase)) grupos[chave].totalLutas += 1;
+      if (![luta.atleta_1, luta.atleta_2].some(nome => normalizar(nome) === 'BYE') || ehFaseChaveDeTres(luta.fase)) grupos[chave].totalLutas += 1;
       if (isLutaReal(luta) && statusConcluido(luta)) grupos[chave].lutasConcluidas += 1;
-      if (!statusConcluido(luta) && luta.horario_estimado && !grupos[chave].proximaHora) {
+      if (!statusConcluido(luta) && luta.horario_estimado && (!grupos[chave].proximaHora || luta.horario_estimado < grupos[chave].proximaHora!)) {
         grupos[chave].proximaHora = luta.horario_estimado;
       }
     });
 
-    setCategorias(Object.values(grupos).filter((cat) => cat.totalLutas > 0 || cat.tatameAtual === 'Não definido').sort((a, b) => a.nome.localeCompare(b.nome)));
+    setCategorias(Object.values(grupos).sort((a, b) => a.ordem - b.ordem || a.nome.localeCompare(b.nome)));
+    setTemAlteracoesPendentes(lutasCarregadas.some(l => Boolean(l.tatame) && l.ordem_tatame == null && !lutaIniciadaSequencia(l)));
+    setTatamesCronometrados([]);
     setLoadingLutas(false);
   }, [eventoSelecionado]);
 
@@ -231,27 +244,52 @@ export default function GestaoTatames() {
   }, [carregarLutas, carregarTatamesConfigurados, eventoSelecionado]);
 
   const alterarTatame = (categoriaObj: CategoriaTatame, novoTatame: string) => {
+    if (tatameBloqueado(categoriaObj.tatameAtual) || tatameBloqueado(novoTatame)) return;
     setCategorias((prev) => prev.map((cat) => cat.idUnico === categoriaObj.idUnico ? { ...cat, tatameAtual: novoTatame } : cat));
     setTemAlteracoesPendentes(true);
-    setMensagem('Categoria movida. Toque em Salvar distribuição para o mesário e o chamador enxergarem.');
+    setMensagem('Categoria movida. Salve a sequência e depois defina os horários.');
+  };
+
+  const tatameBloqueado = (tatame: string) => lutasOperacao.some(l => chaveTatame(l.tatame) === chaveTatame(tatame === 'Não definido' ? '' : tatame) && lutaIniciadaSequencia(l));
+  const moverCategoria = (cat: CategoriaTatame, direcao: -1 | 1) => {
+    if (tatameBloqueado(cat.tatameAtual)) return;
+    const fila = categorias.filter(c => chaveTatame(c.tatameAtual) === chaveTatame(cat.tatameAtual));
+    const outra = fila[fila.findIndex(c => c.idUnico === cat.idUnico) + direcao];
+    if (!outra) return;
+    setCategorias(atuais => { const lista = [...atuais]; const i = lista.findIndex(c => c.idUnico === cat.idUnico); const j = lista.findIndex(c => c.idUnico === outra.idUnico); [lista[i], lista[j]] = [lista[j], lista[i]]; return lista; });
+    setTemAlteracoesPendentes(true);
+    setMensagem('Ordem ajustada. Salve para atualizar a fila do chamador. Os horários deste tatame serão recalculados após salvar.');
+  };
+  const ordenarIdadePeso = (tatame: string) => {
+    if (tatameBloqueado(tatame)) return;
+    setCategorias(atuais => {
+      const fila = atuais.filter(c => chaveTatame(c.tatameAtual) === chaveTatame(tatame)).sort(compararCategoriasIdadePeso);
+      let i = 0;
+      return atuais.map(c => chaveTatame(c.tatameAtual) === chaveTatame(tatame) ? fila[i++] : c);
+    });
+    setTemAlteracoesPendentes(true);
+    setMensagem('Mais novos primeiro; dentro da idade, mais leves primeiro. Confira e salve a sequência.');
+  };
+
+  const salvarPlanejamento = async (linhas: unknown[]) => {
+    const { error } = await supabase.rpc('salvar_planejamento_tatames', { p_evento: eventoSelecionado, p_lutas: linhas });
+    if (error) throw new Error(error.code === 'PGRST202'
+      ? 'Instale a função de planejamento dos tatames no Supabase antes de salvar. Nenhuma alteração foi gravada.' : error.message);
   };
 
   const salvarAlteracoes = async () => {
     if (!eventoSelecionado || categorias.length === 0) return;
     setSaving('todos');
-    setMensagem('Salvando distribuição dos tatames...');
-    const resultados = await Promise.all(categorias.map((categoria) => supabase
-      .from('chaves')
-      .update({ tatame: categoria.tatameAtual === 'Não definido' ? null : nomeOficialTatame(categoria.tatameAtual, tatamesDisponiveis) })
-      .eq('evento_id', eventoSelecionado)
-      .eq('categoria', categoria.nome)
-      .eq('faixa', categoria.faixa)));
-    const falha = resultados.find((resultado) => resultado.error)?.error;
-    setMensagem(falha ? `Erro ao salvar alterações: ${falha.message}` : 'Alterações salvas. Mesários e Chamador receberão a nova distribuição.');
-    setSaving(null);
-    if (!falha) {
-      setTemAlteracoesPendentes(false);
+    setMensagem('Salvando distribuição e sequência...');
+    try {
+      const linhas = planejarSequenciaTatames(lutasOperacao, categorias.map(c => ({ ...c, tatameAtual: c.tatameAtual === 'Não definido' ? c.tatameAtual : nomeOficialTatame(c.tatameAtual, tatamesDisponiveis) })));
+      await salvarPlanejamento(linhas);
       await carregarLutas();
+      setMensagem('Sequência salva. O chamador e o mesário já recebem esta ordem. Defina novamente os horários dos tatames alterados.');
+    } catch (error) {
+      setMensagem(error instanceof Error ? error.message : 'Não foi possível salvar.');
+    } finally {
+      setSaving(null);
     }
   };
 
@@ -275,7 +313,7 @@ export default function GestaoTatames() {
       const tatameAlvo = normalizar(cronoTatame);
       const lutasReais = (lutasDoEvento as Luta[])
         .filter((luta) => normalizar(luta.tatame) === tatameAlvo)
-        .filter((luta) => isLutaReal(luta) || ehFaseChaveDeTres(luta.fase))
+        .filter((luta) => ![luta.atleta_1, luta.atleta_2].some(nome => normalizar(nome) === 'BYE'))
         .filter((luta) => !statusConcluido(luta))
         .sort(ordenarLutasCronograma);
 
@@ -287,33 +325,31 @@ export default function GestaoTatames() {
 
       const evento = eventos.find((item) => String(item.id) === eventoSelecionado);
       const dataEvento = String(evento?.data_evento || '').slice(0, 10);
-      const dataBase = /^\d{4}-\d{2}-\d{2}$/.test(dataEvento)
-        ? new Date(`${dataEvento}T00:00:00`)
-        : new Date();
-      const [horas, minutos] = cronoHora.split(':');
-      dataBase.setHours(Number(horas), Number(minutos), 0, 0);
-      const ponteiroTempo = new Date(dataBase);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dataEvento)) throw new Error('Defina a data do campeonato antes dos horários.');
+      if (tatameBloqueado(cronoTatame)) throw new Error('Este tatame já iniciou a operação. Horários preservados.');
+      if (!Number.isInteger(cronoTransicao) || cronoTransicao < 0 || cronoTransicao > 10) throw new Error('O intervalo deve ser de 0 a 10 minutos.');
+      const ponteiroTempo = new Date(dataHoraLocalParaIso(`${dataEvento}T${cronoHora}`, evento?.estado)!);
 
-      const updates = lutasReais.map((luta, index) => {
+      const updates = lutasReais.map((luta) => {
         const horarioEstimado = new Date(ponteiroTempo);
         const tempoLuta = (luta.tempo_minutos || obterTempoRegulamentar(luta.categoria, luta.faixa));
         ponteiroTempo.setMinutes(ponteiroTempo.getMinutes() + tempoLuta + cronoTransicao);
 
-        return supabase
-          .from('chaves')
-          .update({ horario_estimado: horarioEstimado.toISOString(), ordem_tatame: index + 1 })
-          .eq('id', luta.id);
+        return { id: luta.id, tatame: luta.tatame, ordem_tatame: luta.ordem_tatame,
+          horario_estimado: horarioEstimado.toISOString(), tatame_anterior: luta.tatame ?? null,
+          ordem_anterior: luta.ordem_tatame ?? null, horario_anterior: luta.horario_estimado ?? null };
       });
 
-      await Promise.all(updates);
-      setMensagem(`Cronograma do ${cronoTatame} gerado para ${lutasReais.length} lutas reais pendentes.`);
+      if (updates.some(l => !l.ordem_tatame)) throw new Error('Salve a sequência deste tatame antes de aplicar os horários.');
+      await salvarPlanejamento(updates);
+      setMensagem(`Horários do ${cronoTatame} salvos para ${lutasReais.length} lutas, incluindo as próximas fases.`);
       setTatamesCronometrados((atuais) => Array.from(new Set([...atuais, cronoTatame])));
       const proximoTatame = tatamesPendentesCrono.find((tatame) => tatame !== cronoTatame);
       if (proximoTatame) setCronoTatame(proximoTatame);
       await carregarLutas();
     } catch (error) {
       console.error(error);
-      setMensagem('Houve um erro ao gerar o cronograma.');
+      setMensagem(error instanceof Error ? error.message : 'Houve um erro ao gerar o cronograma.');
     } finally {
       setGerandoCrono(false);
     }
@@ -388,6 +424,7 @@ export default function GestaoTatames() {
       return;
     }
     setCronoTatame(tatamesPendentesCrono[0] || tatamesUsados[0] || tatamesDisponiveis[0] || '');
+    setMensagem('');
     setShowCronoModal(true);
   };
 
@@ -396,20 +433,20 @@ export default function GestaoTatames() {
     return (
       <label className="block">
         <span className={`mb-1 block text-[10px] font-bold uppercase tracking-widest ${destaque ? 'text-yellow-300' : 'text-zinc-500'}`}>{destaque ? 'Escolha o tatame' : 'Mover para'}</span>
-        <select value={cat.tatameAtual} onChange={(event) => alterarTatame(cat, event.target.value)} disabled={concluida || Boolean(salvando)} className={`min-h-11 w-full rounded-xl px-3 text-sm font-bold text-white outline-none disabled:opacity-50 ${destaque ? 'border-2 border-yellow-400 bg-black' : 'border border-white/10 bg-black/60'}`}>
+        <select value={cat.tatameAtual} onChange={(event) => alterarTatame(cat, event.target.value)} disabled={concluida || tatameBloqueado(cat.tatameAtual) || Boolean(salvando)} className={`min-h-11 w-full rounded-xl px-3 text-sm font-bold text-white outline-none disabled:opacity-50 ${destaque ? 'border-2 border-yellow-400 bg-black' : 'border border-white/10 bg-black/60'}`}>
           <option value="Não definido">Ainda sem tatame</option>
-          {nomesTatame.map((tatame) => <option key={chaveTatame(tatame)} value={tatame}>{tatame}</option>)}
+          {nomesTatame.map((tatame) => <option key={chaveTatame(tatame)} value={tatame} disabled={tatameBloqueado(tatame)}>{tatame}</option>)}
         </select>
       </label>
     );
   };
 
   return (
-    <main className="min-h-screen bg-[#050505] p-4 pb-32 md:p-8 md:pb-36 text-white">
+    <main className="min-h-screen bg-[#050505] p-4 pb-60 md:p-8 md:pb-36 text-white">
       <div className="mx-auto max-w-6xl">
         <header className="mb-6 border-b border-white/10 pb-6">
           <h1 className="text-2xl md:text-4xl font-black tracking-tight">Organizar tatames</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-zinc-400">Duas tarefas: escolher em qual tatame cada categoria luta, depois dizer que horas cada tatame começa.</p>
+          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-zinc-400">Escolha o tatame, organize as categorias na ordem desejada e defina o horário de início.</p>
         </header>
 
         <section className="mb-5 grid gap-3 md:grid-cols-[1fr_1fr_auto]">
@@ -428,13 +465,13 @@ export default function GestaoTatames() {
               <input value={busca} onChange={(event) => setBusca(event.target.value)} placeholder="Nome, faixa ou tatame" className="w-full bg-transparent text-sm text-white outline-none placeholder:text-zinc-600" />
             </span>
           </label>
-          <button onClick={() => carregarLutas()} className="self-end rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-zinc-400 hover:text-white" title="Atualizar"><RefreshCw size={16} /></button>
+          <button onClick={() => carregarLutas()} disabled={temAlteracoesPendentes || Boolean(salvando)} className="self-end rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-zinc-400 hover:text-white disabled:opacity-40" title="Atualizar"><RefreshCw size={16} /></button>
         </section>
 
         <ol className="mb-6 grid gap-3 md:grid-cols-2">
           <li className={`rounded-2xl border p-4 ${passoAtual === 1 ? 'border-yellow-500/40 bg-yellow-500/10' : 'border-white/10 bg-[#0b0b10]'}`}>
             <p className="text-[11px] font-black uppercase tracking-widest text-yellow-300">Passo 1</p>
-            <p className="mt-1 font-bold text-white">Coloque cada categoria em um tatame e salve.</p>
+            <p className="mt-1 font-bold text-white">Escolha o tatame e a sequência das categorias.</p>
             <p className="mt-1 text-sm text-zinc-400">{resumo.semTatame === 0 ? 'Todas as categorias já têm tatame.' : `${resumo.semTatame} categoria(s) ainda sem tatame.`}</p>
           </li>
           <li className={`rounded-2xl border p-4 ${passoAtual === 2 ? 'border-yellow-500/40 bg-yellow-500/10' : 'border-white/10 bg-[#0b0b10]'}`}>
@@ -495,6 +532,7 @@ export default function GestaoTatames() {
                         : `${coluna.categorias.length} categoria(s) neste tatame · ${coluna.temHorario ? 'horário definido' : 'falta definir o horário'}`}
                     </p>
                   </div>
+                  <button onClick={() => ordenarIdadePeso(coluna.tatame)} disabled={tatameBloqueado(coluna.tatame) || Boolean(salvando) || coluna.categorias.length < 2} className="min-h-11 rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-3 text-xs font-bold text-cyan-200 disabled:opacity-40">Ordenar por idade e peso</button>
                   {coluna.categorias.length > 0 && coluna.operacao && (
                     <span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase ${coluna.operacao.atual ? 'bg-red-500 text-white' : coluna.operacao.chamadas.length ? 'bg-yellow-400 text-black' : 'bg-emerald-500/80 text-black'}`}>
                       {coluna.operacao.atual ? 'Lutando agora' : coluna.operacao.chamadas.length ? 'Atleta chamado' : 'Livre'}
@@ -504,6 +542,7 @@ export default function GestaoTatames() {
 
                 {coluna.categorias.length > 0 && (
                   <>
+                    <p className="mt-3 text-xs leading-relaxed text-zinc-400">{tatameBloqueado(coluna.tatame) ? 'Operação iniciada: sequência protegida.' : 'Do primeiro ao último. Use as setas para ajustar; depois salve. Categorias sem idade/peso identificados ficam ao final da ordenação automática.'}</p>
                     {coluna.operacao?.atual && (
                       <p className="mt-3 rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-100">Agora: {coluna.operacao.atual.atleta_1} × {coluna.operacao.atual.atleta_2}</p>
                     )}
@@ -514,15 +553,23 @@ export default function GestaoTatames() {
                       <p className="mt-1 text-sm text-cyan-300">Esperando adversário: {coluna.operacao.baias.slice(0, 2).map((luta) => isFantasma(luta.atleta_1) ? luta.atleta_2 : luta.atleta_1).join(', ')}</p>
                     )}
                     <div className="mt-3 space-y-2">
-                      {coluna.categorias.map((cat) => (
+                      {coluna.categorias.map((cat) => {
+                        const filaCompleta = categoriasVisiveis.filter(c => chaveTatame(c.tatameAtual) === chaveTatame(coluna.tatame));
+                        const index = filaCompleta.findIndex(c => c.idUnico === cat.idUnico);
+                        return (
                         <div key={cat.idUnico} className="grid gap-3 rounded-xl border border-white/10 bg-black/40 p-3 sm:grid-cols-[1fr_200px] sm:items-center">
-                          <div>
-                            <p className="font-bold uppercase text-white">{cat.nome}</p>
-                            <p className="text-xs text-zinc-500">Faixa {cat.faixa} · {cat.lutasConcluidas}/{cat.totalLutas} lutas · {formatarHorario(cat.proximaHora)}</p>
+                          <div className="flex min-w-0 items-start gap-3">
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-cyan-500/15 text-sm font-black text-cyan-200">{index + 1}</span>
+                            <div className="min-w-0"><p className="break-words text-sm font-bold text-white">{cat.nome}</p>
+                            <p className="text-xs text-zinc-500">Faixa {cat.faixa} · {cat.lutasConcluidas}/{cat.totalLutas} lutas · {formatarHorario(cat.proximaHora, eventos.find(e => String(e.id) === eventoSelecionado)?.estado)}</p>
+                            <div className="mt-2 flex gap-2">
+                              <button aria-label={`Subir ${cat.nome}`} onClick={() => moverCategoria(cat, -1)} disabled={index === 0 || tatameBloqueado(coluna.tatame) || Boolean(salvando)} className="flex min-h-11 items-center gap-1 rounded-lg border border-white/15 px-3 text-xs font-bold disabled:opacity-30"><ArrowUp size={16} /> Subir</button>
+                              <button aria-label={`Descer ${cat.nome}`} onClick={() => moverCategoria(cat, 1)} disabled={index === filaCompleta.length - 1 || tatameBloqueado(coluna.tatame) || Boolean(salvando)} className="flex min-h-11 items-center gap-1 rounded-lg border border-white/15 px-3 text-xs font-bold disabled:opacity-30"><ArrowDown size={16} /> Descer</button>
+                            </div></div>
                           </div>
                           {seletorTatame(cat)}
                         </div>
-                      ))}
+                      ); })}
                     </div>
                   </>
                 )}
@@ -533,10 +580,10 @@ export default function GestaoTatames() {
       </div>
 
       {!loadingInit && !loadingLutas && categorias.length > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-white/10 bg-[#050505]/95 p-4 backdrop-blur">
+        <div className="fixed bottom-[calc(4rem+env(safe-area-inset-bottom))] left-0 right-0 z-40 border-t border-white/10 bg-[#050505]/95 p-3 backdrop-blur md:bottom-0 md:p-4">
           <div className="mx-auto flex max-w-6xl flex-col gap-3 sm:flex-row">
             <button onClick={salvarAlteracoes} disabled={Boolean(salvando) || !temAlteracoesPendentes} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-white px-5 py-4 text-xs font-black uppercase tracking-widest text-black disabled:opacity-40">
-              {salvando ? <RefreshCw size={16} className="animate-spin" /> : <CheckCircle size={16} />} {temAlteracoesPendentes ? 'Salvar distribuição' : 'Distribuição salva'}
+              {salvando ? <RefreshCw size={16} className="animate-spin" /> : <CheckCircle size={16} />} {temAlteracoesPendentes ? 'Salvar sequência e tatames' : 'Sequência salva'}
             </button>
             <button onClick={abrirHorarios} disabled={tatamesUsados.length === 0 || temAlteracoesPendentes} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-yellow-500 px-5 py-4 text-xs font-black uppercase tracking-widest text-black disabled:opacity-40">
               <Clock size={16} /> {temAlteracoesPendentes ? 'Salve antes dos horários' : 'Definir horários'}
@@ -553,10 +600,11 @@ export default function GestaoTatames() {
                 <h2 className="flex items-center gap-2 text-xl font-black text-white"><Clock size={20} className="text-yellow-300" /> Horário do tatame</h2>
                 <p className="mt-1 text-sm text-zinc-400">Informe quando a primeira luta começa. O sistema preenche as seguintes.</p>
               </div>
-              <button onClick={() => setShowCronoModal(false)} className="rounded-xl bg-white/5 p-2 text-zinc-400 hover:text-white"><X size={18} /></button>
+              <button aria-label="Fechar horários" onClick={() => setShowCronoModal(false)} className="min-h-11 min-w-11 rounded-xl bg-white/5 p-2 text-zinc-400 hover:text-white"><X size={18} /></button>
             </div>
 
             <div className="space-y-4 p-5">
+              {mensagem && <p role="status" className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 p-3 text-sm text-cyan-100">{mensagem}</p>}
               <p className="rounded-xl border border-white/10 bg-black/40 p-3 text-sm text-zinc-300">
                 {tatamesPendentesCrono.length > 0 ? `Falta horário em ${tatamesPendentesCrono.length} tatame(s).` : 'Todos os tatames já têm horário. Você pode gerar de novo se mudar a ordem.'}
               </p>
@@ -564,7 +612,7 @@ export default function GestaoTatames() {
                 <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-widest text-zinc-500">Qual tatame?</label>
                 <select value={cronoTatame} onChange={(event) => setCronoTatame(event.target.value)} className="w-full rounded-xl border border-white/10 bg-black px-4 py-3 text-sm font-bold text-white outline-none">
                   <option value="" disabled>Selecione</option>
-                  {(tatamesUsados.length > 0 ? tatamesUsados : nomesTatame).map((tatame) => <option key={chaveTatame(tatame)} value={tatame}>{tatame}{chavesComHorario.has(chaveTatame(tatame)) ? ' · já tem horário' : ''}</option>)}
+                  {(tatamesUsados.length > 0 ? tatamesUsados : nomesTatame).map((tatame) => <option key={chaveTatame(tatame)} value={tatame} disabled={tatameBloqueado(tatame)}>{tatame}{chavesComHorario.has(chaveTatame(tatame)) ? ' · já tem horário' : ''}</option>)}
                 </select>
               </div>
 
@@ -579,7 +627,7 @@ export default function GestaoTatames() {
                 </div>
               </div>
 
-              <p className="text-sm leading-relaxed text-zinc-400">Entram lutas com dois atletas e, na chave de 3 ou 6, também a baia e as decisões, na ordem: luta 1, baia, decisão, final.</p>
+              <p className="text-sm leading-relaxed text-zinc-400">Horário local do campeonato. A sequência salva é mantida, incluindo as próximas fases e decisões das chaves de 3 ou 6. Os horários são estimativas.</p>
 
               <button onClick={gerarCronogramaTatame} disabled={gerandoCrono || !cronoTatame} className="flex w-full items-center justify-center gap-2 rounded-xl bg-yellow-500 px-4 py-3.5 text-xs font-black uppercase tracking-widest text-black disabled:opacity-50">
                 {gerandoCrono ? <RefreshCw size={16} className="animate-spin" /> : <Play size={16} fill="currentColor" />}

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AlertCircle, CheckCircle2, Clock3, LogOut, Megaphone, RefreshCw, ShieldCheck, Users, X } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Clock3, LogOut, Megaphone, RefreshCw, Users, X } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { processarAvancosAutomaticosChaves, propagarResultadoChave } from '../../lib/chaves-auto-avanco';
 import { obterTempoRegulamentar } from '../../lib/cronograma';
@@ -10,6 +10,8 @@ import { rotuloLuta } from '../../lib/lutas-rotulos';
 import { semFaixaDuplicada } from '@/app/lib/categorias-competicao';
 import { sugestoesCategoriaPorTatame } from '@/app/lib/sugestao-categoria-tatame';
 import { ordemOperacionalChaveTriangular, placeholderSlotChaveDeTres, textoAguardandoChaveDeTres } from '@/app/lib/chave-de-tres';
+import FilaCategoriasChamador from '@/app/components/FilaCategoriasChamador';
+import { filaCategoriasTatame, normalizarTatameSequencia } from '@/app/lib/sequencia-tatames';
 
 type StaffSession = {
   evento_id: string | number;
@@ -121,6 +123,8 @@ export default function PainelChamador() {
   const router = useRouter();
   const [sessao, setSessao] = useState<StaffSession | null>(null);
   const [lutas, setLutas] = useState<Luta[]>([]);
+  const [lutasCronograma, setLutasCronograma] = useState<Luta[]>([]);
+  const [tatameAtivo, setTatameAtivo] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [acaoId, setAcaoId] = useState<string | number | null>(null);
@@ -173,6 +177,7 @@ export default function PainelChamador() {
     const lutasReais = (chaves as Luta[]).filter((luta) =>
       (atletaReal(luta.atleta_1) || atletaReal(luta.atleta_2)) && luta.status_luta !== 'concluida'
     );
+    setLutasCronograma((chaves as Luta[]).filter(luta => luta.status_luta !== 'concluida'));
     const ids = Array.from(new Set(lutasReais.flatMap((luta) => [luta.atleta_1_id, luta.atleta_2_id]).filter(Boolean))) as number[];
     const { data: inscricoes } = ids.length
       ? await supabase.from('inscricoes').select('atleta_id, status_checkin').eq('evento_id', sessao.evento_id).in('atleta_id', ids)
@@ -209,14 +214,15 @@ export default function PainelChamador() {
   }, [carregar, sessao]);
 
   const lutasOperacionais = useMemo(() => reservarUmaLutaPorAtleta(lutas), [lutas]);
-  const lutasVisiveis = useMemo(() => lutasOperacionais.filter((luta) => !categoriaAtiva || `${luta.categoria}__${luta.faixa || ''}` === categoriaAtiva), [categoriaAtiva, lutasOperacionais]);
+  const lutasVisiveis = useMemo(() => lutasOperacionais.filter((luta) => (!tatameAtivo || normalizarTatameSequencia(luta.tatame) === normalizarTatameSequencia(tatameAtivo)) && (!categoriaAtiva || `${luta.categoria}__${luta.faixa || ''}` === categoriaAtiva)), [categoriaAtiva, tatameAtivo, lutasOperacionais]);
   const chamadas = useMemo(() => lutasVisiveis.filter((luta) => luta.status_luta !== 'em_andamento' && Boolean(luta.iniciada_em)), [lutasVisiveis]);
   const emAndamento = useMemo(() => lutasVisiveis.filter((luta) => luta.status_luta === 'em_andamento'), [lutasVisiveis]);
   const baias = useMemo(() => lutasVisiveis.filter((luta) => luta.status_luta !== 'em_andamento' && !luta.iniciada_em && atletaReal(luta.atleta_1) !== atletaReal(luta.atleta_2)), [lutasVisiveis]);
   const prontas = useMemo(() => lutasVisiveis.filter((luta) => luta.status_luta !== 'em_andamento' && !luta.iniciada_em && checkinAprovado(luta) && ambosPresentes(luta)), [lutasVisiveis]);
   const aguardandoCheckin = useMemo(() => lutasVisiveis.filter((luta) => atletaReal(luta.atleta_1) && atletaReal(luta.atleta_2) && luta.status_luta !== 'em_andamento' && !luta.iniciada_em && (!checkinAprovado(luta) || !ambosPresentes(luta))), [lutasVisiveis]);
-  const categoriasChamada = useMemo(() => Array.from(new Map(lutas.map((luta) => [`${luta.categoria}__${luta.faixa || ''}`, luta])).values()), [lutas]);
-  const sugestoes = useMemo(() => sugestoesCategoriaPorTatame(lutas), [lutas]);
+  const tatamesFila = useMemo(() => Array.from(new Set(lutasCronograma.map(l => l.tatame?.trim()).filter((t): t is string => Boolean(t)))).sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true })), [lutasCronograma]);
+  const sequencias = useMemo(() => tatamesFila.filter(t => !tatameAtivo || normalizarTatameSequencia(t) === normalizarTatameSequencia(tatameAtivo)).map(tatame => ({ tatame, categorias: filaCategoriasTatame(lutasCronograma.filter(l => normalizarTatameSequencia(l.tatame) === normalizarTatameSequencia(tatame))) })), [lutasCronograma, tatamesFila, tatameAtivo]);
+  const sugestoes = useMemo(() => sugestoesCategoriaPorTatame(lutas).filter(s => !tatameAtivo || normalizarTatameSequencia(s.tatame) === normalizarTatameSequencia(tatameAtivo)), [lutas, tatameAtivo]);
 
   useEffect(() => {
     if (!sessao || lutas.length === 0) return;
@@ -442,8 +448,8 @@ export default function PainelChamador() {
   const card = (luta: Luta, tipo: 'pronta' | 'chamada' | 'aguardando' | 'baia') => (
     <article key={luta.id} className={`min-w-0 max-w-full overflow-hidden rounded-xl border p-2.5 md:rounded-2xl md:p-4 ${tipo === 'chamada' ? 'border-yellow-500/40 bg-yellow-500/10' : tipo === 'pronta' ? 'border-emerald-500/25 bg-emerald-500/5' : tipo === 'baia' ? 'border-cyan-500/30 bg-cyan-500/5' : 'border-white/10 bg-[#0b0b10]'}`}>
       <div className="min-w-0">
-        <p className="truncate text-[8px] font-black uppercase tracking-widest text-zinc-500 md:text-[9px]">{luta.tatame || 'Sem tatame'} · {rotuloLuta(luta)}{luta.horario_estimado ? ` · ${hora(luta.horario_estimado)}` : ''}</p>
-        <h3 className="mt-0.5 break-all text-[12px] font-black uppercase leading-tight text-white md:break-words md:text-sm">{tituloCategoria(luta)}</h3>
+        <p className="text-[10px] font-bold leading-relaxed text-zinc-400">{luta.tatame || 'Sem tatame'}{luta.ordem_tatame ? ` · Fila #${luta.ordem_tatame}` : ''} · {rotuloLuta(luta)}{luta.horario_estimado ? ` · ${hora(luta.horario_estimado)}` : ''}</p>
+        <h3 className="mt-0.5 break-words text-sm font-bold leading-snug text-white">{tituloCategoria(luta)}</h3>
         <p className="mt-0.5 truncate text-[8px] font-bold uppercase text-zinc-500">{luta.faixa || 'Faixa'}</p>
       </div>
       {tipo === 'chamada' && <span className="mt-1.5 inline-flex rounded-full bg-yellow-400 px-2 py-0.5 text-[8px] font-black uppercase text-black">Chamada</span>}
@@ -457,15 +463,15 @@ export default function PainelChamador() {
           <div key={`${luta.id}-${index}`} className="min-w-0 overflow-hidden rounded-lg border border-white/5 bg-black/50 px-2 py-1.5 md:rounded-xl md:p-3">
             {atletaReal(atleta.nome) ? <>
               <div className="flex min-w-0 items-center justify-between gap-2">
-                <p className="min-w-0 truncate text-[11px] font-black uppercase text-white md:text-xs">{atleta.nome}</p>
-                <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[7px] font-black uppercase md:text-[8px] ${atleta.status === 'aprovado' ? 'bg-emerald-500/10 text-emerald-300' : 'bg-yellow-500/10 text-yellow-300'}`}>
+                <p className="min-w-0 break-words text-[13px] font-bold leading-snug text-white">{atleta.nome}</p>
+                <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${atleta.status === 'aprovado' ? 'bg-emerald-500/10 text-emerald-300' : 'bg-yellow-500/10 text-yellow-300'}`}>
                   {atleta.status === 'aprovado' ? <CheckCircle2 size={10} /> : <Clock3 size={10} />}
                   {atleta.status === 'aprovado' ? 'OK' : 'Check-in'}
                 </span>
               </div>
               {tipo !== 'chamada' && <div className="mt-1.5 grid min-w-0 grid-cols-2 gap-1 md:mt-3 md:gap-2">
-                <button onClick={() => atualizarControle(luta, atleta.lado, 'presenca')} disabled={acaoId === `${luta.id}-${atleta.lado}`} className={`h-9 min-w-0 w-full truncate rounded-lg border px-1 text-[8px] font-black uppercase tracking-normal md:px-2 ${controleChamador(luta, atleta.lado).presente ? 'border-emerald-400 bg-emerald-500 text-black' : 'border-white/10 bg-white/5 text-zinc-300'}`}>{controleChamador(luta, atleta.lado).presente ? 'Na baia' : 'Presença'}</button>
-                <button onClick={() => atualizarControle(luta, atleta.lado, 'chamada')} disabled={controleChamador(luta, atleta.lado).chamadas >= 3 || acaoId === `${luta.id}-${atleta.lado}`} className="h-9 min-w-0 w-full truncate rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-1 text-[8px] font-black uppercase tracking-normal text-yellow-200 disabled:opacity-40 md:px-2">{controleChamador(luta, atleta.lado).chamadas >= 3 ? '3ª ok' : <><span className="md:hidden">{controleChamador(luta, atleta.lado).chamadas + 1}ª</span><span className="hidden md:inline">{controleChamador(luta, atleta.lado).chamadas + 1}ª chamada</span></>}</button>
+                <button onClick={() => atualizarControle(luta, atleta.lado, 'presenca')} disabled={acaoId === `${luta.id}-${atleta.lado}`} className={`h-11 min-w-0 w-full rounded-lg border px-1 text-[11px] font-bold md:px-2 ${controleChamador(luta, atleta.lado).presente ? 'border-emerald-400 bg-emerald-500 text-black' : 'border-white/10 bg-white/5 text-zinc-300'}`}>{controleChamador(luta, atleta.lado).presente ? 'Na baia' : 'Presença'}</button>
+                <button onClick={() => atualizarControle(luta, atleta.lado, 'chamada')} disabled={controleChamador(luta, atleta.lado).chamadas >= 3 || acaoId === `${luta.id}-${atleta.lado}`} className="h-11 min-w-0 w-full rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-1 text-[11px] font-bold text-yellow-200 disabled:opacity-40 md:px-2">{controleChamador(luta, atleta.lado).chamadas >= 3 ? '3ª ok' : <><span>{controleChamador(luta, atleta.lado).chamadas + 1}ª chamada</span></>}</button>
               </div>}
               {tipo !== 'chamada' && controleChamador(luta, atleta.lado).chamadas >= 3 && !controleChamador(luta, atleta.lado).presente && controleChamador(luta, atleta.lado === 1 ? 2 : 1).presente && <button onClick={() => confirmarWo(luta, atleta.lado)} className="mt-1.5 h-9 w-full rounded-lg border border-red-500/30 bg-red-500/10 px-2 text-[8px] font-black uppercase text-red-300">Ausência</button>}
             </> : (
@@ -479,7 +485,7 @@ export default function PainelChamador() {
       </div>
 
       {tipo === 'pronta' && (
-        <button onClick={() => chamar(luta)} disabled={acaoId === luta.id} className="mt-2 flex h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-yellow-400 text-[10px] font-black uppercase tracking-widest text-black transition hover:bg-yellow-300 disabled:opacity-50 md:mt-4">
+        <button onClick={() => chamar(luta)} disabled={acaoId === luta.id} className="mt-2 flex h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-yellow-400 text-xs font-bold uppercase tracking-wide text-black transition hover:bg-yellow-300 disabled:opacity-50 md:mt-4">
           {acaoId === luta.id ? <RefreshCw size={15} className="animate-spin" /> : <Megaphone size={15} />}
           Chamar atletas
         </button>
@@ -491,7 +497,7 @@ export default function PainelChamador() {
 
   return (
     <main className="min-h-screen max-w-full overflow-x-hidden bg-[#050505] pb-24 font-sans text-white md:pb-12">
-      <style dangerouslySetInnerHTML={{ __html: `.hide-global-nav > header:first-of-type, .hide-global-nav nav:first-of-type { display: none !important; } body.hide-global-nav > main, body.hide-global-nav > div > main { padding-top: 0 !important; margin-top: 0 !important; }` }} />
+      <style dangerouslySetInnerHTML={{ __html: `.hide-global-nav > header:first-of-type, .hide-global-nav nav:first-of-type, .hide-global-nav .nav-global-mobile, .hide-global-nav footer { display: none !important; } body.hide-global-nav > main, body.hide-global-nav > div > main { padding-top: 0 !important; margin-top: 0 !important; }` }} />
 
       {toast && (
         <div className="fixed left-1/2 top-[max(1rem,env(safe-area-inset-top))] z-[200] w-[min(calc(100%-1.5rem),32rem)] -translate-x-1/2 animate-in slide-in-from-top-4">
@@ -518,25 +524,33 @@ export default function PainelChamador() {
 
       <div className="mx-auto w-full max-w-7xl min-w-0 space-y-4 p-3 md:space-y-6 md:p-6">
         {sugestoes.length > 0 && <section className="rounded-2xl border border-cyan-500/25 bg-cyan-500/5 p-4"><h2 className="text-xs font-black uppercase text-cyan-200">Próxima categoria por tatame</h2><p className="mt-1 text-[10px] text-zinc-400">Sugestão baseada na ordem e no horário definidos em Tatames.</p><div className="mt-3 grid gap-2 md:grid-cols-2 lg:grid-cols-3">{sugestoes.map(({ tatame, proxima, aguardarHorario }) => <div key={tatame} className="rounded-xl border border-white/10 bg-black/40 p-3 text-xs"><strong className="block text-white">{tatame} · {tituloCategoria(proxima)}</strong><span className={aguardarHorario ? 'text-yellow-300' : 'text-cyan-300'}>{aguardarHorario ? `Aguardar início previsto: ${hora(proxima.horario_estimado)}` : proxima.iniciada_em ? 'Luta chamada; aguardar mesário' : `Próxima na ordem · ${hora(proxima.horario_estimado)}`}</span></div>)}</div></section>}
-        {categoriasChamada.length > 0 && <section className="min-w-0"><div className="mb-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-yellow-300 md:mb-3 md:text-xs"><ShieldCheck size={14} /> Categorias</div><div className="flex max-w-full gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"><button onClick={() => setCategoriaAtiva('')} className={`shrink-0 rounded-lg border px-3 py-2 text-[8px] font-black uppercase md:rounded-xl md:px-4 md:py-3 md:text-[9px] ${!categoriaAtiva ? 'border-yellow-400 bg-yellow-400 text-black' : 'border-white/10 bg-white/5 text-zinc-400'}`}>Todas</button>{categoriasChamada.map((luta) => { const chave = `${luta.categoria}__${luta.faixa || ''}`; return <div key={chave} className={`flex max-w-[220px] shrink-0 overflow-hidden rounded-lg border md:max-w-none md:rounded-xl ${categoriaAtiva === chave ? 'border-yellow-400 bg-yellow-500/10' : 'border-yellow-500/20 bg-yellow-500/5'}`}><button onClick={() => setCategoriaAtiva(chave)} className="min-w-0 px-3 py-2 text-left md:px-4 md:py-3"><strong className="block truncate text-[9px] uppercase text-white md:text-[10px]">{tituloCategoria(luta)}</strong><span className="mt-0.5 block truncate text-[7px] font-bold uppercase tracking-widest text-zinc-500 md:text-[8px]">{luta.faixa || 'Faixa'}</span></button><button onClick={() => anunciarCategoria(luta)} title="Texto para o locutor" className="shrink-0 border-l border-yellow-500/20 px-2.5 text-yellow-300 md:px-3"><Megaphone size={14} /></button></div>})}</div></section>}
+        <section className="rounded-2xl border border-white/10 bg-[#0b0b10] p-3">
+          <label htmlFor="tatame-chamador" className="mb-2 block text-xs font-bold text-zinc-300">Qual tatame você está atendendo?</label>
+          <select id="tatame-chamador" value={tatameAtivo} onChange={e => { setTatameAtivo(e.target.value); setCategoriaAtiva(''); }} className="min-h-12 w-full rounded-xl border border-white/15 bg-black px-3 text-sm font-bold text-white">
+            <option value="">Todos os tatames</option>{tatamesFila.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+          <p className="mt-2 text-xs leading-relaxed text-zinc-400">Siga a ordem sugerida. Se o atleta não estiver liberado, escolha outra luta pronta. Check-in/pesagem e presença continuam obrigatórios.</p>
+        </section>
+        <FilaCategoriasChamador sequencias={sequencias} categoriaAtiva={categoriaAtiva} prontasIds={new Set(lutasOperacionais.filter(l => checkinAprovado(l) && ambosPresentes(l) && !l.iniciada_em && l.status_luta !== 'em_andamento').map(l => String(l.id)))} selecionar={setCategoriaAtiva} />
+        {categoriaAtiva && <div className="flex items-center justify-between gap-3 rounded-xl border border-yellow-500/25 bg-yellow-500/5 p-3"><p className="min-w-0 text-xs leading-relaxed text-yellow-100">Categoria selecionada: <strong>{categoriaAtiva.split('__')[0]}</strong></p><button onClick={() => setCategoriaAtiva('')} className="min-h-11 shrink-0 rounded-lg border border-white/15 px-3 text-xs font-bold">Ver todas</button></div>}
 
-        <section className="grid min-w-0 grid-cols-5 gap-1 md:gap-3">
-          <div className="min-w-0 overflow-hidden rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-1 py-2 md:rounded-2xl md:p-4"><p className="truncate text-[7px] font-black uppercase text-emerald-300 md:text-[8px]">Prontas</p><strong className="mt-0.5 block text-lg md:mt-2 md:text-2xl">{prontas.length}</strong></div>
-          <div className="min-w-0 overflow-hidden rounded-xl border border-yellow-500/20 bg-yellow-500/5 px-1 py-2 md:rounded-2xl md:p-4"><p className="truncate text-[7px] font-black uppercase text-yellow-300 md:text-[8px]">Chamadas</p><strong className="mt-0.5 block text-lg md:mt-2 md:text-2xl">{chamadas.length}</strong></div>
-          <div className="min-w-0 overflow-hidden rounded-xl border border-red-500/20 bg-red-500/5 px-1 py-2 md:rounded-2xl md:p-4"><p className="truncate text-[7px] font-black uppercase text-red-300 md:text-[8px]">Em luta</p><strong className="mt-0.5 block text-lg md:mt-2 md:text-2xl">{emAndamento.length}</strong></div>
-          <div className="min-w-0 overflow-hidden rounded-xl border border-white/10 bg-white/[0.02] px-1 py-2 md:rounded-2xl md:p-4"><p className="truncate text-[7px] font-black uppercase text-zinc-400 md:text-[8px]">Check-in</p><strong className="mt-0.5 block text-lg md:mt-2 md:text-2xl">{aguardandoCheckin.length}</strong></div>
-          <div className="min-w-0 overflow-hidden rounded-xl border border-cyan-500/20 bg-cyan-500/5 px-1 py-2 md:rounded-2xl md:p-4"><p className="truncate text-[7px] font-black uppercase text-cyan-300 md:text-[8px]">Baia</p><strong className="mt-0.5 block text-lg md:mt-2 md:text-2xl">{baias.length}</strong></div>
+        <section className="grid min-w-0 grid-cols-3 gap-2 sm:grid-cols-5 md:gap-3">
+          <div className="min-w-0 overflow-hidden rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-1 py-2 md:rounded-2xl md:p-4"><p className="truncate text-[10px] font-bold uppercase text-emerald-300 md:text-[8px]">Prontas</p><strong className="mt-0.5 block text-lg md:mt-2 md:text-2xl">{prontas.length}</strong></div>
+          <div className="min-w-0 overflow-hidden rounded-xl border border-yellow-500/20 bg-yellow-500/5 px-1 py-2 md:rounded-2xl md:p-4"><p className="truncate text-[10px] font-bold uppercase text-yellow-300 md:text-[8px]">Chamadas</p><strong className="mt-0.5 block text-lg md:mt-2 md:text-2xl">{chamadas.length}</strong></div>
+          <div className="min-w-0 overflow-hidden rounded-xl border border-red-500/20 bg-red-500/5 px-1 py-2 md:rounded-2xl md:p-4"><p className="truncate text-[10px] font-bold uppercase text-red-300 md:text-[8px]">Em luta</p><strong className="mt-0.5 block text-lg md:mt-2 md:text-2xl">{emAndamento.length}</strong></div>
+          <div className="min-w-0 overflow-hidden rounded-xl border border-white/10 bg-white/[0.02] px-1 py-2 md:rounded-2xl md:p-4"><p className="truncate text-[10px] font-bold uppercase text-zinc-400 md:text-[8px]">Check-in</p><strong className="mt-0.5 block text-lg md:mt-2 md:text-2xl">{aguardandoCheckin.length}</strong></div>
+          <div className="min-w-0 overflow-hidden rounded-xl border border-cyan-500/20 bg-cyan-500/5 px-1 py-2 md:rounded-2xl md:p-4"><p className="truncate text-[10px] font-bold uppercase text-cyan-300 md:text-[8px]">Baia</p><strong className="mt-0.5 block text-lg md:mt-2 md:text-2xl">{baias.length}</strong></div>
         </section>
 
         {loading ? (
-          <div className="rounded-2xl border border-white/10 p-8 text-center text-[10px] font-black uppercase tracking-widest text-zinc-500 md:p-12 md:text-xs">Carregando cronograma...</div>
+          <div className="rounded-2xl border border-white/10 p-8 text-center text-xs font-bold uppercase tracking-wide text-zinc-500 md:p-12 md:text-xs">Carregando cronograma...</div>
         ) : (
           <>
-            {chamadas.length > 0 && <section className="min-w-0 overflow-hidden"><h2 className="mb-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-yellow-300 md:mb-3 md:text-xs"><Megaphone size={14} /> Aguardando mesário</h2><div className="grid min-w-0 grid-cols-1 gap-2 md:gap-3 lg:grid-cols-2">{chamadas.map((luta) => card(luta, 'chamada'))}</div></section>}
-            {baias.length > 0 && <section className="min-w-0 overflow-hidden"><h2 className="mb-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-cyan-300 md:mb-3 md:text-xs"><Users size={14} /> Baia · adversário pendente</h2><div className="grid min-w-0 grid-cols-1 gap-2 md:gap-3 lg:grid-cols-2">{baias.map((luta) => card(luta, 'baia'))}</div></section>}
-            {prontas.length > 0 && <section className="min-w-0 overflow-hidden"><h2 className="mb-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-emerald-300 md:mb-3 md:text-xs"><Users size={14} /> Prontas para chamar</h2><div className="grid min-w-0 grid-cols-1 gap-2 md:gap-3 lg:grid-cols-2">{prontas.map((luta) => card(luta, 'pronta'))}</div></section>}
-            {aguardandoCheckin.length > 0 && <section className="min-w-0 overflow-hidden"><h2 className="mb-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-zinc-500 md:mb-3 md:text-xs"><AlertCircle size={14} /> Aguardando check-in</h2><div className="grid min-w-0 grid-cols-1 gap-2 opacity-75 md:gap-3 lg:grid-cols-2">{aguardandoCheckin.map((luta) => card(luta, 'aguardando'))}</div></section>}
-            {chamadas.length === 0 && prontas.length === 0 && aguardandoCheckin.length === 0 && baias.length === 0 && <div className="rounded-2xl border border-dashed border-white/10 p-8 text-center text-[10px] font-black uppercase tracking-widest text-zinc-600 md:p-12 md:text-xs">Nenhuma luta pendente no cronograma.</div>}
+            {chamadas.length > 0 && <section className="min-w-0 overflow-hidden"><h2 className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-yellow-300 md:mb-3 md:text-xs"><Megaphone size={14} /> Aguardando mesário</h2><div className="grid min-w-0 grid-cols-1 gap-2 md:gap-3 lg:grid-cols-2">{chamadas.map((luta) => card(luta, 'chamada'))}</div></section>}
+            {baias.length > 0 && <section className="min-w-0 overflow-hidden"><h2 className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-cyan-300 md:mb-3 md:text-xs"><Users size={14} /> Baia · adversário pendente</h2><div className="grid min-w-0 grid-cols-1 gap-2 md:gap-3 lg:grid-cols-2">{baias.map((luta) => card(luta, 'baia'))}</div></section>}
+            {prontas.length > 0 && <section className="min-w-0 overflow-hidden"><h2 className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-emerald-300 md:mb-3 md:text-xs"><Users size={14} /> Prontas para chamar</h2><div className="grid min-w-0 grid-cols-1 gap-2 md:gap-3 lg:grid-cols-2">{prontas.map((luta) => card(luta, 'pronta'))}</div></section>}
+            {aguardandoCheckin.length > 0 && <section className="min-w-0 overflow-hidden"><h2 className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-zinc-500 md:mb-3 md:text-xs"><AlertCircle size={14} /> Aguardando check-in</h2><div className="grid min-w-0 grid-cols-1 gap-2 opacity-75 md:gap-3 lg:grid-cols-2">{aguardandoCheckin.map((luta) => card(luta, 'aguardando'))}</div></section>}
+            {chamadas.length === 0 && prontas.length === 0 && aguardandoCheckin.length === 0 && baias.length === 0 && <div className="rounded-2xl border border-dashed border-white/10 p-8 text-center text-xs font-bold uppercase tracking-wide text-zinc-600 md:p-12 md:text-xs">Nenhuma luta pendente no cronograma.</div>}
           </>
         )}
       </div>
