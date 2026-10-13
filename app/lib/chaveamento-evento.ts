@@ -2,6 +2,7 @@ import { montarChaves, prepararGrupos } from '@/app/lib/gerar-chaves';
 import { processarAvancosAutomaticosChaves } from '@/app/lib/chaves-auto-avanco';
 import type { CategoriaCompeticao, InscricaoCompeticao } from '@/app/lib/categorias-competicao';
 import { ehFaseChaveDeTres } from '@/app/lib/chave-de-tres';
+import { inscricaoAtiva } from '@/app/lib/inscricao-ativa';
 
 type ClienteSupabase = {
   from: (tabela: string) => any;
@@ -157,7 +158,8 @@ export async function prepararChavesEvento(
   if (chavesDoTipo((existentes.data || []) as LutaChaveExistente[], tipo).some(lutaChaveTravada)) {
     throw new Error('Já existem lutas iniciadas ou resultados neste tipo de chave. O chaveamento foi preservado.');
   }
-  const inscricoesComAcademia = await enriquecerAcademiaInscricoes(db, (inscritos.data || []) as InscricaoCompeticao[]);
+  const inscricoesAtivas = (inscritos.data || []).filter(inscricaoAtiva) as InscricaoCompeticao[];
+  const inscricoesComAcademia = await enriquecerAcademiaInscricoes(db, inscricoesAtivas);
   const gruposPreparados = prepararGrupos(inscricoesComAcademia, tipo, (categorias.data || []) as CategoriaCompeticao[]);
   const grupos = Object.entries(gruposPreparados.grupos).map(([categoria, atletas]) => {
     const equipes = new Map<string, { nome: string; total: number }>();

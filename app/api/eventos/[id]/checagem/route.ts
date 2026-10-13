@@ -68,7 +68,8 @@ export async function GET(_request: Request, contexto: { params: Promise<{ id: s
   for (const colunas of colunasInscricao) {
     try {
       inscricoes = await todos(async (de, ate) => {
-        const { data, error } = await db.from('inscricoes').select(colunas).eq('evento_id', eventoId).range(de, ate);
+        const { data, error } = await db.from('inscricoes').select(colunas).eq('evento_id', eventoId)
+          .or('estorno_status.is.null,estorno_status.neq.estornado').range(de, ate);
         return { data: (data as unknown as Array<Record<string, unknown>>) || [], error };
       });
       ultimoErro = null;

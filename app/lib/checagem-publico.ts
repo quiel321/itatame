@@ -1,5 +1,6 @@
 import { chavesDaInscricao, idadeCompetitiva, type CategoriaCompeticao, type ChaveChecagem } from './categorias-competicao';
 import { nomeEquipeChecagem } from './equipes-nome';
+import { inscricaoAtiva } from './inscricao-ativa';
 
 export type EquipeChecagem = {
   id: string;
@@ -101,7 +102,7 @@ export function montarInscritosChecagem(
     equipeId: String(item.equipe_id || ''),
     logo: item.logo_url || null,
   }));
-  const ordenadas = [...inscricoes].sort((a, b) => {
+  const ordenadas = inscricoes.filter(inscricaoAtiva).sort((a, b) => {
     const dataA = String(a.created_at || a.id || '');
     const dataB = String(b.created_at || b.id || '');
     return dataA.localeCompare(dataB);
