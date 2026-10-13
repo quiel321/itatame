@@ -121,6 +121,26 @@ test('geração exclui estorno mesmo ao ignorar pagamentos e preserva os registr
   assert.equal(registros[0].estorno_status, 'estornado');
 });
 
+test('chaves consideram confirmação manual do organizador sem exigir transação MP', async () => {
+  const registros = [
+    { id: 1, atleta_id: 1, atleta: 'Pago manualmente', idade: 18, peso: 70, faixa: 'Branca', sexo: 'Masculino', modalidade: 'Jiu-Jitsu', absoluto: true, pagamento_ok: true, estorno_status: null, mp_payment_id: null },
+    { id: 2, atleta_id: 2, atleta: 'Pendente', idade: 18, peso: 70, faixa: 'Branca', sexo: 'Masculino', modalidade: 'Jiu-Jitsu', absoluto: true, pagamento_ok: false, estorno_status: null },
+    { id: 3, atleta_id: 3, atleta: 'Estornado', idade: 18, peso: 70, faixa: 'Branca', sexo: 'Masculino', modalidade: 'Jiu-Jitsu', absoluto: true, pagamento_ok: true, estorno_status: 'estornado' },
+  ];
+  const db = {
+    from(tabela: string) {
+      let data: unknown[] = tabela === 'inscricoes' ? registros : tabela === 'categorias_evento' ? [absolutoMasculino] : [];
+      const consulta = { select() { return consulta; }, order() { return consulta; }, in() { return consulta; },
+        eq(campo: string, valor: unknown) { if (campo === 'pagamento_ok') data = registros.filter(item => item.pagamento_ok === valor); return consulta; },
+        then(resolve: (value: unknown) => unknown) { return Promise.resolve({ data, error: null }).then(resolve); } };
+      return consulta;
+    },
+    rpc() { throw new Error('O teste não deve gravar dados'); },
+  };
+  const preparado = await prepararChavesEvento(db, 'evt', 'absoluto');
+  assert.deepEqual(preparado.inscritos.map(item => item.id), [1]);
+});
+
 test("aba absoluto lista inscritos mesmo sem idade na API", () => {
   const lista = montarInscritosChecagem(
     [

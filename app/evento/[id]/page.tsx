@@ -18,6 +18,7 @@ import { formatarValorInscricao, idadeMaxInfantil, valorAbsolutoAvulso, valorAdd
 import { ChatEvento } from "@/app/components/ChatEvento";
 import type { InscricaoCompeticao } from "@/app/lib/categorias-competicao";
 import { existeComboCategorias, type CategoriaValoresPublicos } from "@/app/lib/valores-categorias-publicas";
+import { FILTRO_INSCRICOES_ATIVAS } from '@/app/lib/inscricao-ativa';
 
 type EventoDetalhes = EventoComEtapas & Omit<EventoValoresInscricao, "regras_pontuacao_equipes"> & {
   id: string;
@@ -81,7 +82,7 @@ export default function EventoDetalhesPage() {
       setCategoriasValores(null);
       const [eventoResposta, inscritosResposta, categoriasResposta] = await Promise.all([
         supabase.from("eventos").select("*").eq("id", params.id).single(),
-        supabase.from("inscricoes").select("atleta,equipe,faixa,categoria").eq("evento_id", params.id),
+        supabase.from("inscricoes").select("atleta,equipe,faixa,categoria").eq("evento_id", params.id).or(FILTRO_INSCRICOES_ATIVAS),
         supabase.from("categorias_evento").select("tipo,ativa,modalidade,sexo,faixa,idade_min,idade_max,peso_min,peso_max").eq("evento_id", params.id).eq("ativa", true),
       ]);
       if (!ativo) return;

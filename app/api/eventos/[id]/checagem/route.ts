@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/app/lib/supabase-server';
+import { FILTRO_INSCRICOES_ATIVAS } from '@/app/lib/inscricao-ativa';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -69,7 +70,7 @@ export async function GET(_request: Request, contexto: { params: Promise<{ id: s
     try {
       inscricoes = await todos(async (de, ate) => {
         const { data, error } = await db.from('inscricoes').select(colunas).eq('evento_id', eventoId)
-          .or('estorno_status.is.null,estorno_status.neq.estornado').range(de, ate);
+          .or(FILTRO_INSCRICOES_ATIVAS).range(de, ate);
         return { data: (data as unknown as Array<Record<string, unknown>>) || [], error };
       });
       ultimoErro = null;

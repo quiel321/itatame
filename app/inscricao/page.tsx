@@ -9,6 +9,7 @@ import { tarifaInfantilAplicavel, valorAbsolutoAvulso, valorAddonAbsoluto, valor
 import { urlLoginComRetorno } from '@/app/lib/destino-interno';
 import { encontrarEquipeSemelhante } from '@/app/lib/equipes-nome';
 import { contaSomenteResponsavel, competidoresDaConta } from '@/app/lib/conta-responsavel';
+import { FILTRO_INSCRICOES_ATIVAS } from '@/app/lib/inscricao-ativa';
 
 type PerfilCompetidor = {
   id: number;
@@ -161,7 +162,7 @@ function FormularioInscricao() {
           const statusAberto = String(ev.status || "").trim().toUpperCase() === "ABERTO";
           const limite = Math.max(1, Number(ev.limite_vagas) || 500);
           setLimiteVagas(limite);
-          const { count: ocupadas } = await supabase.from("inscricoes").select("id", { count: "exact", head: true }).eq("evento_id", eventoId);
+          const { count: ocupadas } = await supabase.from("inscricoes").select("id", { count: "exact", head: true }).eq("evento_id", eventoId).or(FILTRO_INSCRICOES_ATIVAS);
           if (!statusAberto) {
             setInscricoesEncerradas(true);
             setMotivoInscricaoIndisponivel("Este evento ainda não está com as inscrições abertas.");
@@ -362,7 +363,7 @@ function FormularioInscricao() {
     }
 
     if (limiteVagas > 0 && eventoId && !inscricaoAtual) {
-      const { count: ocupadas } = await supabase.from("inscricoes").select("id", { count: "exact", head: true }).eq("evento_id", eventoId);
+      const { count: ocupadas } = await supabase.from("inscricoes").select("id", { count: "exact", head: true }).eq("evento_id", eventoId).or(FILTRO_INSCRICOES_ATIVAS);
       if ((ocupadas || 0) >= limiteVagas) {
         setInscricoesEncerradas(true);
         setMotivoInscricaoIndisponivel(`As vagas deste campeonato esgotaram (${ocupadas}/${limiteVagas}). Novas inscrições ficam bloqueadas até o organizador ampliar o limite.`);
