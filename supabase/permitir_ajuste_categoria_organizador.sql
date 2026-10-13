@@ -8,15 +8,17 @@ declare
   idade_fora boolean;
   peso_fora boolean;
   faixa_fora boolean;
+  sexo_fora boolean;
   ajuste_novo boolean := false;
   ajuste_existente boolean := false;
 begin
   if new.categoria_id is not null then
     select * into c from public.categorias_evento where id=new.categoria_id;
     if c.id is null or c.evento_id<>new.evento_id or not c.ativa
-      or new.sexo is null or lower(trim(new.sexo))<>lower(trim(c.sexo)) then
+      or new.sexo is null or lower(trim(new.sexo)) not in ('masculino','feminino') then
       raise exception 'Inscrição incompatível com a categoria do evento.';
     end if;
+    sexo_fora := lower(trim(new.sexo))<>lower(trim(c.sexo));
 
     idade_fora := new.idade is null or new.idade not between c.idade_min and c.idade_max;
     faixa_fora := new.faixa is null or not (
@@ -42,19 +44,26 @@ begin
         and old.categoria_ajuste_por is not distinct from new.categoria_ajuste_por
         and old.categoria_ajuste_motivo is not distinct from new.categoria_ajuste_motivo
         and old.categoria_ajuste_em is not distinct from new.categoria_ajuste_em
+        and (not sexo_fora or (c.tipo='peso'
+          and lower(trim(c.sexo)) in ('masculino','feminino')
+          and old.sexo is not distinct from new.sexo
+          and old.categoria_ajuste_motivo like 'Exceção de sexo autorizada:%'))
         and exists (
           select 1 from public.eventos e
           where e.id=new.evento_id and e.organizador_id=old.categoria_ajuste_por
         );
 
       -- A primeira exceção exige serviço, organizador real, justificativa e
-      -- campeonato ainda sem chaves. A regra de sexo segue acima.
+      -- campeonato ainda sem chaves. Outro sexo exige autorização registrada.
       ajuste_novo := c.tipo='peso'
         and old.categoria_id is distinct from new.categoria_id
         and coalesce(auth.role(),'')='service_role'
         and new.categoria_ajuste_por is not null
         and length(trim(coalesce(new.categoria_ajuste_motivo,''))) between 10 and 500
         and new.categoria_ajuste_em is not null
+        and (not sexo_fora or (lower(trim(c.sexo)) in ('masculino','feminino')
+          and old.sexo is not distinct from new.sexo
+          and new.categoria_ajuste_motivo like 'Exceção de sexo autorizada:%'))
         and exists (
           select 1 from public.eventos e
           where e.id=new.evento_id and e.organizador_id=new.categoria_ajuste_por
@@ -62,8 +71,8 @@ begin
         and not exists (select 1 from public.chaves ch where ch.evento_id=new.evento_id);
     end if;
 
-    if (idade_fora or peso_fora or faixa_fora) and not (ajuste_novo or ajuste_existente) then
-      raise exception 'Idade, peso ou faixa incompatível com a categoria. Use o ajuste justificado do organizador.';
+    if (idade_fora or peso_fora or faixa_fora or sexo_fora) and not (ajuste_novo or ajuste_existente) then
+      raise exception 'Idade, peso, faixa ou sexo incompatível com a categoria. Use o ajuste justificado do organizador.';
     end if;
     new.modalidade:=c.modalidade;
   end if;

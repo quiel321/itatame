@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { autenticarRequest } from '@/app/lib/api-auth';
 import { createSupabaseServerClient } from '@/app/lib/supabase-server';
 import { rotuloCategoria, type CategoriaCompeticao } from '@/app/lib/categorias-competicao';
-import { categoriaPermitidaAoOrganizador } from '@/app/lib/ajuste-categoria-organizador';
+import { categoriaPermitidaAoOrganizador, sexosDiferentesCategoria } from '@/app/lib/ajuste-categoria-organizador';
 import { inscricaoSomenteAbsoluto } from '@/app/lib/valor-inscricao';
 
 export async function PATCH(request: Request) {
@@ -40,15 +40,21 @@ export async function PATCH(request: Request) {
   }
 
   const categoria = destino as CategoriaCompeticao;
-  if (!categoriaPermitidaAoOrganizador(categoria, inscricao)) {
+  const outroSexo = sexosDiferentesCategoria(categoria, inscricao);
+  if (outroSexo && (body.permitirOutroSexo !== true || body.autorizacaoConfirmada !== true)) {
+    return NextResponse.json({ error: 'A mudança de sexo da categoria é uma exceção. Confirme a autorização do atleta ou responsável.' }, { status: 400 });
+  }
+  if (!categoriaPermitidaAoOrganizador(categoria, inscricao, body.permitirOutroSexo === true)) {
     return NextResponse.json({ error: 'A categoria deve manter o sexo e a modalidade da inscrição. Idade, peso e faixa diferentes exigem justificativa.' }, { status: 400 });
   }
   if (inscricao.categoria_id === categoria.id) return NextResponse.json({ error: 'O atleta já está nesta categoria.' }, { status: 409 });
+  const motivoRegistrado = outroSexo ? `Exceção de sexo autorizada: ${inscricao.sexo} -> ${categoria.sexo}. ${motivo}` : motivo;
+  if (motivoRegistrado.length > 500) return NextResponse.json({ error: 'Resuma a justificativa para registrar a exceção em até 500 caracteres.' }, { status: 400 });
 
   let update = db.from('inscricoes').update({
     categoria_id: categoria.id,
     categoria: rotuloCategoria(categoria),
-    categoria_ajuste_motivo: motivo,
+    categoria_ajuste_motivo: motivoRegistrado,
     categoria_ajuste_por: usuario.id,
     categoria_ajuste_em: new Date().toISOString(),
   }).eq('id', inscricao.id).eq('evento_id', inscricao.evento_id);

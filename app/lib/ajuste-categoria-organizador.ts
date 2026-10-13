@@ -1,8 +1,13 @@
 import { faixaAtletaCompativel, normalizarCompeticao, pesoNaFaixaCategoria, type CategoriaCompeticao, type InscricaoCompeticao } from './categorias-competicao';
 
-export function categoriaPermitidaAoOrganizador(categoria: CategoriaCompeticao, inscricao: InscricaoCompeticao) {
+export function sexosDiferentesCategoria(categoria: CategoriaCompeticao, inscricao: InscricaoCompeticao) {
+  return normalizarCompeticao(categoria.sexo) !== normalizarCompeticao(inscricao.sexo);
+}
+
+export function categoriaPermitidaAoOrganizador(categoria: CategoriaCompeticao, inscricao: InscricaoCompeticao, permitirOutroSexo = false) {
   return categoria.ativa && categoria.tipo === 'peso'
-    && normalizarCompeticao(categoria.sexo) === normalizarCompeticao(inscricao.sexo)
+    && (!sexosDiferentesCategoria(categoria, inscricao) || (permitirOutroSexo === true
+      && [categoria.sexo, inscricao.sexo].every(sexo => ['MASCULINO', 'FEMININO'].includes(normalizarCompeticao(sexo)))))
     && (!inscricao.modalidade || normalizarCompeticao(categoria.modalidade) === normalizarCompeticao(inscricao.modalidade));
 }
 

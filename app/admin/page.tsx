@@ -19,7 +19,7 @@ import { formatarTelefone } from '@/app/lib/formatar-telefone';
 import { formatarValorInscricao, pacoteInscricao, rotuloPacoteInscricao, type PacoteInscricao } from '@/app/lib/valor-inscricao';
 import { classificarVinculoInscricao, type EquipeOficial, type UnidadeOficial, type VinculoInscricao } from '@/app/lib/vinculo-inscricao';
 import { rotuloCategoria, type CategoriaCompeticao } from '@/app/lib/categorias-competicao';
-import { categoriaPermitidaAoOrganizador, divergenciasCategoria } from '@/app/lib/ajuste-categoria-organizador';
+import { categoriaPermitidaAoOrganizador, divergenciasCategoria, sexosDiferentesCategoria } from '@/app/lib/ajuste-categoria-organizador';
 
 function classePacote(pacote: PacoteInscricao) {
   if (pacote === 'combo') return 'border-yellow-500/30 bg-yellow-500/10 text-yellow-300';
@@ -76,6 +76,8 @@ export default function AdminPage() {
   const [chavesGeradasEdicao, setChavesGeradasEdicao] = useState(false);
   const [categoriaDestinoId, setCategoriaDestinoId] = useState('');
   const [motivoCategoria, setMotivoCategoria] = useState('');
+  const [permitirOutroSexo, setPermitirOutroSexo] = useState(false);
+  const [autorizacaoSexoConfirmada, setAutorizacaoSexoConfirmada] = useState(false);
   const [salvandoCategoria, setSalvandoCategoria] = useState(false);
   const [avisoCategoria, setAvisoCategoria] = useState('');
   const [confirmandoPagamento, setConfirmandoPagamento] = useState<any>(null);
@@ -464,6 +466,8 @@ export default function AdminPage() {
   }
 
   async function abrirEdicao(inscricao: any) {
+    setPermitirOutroSexo(false);
+    setAutorizacaoSexoConfirmada(false);
     setEditando(inscricao);
     setCategoriasEdicao([]);
     setCategoriaDestinoId(inscricao.categoria_id || '');
@@ -503,7 +507,7 @@ export default function AdminPage() {
       const resposta = await fetch('/api/organizador/inscricoes/categoria', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ inscricaoId: editando.id, categoriaId: categoriaDestinoId, motivo: motivoCategoria }),
+        body: JSON.stringify({ inscricaoId: editando.id, categoriaId: categoriaDestinoId, motivo: motivoCategoria, permitirOutroSexo, autorizacaoConfirmada: autorizacaoSexoConfirmada }),
       });
       const resultado = await resposta.json().catch(() => ({}));
       if (!resposta.ok) throw new Error(resultado.error || 'Não foi possível mudar a categoria.');
@@ -511,6 +515,8 @@ export default function AdminPage() {
       setEditando(atualizado);
       setInscricoes(atual => atual.map(item => item.id === editando.id ? { ...item, ...resultado.inscricao } : item));
       setMotivoCategoria('');
+      setPermitirOutroSexo(false);
+      setAutorizacaoSexoConfirmada(false);
       setAvisoCategoria('Categoria oficial atualizada na inscrição. Idade, peso, pagamento e cadastro do atleta foram preservados.');
     } catch (error) { setAvisoCategoria((error as Error).message); }
     finally { setSalvandoCategoria(false); }
@@ -1134,8 +1140,9 @@ export default function AdminPage() {
           <div className="bg-[#0e0e12] border border-white/10 rounded-3xl w-full max-w-lg p-6 shadow-2xl relative overflow-hidden max-h-[90vh] overflow-y-auto">
             {(() => {
               const pacote = pacoteInscricao(editando);
-              const categoriasPermitidas = categoriasEdicao.filter(c => categoriaPermitidaAoOrganizador(c, editando));
+              const categoriasPermitidas = categoriasEdicao.filter(c => categoriaPermitidaAoOrganizador(c, editando, permitirOutroSexo));
               const categoriaDestino = categoriasPermitidas.find(c => c.id === categoriaDestinoId);
+              const destinoOutroSexo = Boolean(categoriaDestino && sexosDiferentesCategoria(categoriaDestino, editando));
               const inscricaoOriginal = inscricoes.find(item => item.id === editando.id);
               const dadosPendentes = inscricaoOriginal && (String(editando.peso ?? '') !== String(inscricaoOriginal.peso ?? '') || String(editando.faixa ?? '') !== String(inscricaoOriginal.faixa ?? ''));
               return (
@@ -1178,20 +1185,28 @@ export default function AdminPage() {
                   <p className="mt-2 text-[11px] text-zinc-400">Inscrição só de absoluto. A categoria de peso pode ser alterada apenas em inscrições de peso ou combo.</p>
                 ) : (
                   <div className="mt-3 space-y-2 rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-3">
+                    <label className="flex items-start gap-2 text-xs text-amber-200">
+                      <input type="checkbox" checked={permitirOutroSexo} disabled={chavesGeradasEdicao || salvandoCategoria} onChange={e => { setPermitirOutroSexo(e.target.checked); setAutorizacaoSexoConfirmada(false); setCategoriaDestinoId(''); }} className="mt-0.5 shrink-0 accent-amber-500" />
+                      Permitir categoria de outro sexo (exceção)
+                    </label>
                     <label className="block text-[10px] font-bold uppercase tracking-widest text-cyan-200">Mover para categoria oficial
-                      <select value={categoriaDestinoId} onChange={e => setCategoriaDestinoId(e.target.value)} disabled={carregandoCategorias} className="mt-1.5 w-full rounded-lg border border-white/10 bg-black px-3 py-2.5 text-xs text-white disabled:opacity-50">
+                      <select value={categoriaDestinoId} onChange={e => { setCategoriaDestinoId(e.target.value); setAutorizacaoSexoConfirmada(false); }} disabled={carregandoCategorias} className="mt-1.5 w-full rounded-lg border border-white/10 bg-black px-3 py-2.5 text-xs text-white disabled:opacity-50">
                         <option value="">{carregandoCategorias ? 'Carregando categorias...' : 'Selecione a categoria'}</option>
                         {categoriasPermitidas.map(c => { const divergencias = divergenciasCategoria(c, editando); return <option key={c.id} value={c.id}>{rotuloCategoria(c)}{divergencias.idade ? ' · outra idade' : ''}{divergencias.peso ? ' · outro peso' : ''}{divergencias.faixa ? ' · outra faixa' : ''}</option>; })}
                       </select>
                     </label>
+                    {destinoOutroSexo && <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 text-xs text-amber-100">
+                      <p className="mb-2">Exceção: {editando.sexo} → {categoriaDestino?.sexo}. O sexo do cadastro e da inscrição será mantido.</p>
+                      <label className="flex items-start gap-2"><input type="checkbox" checked={autorizacaoSexoConfirmada} onChange={e => setAutorizacaoSexoConfirmada(e.target.checked)} className="mt-0.5 shrink-0 accent-amber-500" />Confirmo a autorização do atleta ou responsável para este remanejamento.</label>
+                    </div>}
                     {categoriaDestino && <p className="text-[11px] text-zinc-300">{divergenciasCategoria(categoriaDestino, editando).idade ? 'Idade fora da faixa selecionada. ' : ''}{divergenciasCategoria(categoriaDestino, editando).peso ? 'Peso fora da faixa selecionada. ' : ''}{divergenciasCategoria(categoriaDestino, editando).faixa ? 'Faixa diferente da categoria. ' : ''}Os dados reais do atleta serão mantidos.</p>}
                     {!carregandoCategorias && !categoriasPermitidas.some(c => c.idade_min >= 16) && <p className="text-[11px] text-amber-200">Não há categoria de peso a partir de 16 anos para o sexo e a modalidade desta inscrição. Cadastre a divisão desejada em <Link href={`/admin/categorias?evento=${editando.evento_id}`} className="underline">Categorias do campeonato</Link> para poder selecioná-la aqui. Categorias de absoluto exigem outro tipo de inscrição.</p>}
                     <label className="block text-[10px] font-bold uppercase tracking-widest text-cyan-200">Justificativa da mudança
-                      <textarea value={motivoCategoria} onChange={e => setMotivoCategoria(e.target.value)} maxLength={500} rows={2} placeholder="Ex.: remanejamento autorizado após conferência da idade e do peso" className="mt-1.5 w-full rounded-lg border border-white/10 bg-black px-3 py-2.5 text-xs text-white" />
+                      <textarea value={motivoCategoria} onChange={e => setMotivoCategoria(e.target.value)} maxLength={destinoOutroSexo ? 400 : 500} rows={2} placeholder={destinoOutroSexo ? 'Ex.: atleta sozinha na chave; remanejamento autorizado pelo pai' : 'Ex.: remanejamento autorizado após conferência da idade e do peso'} className="mt-1.5 w-full rounded-lg border border-white/10 bg-black px-3 py-2.5 text-xs text-white" />
                     </label>
                     {dadosPendentes && <p className="text-[11px] text-amber-200">Salve primeiro as alterações de faixa ou peso abaixo antes de mover a categoria.</p>}
                     {chavesGeradasEdicao && <p className="text-[11px] text-amber-200">Há chaves geradas neste campeonato. A mudança está bloqueada para preservar as lutas.</p>}
-                    <button type="button" onClick={() => void aplicarMudancaCategoria()} disabled={salvandoCategoria || carregandoCategorias || chavesGeradasEdicao || Boolean(dadosPendentes) || !categoriaDestino || categoriaDestino.id === editando.categoria_id || motivoCategoria.trim().length < 10} className="rounded-lg bg-cyan-700 px-3 py-2 text-[10px] font-black uppercase text-white disabled:cursor-not-allowed disabled:opacity-40">{salvandoCategoria ? 'Alterando...' : 'Aplicar categoria'}</button>
+                    <button type="button" onClick={() => void aplicarMudancaCategoria()} disabled={salvandoCategoria || carregandoCategorias || chavesGeradasEdicao || Boolean(dadosPendentes) || !categoriaDestino || categoriaDestino.id === editando.categoria_id || motivoCategoria.trim().length < 10 || (destinoOutroSexo && !autorizacaoSexoConfirmada)} className="rounded-lg bg-cyan-700 px-3 py-2 text-[10px] font-black uppercase text-white disabled:cursor-not-allowed disabled:opacity-40">{salvandoCategoria ? 'Alterando...' : 'Aplicar categoria'}</button>
                     <p className="text-[10px] text-zinc-500">É possível subir ou descer na idade e no peso, inclusive de juvenil para adulto. Se a faixa da categoria for diferente, a exceção também ficará registrada. Os dados reais, a inscrição e o pagamento são preservados. Chaves já geradas bloqueiam o ajuste.</p>
                     {pacote === 'combo' && <p className="text-[10px] text-zinc-500">A chave do absoluto continua seguindo os dados reais do atleta.</p>}
                   </div>
