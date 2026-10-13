@@ -16,13 +16,13 @@ export async function POST(request: Request) {
   const db = createSupabaseServerClient();
   const [{ data: evento, error: erroEvento }, { data: atleta, error: erroAtleta }] = await Promise.all([
     db.from("eventos").select("id").eq("id", eventoId).maybeSingle(),
-    db.from("atletas").select("id,user_id,responsavel_id,equipe,professor").eq("id", atletaId).maybeSingle(),
+    db.from("atletas").select("id,user_id,responsavel_id,equipe,professor,role").eq("id", atletaId).maybeSingle(),
   ]);
   if (erroEvento || !evento || erroAtleta || !atleta) return NextResponse.json({ error: "Campeonato ou atleta não encontrado." }, { status: 404 });
   if (atleta.user_id !== usuario.id && atleta.responsavel_id !== usuario.id) {
     return NextResponse.json({ error: "Você não pode alterar a equipe deste atleta." }, { status: 403 });
   }
-  if (!String(atleta.professor || '').trim()) {
+  if (atleta.role !== 'professor' && !String(atleta.professor || '').trim()) {
     return NextResponse.json({ error: "Informe o professor no perfil do atleta antes de concluir a inscrição." }, { status: 400 });
   }
   const nome = String(atleta.equipe || "").trim();

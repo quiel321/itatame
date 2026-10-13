@@ -10,12 +10,15 @@ import { urlLoginComRetorno } from '@/app/lib/destino-interno';
 import { encontrarEquipeSemelhante } from '@/app/lib/equipes-nome';
 import { contaSomenteResponsavel, competidoresDaConta } from '@/app/lib/conta-responsavel';
 import { FILTRO_INSCRICOES_ATIVAS } from '@/app/lib/inscricao-ativa';
+import { camposPerfilInscricao } from '@/app/lib/perfil-inscricao';
 
 type PerfilCompetidor = {
   id: number;
   user_id: string;
   nome: string;
   equipe?: string | null;
+  academia?: string | null;
+  role?: string | null;
   professor?: string | null;
   faixa?: string | null;
   peso?: string | number | null;
@@ -49,6 +52,8 @@ function FormularioInscricao() {
   const [equipe, setEquipe] = useState("");
   const [equipeDoCadastro, setEquipeDoCadastro] = useState("");
   const [professor, setProfessor] = useState("");
+  const [academia, setAcademia] = useState("");
+  const [roleCompetidor, setRoleCompetidor] = useState("");
   const [faixa, setFaixa] = useState("");
   const [modalidade, setModalidade] = useState("");
   const [pesoReal, setPesoReal] = useState("");
@@ -91,7 +96,9 @@ function FormularioInscricao() {
   const [camposInvalidos, setCamposInvalidos] = useState<string[]>([]);
   const [processando, setProcessando] = useState(false);
 
-  const perfilIncompleto = !nome || !equipe || !professor.trim() || !faixa || !atletaId;
+  const camposPerfil = camposPerfilInscricao({ id: atletaId, nome, equipe, academia, professor, faixa, role: roleCompetidor });
+  const perfilIncompleto = camposPerfil.length > 0;
+  const competidorDependente = Boolean(competidorUserId && competidorUserId !== userId);
   const idadePeloCadastro = Number.isInteger(idadeCompetitiva(nascimentoAtleta, dataEvento));
 
   function aplicarCompetidor(
@@ -103,6 +110,8 @@ function FormularioInscricao() {
     setAtletaId(pessoa.id);
     setNome(pessoa.nome || "");
     setProfessor(pessoa.professor || "");
+    setAcademia(pessoa.academia || "");
+    setRoleCompetidor(pessoa.role || 'atleta');
     setFaixa(pessoa.faixa || "");
     setPesoReal(pessoa.peso ? String(pessoa.peso) : "");
     setSexo(pessoa.sexo || "Masculino");
@@ -192,15 +201,15 @@ function FormularioInscricao() {
       }
 
       const { data: atleta, error } = await supabase.from("atletas").select("*").eq("user_id", authData.user.id).single();
-      const { data: depsData } = await supabase.from("atletas").select("id,user_id,nome,equipe,professor,faixa,peso,sexo,modalidade,foto_url,cpf,nascimento").eq("responsavel_id", authData.user.id).order("nome");
+      const { data: depsData } = await supabase.from("atletas").select("id,user_id,nome,equipe,academia,role,professor,faixa,peso,sexo,modalidade,foto_url,cpf,nascimento").eq("responsavel_id", authData.user.id).order("nome");
       const titular = !error && atleta ? atleta as PerfilCompetidor : null;
       const dependentes = (depsData || []) as PerfilCompetidor[];
       const somenteResponsavel = contaSomenteResponsavel(atleta?.role, authData.user.user_metadata);
       const pessoas = competidoresDaConta(titular, dependentes, somenteResponsavel);
       if (somenteResponsavel && !dependentes.length) { router.replace('/perfil'); return; }
       setFamilia(pessoas);
-      if (dependentes[0]) aplicarCompetidor(dependentes[0], equipesCarregadas, dataEventoAtual);
-      else if (titular && !somenteResponsavel) aplicarCompetidor(titular, equipesCarregadas, dataEventoAtual);
+      if (titular && !somenteResponsavel) aplicarCompetidor(titular, equipesCarregadas, dataEventoAtual);
+      else if (dependentes[0]) aplicarCompetidor(dependentes[0], equipesCarregadas, dataEventoAtual);
 
       setLoading(false);
     }
@@ -214,13 +223,17 @@ function FormularioInscricao() {
         if (ativo) setInscricaoAtual(null);
         return;
       }
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("inscricoes")
         .select("id,absoluto,categoria,categoria_id,pagamento_ok,valor_inscricao,valor_total,cupom_id")
         .eq("evento_id", eventoId)
+        .or(FILTRO_INSCRICOES_ATIVAS)
         .or(`user_id.eq.${competidorUserId},atleta_id.eq.${atletaId || 0}`)
         .limit(1);
-      if (ativo) setInscricaoAtual(data?.[0] || null);
+      if (ativo) {
+        if (error) setTabelaErro('Não foi possível conferir as inscrições existentes. Recarregue a página antes de se inscrever.');
+        else setInscricaoAtual(data?.[0] || null);
+      }
     }
     void carregarInscricaoAtual();
     return () => { ativo = false; };
@@ -326,7 +339,7 @@ function FormularioInscricao() {
 
     const faltando: { campo: string; mensagem: string }[] = [];
     if (perfilIncompleto) {
-      faltando.push({ campo: "perfil", mensagem: "Complete nome, equipe, professor e faixa deste atleta no perfil." });
+      faltando.push({ campo: "perfil", mensagem: `Complete no perfil: ${camposPerfil.join(', ')}.` });
     }
     if (!idade || !Number.isInteger(Number(idade)) || Number(idade) < 4 || Number(idade) > 100) {
       faltando.push({ campo: "idade", mensagem: "Informe a idade na data do evento." });
@@ -414,11 +427,18 @@ function FormularioInscricao() {
       return;
     }
 
-    const { data: inscricaoExistente } = await supabase
+    const { data: inscricaoExistente, error: erroDuplicidade } = await supabase
       .from("inscricoes")
       .select("id,absoluto,categoria,categoria_id,pagamento_ok,valor_inscricao,valor_total,cupom_id,modalidade")
       .eq("evento_id", eventoId)
+      .or(FILTRO_INSCRICOES_ATIVAS)
       .or(`user_id.eq.${userIdInscricao},atleta_id.eq.${atletaId || 0}`);
+
+    if (erroDuplicidade) {
+      setErro('Não foi possível conferir as inscrições existentes. Tente de novo.');
+      setProcessando(false);
+      return;
+    }
 
     const existente = inscricaoExistente?.[0] || null;
     const pacoteAtual = existente ? pacoteInscricao(existente) : null;
@@ -437,37 +457,27 @@ function FormularioInscricao() {
     }
 
     if (!ampliando && cpfAtleta) {
-      const { data: cpfJaInscrito, error: erroCpf } = await supabase.rpc('cpf_inscrito_no_evento', {
-        p_evento_id: eventoId,
-        p_cpf: cpfAtleta,
-      });
-
-      if (erroCpf) {
+      const { data: { session } } = await supabase.auth.getSession();
+      const respostaCpf = await fetch('/api/inscricoes/conferir-cpf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token || ''}` },
+        body: JSON.stringify({ eventoId, atletaId }),
+      }).catch(() => null);
+      const resultadoCpf = await respostaCpf?.json().catch(() => null);
+      if (!respostaCpf?.ok || typeof resultadoCpf?.inscrito !== 'boolean') {
         setErro("Não foi possível conferir este CPF agora. Tente de novo.");
         setProcessando(false);
         return;
       }
 
-      if (cpfJaInscrito) {
+      if (resultadoCpf.inscrito) {
         setErro("Já existe inscrição neste evento para este CPF.");
         setProcessando(false);
         return;
       }
     }
 
-    if (!ampliando && emailAtleta && userIdInscricao === usuarioAtualId) {
-      const { data: inscricaoMesmoEmail, error: erroEmail } = await supabase
-        .from("inscricoes")
-        .select("id")
-        .eq("evento_id", eventoId)
-        .eq("email", emailAtleta);
-
-      if (!erroEmail && inscricaoMesmoEmail && inscricaoMesmoEmail.length > 0) {
-        setErro("Já existe inscrição neste evento para este e-mail.");
-        setProcessando(false);
-        return;
-      }
-    }
+    // E-mail é contato compartilhável entre familiares; a identidade é conferida por atleta e CPF.
 
     let equipeOficial: { id: string; nome: string; academia: string; professor: string } | undefined;
     if (eventoId && atletaId) {
@@ -680,7 +690,7 @@ function FormularioInscricao() {
           {perfilIncompleto && (
             <div id="inscricao-perfil" className={`bg-yellow-500/10 border rounded-xl p-4 ${camposInvalidos.includes("perfil") ? "border-red-500 ring-1 ring-red-500/60" : "border-yellow-500/30"}`}>
               <p className="text-yellow-500 font-bold text-xs uppercase tracking-widest mb-1">Perfil Incompleto</p>
-              <p className="text-yellow-200/70 text-xs">Faltam dados obrigatórios no cadastro deste atleta (nome, equipe, professor e faixa). <Link href="/perfil" className="underline font-bold text-yellow-400">Complete em Família / Dependentes</Link></p>
+              <p className="text-yellow-200/70 text-xs">Faltam dados no cadastro: {camposPerfil.join(', ')}. <Link href="/perfil" className="underline font-bold text-yellow-400">{competidorDependente ? 'Complete em Família / Dependentes' : 'Complete no seu perfil'}</Link></p>
             </div>
           )}
 
