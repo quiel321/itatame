@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
 import { pacoteInscricao } from "@/app/lib/valor-inscricao";
+import { FILTRO_INSCRICOES_ATIVAS } from '@/app/lib/inscricao-ativa';
 import QRCode from "react-qr-code";
 import Link from "next/link";
 
@@ -41,6 +42,7 @@ export default function IngressoDigitalPage() {
         .eq("evento_id", eventoId)
         .eq("user_id", atletaUserId)
         .eq("pagamento_ok", true)
+        .or(FILTRO_INSCRICOES_ATIVAS)
         .maybeSingle(); // 🟢 Usamos maybeSingle pois agora é uma linha só
       
       if (inscData) {

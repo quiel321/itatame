@@ -8,6 +8,9 @@ import { useRouter } from 'next/navigation';
 import { obterTempoRegulamentar } from '../../lib/cronograma';
 import { garantirVinculoStaff } from '../../lib/staff-sessao';
 import { processarAvancosAutomaticosChaves } from '../../lib/chaves-auto-avanco';
+import { FILTRO_INSCRICOES_ATIVAS } from '../../lib/inscricao-ativa';
+import { salvarCheckinInscricoes } from '../../lib/checkin-inscricoes';
+import { dataOperacionalEvento } from '../../lib/evento-datas';
 
 export default function CheckinOperador() {
   const router = useRouter();
@@ -82,8 +85,7 @@ export default function CheckinOperador() {
   const obterFimInscricoes = (evento: any) => {
     const valor = evento?.data_fim_inscricoes || evento?.lote3_data_fim || evento?.lote2_data_fim || evento?.lote1_data_fim;
     if (!valor) return null;
-    const data = new Date(valor);
-    return Number.isNaN(data.getTime()) ? null : data;
+    return dataOperacionalEvento(valor, true, evento.estado);
   };
 
   const formatarDataHora = (data: Date) => {
@@ -102,10 +104,11 @@ export default function CheckinOperador() {
   const fetchAtleta = async (eventoId: string, userId: string) => {
     setLoading(true);
     setErro('');
+    setAtleta(null);
 
     const { data: eventoData, error: eventoError } = await supabase
       .from('eventos')
-      .select('id, nome, status, data_fim_inscricoes, lote1_data_fim, lote2_data_fim, lote3_data_fim')
+      .select('id, nome, status, estado, data_fim_inscricoes, lote1_data_fim, lote2_data_fim, lote3_data_fim')
       .eq('id', eventoId)
       .single();
 
@@ -133,7 +136,7 @@ export default function CheckinOperador() {
       .from('inscricoes')
       .select('*')
       .eq('evento_id', eventoId)
-      .eq('user_id', userId);
+      .eq('user_id', userId).or(FILTRO_INSCRICOES_ATIVAS);
 
     if (inscricaoError || !inscricoesData || inscricoesData.length === 0) {
       setErro('Inscrição não encontrada ou não autorizada para este evento.');
@@ -218,14 +221,11 @@ export default function CheckinOperador() {
     };
 
     // Atualização segura: Atualiza usando o cruzamento absoluto (Evento + User_ID)
-    const { error } = await supabase
-      .from('inscricoes')
-      .update(atualizacao)
-      .eq('evento_id', atleta.evento_id)
-      .eq('user_id', atleta.user_id); // Seguro contra homônimos
-
-    if (error) {
-      alert('Erro de conexão ao salvar no sistema: ' + error.message);
+    try {
+      await salvarCheckinInscricoes(supabase, atleta.evento_id, atleta.user_id, atualizacao);
+    } catch (error) {
+      setAtleta(null);
+      setErro(error instanceof Error ? error.message : 'Não foi possível validar a inscrição para o check-in.');
       setLoading(false);
       return;
     }
