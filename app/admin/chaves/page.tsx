@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation"
 import { criarChavesImpressao, chaveGrupoPDF, type LutaImpressao } from '../../lib/chaves-impressao';
 import { criarKitContingenciaPDF } from "../../lib/kit-contingencia-pdf"
 import { rotuloLuta } from "../../lib/lutas-rotulos"
+import RevisaoChavesOrganizador from '@/app/components/RevisaoChavesOrganizador';
 import { semFaixaDuplicada } from "../../lib/categorias-competicao"
 
 type EventoOrganizador = {
@@ -109,7 +110,7 @@ export default function GerarChavesPage() {
       const dados = await resposta.json();
       if (!resposta.ok) throw new Error(dados.error || 'Falha no chaveamento.');
       if (dados.previa) { setPrevia(dados.previa); }
-      else { setPrevia(null); setMensagem({ tipo: 'sucesso', texto: `${dados.total} lutas geradas. Chaves anteriores substituídas com segurança.` }); }
+      else { setPrevia(null); setMensagem({ tipo: 'sucesso', texto: `${dados.total} lutas geradas em rascunho. Confira e publique cada categoria abaixo.` }); }
     } catch (error) { setPrevia(null); setMensagem({ tipo: 'erro', texto: (error as Error).message }); }
     finally { setLoading(false); }
   }
@@ -310,6 +311,7 @@ export default function GerarChavesPage() {
           )}
         </div>
 
+        <div className="my-5"><RevisaoChavesOrganizador eventoId={eventoId} atualizacao={mensagem.texto} /></div>
         <div className="bg-gradient-to-b from-[#111116] to-black border border-white/5 rounded-2xl p-5 md:p-6 shadow-xl">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center shrink-0">
@@ -350,3 +352,4 @@ export default function GerarChavesPage() {
     </main>
   )
 }
+

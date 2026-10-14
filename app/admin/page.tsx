@@ -1,5 +1,7 @@
 "use client";
 
+import RecepcaoOrganizador from '@/app/components/staff/RecepcaoOrganizador';
+
 import { obterEventoOrganizador, guardarEventoOrganizador } from '@/app/lib/evento-organizador';
 
 import { useEffect, useState, useRef } from "react";
@@ -1055,6 +1057,7 @@ export default function AdminPage() {
                     <option value="mesario" disabled={!planoCompleto}>Mesário / Tatame{!planoCompleto ? ' · Plano Completo' : ''}</option>
                     <option value="chamador" disabled={!planoCompleto}>Chamador / Área de espera{!planoCompleto ? ' · Plano Completo' : ''}</option>
                     <option value="checkin">Recepção / Check-in</option>
+                    <option value="operacao" disabled={!planoCompleto}>Operação completa · Check-in + Chamador{!planoCompleto ? ' · Plano Completo' : ''}</option>
                   </select>
                 </div>
 
@@ -1078,6 +1081,7 @@ export default function AdminPage() {
                 </button>
               </form>
 
+              <RecepcaoOrganizador eventoId={eventoSelecionado} />
               <h3 className="text-white font-black text-sm uppercase tracking-widest mb-4 border-l-2 border-red-500 pl-3">Credenciais Ativas</h3>
               
               {loadingStaff ? (
@@ -1424,3 +1428,4 @@ function ConferenciaVinculo({
     </section>
   );
 }
+

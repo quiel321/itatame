@@ -1,5 +1,4 @@
 import { montarChaves, prepararGrupos } from '@/app/lib/gerar-chaves';
-import { processarAvancosAutomaticosChaves } from '@/app/lib/chaves-auto-avanco';
 import type { CategoriaCompeticao, InscricaoCompeticao } from '@/app/lib/categorias-competicao';
 import { ehFaseChaveDeTres } from '@/app/lib/chave-de-tres';
 import { inscricaoAtiva } from '@/app/lib/inscricao-ativa';
@@ -211,7 +210,8 @@ export async function gravarChavesEvento(
     { p_evento: evento.id, p_tipo: tipo, p_lutas: linhas, p_organizador: evento.organizador_id },
   );
   if (error) throw new Error('Não foi possível gravar as chaves com segurança. Confira as funções de chaveamento no banco. ' + error.message);
-  await processarAvancosAutomaticosChaves(db, evento.id);
+  // Os avanços passam a ocorrer após o despacho da recepção, pela operação autorizada.
+  // Geração/divulgação não podem produzir resultados de luta.
   return Number(total || 0);
 }
 
@@ -229,6 +229,6 @@ export async function gerarChavesAutomaticasEvento(db: ClienteSupabase, evento: 
       throw error;
     }
   }
-  await processarAvancosAutomaticosChaves(db, evento.id);
   return gerados;
 }
+

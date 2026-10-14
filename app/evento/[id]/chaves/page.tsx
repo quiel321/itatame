@@ -9,6 +9,7 @@ import AvisoChaves from "@/app/components/AvisoChaves"
 import { dataOperacional, type EventoComEtapas } from "@/app/lib/evento-etapas"
 import { agendarChavesAutomaticas } from "@/app/lib/agendar-chaves-automaticas"
 import { totalAbasArvore } from "@/app/lib/chave-visual"
+import { consultarChavesPublicadas } from '@/app/lib/chaves-publicadas';
 
 export default function ChavesPage() {
   const params = useParams()
@@ -25,7 +26,7 @@ export default function ChavesPage() {
   const [atletasDB, setAtletasDB] = useState<{ id?: number; nome: string; foto_url: string | null }[]>([])
 
   async function carregarCategorias() {
-    const { data } = await supabase.from("chaves").select("categoria, faixa").eq("evento_id", params.id)
+    const { data } = await consultarChavesPublicadas(supabase, String(params.id), "categoria, faixa")
     if (data) {
       const unicas = Array.from(new Set(data.map(d => `${d.categoria}__${d.faixa}`)))
       setCategoriasMenu(unicas)
@@ -40,7 +41,7 @@ export default function ChavesPage() {
   async function carregarChaves() {
     if (!categoriaSelecionada) return
     const [cat, fx] = categoriaSelecionada.split("__")
-    const { data } = await supabase.from("chaves").select("*").eq("evento_id", params.id).eq("categoria", cat).eq("faixa", fx)
+    const { data } = await consultarChavesPublicadas(supabase, String(params.id), "*", cat, fx)
     setLutas(data || [])
   }
 
@@ -68,6 +69,13 @@ export default function ChavesPage() {
   }, [params.id])
 
   useEffect(() => { carregarChaves(); setAbaAtual(1) }, [categoriaSelecionada])
+  useEffect(() => {
+    if (!params.id) return;
+    const atualizar = () => { void carregarCategorias(); void carregarChaves(); };
+    const canal = supabase.channel(`publicacao-chave-${params.id}`).on('postgres_changes', { event: '*', schema: 'public', table: 'chaves_publicacoes', filter: `evento_id=eq.${params.id}` }, atualizar).subscribe();
+    const intervalo = window.setInterval(atualizar, 10000);
+    return () => { window.clearInterval(intervalo); void supabase.removeChannel(canal); };
+  }, [params.id, categoriaSelecionada]);
 
   const categoriasFiltradas = categoriasMenu.filter((cat) => {
     const isAbsoluto = cat.toLowerCase().includes("absoluto")
@@ -262,3 +270,4 @@ export default function ChavesPage() {
     </main>
   )
 }
+

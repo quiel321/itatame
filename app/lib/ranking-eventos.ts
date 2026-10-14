@@ -19,6 +19,7 @@ export function calcularResultadosChaves(lutas: any[], regrasPorEvento?: Record<
 
     lutas.forEach(luta => {
       if (luta.status_luta !== 'concluida') return;
+      if (luta.pontuacao_atleta_1?.recepcao_wo || luta.pontuacao_atleta_2?.recepcao_wo) return;
 
       const vId = String(luta.vencedor_id || luta.vencedor);
       if (!vId || vId === "null" || vId === "") return;
@@ -161,3 +162,4 @@ export function calcularResultadosChaves(lutas: any[], regrasPorEvento?: Record<
       cleanName.includes('SEM ADVERSARIO')
     );
   }
+

@@ -2,12 +2,14 @@ import { ehFaseChaveDeTres, idBaiaDaPrimeiraChaveDeTres } from '@/app/lib/chave-
 
 type SupabaseLike = {
   from: (table: string) => any;
+  rpc?: (nome: string, parametros: Record<string, unknown>) => any;
 };
 
 export type ChaveLutaAuto = {
   id: string | number;
   evento_id: string | number;
   categoria: string;
+  categoria_id?: string | null;
   faixa: string;
   id_visual?: string | number | null;
   proxima_luta?: string | number | null;
@@ -197,7 +199,7 @@ async function concluirWo(supabase: SupabaseLike, todas: ChaveLutaAuto[], luta: 
   return true;
 }
 
-async function reabrirWoSemChecagem(supabase: SupabaseLike, todas: ChaveLutaAuto[], checkinPorAtleta: Map<number, string>) {
+async function reabrirWoSemChecagem(supabase: SupabaseLike, todas: ChaveLutaAuto[], checkinPorAtleta: Map<string, string>) {
   for (const luta of todas) {
     if (luta.status_luta !== 'concluida' || luta.metodo_vitoria !== 'wo') continue;
     const a1Real = isChaveAtletaReal(luta.atleta_1);
@@ -205,7 +207,7 @@ async function reabrirWoSemChecagem(supabase: SupabaseLike, todas: ChaveLutaAuto
     const byeEstrutural = (a1Real && isChaveBye(luta.atleta_2)) || (a2Real && isChaveBye(luta.atleta_1));
     if (!byeEstrutural) continue;
     const vencedorId = Number(luta.vencedor_id || (a1Real ? luta.atleta_1_id : luta.atleta_2_id) || 0);
-    if (vencedorId && checkinPorAtleta.get(vencedorId) === 'aprovado') continue;
+    if (vencedorId && checkinPorAtleta.get(`${luta.categoria_id}:${vencedorId}`) === 'aprovado') continue;
 
     await supabase.from('chaves').update({
       status_luta: 'agendada',
@@ -244,8 +246,19 @@ async function alinharTatameDaCategoria(supabase: SupabaseLike, todas: ChaveLuta
 
 export async function processarAvancosAutomaticosChaves(supabase: SupabaseLike, eventoId: string | number) {
   let houveAvanco = false;
+  const { data: controles, error: controleError } = await supabase.from('recepcao_categorias').select('categoria_id').eq('evento_id', eventoId).eq('fechada', true);
+  if (controleError || !controles?.length) return false;
+  const fechadas = new Set<string>(controles.map((c: { categoria_id: string }) => c.categoria_id));
+  if (supabase.rpc) for (const categoria of fechadas) {
+    const { error } = await supabase.rpc('recepcao_resolver_ausencias', { p_categoria: categoria });
+    if (error) throw error;
+  }
 
   for (let rodada = 0; rodada < 20; rodada++) {
+    if (rodada > 0 && supabase.rpc) for (const categoria of fechadas) {
+      const { error } = await supabase.rpc('recepcao_resolver_ausencias', { p_categoria: categoria });
+      if (error) throw error;
+    }
     const { data, error } = await supabase
       .from('chaves')
       .select('*')
@@ -253,13 +266,13 @@ export async function processarAvancosAutomaticosChaves(supabase: SupabaseLike, 
 
     if (error || !data) return houveAvanco;
 
-    const todas = data as ChaveLutaAuto[];
+    const todas = (data as ChaveLutaAuto[]).filter(l => l.categoria_id && fechadas.has(l.categoria_id));
     await alinharTatameDaCategoria(supabase, todas);
     const idsComAvanco = Array.from(new Set(todas.flatMap((luta) => [luta.atleta_1_id, luta.atleta_2_id]).filter(Boolean))) as number[];
     const { data: inscricoes } = idsComAvanco.length > 0
-      ? await supabase.from('inscricoes').select('atleta_id, status_checkin').eq('evento_id', eventoId).in('atleta_id', idsComAvanco)
-      : { data: [] as Array<{ atleta_id: number; status_checkin: string }> };
-    const checkinPorAtleta = new Map<number, string>((inscricoes || []).map((item: { atleta_id: number; status_checkin: string }) => [Number(item.atleta_id), String(item.status_checkin || 'pendente')]));
+      ? await supabase.from('inscricoes').select('atleta_id,categoria_id,status_checkin').eq('evento_id', eventoId).in('atleta_id', idsComAvanco)
+      : { data: [] as Array<{ atleta_id: number; categoria_id: string; status_checkin: string }> };
+    const checkinPorAtleta = new Map<string, string>((inscricoes || []).map((item: { atleta_id: number; categoria_id: string; status_checkin: string }) => [`${item.categoria_id}:${item.atleta_id}`, String(item.status_checkin || 'pendente')]));
     if (rodada === 0) {
       await reabrirWoSemChecagem(supabase, todas, checkinPorAtleta);
       continue;
@@ -280,7 +293,7 @@ export async function processarAvancosAutomaticosChaves(supabase: SupabaseLike, 
         if (isChaveTbd(luta.atleta_2) && temAlimentadoraPendente) continue;
         if (isChaveBye(luta.atleta_2) && !sozinhoNaChave(todas, luta) && !luta.proxima_luta) continue;
         if (ehFaseChaveDeTres(luta.fase) && isChaveBye(luta.atleta_2) && !sozinhoNaChave(todas, luta)) continue;
-        if (!luta.atleta_1_id || checkinPorAtleta.get(Number(luta.atleta_1_id)) !== 'aprovado') continue;
+        if (!luta.atleta_1_id || checkinPorAtleta.get(`${luta.categoria_id}:${luta.atleta_1_id}`) !== 'aprovado') continue;
         if (!await concluirWo(supabase, todas, luta, 'atleta_1')) continue;
         processouNestaRodada = true;
         houveAvanco = true;
@@ -291,7 +304,7 @@ export async function processarAvancosAutomaticosChaves(supabase: SupabaseLike, 
         if (isChaveTbd(luta.atleta_1) && temAlimentadoraPendente) continue;
         if (isChaveBye(luta.atleta_1) && !sozinhoNaChave(todas, luta) && !luta.proxima_luta) continue;
         if (ehFaseChaveDeTres(luta.fase) && isChaveBye(luta.atleta_1) && !sozinhoNaChave(todas, luta)) continue;
-        if (!luta.atleta_2_id || checkinPorAtleta.get(Number(luta.atleta_2_id)) !== 'aprovado') continue;
+        if (!luta.atleta_2_id || checkinPorAtleta.get(`${luta.categoria_id}:${luta.atleta_2_id}`) !== 'aprovado') continue;
         if (!await concluirWo(supabase, todas, luta, 'atleta_2')) continue;
         processouNestaRodada = true;
         houveAvanco = true;

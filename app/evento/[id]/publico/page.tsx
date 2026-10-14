@@ -12,6 +12,7 @@ import ArvoreChaveDesktop from "@/app/components/ArvoreChaveDesktop"
 import AvisoChaves from "@/app/components/AvisoChaves"
 import { dataOperacional, type EventoComEtapas } from "@/app/lib/evento-etapas"
 import { totalAbasArvore } from "@/app/lib/chave-visual"
+import { consultarChavesPublicadas } from '@/app/lib/chaves-publicadas';
 
 const formatarHorarioEstimado = (isoString: string | null) => {
   if (!isoString) return '';
@@ -61,7 +62,7 @@ export default function ChavesPublicoPage() {
 
   async function carregarCategorias() {
     if (!idEvento) return;
-    const { data } = await supabase.from("chaves").select("categoria, faixa, atleta_1, atleta_2, equipe_1, equipe_2").eq("evento_id", idEvento)
+    const { data } = await consultarChavesPublicadas(supabase, idEvento, "categoria, faixa, atleta_1, atleta_2, equipe_1, equipe_2")
     if (data) {
       setIndice(data as IndiceLuta[])
       setCategoriasMenu(Array.from(new Set(data.map(d => `${d.categoria}__${d.faixa}`))))
@@ -77,7 +78,7 @@ export default function ChavesPublicoPage() {
     if (!categoriaSelecionada || !idEvento) return
     const pedido = ++pedidoChaves.current
     const [cat, fx] = categoriaSelecionada.split("__")
-    const { data } = await supabase.from("chaves").select("*").eq("evento_id", idEvento).eq("categoria", cat).eq("faixa", fx)
+    const { data } = await consultarChavesPublicadas(supabase, idEvento, "*", cat, fx)
     if (pedido !== pedidoChaves.current) return
     setLutas(data || [])
   }
@@ -115,8 +116,12 @@ export default function ChavesPublicoPage() {
         carregarChaves();
         carregarCategorias();
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chaves_publicacoes', filter: `evento_id=eq.${idEvento}` }, () => {
+        carregarChaves(); carregarCategorias();
+      })
       .subscribe();
-    return () => { supabase.removeChannel(subscription); }
+    const atualizacao = window.setInterval(() => { carregarChaves(); carregarCategorias(); }, 10000);
+    return () => { window.clearInterval(atualizacao); supabase.removeChannel(subscription); }
   }, [categoriaSelecionada, versaoChaves, carregandoEvento])
 
   const categoriasFiltradas = categoriasMenu.filter((cat) => {
@@ -522,3 +527,4 @@ export default function ChavesPublicoPage() {
     </main>
   )
 }
+

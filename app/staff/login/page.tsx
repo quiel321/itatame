@@ -83,7 +83,9 @@ export default function StaffLogin() {
     document.cookie = `itatame_staff_access=1; Path=/; Max-Age=43200; SameSite=Lax${window.location.protocol === 'https:' ? '; Secure' : ''}`;
 
     // 4. Redirecionar para o posto correto
-    if (staffData.funcao === 'checkin') {
+    if (staffData.funcao === 'operacao') {
+      router.push('/staff/operacao');
+    } else if (staffData.funcao === 'checkin') {
       router.push('/staff/checkin');
     } else if (staffData.funcao === 'chamador') {
       router.push('/staff/chamador');
@@ -203,3 +205,4 @@ export default function StaffLogin() {
     </main>
   );
 }
+

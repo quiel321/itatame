@@ -7,6 +7,7 @@ import { useParams } from "next/navigation";
 import { Clock, Medal, Monitor, Radio, Search, Trophy } from "lucide-react";
 import QRCode from "react-qr-code";
 import { supabase } from "@/app/lib/supabase";
+import { consultarChavesPublicadas } from '@/app/lib/chaves-publicadas';
 import { obterTempoRegulamentar } from "@/app/lib/cronograma";
 import { rotuloLutaCurto } from "@/app/lib/lutas-rotulos";
 import { rotuloCategoriaAoVivo } from "@/app/lib/categorias-competicao";
@@ -601,12 +602,8 @@ export default function AoVivoPage() {
 
   const buscarLutas = useCallback(async () => {
     if (!eventoId) return;
-    const { data } = await supabase
-      .from("chaves")
-      .select("id, evento_id, tatame, fase, id_visual, categoria, faixa, atleta_1, atleta_2, atleta_1_id, atleta_2_id, equipe_1, equipe_2, pontuacao_atleta_1, pontuacao_atleta_2, duracao_segundos, iniciada_em, ordem_tatame, horario_estimado, status_luta, vencedor, vencedor_id, metodo_vitoria, finalizada_em")
-      .eq("evento_id", eventoId)
-      .order("ordem_tatame", { ascending: true })
-      .order("ordem", { ascending: true });
+    const { data } = await consultarChavesPublicadas(supabase, eventoId,
+      "id, evento_id, tatame, fase, id_visual, categoria, faixa, atleta_1, atleta_2, atleta_1_id, atleta_2_id, equipe_1, equipe_2, pontuacao_atleta_1, pontuacao_atleta_2, duracao_segundos, iniciada_em, ordem_tatame, horario_estimado, status_luta, vencedor, vencedor_id, metodo_vitoria, finalizada_em");
 
     const lutasReais = ((data || []) as LutaAoVivo[]).filter(isLutaReal);
 
@@ -659,6 +656,7 @@ export default function AoVivoPage() {
     const subscription = supabase
       .channel(`live-scoring-${eventoId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "chaves", filter: `evento_id=eq.${eventoId}` }, () => { void buscarLutas(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "chaves_publicacoes", filter: `evento_id=eq.${eventoId}` }, () => { void buscarLutas(); })
       .subscribe();
     return () => { void supabase.removeChannel(subscription); };
   }, [eventoId, buscarLutas]);
@@ -971,3 +969,4 @@ export default function AoVivoPage() {
     </main>
   );
 }
+
