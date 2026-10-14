@@ -4,7 +4,7 @@ import { useEffect, useState, Suspense } from "react";
 import { supabase } from "../lib/supabase";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { absolutoDaInscricao, categoriaCompativel, idadeCompetitiva, rotuloCategoria, type CategoriaCompeticao } from '@/app/lib/categorias-competicao';
+import { absolutoDaInscricao, categoriaCompativel, idadeCompetitiva, idadePorAnoCompetitivo, rotuloCategoria, type CategoriaCompeticao } from '@/app/lib/categorias-competicao';
 import { tarifaInfantilAplicavel, valorAbsolutoAvulso, valorAddonAbsoluto, valorLoteVigente, pacoteInscricao, pacoteDoTipoInscricao, podeAmpliarPacote, pacoteAposAmpliar, rotuloPacoteInscricao, calcularValorInscricao, valorAindaDevido, type EventoValoresInscricao } from '@/app/lib/valor-inscricao';
 import { urlLoginComRetorno } from '@/app/lib/destino-interno';
 import { encontrarEquipeSemelhante } from '@/app/lib/equipes-nome';
@@ -99,7 +99,10 @@ function FormularioInscricao() {
   const camposPerfil = camposPerfilInscricao({ id: atletaId, nome, equipe, academia, professor, faixa, role: roleCompetidor });
   const perfilIncompleto = camposPerfil.length > 0;
   const competidorDependente = Boolean(competidorUserId && competidorUserId !== userId);
-  const idadePeloCadastro = Number.isInteger(idadeCompetitiva(nascimentoAtleta, dataEvento));
+  const idadePeloCadastro = Number.isInteger(idadeCompetitiva(nascimentoAtleta, dataEvento, modalidade));
+
+  const idadeNoAno = idadePorAnoCompetitivo(modalidade);
+  const rotuloIdade = idadeNoAno ? 'Idade no ano do campeonato' : 'Idade na data do evento';
 
   function aplicarCompetidor(
     pessoa: PerfilCompetidor,
@@ -121,7 +124,7 @@ function FormularioInscricao() {
     setFotoUrl(pessoa.foto_url || "");
     setCpfAtleta(pessoa.cpf || "");
     setNascimentoAtleta(pessoa.nascimento || "");
-    const idadeCalc = idadeCompetitiva(pessoa.nascimento, dataRef);
+    const idadeCalc = idadeCompetitiva(pessoa.nascimento, dataRef, pessoa.modalidade);
     setIdade(Number.isInteger(idadeCalc) ? String(idadeCalc) : "");
     setCupom("");
     setDesconto(0);
@@ -342,7 +345,7 @@ function FormularioInscricao() {
       faltando.push({ campo: "perfil", mensagem: `Complete no perfil: ${camposPerfil.join(', ')}.` });
     }
     if (!idade || !Number.isInteger(Number(idade)) || Number(idade) < 4 || Number(idade) > 100) {
-      faltando.push({ campo: "idade", mensagem: "Informe a idade na data do evento." });
+      faltando.push({ campo: "idade", mensagem: `Informe a ${rotuloIdade.toLowerCase()}.` });
     }
     if (precisaCategoriaPeso && !categoriaId) {
       faltando.push({
@@ -738,9 +741,9 @@ function FormularioInscricao() {
             <h2 className="text-xs font-black text-white uppercase tracking-widest mb-5">Encaixe na Chave</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
             <div id="inscricao-idade" className="scroll-mt-24">
-                <label className="text-[9px] text-zinc-500 font-bold uppercase block mb-1.5">Idade na data do evento</label>
+                <label className="text-[9px] text-zinc-500 font-bold uppercase block mb-1.5">{rotuloIdade}</label>
                 <input type="number" placeholder="Ex: 8" value={idade} onChange={(e) => { setIdade(e.target.value); limparCampoInvalido("idade"); }} disabled={idadePeloCadastro} aria-invalid={camposInvalidos.includes("idade")} className={`w-full bg-black border rounded-lg px-3 py-2.5 text-white text-xs ${classeCampo("idade")} ${idadePeloCadastro ? 'opacity-70 cursor-not-allowed' : ''}`} />
-                {camposInvalidos.includes("idade") ? <p className="text-[11px] text-red-400 mt-1 font-bold">Informe a idade na data do evento.</p> : idadePeloCadastro ? <p className="text-[10px] text-zinc-500 mt-1">Calculada pela data de nascimento do cadastro.</p> : <p className="text-[10px] text-zinc-500 mt-1">Informe a idade ou complete a data de nascimento no perfil.</p>}
+                {camposInvalidos.includes("idade") ? <p className="text-[11px] text-red-400 mt-1 font-bold">Informe a {rotuloIdade.toLowerCase()}.</p> : idadeNoAno ? <p className="text-[10px] text-zinc-500 mt-1">Vale a idade que completa no ano do campeonato, mesmo antes do aniversário.{!idadePeloCadastro && ' Informe a idade ou complete o nascimento no perfil.'}</p> : idadePeloCadastro ? <p className="text-[10px] text-zinc-500 mt-1">Calculada pela data de nascimento do cadastro.</p> : <p className="text-[10px] text-zinc-500 mt-1">Informe a idade ou complete a data de nascimento no perfil.</p>}
               </div>
               <div>
                 <label className="text-[9px] text-zinc-500 font-bold uppercase block mb-1.5">Sexo Competitivo</label>
@@ -888,3 +891,4 @@ export default function PageInscricao() {
     </main>
   );
 }
+

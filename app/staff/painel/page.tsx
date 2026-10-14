@@ -13,6 +13,7 @@ import { ordemOperacionalChaveTriangular, textoAguardandoChaveDeTres } from '@/a
 import { semFaixaDuplicada } from '@/app/lib/categorias-competicao';
 import { sugestoesCategoriaPorTatame } from '@/app/lib/sugestao-categoria-tatame';
 import { alertaProximaLuta, corrigirResultadoLuta, METODOS_RESULTADO, rotuloMetodo, type MetodoResultado } from '@/app/lib/corrigir-resultado';
+import { resultadoOperacional } from '@/app/lib/operacao-campeonato';
 
 type StaffSession = {
   evento_id: string | number;
@@ -354,8 +355,10 @@ export default function PainelMesario() {
   const proximasLutas = useMemo(() => lutasProntas.filter((luta) => luta.status_luta !== 'em_andamento'), [lutasProntas]);
   const lutasChamadas = useMemo(() => proximasLutas.filter((luta) => Boolean(luta.iniciada_em)), [proximasLutas]);
   const lutasNaFila = useMemo(() => proximasLutas.filter((luta) => !luta.iniciada_em), [proximasLutas]);
-  const concluidas = useMemo(() => lutasComFiltro.filter((luta) => luta.status_luta === 'concluida').sort(ordenarLutas), [lutasComFiltro]);
-  const totalConcluidas = useMemo(() => lutas.filter((luta) => luta.status_luta === 'concluida').length, [lutas]);
+  const concluidas = useMemo(() => lutasComFiltro.filter((luta) => ['combate','wo'].includes(resultadoOperacional(luta))).sort(ordenarLutas), [lutasComFiltro]);
+  const totalConcluidas = useMemo(() => lutas.filter((luta) => ['combate','wo'].includes(resultadoOperacional(luta))).length, [lutas]);
+  const avancosBye = lutasComFiltro.filter(luta => resultadoOperacional(luta) === 'bye');
+  const posicoesVazias = lutasComFiltro.filter(luta => resultadoOperacional(luta) === 'vazio').length;
   const totalFila = useMemo(() => lutas.filter((luta) => luta.status_luta !== 'concluida' && luta.status_luta !== 'em_andamento' && isAtletaValido(luta.atleta_1) && isAtletaValido(luta.atleta_2)).length, [lutas]);
   const temLutaAgora = lutas.some((luta) => luta.status_luta === 'em_andamento');
 
@@ -373,10 +376,10 @@ export default function PainelMesario() {
       });
     const resumo = Array.from(grupos.entries()).map(([tatame, itens]) => ({
       tatame,
-      concluidas: itens.filter((luta) => luta.status_luta === 'concluida').length,
+      concluidas: itens.filter((luta) => ['combate','wo'].includes(resultadoOperacional(luta))).length,
       emAndamento: itens.find((luta) => luta.status_luta === 'em_andamento') || null,
       proximas: itens.filter((luta) => luta.status_luta !== 'concluida' && luta.status_luta !== 'em_andamento').slice(0, 6),
-      total: itens.length,
+      total: itens.filter(luta => !['bye','vazio'].includes(resultadoOperacional(luta))).length,
     }));
     const temTatameReal = resumo.some((grupo) => !ehRotuloPlaceholderTatame(grupo.tatame));
     return resumo.filter((grupo) => {
@@ -520,14 +523,17 @@ export default function PainelMesario() {
     try {
       const jaAvisadaPeloChamador = Boolean(luta.iniciada_em);
       if (luta.status_luta !== 'em_andamento') {
-        await supabase
+        let inicio = supabase
           .from('chaves')
           .update({
             status_luta: 'em_andamento',
             iniciada_em: new Date().toISOString(),
             tatame: luta.tatame || sessao.identificacao,
           })
-          .eq('id', luta.id);
+          .eq('id', luta.id).eq('evento_id', sessao.evento_id).neq('status_luta', 'concluida');
+        inicio = luta.tatame == null ? inicio.is('tatame', null) : inicio.eq('tatame', luta.tatame);
+        const { data: iniciadas, error: erroInicio } = await inicio.select('id');
+        if (erroInicio || !iniciadas?.length) throw new Error(erroInicio?.message || 'Esta luta mudou de tatame. Atualize a fila antes de iniciar.');
       }
 
       if (!jaAvisadaPeloChamador) await enviarAvisosDeFila(luta);
@@ -541,25 +547,36 @@ export default function PainelMesario() {
 
   const executarTransferenciaTatame = async (novoTatame: string) => {
     if (!modalTransferencia.luta || !sessao) return;
+    const { data: atual, error: leituraError } = await supabase.from('chaves')
+      .select('id, tatame, status_luta, iniciada_em, pontuacao_atleta_1, pontuacao_atleta_2')
+      .eq('id', modalTransferencia.luta.id).eq('evento_id', sessao.evento_id).single();
+    if (leituraError || !atual || atual.status_luta === 'concluida' || atual.status_luta === 'em_andamento' || atual.iniciada_em
+      || nomeUpper(atual.tatame || '') !== nomeUpper(modalTransferencia.luta.tatame || '')) {
+      setAviso('A luta mudou ou já foi liberada ao mesário. Atualize a fila; ela não pode ser transferida agora.');
+      return;
+    }
+    if (!window.confirm(`Transferir a luta e sua baia para ${novoTatame}? Encaminhe os atletas ao destino. Presenças, chamadas, check-in e pesagem serão mantidos.`)) return;
     setAcaoId(modalTransferencia.luta.id);
-    const { error } = await supabase
+    let transferencia = supabase
       .from('chaves')
       .update({ tatame: novoTatame })
       .eq('id', modalTransferencia.luta.id)
       .eq('evento_id', sessao.evento_id)
-      .neq('status_luta', 'concluida');
-    if (error) {
-      setAviso(`Não foi possível transferir a luta: ${error.message}`);
+      .neq('status_luta', 'concluida').neq('status_luta', 'em_andamento').is('iniciada_em', null);
+    transferencia = atual.tatame == null ? transferencia.is('tatame', null) : transferencia.eq('tatame', atual.tatame);
+    const { data: transferidas, error } = await transferencia.select('id');
+    if (error || !transferidas?.length) {
+      setAviso(error ? `Não foi possível transferir a luta: ${error.message}` : 'A luta mudou durante a transferência. Atualize a fila e tente novamente.');
       setAcaoId(null);
       return;
     }
     if (tatamesLivres[nomeUpper(novoTatame)]) {
       void canalOperacaoRef.current?.send({ type: 'broadcast', event: 'tatame_ocupado', payload: { tatame: novoTatame } });
-      void canalOperacaoRef.current?.send({ type: 'broadcast', event: 'luta_transferida', payload: { tatame: novoTatame, origem: sessao.identificacao, luta_id: modalTransferencia.luta.id } });
     }
+    void canalOperacaoRef.current?.send({ type: 'broadcast', event: 'luta_transferida', payload: { tatame: novoTatame, origem: atual.tatame, luta_id: modalTransferencia.luta.id } });
     setModalTransferencia({ visivel: false, luta: null });
     await carregarPainel();
-    setAviso(`Luta transferida para ${novoTatame}.`);
+    setAviso(`Luta e baia transferidas para ${novoTatame}. Encaminhe os atletas ao destino; as presenças foram mantidas.`);
     setAcaoId(null);
   };
 
@@ -679,7 +696,7 @@ export default function PainelMesario() {
             </>
           ) : (
             <>
-              <button onClick={() => setModalTransferencia({ visivel: true, luta })} title="Transferir tatame" className="h-10 rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 text-zinc-400"><ArrowRightLeft size={14} /></button>
+              <button onClick={() => setModalTransferencia({ visivel: true, luta })} disabled={Boolean(luta.iniciada_em) || luta.status_luta === 'em_andamento' || Boolean(acaoId)} title="Transferir tatame" className="h-10 rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 text-zinc-400 disabled:opacity-30"><ArrowRightLeft size={14} /></button>
               {temReprovado ? (
                 <button onClick={() => router.push(`/staff/placar/${luta.id}`)} className="h-10 min-w-0 flex-1 rounded-lg border border-red-500/40 bg-red-950 px-3 text-[9px] font-black uppercase text-red-300 md:w-36 md:flex-none"><XCircle size={12} className="mr-1 inline" /> W.O. balança</button>
               ) : (
@@ -756,6 +773,7 @@ export default function PainelMesario() {
           <button type="button" onClick={() => setAbaAtiva('concluidas')} className={`min-w-0 overflow-hidden rounded-xl border px-2 py-3 text-left md:rounded-2xl md:p-4 ${abaAtiva === 'concluidas' ? 'border-emerald-400 bg-emerald-500 text-black' : 'border-emerald-500/20 bg-emerald-500/10'}`}>
             <span className={`block truncate text-[8px] font-black uppercase tracking-widest md:text-[9px] ${abaAtiva === 'concluidas' ? 'text-black' : 'text-emerald-300'}`}>Concluídas</span>
             <strong className={`mt-1 block text-xl md:mt-2 md:text-2xl ${abaAtiva === 'concluidas' ? 'text-black' : 'text-emerald-300'}`}>{totalConcluidas}</strong>
+            <span className="mt-1 block text-[9px] normal-case">{lutas.filter(luta => resultadoOperacional(luta) === 'bye').length} BYEs · {lutas.filter(luta => resultadoOperacional(luta) === 'vazio').length} vazias</span>
           </button>
           <div className="min-w-0 overflow-hidden rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-2 py-3 md:rounded-2xl md:p-4">
             <span className="block truncate text-[8px] font-black uppercase tracking-widest text-cyan-300 md:text-[9px]">Próxima</span>
@@ -854,6 +872,8 @@ export default function PainelMesario() {
           )
         ) : abaAtiva === 'concluidas' ? (
           <section className="min-w-0 space-y-3">
+            <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-3 text-xs text-cyan-100"><strong>{concluidas.length} resultados de lutas</strong><p className="mt-1">{avancosBye.length} avanços por BYE · {posicoesVazias} posições vazias. Esses registros não representam combates realizados.</p></div>
+            {avancosBye.length > 0 && <details className="rounded-xl border border-white/10 p-3 text-xs"><summary className="cursor-pointer font-bold">Ver avanços automáticos por BYE</summary><div className="mt-3 space-y-2">{avancosBye.map(luta => <p key={luta.id}>{luta.fase} · {luta.categoria}<br /><strong>{isAtletaValido(luta.atleta_1) ? luta.atleta_1 : luta.atleta_2}</strong> avançou sem combate.</p>)}</div></details>}
             <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <h2 className="text-xs font-black uppercase tracking-widest text-emerald-300">Lutas concluídas</h2>
@@ -938,6 +958,7 @@ export default function PainelMesario() {
               <button onClick={() => setModalTransferencia({ visivel: false, luta: null })} className="rounded-xl bg-white/5 p-2 text-zinc-400 hover:text-white"><X size={18} /></button>
             </div>
 
+            <p className="mb-3 text-xs text-cyan-200">A luta e sua baia serão transferidas juntas. Encaminhe os atletas ao destino; presenças, chamadas, check-in e pesagem serão mantidos.</p>
             <div className="space-y-2">
               {tatamesDisponiveis.filter((tatame) => nomeUpper(tatame) !== nomeUpper(sessao.identificacao)).length === 0 ? (
                 <div className="rounded-xl border border-dashed border-white/10 p-4 text-center text-xs text-zinc-500">Nenhum outro tatame configurado.</div>
@@ -998,3 +1019,4 @@ export default function PainelMesario() {
     </main>
   );
 }
+

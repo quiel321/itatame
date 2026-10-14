@@ -171,7 +171,7 @@ async function concluirWo(supabase: SupabaseLike, todas: ChaveLutaAuto[], luta: 
   const vencedorId = ladoVencedor === 'atleta_1' ? luta.atleta_1_id : ladoVencedor === 'atleta_2' ? luta.atleta_2_id : null;
   const vencedorFinal = vencedorNome || 'BYE';
 
-  await supabase
+  let registro = supabase
     .from('chaves')
     .update({
       status_luta: 'concluida',
@@ -180,7 +180,13 @@ async function concluirWo(supabase: SupabaseLike, todas: ChaveLutaAuto[], luta: 
       metodo_vitoria: 'wo',
       finalizada_em: new Date().toISOString(),
     })
-    .eq('id', luta.id);
+    .eq('id', luta.id).eq('evento_id', luta.evento_id).neq('status_luta', 'concluida').neq('status_luta', 'em_andamento');
+  for (const campo of ['atleta_1', 'atleta_2'] as const) {
+    registro = luta[campo] == null ? registro.is(campo, null) : registro.eq(campo, luta[campo]);
+  }
+  const { data: atualizadas, error } = await registro.select('id');
+  if (error) throw error;
+  if (!atualizadas?.length) return false;
 
   await propagarResultadoChave(supabase, todas, luta, {
     vencedorNome: vencedorFinal,
@@ -188,6 +194,7 @@ async function concluirWo(supabase: SupabaseLike, todas: ChaveLutaAuto[], luta: 
     vencedorId,
     propagarPerdedor: false,
   });
+  return true;
 }
 
 async function reabrirWoSemChecagem(supabase: SupabaseLike, todas: ChaveLutaAuto[], checkinPorAtleta: Map<number, string>) {
@@ -274,7 +281,7 @@ export async function processarAvancosAutomaticosChaves(supabase: SupabaseLike, 
         if (isChaveBye(luta.atleta_2) && !sozinhoNaChave(todas, luta) && !luta.proxima_luta) continue;
         if (ehFaseChaveDeTres(luta.fase) && isChaveBye(luta.atleta_2) && !sozinhoNaChave(todas, luta)) continue;
         if (!luta.atleta_1_id || checkinPorAtleta.get(Number(luta.atleta_1_id)) !== 'aprovado') continue;
-        await concluirWo(supabase, todas, luta, 'atleta_1');
+        if (!await concluirWo(supabase, todas, luta, 'atleta_1')) continue;
         processouNestaRodada = true;
         houveAvanco = true;
         continue;
@@ -285,7 +292,7 @@ export async function processarAvancosAutomaticosChaves(supabase: SupabaseLike, 
         if (isChaveBye(luta.atleta_1) && !sozinhoNaChave(todas, luta) && !luta.proxima_luta) continue;
         if (ehFaseChaveDeTres(luta.fase) && isChaveBye(luta.atleta_1) && !sozinhoNaChave(todas, luta)) continue;
         if (!luta.atleta_2_id || checkinPorAtleta.get(Number(luta.atleta_2_id)) !== 'aprovado') continue;
-        await concluirWo(supabase, todas, luta, 'atleta_2');
+        if (!await concluirWo(supabase, todas, luta, 'atleta_2')) continue;
         processouNestaRodada = true;
         houveAvanco = true;
         continue;
@@ -293,7 +300,10 @@ export async function processarAvancosAutomaticosChaves(supabase: SupabaseLike, 
 
       if (atleta1Fantasma && atleta2Fantasma) {
         if (temAlimentadoraPendente) continue;
-        await concluirWo(supabase, todas, luta, 'bye');
+        // Um resultado já gravado pode ainda estar propagando o vencedor.
+        // TBD nunca comprova que uma vaga da próxima fase é vazia.
+        if (alimentadoras.length && (isChaveTbd(luta.atleta_1) || isChaveTbd(luta.atleta_2))) continue;
+        if (!await concluirWo(supabase, todas, luta, 'bye')) continue;
         processouNestaRodada = true;
         houveAvanco = true;
       }
@@ -304,3 +314,4 @@ export async function processarAvancosAutomaticosChaves(supabase: SupabaseLike, 
 
   return houveAvanco;
 }
+

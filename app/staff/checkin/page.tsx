@@ -22,6 +22,18 @@ export default function CheckinOperador() {
 
   const [pesoAferido, setPesoAferido] = useState('');
   const [kimonoAprovado, setKimonoAprovado] = useState(false);
+  const [limiteCategoria, setLimiteCategoria] = useState('Limite da categoria não informado');
+  useEffect(() => {
+    let ativo = true;
+    setLimiteCategoria('Limite da categoria não informado');
+    if (atleta?.categoria_id) void supabase.from('categorias_evento')
+      .select('tipo,peso_min,peso_max').eq('id', atleta.categoria_id).eq('evento_id', atleta.evento_id).maybeSingle()
+      .then(({ data, error }) => {
+        if (!ativo || error || !data) return;
+        setLimiteCategoria(data.tipo === 'absoluto' && data.peso_max == null && Number(data.peso_min) <= 0 ? 'Sem limite de peso' : data.peso_max == null ? `Acima de ${data.peso_min} kg` : `Limite da categoria: até ${data.peso_max} kg`);
+      });
+    return () => { ativo = false; };
+  }, [atleta?.categoria_id, atleta?.evento_id]);
 
   // =========================================================================
   // SEGURANÇA DE PORTA: Garante que o operador está logado via PIN
@@ -176,8 +188,12 @@ export default function CheckinOperador() {
   // SALVAR CHECK-IN (Com Blindagem de UUID)
   // =========================================================================
   const processarCheckin = async (status: 'aprovado' | 'desclassificado_peso' | 'desclassificado_kimono') => {
+    if (status === 'aprovado' && !kimonoAprovado) {
+      setErro('Confirme Kimono / Faixa antes de aprovar o atleta.');
+      return;
+    }
     setLoading(true);
-    const statusFinal = status === 'aprovado' && !kimonoAprovado ? 'desclassificado_kimono' : status;
+    const statusFinal = status;
     const peso = Number(String(pesoAferido).replace(',', '.'));
     if (!Number.isFinite(peso) || peso <= 0 || peso > 500) {
       setErro('Informe o peso aferido em kg, entre 0 e 500.');
@@ -420,7 +436,7 @@ export default function CheckinOperador() {
                 <div className="flex justify-center mt-3">
                   <span className="bg-white/5 border border-white/10 text-zinc-300 text-[10px] font-bold px-3 py-1 rounded-full flex items-center gap-1.5">
                     <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
-                    Limite: {atleta.peso} kg
+                    {limiteCategoria}
                   </span>
                 </div>
               </div>
@@ -431,7 +447,7 @@ export default function CheckinOperador() {
                 <span className="font-bold text-zinc-200 text-sm uppercase tracking-wider flex flex-col group-hover:text-white transition-colors">
                   Kimono / Faixa
                   <span className={`text-[10px] font-bold mt-1 tracking-widest normal-case ${kimonoAprovado ? 'text-green-500/80' : 'text-red-400'}`}>
-                    {kimonoAprovado ? 'Dentro dos padrões' : 'Desmarcado desclassifica o atleta'}
+                    {kimonoAprovado ? 'Dentro dos padrões' : 'Confirme para liberar a aprovação'}
                   </span>
                 </span>
                 <input 
@@ -445,8 +461,9 @@ export default function CheckinOperador() {
 
             <div className="flex flex-col gap-3 mt-2 mb-8">
               <button 
-                onClick={() => processarCheckin(kimonoAprovado ? 'aprovado' : 'desclassificado_kimono')}
-                className="w-full bg-green-600 hover:bg-green-500 text-white font-black py-6 rounded-3xl flex items-center justify-center gap-3 text-base uppercase tracking-widest shadow-[0_0_25px_rgba(22,163,74,0.3)] active:scale-[0.98] transition-all border border-green-500/50"
+                onClick={() => processarCheckin('aprovado')}
+                disabled={!kimonoAprovado || loading}
+                className="w-full bg-green-600 hover:bg-green-500 text-white font-black py-4 rounded-2xl flex items-center justify-center gap-3 text-base uppercase tracking-widest shadow-[0_0_25px_rgba(22,163,74,0.3)] active:scale-[0.98] transition-all border border-green-500/50 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <CheckCircle size={22} /> Aprovar Atleta
               </button>
@@ -475,3 +492,4 @@ export default function CheckinOperador() {
     </main>
   );
 }
+

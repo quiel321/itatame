@@ -83,11 +83,19 @@ export function dataCompeticao(valor?: string | Date | null) {
   return Number.isNaN(data.getTime()) ? null : data;
 }
 
-export function idadeCompetitiva(nascimento?: string | Date | null, referencia?: string | Date | null) {
+export function idadePorAnoCompetitivo(modalidade?: string | null) {
+  const nome = normalizarCompeticao(modalidade);
+  return !nome || /^(JIU[ -]?JITSU|BJJ)(?:\s|$)/.test(nome) || /^NO[ -]?GI$/.test(nome);
+}
+
+export function idadeCompetitiva(nascimento?: string | Date | null, referencia?: string | Date | null, modalidade?: string | null) {
   const nasc = dataCompeticao(nascimento);
   const ref = dataCompeticao(referencia) || new Date();
   if (!nasc) return NaN;
   let idade = ref.getFullYear() - nasc.getFullYear();
+  // No jiu-jitsu vale a idade completada no ano do campeonato.
+  // Este cálculo não substitui a idade civil usada para conta e responsabilidade.
+  if (idadePorAnoCompetitivo(modalidade)) return idade;
   const mes = ref.getMonth() - nasc.getMonth();
   if (mes < 0 || (mes === 0 && ref.getDate() < nasc.getDate())) idade--;
   return idade;
@@ -273,3 +281,4 @@ export function grupoInscricao(i: InscricaoCompeticao, tipo: 'peso' | 'absoluto'
   }
   throw new Error('Este atleta não se enquadra em categoria de peso cadastrada pelo organizador.');
 }
+

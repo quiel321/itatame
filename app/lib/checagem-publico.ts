@@ -64,7 +64,7 @@ function idadeDaInscricao(insc: Record<string, unknown>, atleta: Record<string, 
   const direto = Number(insc.idade);
   if (insc.idade !== '' && insc.idade != null && Number.isInteger(direto)) return direto;
   const nascimento = atleta?.nascimento ? String(atleta.nascimento) : null;
-  const calculada = idadeCompetitiva(nascimento, dataEvento);
+  const calculada = idadeCompetitiva(nascimento, dataEvento, textoOpcional(insc.modalidade ?? atleta?.modalidade));
   if (Number.isInteger(calculada)) return calculada;
   if (insc.idade == null) return null;
   return String(insc.idade);
@@ -166,3 +166,4 @@ export function montarInscritosChecagem(
   dados.sort((a, b) => a.atleta_nome.localeCompare(b.atleta_nome, 'pt-BR'));
   return dados;
 }
+

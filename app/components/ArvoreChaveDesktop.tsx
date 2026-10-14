@@ -121,7 +121,7 @@ function Atleta({
             <svg className="h-8 w-8 text-yellow-600" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" /></svg>
           )}
         </div>
-        <span className="w-full truncate px-1 text-center text-sm font-black uppercase text-yellow-400">{nome || 'A definir'}</span>
+        <span title={nome} className="w-full break-words px-1 text-center text-xs font-bold uppercase leading-snug text-yellow-400">{nome || 'A definir'}</span>
         {equipe ? <span className="w-full truncate px-1 text-center text-[10px] font-bold uppercase text-yellow-600/80">{equipe}</span> : null}
       </div>
     );
@@ -139,7 +139,7 @@ function Atleta({
         vazio ? 'border-white/5 bg-white/[0.02]' :
         'border-white/15 bg-[#0b1220]'
       } ${reverso ? 'flex-row-reverse' : ''} ${centralizado ? 'flex-col text-center' : ''} ${podeClicar ? 'hover:border-cyan-400/50' : ''}`}>
-        <div className={`flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border ${
+        <div className={`flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full border ${
           venceu ? 'border-green-400' : placeholder ? 'border-cyan-500/40' : vazio ? 'border-white/10' : 'border-zinc-600'
         } bg-black`}>
           {foto && !placeholder ? <img src={foto} alt="" className="h-full w-full object-cover" /> : (
@@ -147,13 +147,13 @@ function Atleta({
           )}
         </div>
         <div className={`min-w-0 flex-1 ${centralizado ? 'text-center' : reverso ? 'text-right' : 'text-left'}`}>
-          <p className={`truncate text-[13px] font-black uppercase leading-tight ${
+          <p title={nome} className={`break-words text-[11px] font-bold uppercase leading-[1.25] ${
             venceu ? 'text-green-300' : placeholder ? 'text-cyan-200 italic' : vazio ? 'text-zinc-700' : 'text-white'
           }`}>
             {numero && !placeholder ? <span className="mr-1 text-[10px] text-zinc-500">{numero}</span> : null}
             {nome || (vazio ? '—' : '')}
           </p>
-          <p className={`truncate text-[10px] font-bold uppercase ${placeholder ? 'text-cyan-700' : 'text-zinc-500'}`}>
+          <p title={equipe} className={`truncate text-[9px] font-medium uppercase ${placeholder ? 'text-cyan-700' : 'text-zinc-500'}`}>
             {equipe || (vazio ? '' : ' ')}
           </p>
           {!placeholder && horario && status !== 'concluida' && status !== 'em_andamento' && (
@@ -413,3 +413,4 @@ export default function ArvoreChaveDesktop({
     </div>
   );
 }
+

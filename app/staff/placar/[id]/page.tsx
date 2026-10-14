@@ -6,6 +6,7 @@ import { supabase } from "../../../lib/supabase";
 import { processarAvancosAutomaticosChaves, propagarResultadoChave } from "../../../lib/chaves-auto-avanco";
 import { idBaiaDaPrimeiraChaveDeTres } from "@/app/lib/chave-de-tres";
 import { garantirVinculoStaff } from "../../../lib/staff-sessao";
+import { obterTempoRegulamentar } from "../../../lib/cronograma";
 
 export default function PlacarMesarioDB() {
   const params = useParams();
@@ -49,6 +50,7 @@ export default function PlacarMesarioDB() {
 
   const placarRef = useRef<HTMLDivElement>(null);
   const timerFimRef = useRef<number | null>(null);
+  const timerSalvandoRef = useRef(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   // 🛡️ ESTADOS DE SEGURANÇA (CLIQUE TRIPLO)
@@ -110,6 +112,19 @@ export default function PlacarMesarioDB() {
       }
 
       setLutaAtual(luta);
+      let tempoCategoria = Number(luta.tempo_minutos);
+      if ((!Number.isFinite(tempoCategoria) || tempoCategoria <= 0) && luta.categoria_id) {
+        const { data: categoriaTempo, error: erroTempo } = await supabase.from('categorias_evento')
+          .select('tempo_minutos').eq('id', luta.categoria_id).eq('evento_id', luta.evento_id).maybeSingle();
+        if (erroTempo || !categoriaTempo) {
+          alert('Não foi possível conferir o tempo da categoria. Atualize a fila antes de iniciar o combate.');
+          router.replace('/staff/painel');
+          return;
+        }
+        tempoCategoria = Number(categoriaTempo.tempo_minutos);
+      }
+      if (!Number.isFinite(tempoCategoria) || tempoCategoria <= 0) tempoCategoria = obterTempoRegulamentar(luta.categoria, luta.faixa);
+      setTempoMinutos(tempoCategoria);
       if (luta.status_luta === 'concluida') {
         setModoCorrecao(true);
         setConfigOpen(false);
@@ -413,7 +428,9 @@ export default function PlacarMesarioDB() {
   useEffect(() => {
     if (!timerAtivo || !timerFimRef.current) return;
     const atualizarPeloRelogioReal = () => {
-      const restante = Math.max(0, Math.ceil(((timerFimRef.current || Date.now()) - Date.now()) / 1000));
+      const fim = timerFimRef.current;
+      if (fim === null) return;
+      const restante = Math.max(0, Math.ceil((fim - Date.now()) / 1000));
       setTempoRestante(restante);
     };
     atualizarPeloRelogioReal();
@@ -423,7 +440,7 @@ export default function PlacarMesarioDB() {
 
   useEffect(() => {
     const finalizarPorPontos = async () => {
-      if (tempoRestante === 0 && timerAtivo) {
+      if (tempoRestante === 0 && timerAtivo && timerFimRef.current !== null && Date.now() >= timerFimRef.current) {
         tocarSom('fim');
         setTimerAtivo(false);
         timerFimRef.current = null;
@@ -451,8 +468,12 @@ export default function PlacarMesarioDB() {
   }, [tempoRestante, timerAtivo]);
 
   const toggleTimer = async () => {
+    if (timerSalvandoRef.current) return;
+    timerSalvandoRef.current = true;
+    try {
     if (!timerAtivo && tempoRestante > 0) {
       timerFimRef.current = Date.now() + tempoRestante * 1000;
+      setTimerAtivo(true);
       tocarSom('inicio');
       await supabase.from("chaves").update({
         status_luta: "em_andamento",
@@ -461,12 +482,16 @@ export default function PlacarMesarioDB() {
       }).eq("id", matchId);
     } else if (timerAtivo) {
       const restante = Math.max(0, Math.ceil(((timerFimRef.current || Date.now()) - Date.now()) / 1000));
-      setTempoRestante(restante);
+      // Desarmar a expiração antes de aguardar a rede: pausar nunca encerra a luta.
       timerFimRef.current = null;
+      setTimerAtivo(false);
+      setTempoRestante(restante);
       tocarSom('pause');
       await supabase.from("chaves").update({ iniciada_em: null, duracao_segundos: restante }).eq("id", matchId);
     }
-    setTimerAtivo(!timerAtivo);
+    } finally {
+      timerSalvandoRef.current = false;
+    }
   };
 
   const formatarTempo = (segundos: number) => {
@@ -603,7 +628,7 @@ export default function PlacarMesarioDB() {
     <>
       <style dangerouslySetInnerHTML={{__html: `
         .ocultar-nav-global header:not(.header-placar),
-        .ocultar-nav-global nav { display: none !important; }
+        .ocultar-nav-global nav, .ocultar-nav-global .nav-global-mobile { display: none !important; }
         .ocultar-nav-global body > div, .ocultar-nav-global body > main, .ocultar-nav-global #__next { padding-top: 0 !important; margin-top: 0 !important; height: 100vh; overflow: hidden; }
 
         @media screen and (max-width: 768px) and (orientation: portrait) {
@@ -664,6 +689,7 @@ export default function PlacarMesarioDB() {
               <div className="space-y-5">
                 <div>
                   <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1 pl-1">Tempo de Luta</label>
+                  <p className="mb-2 text-xs text-cyan-200">Carregado da categoria. Confira antes de iniciar.</p>
                   <div className="flex items-center gap-4">
                     <input type="range" min="1" max="10" value={tempoMinutos} onChange={(e) => setTempoMinutos(Number(e.target.value))} className="w-full accent-white cursor-pointer" />
                     <span className="text-lg font-black text-white w-12 text-center bg-zinc-800 py-1 rounded-md">{tempoMinutos}m</span>
@@ -987,3 +1013,4 @@ export default function PlacarMesarioDB() {
     </>
   );
 }
+

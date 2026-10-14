@@ -11,12 +11,16 @@ for (const tipo of ['peso', 'absoluto'] as const) {
     const inscritos=Array.from({length:100},(_,i)=>({id:i+1,atleta_id:i+1,atleta:`Fictício ${i+1}`,categoria_id:categoria.id,categoria:categoria.nome,faixa:'Branca',sexo:'Masculino',idade:20,peso:70+i/10,modalidade:'Jiu-Jitsu',equipe:`Equipe ${i%10}`,academia:`CT ${i%20}`,absoluto:tipo==='absoluto',pagamento_ok:true,status_checkin:'aprovado'}));
     const grupos=prepararGrupos(inscritos,tipo,[categoria]);
     assert.equal(Object.values(grupos.grupos).flat().length,100);
-    const lutas=(montarChaves('evento-teste',grupos) as unknown as ChaveLutaAuto[]).map((luta,i)=>({...luta,id:`luta-${i}`,status_luta:'agendada'}));
+    const lutas=(montarChaves('evento-teste',grupos) as unknown as ChaveLutaAuto[]).map((luta,i)=>({...luta,id:`luta-${i}`,categoria_id:categoria.id,status_luta:'agendada'}));
     const db={from:(tabela:string)=>{
+      if(tabela==='recepcao_categorias')return {select:()=>({eq:()=>({eq:async()=>({data:[{categoria_id:categoria.id}],error:null})})})};
       assert.ok(['chaves','inscricoes'].includes(tabela),'Não acessar cadastro de atletas');
       return {
         select:()=>({eq:()=>Object.assign(Promise.resolve({data:structuredClone(tabela==='chaves'?lutas:inscritos),error:null}),{in:async()=>({data:inscritos,error:null})})}),
-        update:(payload:Record<string,unknown>)=>({eq:async(campo:string,id:unknown)=>{assert.equal(tabela,'chaves');assert.equal(campo,'id');const luta=lutas.find(x=>x.id===id);assert.ok(luta);Object.assign(luta,payload);return {error:null};}}),
+        update:(payload:Record<string,unknown>)=>{
+          assert.equal(tabela,'chaves');const filtros:((l:any)=>boolean)[]=[];
+          const q:any={eq:(c:string,v:unknown)=>{filtros.push(l=>l[c]===v);return q;},neq:(c:string,v:unknown)=>{filtros.push(l=>l[c]!==v);return q;},is:(c:string,v:unknown)=>{filtros.push(l=>(l[c]??null)===v);return q;},select:()=>q,then:(resolve:any)=>{const alvos=lutas.filter(l=>filtros.every(f=>f(l)));alvos.forEach(l=>Object.assign(l,payload));return Promise.resolve({data:alvos.map(l=>({id:l.id})),error:null}).then(resolve);}};return q;
+        },
       };
     }};
     for(let rodada=0;rodada<150;rodada++){
@@ -36,3 +40,4 @@ for (const tipo of ['peso', 'absoluto'] as const) {
     assert.equal(new Set(ranking.atletas.map(x=>x.atleta_id)).size,100);
   });
 }
+
