@@ -3,6 +3,7 @@ import { processarAvancosAutomaticosChaves, propagarResultadoChave, type ChaveLu
 
 type SupabaseLike = {
   from: (table: string) => any;
+  rpc: (nome: string, parametros: Record<string, unknown>) => any;
 };
 
 export const METODOS_RESULTADO = [
@@ -72,9 +73,8 @@ export async function corrigirResultadoLuta(
 
   const ajustar = async (id: number | null | undefined, coluna: string, delta: number) => {
     if (!id || delta === 0) return;
-    const { data } = await supabase.from('atletas_publico').select(`id, ${coluna}`).eq('id', id).maybeSingle();
-    if (!data) return;
-    await supabase.from('atletas').update({ [coluna]: Math.max(0, Number((data as any)[coluna] || 0) + delta) }).eq('id', id);
+    const { error } = await supabase.rpc('ajustar_medalha_staff', { p_atleta: id, p_coluna: coluna, p_incremento: delta });
+    if (error) throw new Error('Não foi possível corrigir a medalha: ' + error.message);
   };
 
   if (mudouVencedor) {
@@ -118,3 +118,4 @@ export async function corrigirResultadoLuta(
 
   return alertaProximaLuta(todas, luta);
 }
+

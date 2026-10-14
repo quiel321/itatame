@@ -271,11 +271,8 @@ export default function PlacarMesarioDB() {
 
       const updateEstatistica = async (idAtletaNum: number, coluna: string, incremento: number) => {
         if (!idAtletaNum) return;
-        const { data } = await supabase.from("atletas_publico").select(`id, ${coluna}`).eq("id", idAtletaNum).single();
-        if (data) {
-          const valorAtual = (data as any)[coluna] || 0;
-          await supabase.from("atletas").update({ [coluna]: Math.max(0, valorAtual + incremento) }).eq("id", idAtletaNum);
-        }
+        const { error } = await supabase.rpc('ajustar_medalha_staff', { p_atleta: idAtletaNum, p_coluna: coluna, p_incremento: incremento });
+        if (error) throw new Error('Não foi possível registrar a medalha: ' + error.message);
       };
 
       if (!ignoraMedalha && ganhouPorWO && idVencedor) await updateEstatistica(idVencedor, "vitorias_wo", 1);
@@ -538,9 +535,8 @@ export default function PlacarMesarioDB() {
 
     const ajustar = async (id: number | null | undefined, coluna: string, delta: number) => {
       if (!id || delta === 0) return;
-      const { data } = await supabase.from('atletas_publico').select(`id, ${coluna}`).eq('id', id).maybeSingle();
-      if (!data) return;
-      await supabase.from('atletas').update({ [coluna]: Math.max(0, Number((data as any)[coluna] || 0) + delta) }).eq('id', id);
+      const { error } = await supabase.rpc('ajustar_medalha_staff', { p_atleta: id, p_coluna: coluna, p_incremento: delta });
+      if (error) throw new Error('Não foi possível corrigir a medalha: ' + error.message);
     };
 
     if (mudouVencedor) {
