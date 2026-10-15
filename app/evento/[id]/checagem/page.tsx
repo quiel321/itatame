@@ -18,6 +18,8 @@ import {
 
 type FiltrosCategoria = { categoria: string; faixa: string; peso: string; sexo: string; busca: string };
 
+const CARD_CHECAGEM = 'overflow-hidden rounded-2xl border border-zinc-500/70 bg-[#0b0b10]';
+
 const ABAS: Array<{ id: AbaChecagem; rotulo: string }> = [
   { id: 'geral', rotulo: 'Geral' },
   { id: 'absoluto', rotulo: 'Absoluto' },
@@ -291,7 +293,7 @@ export default function ChecagemGeralPage() {
                 ))}
               </div>
             )}
-            <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#0b0b10]">
+            <div className={CARD_CHECAGEM}>
               {geral.length === 0 ? <p className="p-8 text-center text-sm text-zinc-500">Nenhum atleta encontrado.</p> : letras.flatMap(([letra, atletas]) => atletas.map((insc, indice) => (
                 <div key={insc.id} id={indice === 0 ? `letra-${letra}` : undefined}>
                   <CardAtleta insc={insc} onEquipe={irParaEquipe} onProfessor={irParaProfessor} onCategoria={irParaCategoria} />
@@ -319,7 +321,7 @@ export default function ChecagemGeralPage() {
             {gruposEquipe.map((grupo) => {
               const aberta = equipeAberta === grupo.nome;
               return (
-                <article key={grupo.nome} className="overflow-hidden rounded-2xl border border-white/10 bg-[#0b0b10]">
+                <article key={grupo.nome} className={CARD_CHECAGEM}>
                   <button type="button" onClick={() => setEquipeAberta(aberta ? '' : grupo.nome)} className="flex w-full items-center gap-3 px-4 py-3 text-left">
                     <LogoEquipe src={grupo.logo_url} nome={grupo.nome} />
                     <div className="min-w-0 flex-1">
@@ -342,7 +344,7 @@ export default function ChecagemGeralPage() {
             {gruposProfessor.map((grupo) => {
               const aberta = professorAberto === grupo.titulo;
               return (
-                <article key={grupo.titulo} className="overflow-hidden rounded-2xl border border-white/10 bg-[#0b0b10]">
+                <article key={grupo.titulo} className={CARD_CHECAGEM}>
                   <button type="button" onClick={() => setProfessorAberto(aberta ? '' : grupo.titulo)} className="flex w-full items-center gap-3 px-4 py-3 text-left">
                     <LogoEquipe src={grupo.logo_url} nome={grupo.titulo} />
                     <div className="min-w-0 flex-1">
@@ -403,7 +405,7 @@ function ListaPorCategoria({
         <input value={filtros.busca} onChange={(e) => setFiltros({ ...filtros, busca: e.target.value })} placeholder="Buscar atleta" aria-label="Buscar atleta" className={`${campo} col-span-2 md:col-span-1`} />
       </div>
       {grupos.length === 0 ? <p className="rounded-2xl border border-dashed border-white/10 p-8 text-center text-sm text-zinc-500">Nenhuma {titulo.toLowerCase()} com esses filtros.</p> : grupos.map((grupo) => (
-        <div key={grupo.chave} id={`cat-${grupo.chave}`} className="mb-5 overflow-hidden rounded-2xl border border-white/10 bg-[#0b0b10]">
+        <div key={grupo.chave} id={`cat-${grupo.chave}`} className={`mb-6 ${CARD_CHECAGEM}`}>
           <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
             <h2 className="flex items-center gap-2 text-[12px] font-semibold text-cyan-300"><Layers size={13} /> {grupo.rotulo}</h2>
             <span className="text-[10px] font-medium text-zinc-500">{grupo.atletas.length} {grupo.atletas.length === 1 ? 'atleta' : 'atletas'}</span>

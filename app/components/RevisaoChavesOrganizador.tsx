@@ -32,6 +32,21 @@ export default function RevisaoChavesOrganizador({ eventoId, atualizacao }: { ev
  const a = categoria?.posicoes.find(p => chave(p) === primeira);
  const b = categoria?.posicoes.find(p => chave(p) === segunda);
  const podeTrocar = !!a && !!b && primeira !== segunda && a.divisao === b.divisao && a.faixa === b.faixa && motivo.trim().length >= 3;
+ const rascunhos = categorias.filter(c => !c.publicada);
+ const trocaSelecionada = Boolean(primeira || segunda);
+ async function publicarTodas() {
+  if (ocupado || !rascunhos.length || trocaSelecionada) return;
+  setOcupado(true);
+  try {
+   const { data, error } = await supabase.rpc('chaves_publicar_todas', {
+    p_evento: eventoId, p_categorias: rascunhos.map(c => ({ categoria_id: c.categoria_id, revisao: c.revisao })),
+   });
+   if (error) setMensagem(error.message);
+   else setMensagem(`${data?.publicadas || 0} categoria(s) publicada(s) para atletas, público e operadores.`);
+   await carregar();
+  } catch { setMensagem('Não foi possível confirmar a publicação. Atualize a revisão para conferir o estado das chaves.'); }
+  finally { setOcupado(false); aviso.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+ }
  async function agir(acao: string) {
   if (!categoria || ocupado) return;
   setOcupado(true);
@@ -45,10 +60,16 @@ export default function RevisaoChavesOrganizador({ eventoId, atualizacao }: { ev
   aviso.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
  }
  return <section className="rounded-2xl border border-cyan-500/20 bg-[#111116] p-4 md:p-6 space-y-4">
-  <div><h2 className="font-bold text-lg">Revisar e publicar chaves</h2><p className="text-xs text-zinc-400 mt-1">1. Escolha a categoria · 2. Confira os atletas · 3. Publique</p></div>
+  <div><h2 className="font-bold text-lg">Revisar e publicar chaves</h2><p className="text-xs text-zinc-400 mt-1">Confira e ajuste os confrontos. Depois, publique todas de uma vez ou cada categoria.</p></div>
   <div ref={aviso} role="status" className={mensagem ? 'rounded-xl border border-cyan-500/30 p-3 text-sm text-cyan-200' : ''}>{mensagem}</div>
   <button disabled={ocupado} onClick={() => void carregar()} className="text-xs text-cyan-300">Atualizar revisão</button>
   {!categorias.length ? <p className="text-sm text-zinc-400">Gere as chaves para iniciar a revisão.</p> : <>
+   <div className="rounded-xl border border-green-500/20 bg-green-500/5 p-3 space-y-2">
+    <p className="text-xs text-zinc-300">{rascunhos.length} em rascunho · {categorias.length - rascunhos.length} publicada(s)</p>
+    <button disabled={ocupado || !rascunhos.length || trocaSelecionada} onClick={() => void publicarTodas()} className="w-full rounded-xl bg-green-600 p-3 font-bold text-sm disabled:opacity-40">{ocupado ? 'Aguarde...' : rascunhos.length ? `Publicar todas as chaves (${rascunhos.length})` : 'Todas as chaves publicadas'}</button>
+    <p className="text-xs text-zinc-400">Após conferir os ajustes, este botão publica todos os rascunhos juntos.</p>
+    {trocaSelecionada && <p className="text-xs text-yellow-200">Salve a troca selecionada ou <button disabled={ocupado} onClick={() => { setPrimeira(''); setSegunda(''); }} className="underline">limpe a seleção</button> antes de publicar todas.</p>}
+   </div>
    <select aria-label="Categoria para revisão" value={categoriaId} disabled={ocupado} onChange={e => { setCategoriaId(e.target.value); setPrimeira(''); setSegunda(''); setMotivo(''); setMensagem(''); }} className="w-full min-w-0 rounded-xl bg-black border border-white/15 p-3 text-sm">
     {categorias.map(c => <option key={c.categoria_id} value={c.categoria_id}>{c.nome} · {c.travada ? 'Em operação' : c.publicada ? 'Publicada' : 'Rascunho'}</option>)}
    </select>
@@ -76,4 +97,3 @@ export default function RevisaoChavesOrganizador({ eventoId, atualizacao }: { ev
   </>}
  </section>;
 }
-

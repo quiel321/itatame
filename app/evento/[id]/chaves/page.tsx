@@ -10,6 +10,7 @@ import { dataOperacional, type EventoComEtapas } from "@/app/lib/evento-etapas"
 import { agendarChavesAutomaticas } from "@/app/lib/agendar-chaves-automaticas"
 import { totalAbasArvore } from "@/app/lib/chave-visual"
 import { consultarChavesPublicadas } from '@/app/lib/chaves-publicadas';
+import { situacaoAtletaLuta } from '@/app/lib/situacao-atleta-luta';
 
 export default function ChavesPage() {
   const params = useParams()
@@ -21,6 +22,7 @@ export default function ChavesPage() {
   const [categoriasMenu, setCategoriasMenu] = useState<string[]>([])
   const [categoriaSelecionada, setCategoriaSelecionada] = useState("")
   const [lutas, setLutas] = useState<any[]>([])
+  const [erroSituacoes, setErroSituacoes] = useState('');
   const [abaAtual, setAbaAtual] = useState(1)
   
   const [atletasDB, setAtletasDB] = useState<{ id?: number; nome: string; foto_url: string | null }[]>([])
@@ -41,8 +43,15 @@ export default function ChavesPage() {
   async function carregarChaves() {
     if (!categoriaSelecionada) return
     const [cat, fx] = categoriaSelecionada.split("__")
-    const { data } = await consultarChavesPublicadas(supabase, String(params.id), "*", cat, fx)
-    setLutas(data || [])
+    const [{ data }, resposta] = await Promise.all([
+      consultarChavesPublicadas(supabase, String(params.id), "*", cat, fx),
+      fetch(`/api/eventos/${params.id}/situacao-chave`, {cache:'no-store'}).catch(() => null),
+    ]);
+    if (!resposta?.ok) { setErroSituacoes('Situação da pesagem temporariamente indisponível.'); setLutas(data || []); return; }
+    const {situacoes=[]} = await resposta.json();
+    const mapa = new Map<string,string>(situacoes.map((s: {categoria_id:string;atleta_id:number;situacao:string}) => [`${s.categoria_id}:${s.atleta_id}`,s.situacao]));
+    setErroSituacoes('');
+    setLutas((data || []).map(l=>({...l,checkin_1:mapa.get(`${l.categoria_id}:${l.atleta_1_id}`),checkin_2:mapa.get(`${l.categoria_id}:${l.atleta_2_id}`)})));
   }
 
   useEffect(() => {
@@ -179,6 +188,7 @@ export default function ChavesPage() {
         )}
 
         <div className="hidden px-4 md:block md:px-0">
+          {erroSituacoes && <p role="status" className="mb-3 text-xs text-amber-200">{erroSituacoes}</p>}
           <ArvoreChaveDesktop
             lutas={lutas}
             abaAtual={abaAtual}
@@ -188,6 +198,7 @@ export default function ChavesPage() {
         </div>
 
         <div className="mb-16 mt-3 flex w-full flex-col px-4 md:hidden">
+          {erroSituacoes && <p role="status" className="mb-3 text-xs text-amber-200">{erroSituacoes}</p>}
           
           {temCampeao && (
             <div className="mb-3 flex items-center gap-3 rounded-xl border border-yellow-500/30 bg-gradient-to-r from-yellow-600/20 to-[#0c1220] px-3 py-2.5">
@@ -214,6 +225,7 @@ export default function ChavesPage() {
                 const a2 = limparNome(luta.atleta_2);
                 const foto1 = buscarFoto(luta.atleta_1_id, a1);
                 const foto2 = buscarFoto(luta.atleta_2_id, a2);
+                const situacao1 = situacaoAtletaLuta(luta,1), situacao2 = situacaoAtletaLuta(luta,2);
 
                 return (
                   <div key={luta.id} className="bg-[#0c1220] border border-[#57d8ff]/20 rounded-xl flex flex-col shadow-md relative overflow-hidden">
@@ -235,6 +247,7 @@ export default function ChavesPage() {
                           <div className="flex flex-col overflow-hidden">
                             <span className={`text-xs font-black uppercase tracking-tight truncate ${luta.vencedor === a1 ? 'text-green-400' : 'text-white'}`}>{a1 || "A DEFINIR"}</span>
                             <span className="text-[9px] text-zinc-500 uppercase truncate">{luta.equipe_1 || "Sem Equipe"}</span>
+                            {situacao1 && <span className="mt-1 text-[9px] font-bold uppercase text-red-300">{situacao1}</span>}
                           </div>
                         </div>
                         {luta.vencedor === a1 && <svg className="w-5 h-5 text-green-500 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/></svg>}
@@ -253,6 +266,7 @@ export default function ChavesPage() {
                           <div className="flex flex-col overflow-hidden">
                             <span className={`text-xs font-black uppercase tracking-tight truncate ${luta.vencedor === a2 ? 'text-green-400' : 'text-white'}`}>{a2 || "A DEFINIR"}</span>
                             <span className="text-[9px] text-zinc-500 uppercase truncate">{luta.equipe_2 || "Sem Equipe"}</span>
+                            {situacao2 && <span className="mt-1 text-[9px] font-bold uppercase text-red-300">{situacao2}</span>}
                           </div>
                         </div>
                         {luta.vencedor === a2 && <svg className="w-5 h-5 text-green-500 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/></svg>}
@@ -270,4 +284,3 @@ export default function ChavesPage() {
     </main>
   )
 }
-

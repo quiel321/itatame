@@ -13,6 +13,8 @@ import { sugestoesCategoriaPorTatame } from '@/app/lib/sugestao-categoria-tatame
 import { ordemOperacionalChaveTriangular, placeholderSlotChaveDeTres, textoAguardandoChaveDeTres } from '@/app/lib/chave-de-tres';
 import FilaCategoriasChamador from '@/app/components/FilaCategoriasChamador';
 import { filaCategoriasTatame, normalizarTatameSequencia } from '@/app/lib/sequencia-tatames';
+import { AVISO_TATAMES, categoriasComTatamesProntos } from '@/app/lib/planejamento-operacao';
+import { lutaComAtletaImpedido } from '@/app/lib/situacao-atleta-luta';
 
 type StaffSession = {
   evento_id: string | number;
@@ -116,7 +118,8 @@ function reservarUmaLutaPorAtleta(lutas: Luta[]) {
   return [...lutas].sort((a, b) => prioridadeOperacional(a) - prioridadeOperacional(b) || ordenar(a, b)).filter((luta) => {
     const atletas = chavesDosAtletas(luta);
     if (atletas.some((atleta) => reservados.has(atleta))) return false;
-    atletas.forEach((atleta) => reservados.add(atleta));
+    // A posição na fila sugere a ordem; somente presença/chamada/luta reserva o atleta.
+    if (prioridadeOperacional(luta) < 3) atletas.forEach((atleta) => reservados.add(atleta));
     return true;
   });
 }
@@ -126,6 +129,11 @@ export default function ChamadorOperacao() {
   const [sessao, setSessao] = useState<StaffSession | null>(null);
   const [lutas, setLutas] = useState<Luta[]>([]);
   const [lutasCronograma, setLutasCronograma] = useState<Luta[]>([]);
+  const [tatamesProntos, setTatamesProntos] = useState<string[]>([]);
+  const [filaDisponivel, setFilaDisponivel] = useState(false);
+  const tatamePronto = (luta: Luta) => Boolean(filaDisponivel && luta.categoria_id && tatamesProntos.includes(luta.categoria_id));
+  const carregandoRef = useRef(false);
+  const recarregarRef = useRef(false);
   const [tatameAtivo, setTatameAtivo] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -159,6 +167,11 @@ export default function ChamadorOperacao() {
 
   const carregar = useCallback(async (silencioso = false) => {
     if (!sessao) return;
+    if (carregandoRef.current) { recarregarRef.current = true; return; }
+    carregandoRef.current = true;
+    try {
+    do {
+    recarregarRef.current = false;
     if (!silencioso) setLoading(true);
     setRefreshing(true);
 
@@ -170,24 +183,28 @@ export default function ChamadorOperacao() {
       .order('ordem', { ascending: true });
 
     if (error || !chaves) {
-      setToast({ mensagem: 'Não foi possível carregar a fila do Chamador.', tipo: 'erro' });
-      setLoading(false);
-      setRefreshing(false);
-      return;
+      throw new Error('Não foi possível atualizar a fila. Confira a conexão e atualize antes de chamar.');
     }
 
-    const { data: fechamentos, error: fechamentoError } = await supabase.from('recepcao_categorias').select('categoria_id').eq('evento_id', sessao.evento_id).eq('fechada', true);
-    if (fechamentoError) { setLutas([]); setLutasCronograma([]); setToast({ mensagem: 'Controle de recepção indisponível. Nenhum despacho liberado.', tipo: 'erro' }); setLoading(false); setRefreshing(false); return; }
+    const [fechamento, mesarios] = await Promise.all([
+      supabase.from('recepcao_categorias').select('categoria_id').eq('evento_id', sessao.evento_id).eq('fechada', true),
+      supabase.from('staff_eventos').select('identificacao').eq('evento_id', sessao.evento_id).eq('funcao', 'mesario'),
+    ]);
+    const { data: fechamentos, error: fechamentoError } = fechamento;
+    if (fechamentoError || mesarios.error) throw new Error('Não foi possível conferir o despacho e os tatames. Atualize a fila antes de operar.');
     const liberadas = new Set((fechamentos || []).map(c => c.categoria_id));
     const despachadas = (chaves as Luta[]).filter(l => l.categoria_id && liberadas.has(l.categoria_id));
-    setLutasCronograma(despachadas.filter(l => l.status_luta !== 'concluida'));
     const ids = Array.from(new Set(despachadas.flatMap((luta) => [luta.atleta_1_id, luta.atleta_2_id]).filter(Boolean))) as number[];
-    const { data: inscricoes } = ids.length
+    const { data: inscricoes, error: inscricoesError } = ids.length
       ? await supabase.from('inscricoes').select('atleta_id,categoria_id,status_checkin,pesagem_ok,kimono_aprovado').eq('evento_id', sessao.evento_id).eq('pagamento_ok',true).or('estorno_status.is.null,estorno_status.neq.estornado').in('atleta_id', ids)
-      : { data: [] as Array<{ atleta_id: number; categoria_id: string; status_checkin: string; pesagem_ok: boolean; kimono_aprovado: boolean }> };
+      : { data: [] as Array<{ atleta_id: number; categoria_id: string; status_checkin: string; pesagem_ok: boolean; kimono_aprovado: boolean }>, error: null };
+    if (inscricoesError) throw new Error('Não foi possível conferir a pesagem dos atletas. Atualize a fila antes de chamar.');
+    setTatamesProntos(categoriasComTatamesProntos(chaves as Luta[], mesarios.data || []));
 
-    const statusPorAtleta = new Map((inscricoes || []).map(item => [`${item.categoria_id}:${item.atleta_id}`, item.status_checkin === 'aprovado' && item.pesagem_ok && item.kimono_aprovado ? 'aprovado' : 'pendente']));
-    const lutasReais = despachadas.filter(l => l.status_luta !== 'concluida' && [1,2].some(lado => {
+    const statusPorAtleta = new Map((inscricoes || []).map(item => [`${item.categoria_id}:${item.atleta_id}`, item.status_checkin === 'aprovado' && item.pesagem_ok && item.kimono_aprovado ? 'aprovado' : item.status_checkin?.startsWith('desclassificado_') ? item.status_checkin : 'pendente']));
+    const permitidas = despachadas.map(l => ({...l, checkin_1:statusPorAtleta.get(`${l.categoria_id}:${l.atleta_1_id}`),checkin_2:statusPorAtleta.get(`${l.categoria_id}:${l.atleta_2_id}`)})).filter(l => !lutaComAtletaImpedido(l));
+    setLutasCronograma(permitidas.filter(l => l.status_luta !== 'concluida'));
+    const lutasReais = permitidas.filter(l => l.status_luta !== 'concluida' && [1,2].some(lado => {
       const id = lado === 1 ? l.atleta_1_id : l.atleta_2_id;
       return id && statusPorAtleta.get(`${l.categoria_id}:${id}`) === 'aprovado';
     }));
@@ -196,8 +213,13 @@ export default function ChamadorOperacao() {
       checkin_1: statusPorAtleta.get(`${luta.categoria_id}:${luta.atleta_1_id}`) || 'pendente',
       checkin_2: statusPorAtleta.get(`${luta.categoria_id}:${luta.atleta_2_id}`) || 'pendente',
     })).sort(ordenar));
-    setLoading(false);
-    setRefreshing(false);
+    setFilaDisponivel(true);
+    setToast(atual => atual?.tipo === 'erro' ? null : atual);
+    } while (recarregarRef.current);
+    } catch (error) {
+      setFilaDisponivel(false);
+      setToast(atual => atual?.tipo === 'erro' && atual.mensagem === (error as Error).message ? atual : { mensagem: error instanceof Error ? error.message : 'Falha na conexão. Atualize a fila.', tipo: 'erro' });
+    } finally { carregandoRef.current = false; setLoading(false); setRefreshing(false); }
   }, [sessao]);
 
   useEffect(() => {
@@ -318,6 +340,7 @@ export default function ChamadorOperacao() {
 
   const atualizarControle = async (luta: Luta, lado: 1 | 2, acao: 'presenca' | 'chamada') => {
     if (!sessao) return;
+    if (!tatamePronto(luta) && !(acao === 'presenca' && controleChamador(luta, lado).presente)) { setToast({ mensagem: AVISO_TATAMES, tipo: 'erro' }); return; }
     const nome = lado === 1 ? luta.atleta_1 : luta.atleta_2;
     const atletaId = lado === 1 ? luta.atleta_1_id : luta.atleta_2_id;
     const statusCheckin = lado === 1 ? luta.checkin_1 : luta.checkin_2;
@@ -371,6 +394,7 @@ export default function ChamadorOperacao() {
 
   const confirmarWo = async (luta: Luta, ladoAusente: 0 | 1 | 2) => {
     if (!sessao || acaoId) return;
+    if (!tatamePronto(luta)) { setToast({ mensagem: AVISO_TATAMES, tipo: 'erro' }); return; }
     const ambos = ladoAusente === 0;
     if (!window.confirm(ambos ? 'Confirmar que os dois atletas não compareceram após três chamadas de cada um? Nenhum recebe vitória.' : 'Confirmar ausência após três chamadas? O oponente presente avança, sem pontos de W.O. no ranking.')) return;
     setAcaoId(luta.id);
@@ -405,6 +429,7 @@ export default function ChamadorOperacao() {
   };
 
   const chamar = async (luta: Luta) => {
+    if (!tatamePronto(luta)) { setToast({ mensagem: AVISO_TATAMES, tipo: 'erro' }); return; }
     if (!sessao || !checkinAprovado(luta) || !ambosPresentes(luta)) return;
     setAcaoId(luta.id);
     setToast({ mensagem: 'Registrando chamada e avisando os atletas...', tipo: 'info' });
@@ -467,6 +492,7 @@ export default function ChamadorOperacao() {
         <h3 className="mt-0.5 break-words text-sm font-bold leading-snug text-white">{tituloCategoria(luta)}</h3>
         <p className="mt-0.5 truncate text-[8px] font-bold uppercase text-zinc-500">{luta.faixa || 'Faixa'}</p>
       </div>
+      {!tatamePronto(luta) && <p className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2 text-xs text-amber-200">{AVISO_TATAMES}</p>}
       {tipo === 'chamada' && <span className="mt-1.5 inline-flex rounded-full bg-yellow-400 px-2 py-0.5 text-[8px] font-black uppercase text-black">Chamada</span>}
       {tipo === 'baia' && <button onClick={() => anunciarCategoria(luta)} className="mt-1.5 h-8 w-full rounded-lg border border-cyan-500/30 bg-cyan-500/10 text-[8px] font-black uppercase text-cyan-200"><Megaphone size={10} className="mr-1 inline" /> Anunciar</button>}
 
@@ -485,8 +511,8 @@ export default function ChamadorOperacao() {
                 </span>
               </div>
               {tipo !== 'chamada' && atleta.status === 'aprovado' && <div className="mt-1.5 grid min-w-0 grid-cols-2 gap-1 md:mt-3 md:gap-2">
-                <button onClick={() => atualizarControle(luta, atleta.lado, 'presenca')} disabled={acaoId === `${luta.id}-${atleta.lado}`} className={`h-11 min-w-0 w-full rounded-lg border px-1 text-[11px] font-bold md:px-2 ${controleChamador(luta, atleta.lado).presente ? 'border-emerald-400 bg-emerald-500 text-black' : 'border-white/10 bg-white/5 text-zinc-300'}`}>{controleChamador(luta, atleta.lado).presente ? 'Na baia' : 'Presença'}</button>
-                <button onClick={() => atualizarControle(luta, atleta.lado, 'chamada')} disabled={controleChamador(luta, atleta.lado).chamadas >= 3 || acaoId === `${luta.id}-${atleta.lado}`} className="h-11 min-w-0 w-full rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-1 text-[11px] font-bold text-yellow-200 disabled:opacity-40 md:px-2">{controleChamador(luta, atleta.lado).chamadas >= 3 ? '3ª ok' : <><span>{controleChamador(luta, atleta.lado).chamadas + 1}ª chamada</span></>}</button>
+                <button onClick={() => atualizarControle(luta, atleta.lado, 'presenca')} disabled={(!tatamePronto(luta) && !controleChamador(luta, atleta.lado).presente) || acaoId === `${luta.id}-${atleta.lado}`}  className={`h-11 min-w-0 w-full rounded-lg border px-1 text-[11px] font-bold md:px-2 ${controleChamador(luta, atleta.lado).presente ? 'border-emerald-400 bg-emerald-500 text-black' : 'border-white/10 bg-white/5 text-zinc-300'}`}>{controleChamador(luta, atleta.lado).presente ? 'Na baia' : 'Presença'}</button>
+                <button onClick={() => atualizarControle(luta, atleta.lado, 'chamada')} disabled={!tatamePronto(luta) || controleChamador(luta, atleta.lado).chamadas >= 3 || acaoId === `${luta.id}-${atleta.lado}`} className="h-11 min-w-0 w-full rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-1 text-[11px] font-bold text-yellow-200 disabled:opacity-40 md:px-2">{controleChamador(luta, atleta.lado).chamadas >= 3 ? '3ª ok' : <><span>{controleChamador(luta, atleta.lado).chamadas + 1}ª chamada</span></>}</button>
               </div>}
               {tipo !== 'chamada' && atleta.status === 'aprovado' && controleChamador(luta, atleta.lado).chamadas >= 3 && !controleChamador(luta, atleta.lado).presente && controleChamador(luta, atleta.lado === 1 ? 2 : 1).presente && <button onClick={() => confirmarWo(luta, atleta.lado)} className="mt-1.5 min-h-11 w-full rounded-lg border border-red-500/30 bg-red-500/10 px-2 text-xs font-bold text-red-300">Confirmar ausência e dar W.O.</button>}
             </> : (
@@ -501,7 +527,7 @@ export default function ChamadorOperacao() {
 
       {tipo !== 'chamada' && checkinAprovado(luta) && !controleChamador(luta,1).presente && !controleChamador(luta,2).presente && controleChamador(luta,1).chamadas >= 3 && controleChamador(luta,2).chamadas >= 3 && <button disabled={Boolean(acaoId)} onClick={() => void confirmarWo(luta,0)} className="mt-2 min-h-11 w-full rounded-lg border border-red-500/30 text-xs font-bold text-red-200">Confirmar ausência dos dois</button>}
       {tipo === 'pronta' && (
-        <button onClick={() => chamar(luta)} disabled={acaoId === luta.id} className="mt-2 flex h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-yellow-400 text-xs font-bold uppercase tracking-wide text-black transition hover:bg-yellow-300 disabled:opacity-50 md:mt-4">
+        <button onClick={() => chamar(luta)} disabled={!tatamePronto(luta) || acaoId === luta.id} className="mt-2 flex h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-yellow-400 text-xs font-bold uppercase tracking-wide text-black transition hover:bg-yellow-300 disabled:opacity-50 md:mt-4">
           {acaoId === luta.id ? <RefreshCw size={15} className="animate-spin" /> : <Megaphone size={15} />}
           Chamar atletas
         </button>
@@ -575,4 +601,3 @@ export default function ChamadorOperacao() {
     </main>
   );
 }
-

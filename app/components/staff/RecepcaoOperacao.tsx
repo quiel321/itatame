@@ -8,9 +8,10 @@ import { useRouter } from 'next/navigation';
 import { obterTempoRegulamentar } from '@/app/lib/cronograma';
 import { garantirVinculoStaff } from '@/app/lib/staff-sessao';
 import { processarAvancosAutomaticosChaves } from '@/app/lib/chaves-auto-avanco';
+import { AVISO_TATAMES, categoriasComTatamesProntos } from '@/app/lib/planejamento-operacao';
 import { FILTRO_INSCRICOES_ATIVAS } from '@/app/lib/inscricao-ativa';
 import { dataOperacionalEvento } from '@/app/lib/evento-datas';
-import { filtrarCheckin, listaCheckinPorChave, type ChaveCheckin, type InscritoCheckin } from '@/app/lib/operacao-campeonato';
+import { categoriasRecepcaoOrdenadas, filtrarCheckin, listaCheckinPorChave, type ChaveCheckin, type InscritoCheckin } from '@/app/lib/operacao-campeonato';
 
 export default function RecepcaoOperacao({ ativa = true }: { ativa?: boolean }) {
   const router = useRouter();
@@ -21,29 +22,35 @@ export default function RecepcaoOperacao({ ativa = true }: { ativa?: boolean }) 
   const [erro, setErroInterno] = useState('');
   const [eventoStaff, setEventoStaff] = useState('');
   const [lista, setLista] = useState<InscritoCheckin[]>([]);
+  const [planejamento, setPlanejamento] = useState<ChaveCheckin[]>([]);
+  const atualizacaoRef = useRef<Promise<void> | null>(null);
+  const repetirAtualizacaoRef = useRef(false);
   const [categoriasFechadas, setCategoriasFechadas] = useState<string[]>([]);
+  const [tatamesProntos, setTatamesProntos] = useState<string[]>([]);
   const [controleRecepcao, setControleRecepcao] = useState<Record<number, { chamadas: number; ausente: boolean }>>({});
   const [controlePronto, setControlePronto] = useState(false);
   const [acaoRecepcao, setAcaoRecepcao] = useState<string | null>(null);
   const [avisoRecepcao, setAvisoRecepcao] = useState('');
+  const [avancoPendente, setAvancoPendente] = useState<string | null>(null);
   const [erroLista, setErroListaInterno] = useState('');
   const [avisoVersao, setAvisoVersao] = useState(0);
   const avisoRef = useRef<HTMLDivElement>(null);
   function setErro(mensagem: string) { setErroInterno(mensagem); if (mensagem) setAvisoVersao(v => v + 1); }
-  function setErroLista(mensagem: string) { setErroListaInterno(mensagem); if (mensagem) setAvisoVersao(v => v + 1); }
+  function setErroLista(mensagem: string) { setErroListaInterno(mensagem); }
   useEffect(() => {
-    if (!erro && !erroLista) return;
+    if (!erro && !erroLista && !avancoPendente) return;
     avisoRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     avisoRef.current?.focus({ preventScroll: true });
-  }, [avisoVersao, erro, erroLista]);
+  }, [avisoVersao, erro, erroLista, avancoPendente]);
   const [busca, setBusca] = useState('');
   const [categoriaLista, setCategoriaLista] = useState('');
-  const [situacaoLista, setSituacaoLista] = useState<'pendentes' | 'aprovados' | 'todos'>('pendentes');
+  const [situacaoLista, setSituacaoLista] = useState<'pendentes' | 'aprovados' | 'desclassificados' | 'todos'>('pendentes');
   const selecao = filtrarCheckin(lista, busca, categoriaLista);
   const categoriaInteira = filtrarCheckin(lista, '', categoriaLista);
-  const visiveis = selecao.filter(i => situacaoLista === 'todos' || (situacaoLista === 'aprovados' ? i.status_checkin === 'aprovado' && !controleRecepcao[i.id]?.ausente : (!i.status_checkin || i.status_checkin === 'pendente') && !controleRecepcao[i.id]?.ausente));
+  const visiveis = selecao.filter(i => situacaoLista === 'todos' || (situacaoLista === 'desclassificados' ? i.status_checkin?.startsWith('desclassificado_') : situacaoLista === 'aprovados' ? i.status_checkin === 'aprovado' && !controleRecepcao[i.id]?.ausente : (!i.status_checkin || i.status_checkin === 'pendente') && !controleRecepcao[i.id]?.ausente));
   const categoriaSelecionadaId = categoriaLista ? categoriaInteira[0]?.categoria_id : null;
   const categoriaFechada = Boolean(categoriaSelecionadaId && categoriasFechadas.includes(categoriaSelecionadaId));
+  const categoriaTatamePronto = Boolean(categoriaSelecionadaId && tatamesProntos.includes(categoriaSelecionadaId));
   const habilitados = categoriaInteira.filter(i => i.pagamento_ok);
   const pendentesRecepcao = habilitados.filter(i => (!i.status_checkin || i.status_checkin === 'pendente') && !controleRecepcao[i.id]?.ausente).length;
   const aprovadosRecepcao = habilitados.filter(i => i.status_checkin === 'aprovado' && !controleRecepcao[i.id]?.ausente).length;
@@ -92,60 +99,94 @@ export default function RecepcaoOperacao({ ativa = true }: { ativa?: boolean }) 
   }, [router]);
 
   async function carregarLista(eventoId: string) {
-    setErroLista('');
+    if (atualizacaoRef.current) { repetirAtualizacaoRef.current = true; return atualizacaoRef.current; }
+    const tarefa = async () => {
+      do { repetirAtualizacaoRef.current = false; await lerLista(eventoId); } while (repetirAtualizacaoRef.current);
+    };
+    atualizacaoRef.current = tarefa().finally(() => { atualizacaoRef.current = null; });
+    return atualizacaoRef.current;
+  }
+
+  async function lerLista(eventoId: string) {
+    try {
     const vinculo = await garantirVinculoStaff();
-    if (!vinculo.ok) { setLista([]); setErroLista(vinculo.erro || 'Entre novamente com o PIN.'); return; }
-    const [categorias, controles] = await Promise.all([
+    if (!vinculo.ok) throw new Error(vinculo.erro || 'Entre novamente com o PIN.');
+    const [categorias, controles, mesarios] = await Promise.all([
       supabase.from('recepcao_categorias').select('categoria_id,fechada').eq('evento_id', eventoId),
       supabase.from('recepcao_inscricoes').select('inscricao_id,chamadas,ausente').eq('evento_id', eventoId),
+      supabase.from('staff_eventos').select('identificacao').eq('evento_id', eventoId).eq('funcao', 'mesario'),
     ]);
     if (categorias.error || controles.error) {
-      setControlePronto(false);
-      setErroLista('Controle por categoria indisponível. O organizador precisa instalar a atualização da operação antes de operar.');
-    } else {
-      setControlePronto(true);
-      setCategoriasFechadas((categorias.data || []).filter(c => c.fechada).map(c => c.categoria_id));
-      setControleRecepcao(Object.fromEntries((controles.data || []).map(c => [c.inscricao_id, { chamadas: c.chamadas, ausente: c.ausente }])));
+      throw new Error('Não foi possível atualizar o controle da recepção. Confira a conexão e atualize a lista.');
     }
+    if (mesarios.error) throw new Error('Não foi possível conferir os tatames. Atualize a lista antes de operar.');
     const todas: InscritoCheckin[] = [];
     for (let inicio = 0; ; inicio += 500) {
       const { data, error } = await supabase.from('inscricoes')
         .select('id,user_id,atleta_id,categoria_id,atleta,equipe,categoria,faixa,pagamento_ok,status_checkin,pesagem_ok,kimono_aprovado')
         .eq('evento_id', eventoId).or(FILTRO_INSCRICOES_ATIVAS).order('atleta').range(inicio, inicio + 499);
-      if (error) { setErroLista('Não foi possível carregar os atletas. Atualize a lista.'); return; }
+      if (error) throw new Error('Não foi possível carregar os atletas. Atualize a lista.');
       todas.push(...(data || []) as InscritoCheckin[]);
       if (!data || data.length < 500) break;
     }
     const chaves: ChaveCheckin[] = [];
     for (let inicio = 0; ; inicio += 500) {
-      const { data, error } = await supabase.from('chaves').select('categoria,categoria_id,tatame,atleta_1_id,atleta_2_id')
+      const { data, error } = await supabase.from('chaves').select('categoria,categoria_id,tatame,ordem_tatame,atleta_1_id,atleta_2_id')
         .eq('evento_id',eventoId).order('id').range(inicio,inicio+499);
-      if (error) { setErroLista('Não foi possível conferir as chaves. A lista mostra as categorias das inscrições.'); break; }
+      if (error) throw new Error('Não foi possível conferir as chaves. Despacho bloqueado até atualizar a lista.');
       chaves.push(...(data || []) as ChaveCheckin[]);
       if (!data || data.length < 500) break;
     }
     setLista(listaCheckinPorChave(todas,chaves));
+    setPlanejamento(chaves);
+    setCategoriasFechadas((categorias.data || []).filter(c => c.fechada).map(c => c.categoria_id));
+    setControleRecepcao(Object.fromEntries((controles.data || []).map(c => [c.inscricao_id, { chamadas: c.chamadas, ausente: c.ausente }])));
+    setTatamesProntos(categoriasComTatamesProntos(chaves, mesarios.data || []));
+    setControlePronto(true);
+    setErroLista('');
+    } catch (error) {
+      setControlePronto(false);
+      setErroLista(error instanceof Error ? error.message : 'Falha na conexão. Atualize a lista antes de operar.');
+    }
   }
 
   async function operarRecepcao(acao: 'chamar' | 'ausente' | 'retirar_ausencia' | 'fechar', item?: InscritoCheckin) {
     const categoriaId = item?.categoria_id || categoriaSelecionadaId;
     if (!categoriaId || acaoRecepcao || !controlePronto) return;
+    if (acao === 'fechar' && !tatamesProntos.includes(categoriaId)) { setErro(AVISO_TATAMES); return; }
     if (acao === 'ausente' && !window.confirm(`Confirmar que ${item?.atleta} não compareceu após três chamadas? O avanço da chave ocorre ao fechar a categoria.`)) return;
     if (acao === 'fechar' && !window.confirm(`Fechar check-in e despachar esta categoria? ${aprovadosRecepcao} aprovado(s), ${ausentesRecepcao} ausente(s), ${habilitados.length - aprovadosRecepcao - ausentesRecepcao} reprovado(s). Ausências e reprovações serão tratadas na chave.`)) return;
-    setAcaoRecepcao(`${acao}-${item?.id || categoriaId}`); setAvisoRecepcao('');
+    setAcaoRecepcao(`${acao}-${item?.id || categoriaId}`); setAvisoRecepcao(''); setErro('');
     try {
       const vinculo = await garantirVinculoStaff();
       if (!vinculo.ok) throw new Error(vinculo.erro);
       const { data, error } = await supabase.rpc('recepcao_operar', { p_categoria: categoriaId, p_acao: acao, p_inscricao: item?.id || null });
       if (error) throw new Error(error.message);
       if (acao === 'fechar') {
-        await processarAvancosAutomaticosChaves(supabase, eventoStaff);
         setAvisoRecepcao(`Categoria despachada. ${aprovadosRecepcao} aprovado(s) liberado(s) para Chamada / Tatames. ${Number(data?.avancos_por_ausencia || 0)} avanço(s) por ausência/reprovação.`);
+        try {
+          await processarAvancosAutomaticosChaves(supabase, eventoStaff, categoriaId);
+          setAvancoPendente(null);
+        } catch { setAvancoPendente(categoriaId); }
       } else if (acao === 'chamar') setAvisoRecepcao(`${data.chamadas}ª chamada: ${item?.atleta}. Anuncie o nome e aguarde a apresentação.`);
       else setAvisoRecepcao(acao === 'ausente' ? 'Ausência registrada. Nenhuma presença foi confirmada automaticamente.' : 'Ausência retirada. Confira documento e pesagem do atleta.');
       await carregarLista(eventoStaff);
       window.dispatchEvent(new CustomEvent('itatame:recepcao-atualizada', { detail: { eventoId: eventoStaff } }));
     } catch (error) { setErro(error instanceof Error ? error.message : 'Não foi possível registrar a ação.'); }
+    finally { setAcaoRecepcao(null); }
+  }
+
+  async function atualizarAvancos() {
+    if (!avancoPendente || acaoRecepcao) return;
+    setAcaoRecepcao('atualizar-avancos');
+    try {
+      const vinculo = await garantirVinculoStaff();
+      if (!vinculo.ok) throw new Error(vinculo.erro);
+      await processarAvancosAutomaticosChaves(supabase, eventoStaff, avancoPendente);
+      setAvancoPendente(null);
+      await carregarLista(eventoStaff);
+      window.dispatchEvent(new CustomEvent('itatame:recepcao-atualizada', { detail: { eventoId: eventoStaff } }));
+    } catch { /* Mantém o aviso e permite tentar novamente sem fechar a categoria outra vez. */ }
     finally { setAcaoRecepcao(null); }
   }
 
@@ -443,6 +484,10 @@ export default function RecepcaoOperacao({ ativa = true }: { ativa?: boolean }) 
         {atleta && <button onClick={resetarTela} className="flex min-h-11 items-center gap-2 self-start rounded-lg bg-white/5 px-3 text-sm"><ArrowLeft size={16} /> Voltar à lista</button>}
         {avisoRecepcao && <div role="status" className="rounded-xl border border-cyan-500/30 bg-cyan-950/40 p-3 text-xs text-cyan-100">{avisoRecepcao}</div>}
         {(erro || erroLista) && <div ref={avisoRef} role="alert" tabIndex={-1} className="scroll-mt-24 rounded-xl border border-red-500/40 bg-red-950/70 p-3 text-sm text-red-200 outline-none">{erro || erroLista}</div>}
+        {avancoPendente && <div ref={avisoRef} role="alert" tabIndex={-1} className="scroll-mt-24 rounded-xl border border-amber-400/50 bg-amber-950/50 p-3 text-sm text-amber-100 outline-none">
+          <p>A categoria foi despachada, mas a atualização dos avanços da chave está pendente. Não é necessário fechar novamente.</p>
+          <button disabled={Boolean(acaoRecepcao)} onClick={() => void atualizarAvancos()} className="mt-3 min-h-11 rounded-lg border border-amber-300/50 bg-amber-400/15 px-3 font-bold disabled:opacity-40">{acaoRecepcao === 'atualizar-avancos' ? 'Atualizando...' : 'Tentar atualizar avanços'}</button>
+        </div>}
         
         {opcoesQr.length > 0 && <section className="rounded-xl border border-cyan-500/30 bg-cyan-950/20 p-3"><h2 className="text-sm font-bold">Quem vai fazer o check-in?</h2><p className="mt-1 text-xs text-zinc-400">Este passaporte possui mais de uma inscrição. Selecione o atleta e a categoria.</p><div className="mt-3 space-y-2">{opcoesQr.map(i => <button key={i.id} disabled={!i.pagamento_ok} onClick={() => void fetchAtleta(eventoStaff,i.user_id,i.id)} className="min-h-12 w-full rounded-lg border border-white/10 p-3 text-left text-xs disabled:opacity-40"><strong className="block">{i.atleta}</strong>{i.categoria} · #{i.id}{!i.pagamento_ok && ' · Pagamento pendente'}</button>)}</div></section>}
         {!atleta && <section className="space-y-3 rounded-2xl border border-white/10 bg-[#0a0a0e] p-3">
@@ -450,10 +495,10 @@ export default function RecepcaoOperacao({ ativa = true }: { ativa?: boolean }) 
           {modoEntrada === 'lista' && <>
             <p className="text-xs text-zinc-400">Chame a categoria para o aquecimento. Sem celular? Encontre o atleta, confira o documento e faça a mesma pesagem do QR.</p>
             <input aria-label="Buscar atleta ou número de inscrição" value={busca} onChange={e => setBusca(e.target.value)} placeholder="Nome ou nº da inscrição" className="min-h-12 w-full rounded-xl border border-white/15 bg-black px-3 text-sm" />
-            <select aria-label="Categoria do check-in" value={categoriaLista} onChange={e => setCategoriaLista(e.target.value)} className="min-h-12 w-full rounded-xl border border-white/15 bg-black px-3 text-sm"><option value="">Todas as categorias</option>{Array.from(new Set(lista.map(i => i.categoria || 'Sem categoria'))).sort().map(c => <option key={c} value={c}>{c}</option>)}</select>
-            {categoriaSelecionadaId && <section className="rounded-xl border border-cyan-500/20 bg-cyan-950/20 p-3"><div className="grid grid-cols-3 gap-2 text-center text-xs"><div><strong className="block text-lg text-green-300">{aprovadosRecepcao}</strong>Aprovados</div><div><strong className="block text-lg text-yellow-300">{pendentesRecepcao}</strong>Pendentes</div><div><strong className="block text-lg text-red-300">{ausentesRecepcao}</strong>Ausentes</div></div><button disabled={!controlePronto || categoriaFechada || pendentesRecepcao > 0 || Boolean(acaoRecepcao)} onClick={() => void operarRecepcao('fechar')} className="mt-3 min-h-12 w-full rounded-xl bg-cyan-400 px-2 text-sm font-bold text-black disabled:opacity-40">{categoriaFechada ? 'Categoria despachada para os tatames' : 'Fechar check-in e despachar'}</button><p className="mt-2 text-xs text-zinc-400">{categoriaFechada ? 'Os aprovados estão liberados em Chamada / Tatames.' : pendentesRecepcao > 0 ? 'Resolva os pendentes: confira quem chegou ou confirme ausência após três chamadas.' : 'Confira o resumo antes de liberar a categoria. Reprovados e ausentes não entram na fila do tatame.'}</p></section>}
-            <div role="group" aria-label="Situação do check-in" className="grid grid-cols-3 gap-1">{(['pendentes','aprovados','todos'] as const).map(status => <button key={status} aria-pressed={situacaoLista === status} onClick={() => setSituacaoLista(status)} className={`min-h-11 rounded-lg px-1 text-xs font-bold ${situacaoLista === status ? 'bg-white text-black' : 'bg-white/5 text-zinc-300'}`}>{status === 'pendentes' ? 'Pendentes' : status === 'aprovados' ? 'Aprovados' : 'Todos'}</button>)}</div>
-            {visiveis.length === 0 && <p role="status" className="rounded-lg bg-white/5 p-3 text-xs text-zinc-400">{situacaoLista === 'pendentes' ? 'Nenhum check-in pendente nesta seleção. Consulte Aprovados ou Todos.' : 'Nenhuma inscrição nesta seleção.'}</p>}
+            <select aria-label="Categoria do check-in" value={categoriaLista} onChange={e => setCategoriaLista(e.target.value)} className="min-h-12 w-full rounded-xl border border-white/15 bg-black px-3 text-sm"><option value="">Todas as categorias</option>{categoriasRecepcaoOrdenadas(lista, planejamento).map(c => <option key={c.nome} value={c.nome}>{c.tatame ? `${c.tatame} · ` : 'Sem distribuição · '}{c.nome}</option>)}</select>
+            {categoriaSelecionadaId && <section className="rounded-xl border border-cyan-500/20 bg-cyan-950/20 p-3"><div className="grid grid-cols-3 gap-2 text-center text-xs"><div><strong className="block text-lg text-green-300">{aprovadosRecepcao}</strong>Aprovados</div><div><strong className="block text-lg text-yellow-300">{pendentesRecepcao}</strong>Pendentes</div><div><strong className="block text-lg text-red-300">{ausentesRecepcao}</strong>Ausentes</div></div><button disabled={!controlePronto || !categoriaTatamePronto || categoriaFechada || pendentesRecepcao > 0 || Boolean(acaoRecepcao)} onClick={() => void operarRecepcao('fechar')} className="mt-3 min-h-12 w-full rounded-xl bg-cyan-400 px-2 text-sm font-bold text-black disabled:opacity-40">{categoriaFechada ? 'Categoria despachada para os tatames' : 'Fechar check-in e despachar'}</button><p className="mt-2 text-xs text-zinc-400">{!categoriaTatamePronto ? AVISO_TATAMES : categoriaFechada ? 'Os aprovados estão liberados em Chamada / Tatames.' : pendentesRecepcao > 0 ? 'Resolva os pendentes: confira quem chegou ou confirme ausência após três chamadas.' : 'Confira o resumo antes de liberar a categoria. Reprovados e ausentes não entram na fila do tatame.'}</p></section>}
+            <div role="group" aria-label="Situação do check-in" className="grid grid-cols-2 gap-1 sm:grid-cols-4">{(['pendentes','aprovados','todos','desclassificados'] as const).map(status => <button key={status} aria-pressed={situacaoLista === status} onClick={() => setSituacaoLista(status)} className={`min-h-11 rounded-lg px-1 text-xs font-bold ${situacaoLista === status ? 'bg-white text-black' : 'bg-white/5 text-zinc-300'}`}>{status === 'pendentes' ? 'Pendentes' : status === 'aprovados' ? 'Aprovados' : status === 'desclassificados' ? 'Desclassificados' : 'Todos'}</button>)}</div>
+            {visiveis.length === 0 && <p role="status" className="rounded-lg bg-white/5 p-3 text-xs text-zinc-400">{situacaoLista === 'pendentes' ? 'Nenhum check-in pendente nesta seleção. Consulte os outros filtros.' : situacaoLista === 'desclassificados' ? 'Nenhum atleta desclassificado nesta seleção.' : 'Nenhuma inscrição nesta seleção.'}</p>}
             <div className="flex justify-between gap-2 text-xs text-zinc-400"><span>{visiveis.length} inscrições nesta seleção</span><button onClick={() => void carregarLista(eventoStaff)} className="min-h-10 px-2 font-bold text-cyan-300">Atualizar lista</button></div>
             <div className="space-y-2">{visiveis.map(i => {
               const controle = controleRecepcao[i.id] || { chamadas: 0, ausente: false };
@@ -609,4 +654,3 @@ export default function RecepcaoOperacao({ ativa = true }: { ativa?: boolean }) 
     </main>
   );
 }
-

@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { placeholderSlotChaveDeTres } from '@/app/lib/chave-de-tres';
 import { estruturaVisualChave, rotulosColunasArvore, rotulosLadoArvore } from '@/app/lib/chave-visual';
+import { situacaoAtletaLuta } from '@/app/lib/situacao-atleta-luta';
 
 export type LutaArvore = {
   id?: string | number;
@@ -22,9 +23,12 @@ export type LutaArvore = {
   status_luta?: string | null;
   horario_estimado?: string | null;
   tatame?: string | null;
+  checkin_1?: string | null; checkin_2?: string | null;
+  pontuacao_atleta_1?: Record<string, unknown> | null; pontuacao_atleta_2?: Record<string, unknown> | null;
 };
 
 type AtletaSlot = {
+  impedimento?: string;
   nome: string;
   equipe: string;
   numero?: string | null;
@@ -69,6 +73,7 @@ function slot(
   const nome = real ? String(bruto) : (placeholderSlotChaveDeTres(luta, lado) || '');
   const venceu = real && Boolean(luta.vencedor) && String(luta.vencedor).trim().toUpperCase() === String(bruto).trim().toUpperCase();
   return {
+    impedimento: situacaoAtletaLuta(luta,lado),
     nome,
     equipe: real ? String((lado === 1 ? luta.equipe_1 : luta.equipe_2) || '') : (nome ? 'Aguardando resultado' : ''),
     numero: real ? (lado === 1 ? luta.numero_1 : luta.numero_2) : '',
@@ -76,7 +81,7 @@ function slot(
     horario: luta.horario_estimado,
     status: luta.status_luta,
     tatame: luta.tatame,
-    venceu,
+    venceu: venceu && !situacaoAtletaLuta(luta,lado),
     placeholder: !real && Boolean(nome),
     onAvancar,
     luta_id: luta.id_visual,
@@ -101,13 +106,14 @@ function Atleta({
   status,
   tatame,
   venceu = false,
+  impedimento = '',
   placeholder = false,
   destaque = false,
   onAvancar,
   luta_id,
   id_banco,
 }: AtletaSlot & { reverso?: boolean; centralizado?: boolean; campeao?: boolean; destaque?: boolean }) {
-  const podeClicar = Boolean(onAvancar && nome && !placeholder);
+  const podeClicar = Boolean(onAvancar && nome && !placeholder && !impedimento);
   const vazio = !nome && !placeholder;
 
   if (campeao) {
@@ -156,7 +162,8 @@ function Atleta({
           <p title={equipe} className={`truncate text-[9px] font-medium uppercase ${placeholder ? 'text-cyan-700' : 'text-zinc-500'}`}>
             {equipe || (vazio ? '' : ' ')}
           </p>
-          {!placeholder && horario && status !== 'concluida' && status !== 'em_andamento' && (
+          {impedimento && <p className="mt-0.5 text-[8px] font-bold uppercase leading-tight text-red-300">{impedimento}</p>}
+          {!placeholder && !impedimento && horario && status !== 'concluida' && status !== 'em_andamento' && (
             <p className="mt-0.5 truncate text-[9px] font-black uppercase tracking-widest text-yellow-500">
               {formatarHorario(horario)}{tatame ? ` · ${tatame}` : ''}
             </p>
@@ -413,4 +420,3 @@ export default function ArvoreChaveDesktop({
     </div>
   );
 }
-

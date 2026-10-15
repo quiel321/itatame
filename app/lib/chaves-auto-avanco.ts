@@ -26,6 +26,8 @@ export type ChaveLutaAuto = {
   vencedor?: string | null;
   fase?: string | null;
   metodo_vitoria?: string | null;
+  pontuacao_atleta_1?: Record<string, unknown> | null;
+  pontuacao_atleta_2?: Record<string, unknown> | null;
 };
 
 export type ResultadoChave = {
@@ -202,11 +204,14 @@ async function concluirWo(supabase: SupabaseLike, todas: ChaveLutaAuto[], luta: 
 async function reabrirWoSemChecagem(supabase: SupabaseLike, todas: ChaveLutaAuto[], checkinPorAtleta: Map<string, string>) {
   for (const luta of todas) {
     if (luta.status_luta !== 'concluida' || luta.metodo_vitoria !== 'wo') continue;
+    // Decisões da recepção/chamador são definitivas, não avanços prematuros da geração.
+    if (luta.pontuacao_atleta_1?.recepcao_wo || luta.pontuacao_atleta_2?.recepcao_wo) continue;
     const a1Real = isChaveAtletaReal(luta.atleta_1);
     const a2Real = isChaveAtletaReal(luta.atleta_2);
     const byeEstrutural = (a1Real && isChaveBye(luta.atleta_2)) || (a2Real && isChaveBye(luta.atleta_1));
     if (!byeEstrutural) continue;
     const vencedorId = Number(luta.vencedor_id || (a1Real ? luta.atleta_1_id : luta.atleta_2_id) || 0);
+    if (String(checkinPorAtleta.get(`${luta.categoria_id}:${vencedorId}`) || '').startsWith('desclassificado_')) continue;
     if (vencedorId && checkinPorAtleta.get(`${luta.categoria_id}:${vencedorId}`) === 'aprovado') continue;
 
     await supabase.from('chaves').update({
@@ -244,10 +249,13 @@ async function alinharTatameDaCategoria(supabase: SupabaseLike, todas: ChaveLuta
   }
 }
 
-export async function processarAvancosAutomaticosChaves(supabase: SupabaseLike, eventoId: string | number) {
+export async function processarAvancosAutomaticosChaves(supabase: SupabaseLike, eventoId: string | number, categoriaId?: string) {
   let houveAvanco = false;
-  const { data: controles, error: controleError } = await supabase.from('recepcao_categorias').select('categoria_id').eq('evento_id', eventoId).eq('fechada', true);
-  if (controleError || !controles?.length) return false;
+  let consulta = supabase.from('recepcao_categorias').select('categoria_id').eq('evento_id', eventoId).eq('fechada', true);
+  if (categoriaId) consulta = consulta.eq('categoria_id', categoriaId);
+  const { data: controles, error: controleError } = await consulta;
+  if (controleError) throw controleError;
+  if (!controles?.length) return false;
   const fechadas = new Set<string>(controles.map((c: { categoria_id: string }) => c.categoria_id));
   if (supabase.rpc) for (const categoria of fechadas) {
     const { error } = await supabase.rpc('recepcao_resolver_ausencias', { p_categoria: categoria });
@@ -264,14 +272,16 @@ export async function processarAvancosAutomaticosChaves(supabase: SupabaseLike, 
       .select('*')
       .eq('evento_id', eventoId);
 
-    if (error || !data) return houveAvanco;
+    if (error) throw error;
+    if (!data) return houveAvanco;
 
     const todas = (data as ChaveLutaAuto[]).filter(l => l.categoria_id && fechadas.has(l.categoria_id));
     await alinharTatameDaCategoria(supabase, todas);
     const idsComAvanco = Array.from(new Set(todas.flatMap((luta) => [luta.atleta_1_id, luta.atleta_2_id]).filter(Boolean))) as number[];
-    const { data: inscricoes } = idsComAvanco.length > 0
+    const { data: inscricoes, error: inscricoesError } = idsComAvanco.length > 0
       ? await supabase.from('inscricoes').select('atleta_id,categoria_id,status_checkin').eq('evento_id', eventoId).in('atleta_id', idsComAvanco)
-      : { data: [] as Array<{ atleta_id: number; categoria_id: string; status_checkin: string }> };
+      : { data: [] as Array<{ atleta_id: number; categoria_id: string; status_checkin: string }>, error: null };
+    if (inscricoesError) throw inscricoesError;
     const checkinPorAtleta = new Map<string, string>((inscricoes || []).map((item: { atleta_id: number; categoria_id: string; status_checkin: string }) => [`${item.categoria_id}:${item.atleta_id}`, String(item.status_checkin || 'pendente')]));
     if (rodada === 0) {
       await reabrirWoSemChecagem(supabase, todas, checkinPorAtleta);
@@ -327,4 +337,3 @@ export async function processarAvancosAutomaticosChaves(supabase: SupabaseLike, 
 
   return houveAvanco;
 }
-

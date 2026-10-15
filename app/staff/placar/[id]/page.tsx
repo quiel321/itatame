@@ -20,11 +20,18 @@ export default function PlacarMesarioDB() {
 
   // CONFIGURAÇÕES DA LUTA
   const [configOpen, setConfigOpen] = useState(true);
+  const [editarTempo, setEditarTempo] = useState(false);
+  const [minutoEditado, setMinutoEditado] = useState(0);
+  const [segundoEditado, setSegundoEditado] = useState(0);
+  const [erroTempo, setErroTempo] = useState('');
+  const [salvandoTempo, setSalvandoTempo] = useState(false);
   const [showResumo, setShowResumo] = useState(false);
   const [tempoMinutos, setTempoMinutos] = useState(5);
   const [modoCorrecao, setModoCorrecao] = useState(false);
   const [metodoCorrecao, setMetodoCorrecao] = useState('pontos');
   const [salvandoResultado, setSalvandoResultado] = useState(false);
+  const resultadoGravandoRef = useRef(false);
+  const [avisoResultado, setAvisoResultado] = useState('');
 
   // ESTADOS DO PLACAR
   const [tempoRestante, setTempoRestante] = useState(0);
@@ -111,6 +118,15 @@ export default function PlacarMesarioDB() {
         return;
       }
 
+      if (luta.status_luta !== 'concluida') {
+        const {data: inscritos, error: erroCheckin} = await supabase.from('inscricoes')
+          .select('atleta_id,status_checkin,pesagem_ok,kimono_aprovado,pagamento_ok,estorno_status')
+          .eq('evento_id',luta.evento_id).eq('categoria_id',luta.categoria_id).in('atleta_id',[luta.atleta_1_id,luta.atleta_2_id].filter(Boolean));
+        const aprovados = new Set((inscritos||[]).filter(i=>i.status_checkin==='aprovado' && i.pesagem_ok && i.kimono_aprovado && i.pagamento_ok && i.estorno_status!=='estornado').map(i=>i.atleta_id));
+        if (erroCheckin || !luta.atleta_1_id || !luta.atleta_2_id || !aprovados.has(luta.atleta_1_id) || !aprovados.has(luta.atleta_2_id)) {
+          alert('Este confronto não está liberado: ambos os atletas precisam estar aprovados na recepção.'); router.replace('/staff/painel'); return;
+        }
+      }
       setLutaAtual(luta);
       let tempoCategoria = Number(luta.tempo_minutos);
       if ((!Number.isFinite(tempoCategoria) || tempoCategoria <= 0) && luta.categoria_id) {
@@ -125,6 +141,11 @@ export default function PlacarMesarioDB() {
       }
       if (!Number.isFinite(tempoCategoria) || tempoCategoria <= 0) tempoCategoria = obterTempoRegulamentar(luta.categoria, luta.faixa);
       setTempoMinutos(tempoCategoria);
+      if (luta.status_luta === 'em_andamento' && !luta.iniciada_em && Number(luta.duracao_segundos) > 0) {
+        setConfigOpen(false);
+        setTempoRestante(Number(luta.duracao_segundos));
+        setTimerAtivo(false);
+      }
       if (luta.status_luta === 'concluida') {
         setModoCorrecao(true);
         setConfigOpen(false);
@@ -209,6 +230,9 @@ export default function PlacarMesarioDB() {
   const processarFimDeLuta = async (vencedorLado: "azul" | "vermelho" | "empate", metodo: string) => {
     if (!lutaAtual || vencedorLado === "empate") return false;
     if (lutaAtual.status_luta === "concluida" || lutaAtual.vencedor) return true;
+    if (resultadoGravandoRef.current) return false;
+    resultadoGravandoRef.current = true;
+    setAvisoResultado('');
 
     const nomeVencedor = vencedorLado === "azul" ? lutaAtual.atleta_1 : lutaAtual.atleta_2;
     const equipeVencedor = vencedorLado === "azul" ? lutaAtual.equipe_1 : lutaAtual.equipe_2;
@@ -218,13 +242,14 @@ export default function PlacarMesarioDB() {
     const idPerdedor = vencedorLado === "azul" ? lutaAtual.atleta_2_id : lutaAtual.atleta_1_id;
 
     // Renova o vínculo antes de gravar: as medalhas só entram para atletas inscritos neste evento.
+    try {
     const vinculo = await garantirVinculoStaff();
     if (!vinculo.ok) {
+      resultadoGravandoRef.current = false;
       alert(vinculo.erro || 'Posto sem autorização para registrar o resultado.');
       return false;
     }
 
-    try {
       const finalizadaEm = new Date().toISOString();
       // O enum legado do banco aceita "pontos", "finalizacao" e "wo".
       // A decisao do arbitro fica identificada no JSON do placar sem enviar
@@ -286,12 +311,16 @@ export default function PlacarMesarioDB() {
         if (idPerdedor) await updateEstatistica(idPerdedor, "bronze", 1);
       }
 
-      await processarAvancosAutomaticosChaves(supabase, lutaAtual.evento_id);
+      try {
+        await processarAvancosAutomaticosChaves(supabase, lutaAtual.evento_id, lutaAtual.categoria_id || undefined);
+      } catch {
+        setAvisoResultado('Resultado salvo. A atualização dos demais avanços desta categoria ficou pendente; avise o organizador. Não registre o vencedor novamente.');
+      }
       return true;
     } catch (error: any) {
       alert(`Não foi possível concluir a luta: ${error?.message || 'erro inesperado'}`);
       return false;
-    }
+    } finally { resultadoGravandoRef.current = false; }
   };
 
   // NOVO: FUNÇÃO DO CLIQUE TRIPLO DE SEGURANÇA
@@ -324,11 +353,14 @@ export default function PlacarMesarioDB() {
   };
 
   const declararFinalizacao = async (lado: "azul" | "vermelho") => {
-    tocarSom('fim');
+    if (resultadoGravandoRef.current) return;
+    timerFimRef.current = null;
     setTimerAtivo(false);
+    const salvou = await processarFimDeLuta(lado, "finalizacao");
+    if (!salvou) return;
+    tocarSom('fim');
     setVencedor(lado);
     setTimeout(() => setShowResumo(true), 3500);
-    await processarFimDeLuta(lado, "finalizacao");
   };
 
   useEffect(() => {
@@ -450,14 +482,16 @@ export default function PlacarMesarioDB() {
         else if (punicoesAzul < punicoesVermelho) calcVencedor = "azul";
         else if (punicoesVermelho < punicoesAzul) calcVencedor = "vermelho";
 
-        setVencedor(calcVencedor);
         if (calcVencedor === "empate") {
           // O sistema não inventa um critério de desempate. A luta permanece
           // aberta até o árbitro indicar, visualmente, quem venceu a decisão.
+          setVencedor('empate');
           setShowResumo(true);
         } else {
-          setTimeout(() => setShowResumo(true), 3500);
-          await processarFimDeLuta(calcVencedor, "pontos");
+          if (await processarFimDeLuta(calcVencedor, "pontos")) {
+            setVencedor(calcVencedor);
+            setTimeout(() => setShowResumo(true), 3500);
+          }
         }
       }
     };
@@ -465,18 +499,19 @@ export default function PlacarMesarioDB() {
   }, [tempoRestante, timerAtivo]);
 
   const toggleTimer = async () => {
-    if (timerSalvandoRef.current) return;
+    if (timerSalvandoRef.current || editarTempo || modoCorrecao || vencedor) return;
     timerSalvandoRef.current = true;
     try {
     if (!timerAtivo && tempoRestante > 0) {
-      timerFimRef.current = Date.now() + tempoRestante * 1000;
-      setTimerAtivo(true);
-      tocarSom('inicio');
-      await supabase.from("chaves").update({
+      const { data, error } = await supabase.from("chaves").update({
         status_luta: "em_andamento",
         iniciada_em: new Date().toISOString(),
         duracao_segundos: tempoRestante,
-      }).eq("id", matchId);
+      }).eq("id", matchId).eq('evento_id', lutaAtual.evento_id).eq('tatame', lutaAtual.tatame).neq('status_luta','concluida').select('id');
+      if (error || !data?.length) { window.alert('Não foi possível iniciar o cronômetro. Confira a conexão e atualize o placar.'); return; }
+      timerFimRef.current = Date.now() + tempoRestante * 1000;
+      setTimerAtivo(true);
+      tocarSom('inicio');
     } else if (timerAtivo) {
       const restante = Math.max(0, Math.ceil(((timerFimRef.current || Date.now()) - Date.now()) / 1000));
       // Desarmar a expiração antes de aguardar a rede: pausar nunca encerra a luta.
@@ -484,7 +519,8 @@ export default function PlacarMesarioDB() {
       setTimerAtivo(false);
       setTempoRestante(restante);
       tocarSom('pause');
-      await supabase.from("chaves").update({ iniciada_em: null, duracao_segundos: restante }).eq("id", matchId);
+      const { data, error } = await supabase.from("chaves").update({ iniciada_em: null, duracao_segundos: restante }).eq("id", matchId).eq('evento_id',lutaAtual.evento_id).eq('tatame',lutaAtual.tatame).neq('status_luta','concluida').select('id');
+      if (error || !data?.length) window.alert('O cronômetro está pausado neste aparelho, mas não foi possível salvar a pausa. Confira a conexão antes de continuar.');
     }
     } finally {
       timerSalvandoRef.current = false;
@@ -592,15 +628,38 @@ export default function PlacarMesarioDB() {
       perdedorId: novoPerdedorId,
       propagarPerdedor: !['wo', 'ausencia'].includes(metodoFinal),
     });
-    await processarAvancosAutomaticosChaves(supabase, lutaAtual.evento_id);
+    await processarAvancosAutomaticosChaves(supabase, lutaAtual.evento_id, lutaAtual.categoria_id || undefined);
 
     router.push('/staff/painel');
   };
 
-  const reiniciarTimer = () => {
+  const abrirAjusteTempo = () => {
+    if (timerAtivo || timerSalvandoRef.current || modoCorrecao || vencedor) return;
+    setMinutoEditado(Math.floor(tempoRestante / 60));
+    setSegundoEditado(tempoRestante % 60);
+    setErroTempo('');
+    setEditarTempo(true);
+  };
+
+  const aplicarTempo = async () => {
+    if (timerAtivo || timerSalvandoRef.current || modoCorrecao || vencedor || salvandoTempo) return;
+    const total = minutoEditado * 60 + segundoEditado;
+    if (!Number.isInteger(minutoEditado) || !Number.isInteger(segundoEditado) || minutoEditado < 0 || segundoEditado < 0 || segundoEditado > 59 || total <= 0 || total > tempoMinutos * 60) {
+      setErroTempo(`Informe um tempo entre 00:01 e ${formatarTempo(tempoMinutos * 60)}.`); return;
+    }
+    setSalvandoTempo(true);
+    timerSalvandoRef.current = true;
+    try {
+      const { data, error } = await supabase.from('chaves').update({ duracao_segundos: total })
+        .eq('id', matchId).eq('evento_id', lutaAtual.evento_id).eq('tatame', lutaAtual.tatame)
+        .neq('status_luta', 'concluida').is('iniciada_em', null).select('id');
+      if (error || !data?.length) throw new Error('Não foi possível ajustar. Atualize o placar e confira se a luta continua pausada neste tatame.');
     timerFimRef.current = null;
     setTimerAtivo(false);
-    setTempoRestante(tempoMinutos * 60);
+      setTempoRestante(total);
+      setEditarTempo(false);
+    } catch (error) { setErroTempo(error instanceof Error ? error.message : 'Não foi possível ajustar o tempo.'); }
+    finally { timerSalvandoRef.current = false; setSalvandoTempo(false); }
   };
 
   const toggleFullscreen = () => {
@@ -668,6 +727,20 @@ export default function PlacarMesarioDB() {
 
       <div ref={placarRef} className="placar-wrapper bg-black h-screen w-screen flex flex-row font-sans select-none text-white relative overflow-hidden">
 
+        {!configOpen && !modoCorrecao && !vencedor && <button disabled={timerAtivo || salvandoTempo} onClick={abrirAjusteTempo} className="absolute bottom-2 left-2 z-[80] rounded-lg border border-white/20 bg-black/80 px-3 py-2 text-xs font-bold disabled:opacity-40">Ajustar tempo</button>}
+        {editarTempo && <div role="dialog" aria-modal="true" aria-label="Ajustar tempo restante" className="fixed inset-0 z-[110] flex items-center justify-center bg-black/90 p-4">
+          <div className="max-h-[calc(100dvh-3rem)] w-full max-w-sm overflow-y-auto rounded-2xl border border-white/20 bg-zinc-950 p-5">
+            <h2 className="text-lg font-bold">Tempo restante</h2>
+            <p className="mt-2 text-sm text-zinc-400">O placar será mantido. A luta continua pausada após salvar.</p>
+            <div className="my-4 grid grid-cols-2 gap-3">
+              <label>Minutos<input aria-label="Minutos restantes" type="number" min="0" max={tempoMinutos} value={minutoEditado} onChange={e => setMinutoEditado(Number(e.target.value))} className="mt-1 w-full rounded bg-zinc-800 p-3" /></label>
+              <label>Segundos<input aria-label="Segundos restantes" type="number" min="0" max="59" value={segundoEditado} onChange={e => setSegundoEditado(Number(e.target.value))} className="mt-1 w-full rounded bg-zinc-800 p-3" /></label>
+            </div>
+            {erroTempo && <p role="alert" className="mb-3 text-sm text-red-300">{erroTempo}</p>}
+            <div className="flex gap-3"><button disabled={salvandoTempo} onClick={() => setEditarTempo(false)} className="rounded bg-zinc-800 p-3">Cancelar</button><button disabled={salvandoTempo} onClick={aplicarTempo} className="flex-1 rounded bg-white p-3 font-bold text-black">{salvandoTempo ? 'Salvando...' : 'Salvar tempo'}</button></div>
+          </div>
+        </div>}
+
         {configOpen && (
           <div className="absolute inset-0 bg-black/90 backdrop-blur-md z-[100] flex items-center justify-center p-4">
             <div className="modal-config bg-[#111] border border-zinc-800 p-8 rounded-3xl w-full max-w-md shadow-2xl">
@@ -731,9 +804,6 @@ export default function PlacarMesarioDB() {
             <div className="flex gap-2 md:gap-4 mt-2 md:mt-4 w-full justify-center">
               <button onClick={toggleTimer} className={`cursor-pointer flex-1 py-2.5 md:py-3 rounded-xl flex items-center justify-center font-black text-sm md:text-lg uppercase tracking-widest transition-transform active:scale-95 shadow-lg ${timerAtivo ? 'bg-yellow-500 text-black hover:bg-yellow-400' : 'bg-green-500 text-black hover:bg-green-400'}`}>
                 {timerAtivo ? 'PAUSAR' : 'INICIAR'}
-              </button>
-              <button onClick={reiniciarTimer} className="cursor-pointer w-12 h-12 md:w-14 md:h-14 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white flex items-center justify-center transition-transform active:scale-95 shadow-lg border border-zinc-600">
-                <svg className="w-5 h-5 md:w-6 md:h-6 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
               </button>
               <button onClick={toggleFullscreen} className="cursor-pointer w-12 h-12 md:w-14 md:h-14 rounded-xl bg-white/5 hover:bg-white/10 text-white flex items-center justify-center transition-transform active:scale-95 border border-white/5">
                 <svg className="w-5 h-5 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">{isFullscreen ? (<path strokeLinecap="round" strokeLinejoin="round" d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25" />) : (<path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />)}</svg>
@@ -906,6 +976,7 @@ export default function PlacarMesarioDB() {
         {showResumo && (
           <div className="absolute inset-0 bg-black/80 backdrop-blur-md z-[100] flex items-center justify-center p-4">
             <div className="resumo-modal bg-[#0c1220] border border-white/10 rounded-3xl p-8 w-full max-w-4xl shadow-[0_0_80px_rgba(0,0,0,0.8)] animate-in slide-in-from-bottom-10 duration-500">
+              {avisoResultado && <p role="status" className="mb-4 rounded-xl border border-amber-400/40 bg-amber-950/40 p-3 text-sm text-amber-100">{avisoResultado}</p>}
               <div className="text-center mb-6">
                 <p className={`${vencedor === 'empate' ? 'text-yellow-400' : 'text-green-500'} font-black uppercase tracking-[0.25em] text-[10px] mb-2`}>{vencedor === 'empate' ? 'Decisão do árbitro' : 'Resultado oficial'}</p>
                 <h2 className="text-3xl md:text-4xl font-black text-white uppercase tracking-tighter">{vencedor === 'empate' ? 'Quem venceu a luta?' : 'Fim de Combate'}</h2>
@@ -1009,4 +1080,3 @@ export default function PlacarMesarioDB() {
     </>
   );
 }
-
