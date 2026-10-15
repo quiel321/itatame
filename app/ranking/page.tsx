@@ -28,6 +28,7 @@ export default function RankingPage() {
   const [filtroFaixa, setFiltroFaixa] = useState("Todas");
   
   const [eventos, setEventos] = useState<any[]>([]);
+  const [buscaCampeonato, setBuscaCampeonato] = useState("");
   const [filtroEvento, setFiltroEvento] = useState("Geral");
   const [filtroChave, setFiltroChave] = useState<"todos" | "peso" | "absoluto">("todos");
   const [todosAtletas, setTodosAtletas] = useState<any[]>([]);
@@ -344,6 +345,9 @@ export default function RankingPage() {
     return rankingAcademias;
   };
 
+  const normalizarBusca = (texto: string) => texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  const eventosEncontrados = eventos.filter(ev => normalizarBusca(ev.nome || '').includes(normalizarBusca(buscaCampeonato)));
+  const eventosNoSeletor = eventos.filter(ev => eventosEncontrados.includes(ev) || String(ev.id) === String(filtroEvento));
   const lista = getListaAtual();
   const top3 = lista.slice(0, 3);
   const restantes = lista.slice(3, 100); 
@@ -389,7 +393,12 @@ export default function RankingPage() {
           </div>
 
           <div className="flex flex-col gap-2.5 w-full md:w-auto shrink-0 mt-2 md:mt-0">
-            <select
+            <label className="relative block w-full md:w-[280px]">
+              <Search size={14} className="absolute left-3 top-3 text-zinc-500" />
+              <input type="search" aria-label="Pesquisar campeonato no ranking" placeholder="Pesquisar campeonato..." value={buscaCampeonato} onChange={e => setBuscaCampeonato(e.target.value)} className="min-h-10 w-full rounded-xl border border-white/15 bg-[#0a0a0e] py-2 pl-9 pr-3 text-xs text-white outline-none focus:border-red-500" />
+            </label>
+            {buscaCampeonato && <p role="status" className="text-[11px] text-zinc-400">{eventosEncontrados.length} campeonato(s) encontrado(s). Selecione abaixo.</p>}
+            <select aria-label="Campeonato do ranking"
               value={filtroEvento}
               onChange={(e) => {
                 setFiltroEvento(e.target.value);
@@ -399,7 +408,7 @@ export default function RankingPage() {
               className="w-full md:w-[280px] bg-[#0a0a0e] border border-white/10 text-white rounded-xl px-4 py-2.5 outline-none focus:border-red-500 transition-colors shadow-inner text-[10px] font-extrabold uppercase tracking-widest cursor-pointer appearance-none"
             >
               <option value="Geral">Ranking Global (Todos)</option>
-              {eventos.map(ev => (
+              {eventosNoSeletor.map(ev => (
                 <option key={ev.id} value={ev.id}>{ev.nome}</option>
               ))}
             </select>

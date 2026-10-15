@@ -198,7 +198,7 @@ export default function PlacarMesarioDB() {
     const campo = lado === "azul" ? "pontuacao_atleta_1" : "pontuacao_atleta_2";
     const payload = { pontos: pts, vantagens: vts, punicoes: pun };
 
-    await supabase.from("chaves").update({ [campo]: payload }).eq("id", matchId);
+    await supabase.from("chaves").update({ [campo]: payload }).eq("id", matchId).eq("evento_id",lutaAtual.evento_id).eq("tatame",lutaAtual.tatame);
   };
 
   const updatePontos = (lado: "azul" | "vermelho", tipo: "pontos" | "vantagens" | "punicoes", valor: number, acao: "quedas" | "passagens" | "montadas" | null = null) => {
@@ -256,7 +256,7 @@ export default function PlacarMesarioDB() {
       // um novo valor ao enum durante a operacao do campeonato.
       const decisaoArbitro = metodo === "decisao_arbitro";
       const metodoCompativel = decisaoArbitro ? "pontos" : (metodo === "ausencia" ? "wo" : metodo);
-      const { error } = await supabase.from("chaves").update({
+      const { data: gravadas, error } = await supabase.from("chaves").update({
         vencedor: nomeVencedor,
         vencedor_id: idVencedor,
         status_luta: "concluida",
@@ -265,8 +265,9 @@ export default function PlacarMesarioDB() {
         iniciada_em: null,
         pontuacao_atleta_1: { pontos: pontosAzul, vantagens: vantagensAzul, punicoes: punicoesAzul, decisao_arbitro: decisaoArbitro && vencedorLado === "azul" },
         pontuacao_atleta_2: { pontos: pontosVermelho, vantagens: vantagensVermelho, punicoes: punicoesVermelho, decisao_arbitro: decisaoArbitro && vencedorLado === "vermelho" },
-      }).eq("id", matchId);
+      }).eq("id", matchId).eq("evento_id",lutaAtual.evento_id).eq("tatame",lutaAtual.tatame).select("id");
       if (error) throw error;
+      if (!gravadas?.length) throw new Error("Esta luta mudou de tatame. Atualize a fila antes de operar.");
 
       await propagarResultadoChave(supabase, todasLutasCategoria, lutaAtual, {
         vencedorNome: nomeVencedor,

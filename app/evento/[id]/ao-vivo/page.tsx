@@ -12,8 +12,12 @@ import { obterTempoRegulamentar } from "@/app/lib/cronograma";
 import { rotuloLutaCurto } from "@/app/lib/lutas-rotulos";
 import { rotuloCategoriaAoVivo } from "@/app/lib/categorias-competicao";
 
+import { FILTRO_INSCRICOES_ATIVAS } from '@/app/lib/inscricao-ativa';
+import { resumoCheckinTelao } from '@/app/lib/checkin-telao';
+
 // --- TIPOS ---
 type Evento = {
+  status?: string | null;
   nome: string | null;
   banner_url?: string | null;
 };
@@ -643,7 +647,7 @@ export default function AoVivoPage() {
 
   useEffect(() => {
     async function carregarDados() {
-      const { data: ev } = await supabase.from("eventos").select("nome, banner_url").eq("id", eventoId).single();
+      const { data: ev } = await supabase.from("eventos").select("nome, banner_url, status").eq("id", eventoId).single();
       if (ev) setEvento(ev);
       await buscarLutas();
       setLoading(false);
@@ -655,6 +659,7 @@ export default function AoVivoPage() {
     if (!eventoId) return;
     const subscription = supabase
       .channel(`live-scoring-${eventoId}`)
+      .on('postgres_changes', {event:'UPDATE', schema:'public', table:'eventos', filter:`id=eq.${eventoId}`}, payload => { setEvento(atual => atual ? {...atual,...payload.new} : payload.new as Evento); })
       .on("postgres_changes", { event: "*", schema: "public", table: "chaves", filter: `evento_id=eq.${eventoId}` }, () => { void buscarLutas(); })
       .on("postgres_changes", { event: "*", schema: "public", table: "chaves_publicacoes", filter: `evento_id=eq.${eventoId}` }, () => { void buscarLutas(); })
       .subscribe();
@@ -665,19 +670,15 @@ export default function AoVivoPage() {
     if (!eventoId) return;
     const carregarCheckin = async () => {
       const { data } = await supabase.from('inscricoes')
-        .select('atleta,status_checkin,checkin_realizado_em,pagamento_ok')
-        .eq('evento_id', eventoId).eq('pagamento_ok', true);
+        .select('id,atleta_id,categoria_id,atleta,status_checkin,checkin_realizado_em,pagamento_ok')
+        .eq('evento_id', eventoId).eq('pagamento_ok', true).or(FILTRO_INSCRICOES_ATIVAS);
       if (!data) return;
-      const unicos = new Map<string, (typeof data)[number]>();
-      data.forEach(item => { if (item.atleta) unicos.set(item.atleta, item); });
-      const participantes = Array.from(unicos.values());
-      setCheckin({
-        aprovados: participantes.filter(item => item.status_checkin === 'aprovado').length,
-        aguardando: participantes.filter(item => !item.status_checkin || item.status_checkin === 'pendente').length,
-        recentes: participantes.filter(item => item.status_checkin === 'aprovado' && item.checkin_realizado_em)
-          .sort((a, b) => String(b.checkin_realizado_em).localeCompare(String(a.checkin_realizado_em)))
-          .slice(0, 4).map(item => item.atleta),
-      });
+      const ausentes = new Set<string>();
+      try {
+        const resposta = await fetch(`/api/eventos/${eventoId}/situacao-chave`,{cache:'no-store'});
+        if (resposta.ok) for (const i of (await resposta.json()).situacoes || []) if (i.situacao === 'ausente') ausentes.add(`${i.categoria_id}:${i.atleta_id}`);
+      } catch { /* mantém a última leitura do check-in */ }
+      setCheckin(resumoCheckinTelao(data, ausentes));
     };
     void carregarCheckin();
     const intervalo = window.setInterval(() => void carregarCheckin(), 15000);
@@ -794,7 +795,7 @@ export default function AoVivoPage() {
         <header className="mb-3 flex items-center justify-between border-b border-white/5 pb-3">
           <div className="flex items-center gap-6">
             <span className="bg-red-600 text-white font-black text-sm px-4 py-2 rounded-lg uppercase tracking-widest flex items-center gap-2 shadow-[0_0_15px_rgba(220,38,38,0.5)]">
-              <Radio size={18} className="animate-pulse" /> AO VIVO
+              <Radio size={18} className={evento?.status?.toUpperCase() === 'ENCERRADO' ? '' : 'animate-pulse'} /> {evento?.status?.toUpperCase() === 'ENCERRADO' ? 'ENCERRADO' : 'AO VIVO'}
             </span>
             <h1 className="text-4xl lg:text-5xl font-black uppercase text-white tracking-tighter truncate max-w-3xl">{evento?.nome || "Spartan Open Jiu-Jitsu"}</h1>
           </div>
@@ -808,7 +809,7 @@ export default function AoVivoPage() {
 
         <div className="mb-3 flex flex-wrap items-center gap-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-2 text-xs font-bold uppercase text-emerald-200">
           <span>Check-in confirmado: {checkin.aprovados}</span>
-          <span className="text-amber-200">Aguardando: {checkin.aguardando}</span>
+          {evento?.status?.toUpperCase() === 'ENCERRADO' ? <span className="text-zinc-300">Campeonato encerrado</span> : <span className="text-amber-200">Aguardando check-in: {checkin.aguardando}</span>}
           {checkin.recentes.length > 0 && <span className="min-w-0 truncate text-zinc-300">Últimos confirmados: {checkin.recentes.join(' · ')}</span>}
         </div>
 
@@ -969,4 +970,3 @@ export default function AoVivoPage() {
     </main>
   );
 }
-

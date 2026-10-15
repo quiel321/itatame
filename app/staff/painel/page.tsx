@@ -561,33 +561,20 @@ export default function PainelMesario() {
 
   const executarTransferenciaTatame = async (novoTatame: string) => {
     if (!modalTransferencia.luta || !sessao) return;
-    const { data: atual, error: leituraError } = await supabase.from('chaves')
-      .select('id, tatame, status_luta, iniciada_em, pontuacao_atleta_1, pontuacao_atleta_2')
-      .eq('id', modalTransferencia.luta.id).eq('evento_id', sessao.evento_id).single();
-    if (leituraError || !atual || atual.status_luta === 'concluida' || atual.status_luta === 'em_andamento' || atual.iniciada_em
-      || nomeUpper(atual.tatame || '') !== nomeUpper(modalTransferencia.luta.tatame || '')) {
-      setAviso('A luta mudou ou já foi liberada ao mesário. Atualize a fila; ela não pode ser transferida agora.');
-      return;
-    }
-    if (!window.confirm(`Transferir a luta e sua baia para ${novoTatame}? Encaminhe os atletas ao destino. Presenças, chamadas, check-in e pesagem serão mantidos.`)) return;
+    if (!window.confirm(`Transferir a luta e sua baia para ${novoTatame}? Ela entrará no fim da fila do destino. Encaminhe os atletas; presenças, chamadas e liberação serão mantidas. Lutas já iniciadas não podem ser transferidas.`)) return;
     setAcaoId(modalTransferencia.luta.id);
-    let transferencia = supabase
-      .from('chaves')
-      .update({ tatame: novoTatame })
-      .eq('id', modalTransferencia.luta.id)
-      .eq('evento_id', sessao.evento_id)
-      .neq('status_luta', 'concluida').neq('status_luta', 'em_andamento').is('iniciada_em', null);
-    transferencia = atual.tatame == null ? transferencia.is('tatame', null) : transferencia.eq('tatame', atual.tatame);
-    const { data: transferidas, error } = await transferencia.select('id');
-    if (error || !transferidas?.length) {
-      setAviso(error ? `Não foi possível transferir a luta: ${error.message}` : 'A luta mudou durante a transferência. Atualize a fila e tente novamente.');
-      setAcaoId(null);
-      return;
+    const origem = modalTransferencia.luta.tatame || null;
+    const { error } = await supabase.rpc('transferir_luta_tatame', {
+      p_luta: modalTransferencia.luta.id, p_origem: origem, p_destino: novoTatame,
+    });
+    if (error) {
+      setAviso(`Não foi possível transferir a luta: ${error.message}`);
+      setAcaoId(null); return;
     }
     if (tatamesLivres[nomeUpper(novoTatame)]) {
       void canalOperacaoRef.current?.send({ type: 'broadcast', event: 'tatame_ocupado', payload: { tatame: novoTatame } });
     }
-    void canalOperacaoRef.current?.send({ type: 'broadcast', event: 'luta_transferida', payload: { tatame: novoTatame, origem: atual.tatame, luta_id: modalTransferencia.luta.id } });
+    void canalOperacaoRef.current?.send({ type: 'broadcast', event: 'luta_transferida', payload: { tatame: novoTatame, origem, luta_id: modalTransferencia.luta.id } });
     setModalTransferencia({ visivel: false, luta: null });
     await carregarPainel();
     setAviso(`Luta e baia transferidas para ${novoTatame}. Encaminhe os atletas ao destino; as presenças foram mantidas.`);
@@ -710,7 +697,7 @@ export default function PainelMesario() {
             </>
           ) : (
             <>
-              <button onClick={() => setModalTransferencia({ visivel: true, luta })} disabled={Boolean(luta.iniciada_em) || luta.status_luta === 'em_andamento' || Boolean(acaoId)} title="Transferir tatame" className="h-10 rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 text-zinc-400 disabled:opacity-30"><ArrowRightLeft size={14} /></button>
+              <button onClick={() => setModalTransferencia({ visivel: true, luta })} disabled={luta.status_luta !== 'agendada' || Boolean(acaoId)} aria-label="Transferir tatame" title="Transferir luta ainda não iniciada" className="h-10 rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 text-zinc-400 disabled:opacity-30"><ArrowRightLeft size={14} /></button>
               {(
                 <button onClick={() => chamarLuta(luta)} disabled={lutaBloqueada || acaoId === luta.id} className={`h-10 min-w-0 flex-1 rounded-lg px-3 text-[9px] font-black uppercase md:w-36 md:flex-none ${lutaBloqueada ? 'cursor-not-allowed border border-zinc-700 bg-zinc-800 text-zinc-500' : destaque === 'agora' ? 'bg-red-500 text-white' : 'bg-white text-black'}`}>
                   {acaoId === luta.id ? <RefreshCw size={12} className="mr-1 inline animate-spin" /> : luta.status_luta === 'em_andamento' ? <Pause size={12} className="mr-1 inline" /> : <Play size={12} className="mr-1 inline" fill="currentColor" />}

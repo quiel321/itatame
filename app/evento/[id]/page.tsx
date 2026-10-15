@@ -329,9 +329,9 @@ export default function EventoDetalhesPage() {
               <ChatEvento eventoId={evento.id} compacto />
               
               {evento.regulamento_url && (
-                <a href={evento.regulamento_url} target="_blank" rel="noopener noreferrer" className="text-zinc-400 hover:text-white font-bold uppercase tracking-widest text-[10px] md:text-xs px-3 py-2.5 md:px-4 md:py-3.5 transition-all flex items-center justify-center gap-1.5 w-full md:w-auto">
+                <a href={evento.regulamento_url} target="_blank" rel="noopener noreferrer" className="min-h-11 rounded-xl border border-amber-400/60 bg-amber-400/15 text-amber-200 hover:bg-amber-400 hover:text-black font-bold uppercase tracking-widest text-[10px] md:text-xs px-3 py-2.5 md:px-4 md:py-3.5 shadow-[0_0_14px_rgba(251,191,36,0.12)] transition-all flex items-center justify-center gap-1.5 w-full md:w-auto">
                   <svg className="w-3.5 h-3.5 md:w-4 md:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                  Regulamento
+                  Cronograma
                 </a>
               )}
                 </>
