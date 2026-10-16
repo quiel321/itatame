@@ -14,6 +14,7 @@ import { rotuloCategoriaAoVivo } from "@/app/lib/categorias-competicao";
 
 import { FILTRO_INSCRICOES_ATIVAS } from '@/app/lib/inscricao-ativa';
 import { resumoCheckinTelao } from '@/app/lib/checkin-telao';
+import { criarAtualizacaoAoVivo } from '@/app/lib/atualizacao-ao-vivo';
 
 // --- TIPOS ---
 type Evento = {
@@ -112,7 +113,7 @@ function calcularTempoAoVivo(luta: LutaAoVivo, agora: number) {
   const inicio = luta.iniciada_em ? new Date(luta.iniciada_em).getTime() : 0;
   if (!inicio || Number.isNaN(inicio)) return luta.duracao_segundos || 0;
   const decorrido = Math.max(0, Math.floor((agora - inicio) / 1000));
-  if (!luta.duracao_segundos) return decorrido;
+  if (luta.duracao_segundos == null) return decorrido;
   return Math.max(0, luta.duracao_segundos - decorrido);
 }
 
@@ -582,6 +583,7 @@ export default function AoVivoPage() {
 
   // Controle de estado para exibir o Winner Overlay
   const prevLutasRef = useRef<LutaAoVivo[]>([]);
+  const atletasCarregadosRef = useRef({ chave: '', em: 0 });
   const [filaVencedores, setFilaVencedores] = useState<LutaAoVivo[]>([]);
   const [ultimoResultado, setUltimoResultado] = useState<LutaAoVivo | null>(null);
   const fecharVencedor = useCallback(() => setFilaVencedores((atual) => atual.slice(1)), []);
@@ -596,18 +598,24 @@ export default function AoVivoPage() {
     } catch { /* ignora erro de permissão do navegador */ }
   };
 
-  const carregarAtletas = useCallback(async (lutasBase: LutaAoVivo[]) => {
+  const carregarAtletas = useCallback(async (lutasBase: LutaAoVivo[], estaAtivo: () => boolean) => {
     const ids = Array.from(new Set(lutasBase.flatMap((luta) => [luta.atleta_1_id, luta.atleta_2_id, luta.vencedor_id]).filter((id): id is number => Boolean(id))));
     if (ids.length === 0) return;
-    const { data } = await supabase.from("atletas_publico").select("id, user_id, nome, foto_url, equipe, academia, faixa").in("id", ids);
+    const chave = [...ids].sort((a, b) => a - b).join(',');
+    if (atletasCarregadosRef.current.chave === chave && Date.now() - atletasCarregadosRef.current.em < 60000) return;
+    const { data, error } = await supabase.from("atletas_publico").select("id, user_id, nome, foto_url, equipe, academia, faixa").in("id", ids);
+    if (!estaAtivo() || error) return;
     const mapa = Object.fromEntries(((data || []) as AtletaPerfil[]).map((atleta) => [atleta.id, atleta]));
+    atletasCarregadosRef.current = { chave, em: Date.now() };
     setAtletas(mapa);
   }, []);
 
-  const buscarLutas = useCallback(async () => {
+  const buscarLutas = useCallback(async (estaAtivo: () => boolean) => {
     if (!eventoId) return;
-    const { data } = await consultarChavesPublicadas(supabase, eventoId,
+    const { data, error } = await consultarChavesPublicadas(supabase, eventoId,
       "id, evento_id, tatame, fase, id_visual, categoria, faixa, atleta_1, atleta_2, atleta_1_id, atleta_2_id, equipe_1, equipe_2, pontuacao_atleta_1, pontuacao_atleta_2, duracao_segundos, iniciada_em, ordem_tatame, horario_estimado, status_luta, vencedor, vencedor_id, metodo_vitoria, finalizada_em");
+    if (!estaAtivo()) return;
+    if (error) throw new Error(error.message);
 
     const lutasReais = ((data || []) as LutaAoVivo[]).filter(isLutaReal);
 
@@ -642,28 +650,46 @@ export default function AoVivoPage() {
     prevLutasRef.current = ordenadas;
 
     setLutas(ordenadas);
-    await carregarAtletas(ordenadas);
+    await carregarAtletas(ordenadas, estaAtivo);
   }, [carregarAtletas, eventoId]);
 
   useEffect(() => {
-    async function carregarDados() {
-      const { data: ev } = await supabase.from("eventos").select("nome, banner_url, status").eq("id", eventoId).single();
-      if (ev) setEvento(ev);
-      await buscarLutas();
-      setLoading(false);
-    }
-    if (eventoId) void carregarDados();
-  }, [eventoId, buscarLutas]);
-
-  useEffect(() => {
     if (!eventoId) return;
+    prevLutasRef.current = [];
+    atletasCarregadosRef.current = { chave: '', em: 0 };
+    const atualizacao = criarAtualizacaoAoVivo(async estaAtivo => {
+      const { data: ev } = await supabase.from("eventos").select("nome, banner_url, status").eq("id", eventoId).single();
+      if (!estaAtivo()) return;
+      if (ev) setEvento(ev);
+      await buscarLutas(estaAtivo);
+      if (estaAtivo()) setLoading(false);
+    });
+    const atualizar = () => { void atualizacao.solicitar(); };
+    const atualizarVisivel = () => { if (document.visibilityState !== 'hidden') atualizar(); };
+
     const subscription = supabase
       .channel(`live-scoring-${eventoId}`)
-      .on('postgres_changes', {event:'UPDATE', schema:'public', table:'eventos', filter:`id=eq.${eventoId}`}, payload => { setEvento(atual => atual ? {...atual,...payload.new} : payload.new as Evento); })
-      .on("postgres_changes", { event: "*", schema: "public", table: "chaves", filter: `evento_id=eq.${eventoId}` }, () => { void buscarLutas(); })
-      .on("postgres_changes", { event: "*", schema: "public", table: "chaves_publicacoes", filter: `evento_id=eq.${eventoId}` }, () => { void buscarLutas(); })
-      .subscribe();
-    return () => { void supabase.removeChannel(subscription); };
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'eventos', filter: `id=eq.${eventoId}` }, atualizar)
+      .on("postgres_changes", { event: "*", schema: "public", table: "chaves", filter: `evento_id=eq.${eventoId}` }, atualizar)
+      .on("postgres_changes", { event: "*", schema: "public", table: "chaves_publicacoes", filter: `evento_id=eq.${eventoId}` }, atualizar)
+      .subscribe(status => { if (status === 'SUBSCRIBED') atualizar(); });
+    // A conexão de tempo real pode cair ou não entregar uma alteração. A leitura
+    // periódica mantém o placar atual sem depender de F5, inclusive após retomar a aba.
+    const intervalo = window.setInterval(atualizarVisivel, 2000);
+    window.addEventListener('focus', atualizarVisivel);
+    window.addEventListener('online', atualizarVisivel);
+    window.addEventListener('pageshow', atualizarVisivel);
+    document.addEventListener('visibilitychange', atualizarVisivel);
+    atualizar();
+    return () => {
+      atualizacao.cancelar();
+      window.clearInterval(intervalo);
+      window.removeEventListener('focus', atualizarVisivel);
+      window.removeEventListener('online', atualizarVisivel);
+      window.removeEventListener('pageshow', atualizarVisivel);
+      document.removeEventListener('visibilitychange', atualizarVisivel);
+      void supabase.removeChannel(subscription);
+    };
   }, [eventoId, buscarLutas]);
 
   useEffect(() => {
