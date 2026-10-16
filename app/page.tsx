@@ -269,7 +269,7 @@ export default function Home() {
           </Link>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:items-start lg:grid-cols-3 xl:grid-cols-4">
           {erroEventos && <div role="alert" className="col-span-full rounded-2xl border border-amber-400/40 bg-amber-950/40 p-4 text-sm text-amber-100">
             <p>{erroEventos}</p>
             <button type="button" onClick={() => void carregarEventos()} className="mt-3 min-h-11 rounded-lg border border-amber-300/40 px-4 font-bold">Tentar novamente</button>
@@ -294,7 +294,7 @@ export default function Home() {
                 className={`group mx-auto flex w-full max-w-sm flex-col bg-[#0a0a0e] border border-white/10 rounded-3xl overflow-hidden transition-all duration-500 shadow-xl hover:shadow-[0_10px_40px_rgba(0,0,0,0.5)] hover:-translate-y-1 ${estilo.borda}`}
               >
                 {/* Banner Largo do Evento */}
-                <div className="relative h-40 sm:h-44 overflow-hidden bg-black">
+                <div className="relative h-40 sm:h-44 md:h-32 overflow-hidden bg-black">
                   <div className={`absolute top-3 left-3 z-20 rounded-md border px-2 py-1 text-[8px] font-black uppercase tracking-wide shadow-lg backdrop-blur-md ${estilo.badge}`}>
                      {etapa.titulo}
                   </div>
@@ -308,7 +308,7 @@ export default function Home() {
                 </div>
 
                 <div className="p-3 flex flex-col flex-1 relative -mt-3 bg-[#0a0a0e]/90 backdrop-blur-md rounded-t-3xl border-t border-white/5">
-                  <span className="mb-1 text-[9px] font-extrabold uppercase tracking-[0.15em] text-zinc-500">{evento.descricao || "Jiu-Jitsu"}</span>
+                  <span className="mb-1 text-[9px] font-extrabold uppercase tracking-[0.15em] text-zinc-500 md:line-clamp-1">{evento.descricao || "Jiu-Jitsu"}</span>
                   <h3 className="text-sm font-black uppercase tracking-tight text-white mb-1.5 line-clamp-2 leading-snug group-hover:text-red-400 transition-colors">
                     {evento.nome}
                   </h3>
