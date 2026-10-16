@@ -10,6 +10,8 @@ import { rotuloCategoriaAoVivo } from "@/app/lib/categorias-competicao"
 import { lutasFormamChaveDeTres, placeholderSlotChaveDeTres, resumoHumanoChave, textoAguardandoChaveDeTres, textoOuroAposChecagem } from "@/app/lib/chave-de-tres"
 import { resumoAvancoSemCombate, faseVisivelNoGrid } from '@/app/lib/avanco-sem-combate';
 import AvancoSemCombateCard from '@/app/components/AvancoSemCombateCard';
+import ArvoreCombatesReais from '@/app/components/ArvoreCombatesReais';
+import { combatesPrevistos, nomeOrigemPrevista, nomeRealPrevisto } from '@/app/lib/combates-previstos';
 import ArvoreChaveDesktop from "@/app/components/ArvoreChaveDesktop"
 import AvisoChaves from "@/app/components/AvisoChaves"
 import { dataOperacional, type EventoComEtapas } from "@/app/lib/evento-etapas"
@@ -213,11 +215,13 @@ export default function ChavesPublicoPage() {
     return placeholderSlotChaveDeTres(luta, lado) || "A definir";
   };
 
-  const lutasAtivas = lutas.filter(l => l.status_luta !== 'concluida' && l.status_luta !== 'em_andamento');
-  const lutasEmAndamento = lutas.filter(l => l.status_luta === 'em_andamento');
+  const modeloCombates = combatesPrevistos(lutas);
+  const lutasComCombate = modeloCombates?.lutas || lutas;
+  const lutasAtivas = lutasComCombate.filter(l => l.status_luta !== 'concluida' && l.status_luta !== 'em_andamento');
+  const lutasEmAndamento = lutasComCombate.filter(l => l.status_luta === 'em_andamento');
 
   const lutasCards = [...lutas]
-    .filter(faseVisivelNoGrid)
+    .filter(luta => modeloCombates ? modeloCombates.lutas.includes(luta) : faseVisivelNoGrid(luta))
     .sort((a, b) => (parseInt(a.id_visual) || 0) - (parseInt(b.id_visual) || 0));
 
   const atletasNaBaia = lutasAtivas.flatMap((luta) => ([
@@ -387,13 +391,13 @@ export default function ChavesPublicoPage() {
         )}
 
         <div className="mt-5 hidden px-4 md:mt-5 md:block md:px-0">
-          <ArvoreChaveDesktop
+          {modeloCombates && modeloCombates.lutas.length < lutas.length ? <ArvoreCombatesReais lutas={lutas} buscarFoto={buscarFotoPorId} /> : (<ArvoreChaveDesktop
             lutas={lutas}
             abaAtual={abaAtual}
             totalAbas={totalAbas}
             buscarFoto={buscarFotoPorId}
             destaque={busca}
-          />
+          />)}
         </div>
 
         <div className="mb-16 mt-3 flex w-full flex-col px-4 md:mt-12 md:px-0">
@@ -459,7 +463,7 @@ export default function ChavesPublicoPage() {
                 {lutasCards.map(luta => {
                   const avanco = resumoAvancoSemCombate(luta, lutas);
                   if (avanco) return <AvancoSemCombateCard key={luta.id} avanco={avanco} />;
-                  const a1 = nomeSlot(luta, 1); const a2 = nomeSlot(luta, 2);
+                  const a1 = modeloCombates ? (nomeRealPrevisto(luta.atleta_1) || nomeOrigemPrevista(modeloCombates.origem(luta, 1))) : nomeSlot(luta, 1); const a2 = modeloCombates ? (nomeRealPrevisto(luta.atleta_2) || nomeOrigemPrevista(modeloCombates.origem(luta, 2))) : nomeSlot(luta, 2);
                   const foto1 = buscarFotoPorId(luta.atleta_1_id); const foto2 = buscarFotoPorId(luta.atleta_2_id);
                   const vencedor = limparNome(luta.vencedor);
                   const venceu1 = Boolean(vencedor && isAtletaValido(luta.atleta_1) && vencedor.toUpperCase() === limparNome(luta.atleta_1).toUpperCase());

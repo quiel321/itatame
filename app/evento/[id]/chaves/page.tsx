@@ -6,6 +6,8 @@ import { supabase } from "@/app/lib/supabase"
 import { rotuloLuta } from "@/app/lib/lutas-rotulos"
 import { resumoAvancoSemCombate, faseVisivelNoGrid } from '@/app/lib/avanco-sem-combate';
 import AvancoSemCombateCard from '@/app/components/AvancoSemCombateCard';
+import ArvoreCombatesReais from '@/app/components/ArvoreCombatesReais';
+import { combatesPrevistos, nomeOrigemPrevista } from '@/app/lib/combates-previstos';
 import ArvoreChaveDesktop from "@/app/components/ArvoreChaveDesktop"
 import AvisoChaves from "@/app/components/AvisoChaves"
 import { dataOperacional, type EventoComEtapas } from "@/app/lib/evento-etapas"
@@ -131,8 +133,9 @@ export default function ChavesPage() {
     }
   }
 
+  const modeloCombates = combatesPrevistos(lutas);
   const lutasMobile = [...lutas]
-    .filter(faseVisivelNoGrid)
+    .filter(luta => modeloCombates ? modeloCombates.lutas.includes(luta) : faseVisivelNoGrid(luta))
     .sort((a, b) => (parseInt(a.id_visual) || 0) - (parseInt(b.id_visual) || 0));
 
   const divulgacao = dataOperacional(evento?.data_divulgacao_chaves, false, evento?.estado);
@@ -186,12 +189,12 @@ export default function ChavesPage() {
 
         <div className="hidden px-4 md:block md:px-0">
           {erroSituacoes && <p role="status" className="mb-3 text-xs text-amber-200">{erroSituacoes}</p>}
-          <ArvoreChaveDesktop
+          {modeloCombates && modeloCombates.lutas.length < lutas.length ? <ArvoreCombatesReais lutas={lutas} buscarFoto={buscarFoto} /> : (<ArvoreChaveDesktop
             lutas={lutas}
             abaAtual={abaAtual}
             totalAbas={totalAbas}
             buscarFoto={(id) => buscarFoto(id, "")}
-          />
+          />)}
         </div>
 
         <div className="mb-16 mt-3 flex w-full flex-col px-4 md:hidden">
@@ -220,8 +223,8 @@ export default function ChavesPage() {
               {lutasMobile.map(luta => {
                 const avanco = resumoAvancoSemCombate(luta, lutas);
                 if (avanco) return <AvancoSemCombateCard key={luta.id} avanco={avanco} impedimento={situacaoAtletaLuta(luta, avanco.lado)} />;
-                const a1 = limparNome(luta.atleta_1);
-                const a2 = limparNome(luta.atleta_2);
+                const a1 = limparNome(luta.atleta_1) || (modeloCombates ? nomeOrigemPrevista(modeloCombates.origem(luta, 1)) : "");
+                const a2 = limparNome(luta.atleta_2) || (modeloCombates ? nomeOrigemPrevista(modeloCombates.origem(luta, 2)) : "");
                 const foto1 = buscarFoto(luta.atleta_1_id, a1);
                 const foto2 = buscarFoto(luta.atleta_2_id, a2);
                 const situacao1 = situacaoAtletaLuta(luta,1), situacao2 = situacaoAtletaLuta(luta,2);
