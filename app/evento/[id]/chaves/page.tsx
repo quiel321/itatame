@@ -4,6 +4,8 @@ import { useEffect, useState } from "react"
 import { useParams } from "next/navigation"
 import { supabase } from "@/app/lib/supabase"
 import { rotuloLuta } from "@/app/lib/lutas-rotulos"
+import { resumoAvancoSemCombate } from '@/app/lib/avanco-sem-combate';
+import AvancoSemCombateCard from '@/app/components/AvancoSemCombateCard';
 import ArvoreChaveDesktop from "@/app/components/ArvoreChaveDesktop"
 import AvisoChaves from "@/app/components/AvisoChaves"
 import { dataOperacional, type EventoComEtapas } from "@/app/lib/evento-etapas"
@@ -221,6 +223,8 @@ export default function ChavesPage() {
           ) : (
             <div className="flex flex-col gap-2">
               {lutasMobile.map(luta => {
+                const avanco = resumoAvancoSemCombate(luta, lutas);
+                if (avanco) return <AvancoSemCombateCard key={luta.id} avanco={avanco} impedimento={situacaoAtletaLuta(luta, avanco.lado)} />;
                 const a1 = limparNome(luta.atleta_1);
                 const a2 = limparNome(luta.atleta_2);
                 const foto1 = buscarFoto(luta.atleta_1_id, a1);

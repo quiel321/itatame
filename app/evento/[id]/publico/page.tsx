@@ -8,6 +8,8 @@ import { Clock, Search } from "lucide-react"
 import { rotuloLuta } from "@/app/lib/lutas-rotulos"
 import { rotuloCategoriaAoVivo } from "@/app/lib/categorias-competicao"
 import { lutasFormamChaveDeTres, placeholderSlotChaveDeTres, resumoHumanoChave, textoAguardandoChaveDeTres, textoOuroAposChecagem } from "@/app/lib/chave-de-tres"
+import { resumoAvancoSemCombate } from '@/app/lib/avanco-sem-combate';
+import AvancoSemCombateCard from '@/app/components/AvancoSemCombateCard';
 import ArvoreChaveDesktop from "@/app/components/ArvoreChaveDesktop"
 import AvisoChaves from "@/app/components/AvisoChaves"
 import { dataOperacional, type EventoComEtapas } from "@/app/lib/evento-etapas"
@@ -230,6 +232,7 @@ export default function ChavesPublicoPage() {
   ])).filter((item) => isAtletaValido(item.nome) && item.controle.presente);
 
   const atletasAguardandoDefinicao = lutasAtivas.filter(luta => {
+    if (resumoAvancoSemCombate(luta, lutas)) return false;
     const umSo = (isAtletaValido(luta.atleta_1) && !isAtletaValido(luta.atleta_2)) || (!isAtletaValido(luta.atleta_1) && isAtletaValido(luta.atleta_2));
     if (!umSo) return false;
     const fantasmaNome = isAtletaValido(luta.atleta_1) ? luta.atleta_2 : luta.atleta_1;
@@ -454,6 +457,8 @@ export default function ChavesPublicoPage() {
               </h3>
               <div className="grid min-w-0 grid-cols-1 gap-2 md:grid-cols-2 md:gap-4 lg:grid-cols-3">
                 {lutasCards.map(luta => {
+                  const avanco = resumoAvancoSemCombate(luta, lutas);
+                  if (avanco) return <AvancoSemCombateCard key={luta.id} avanco={avanco} />;
                   const a1 = nomeSlot(luta, 1); const a2 = nomeSlot(luta, 2);
                   const foto1 = buscarFotoPorId(luta.atleta_1_id); const foto2 = buscarFotoPorId(luta.atleta_2_id);
                   const vencedor = limparNome(luta.vencedor);
@@ -527,4 +532,3 @@ export default function ChavesPublicoPage() {
     </main>
   )
 }
-
