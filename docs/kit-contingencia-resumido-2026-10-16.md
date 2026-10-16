@@ -4,7 +4,7 @@ O botão Kit Offline PDF agora gera somente a lista de chamada/pesagem da recep�
 
 As árvores reutilizam o gerador de impressão das chaves. No kit, cada folha contém um quadro com referência da luta, vencedor, placares de pontos/vantagens/punições, método e marcação de lançamento no sistema. Resultados já concluídos aparecem como JÁ SALVO. Categorias maiores continuam divididas com referência à página anterior. A emissão usa o fuso do evento.
 
-A recepção utiliza todas as inscrições fornecidas pelo snapshot, inclusive atletas sem chave, agrupadas por categoria/faixa. Contém situação atual, presença, conferência, peso, decisão, rubrica, chamadas e envio ao tatame. Pagamento desconhecido aparece como conferir, nunca como pago.
+A recepção utiliza todas as inscrições fornecidas pelo snapshot, inclusive atletas sem chave, agrupadas somente por categoria. A faixa fica na linha de cada atleta e não abre outro grupo. As árvores do kit também usam a categoria, sem subdivisão adicional por faixa. Contém situação atual, presença, conferência, peso, decisão, rubrica, chamadas e envio ao tatame. Pagamento desconhecido aparece como conferir, nunca como pago.
 
 Nenhuma alteração em banco, atletas, resultados, regras de luta ou check-ins. A mudança é apenas no PDF; o PDF normal das chaves mantém seus campos de pódio. Backup dos dois geradores anteriores em tmp/kit-resumido-20261016/antes.
 

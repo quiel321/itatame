@@ -31,10 +31,10 @@ export function criarKitContingenciaPDF(o: OpcoesKit) {
     categoria: l.categoria, categoria_id: l.categoria_id, faixa: l.faixa,
     equipe: lado === 1 ? l.equipe_1 : l.equipe_2,
   } as InscricaoKit)));
-  const unicos = [...new Map(inscritos.map(i => [JSON.stringify([i.categoria_id || i.categoria, i.faixa, i.id || i.atleta_id || i.atleta]), i])).values()];
+  const unicos = [...new Map(inscritos.map(i => [JSON.stringify([i.categoria_id || i.categoria, i.id || i.atleta_id || i.atleta]), i])).values()];
   const grupos = new Map<string, InscricaoKit[]>();
   for (const i of unicos) {
-    const chave = JSON.stringify([i.categoria_id || i.categoria, i.faixa]);
+    const chave = JSON.stringify([i.categoria_id || i.categoria]);
     grupos.set(chave, [...(grupos.get(chave) || []), i]);
   }
   const listas = [...grupos.values()].sort((a, b) => t(a[0].categoria).localeCompare(t(b[0].categoria), 'pt-BR'));
@@ -58,7 +58,7 @@ export function criarKitContingenciaPDF(o: OpcoesKit) {
       doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
       doc.text('RECEPÇÃO / LISTA DE CHAMADA E PESAGEM', 10, 31.5);
       doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5);
-      doc.text(doc.splitTextToSize(`${t(base?.categoria, 'Sem inscrições')} · Faixa ${t(base?.faixa)} · ${limite} · ${lista.length} atleta(s)`, 277).slice(0, 1), 10, 38.2);
+      doc.text(doc.splitTextToSize(`${t(base?.categoria, 'Sem inscrições')} · ${limite} · ${lista.length} atleta(s)`, 277).slice(0, 1), 10, 38.2);
       doc.setTextColor(82, 82, 91); doc.setFontSize(7);
       doc.text('Anote presença, peso e liberação. Pendências e mudança de categoria: consultar o organizador.', 10, 47);
       doc.setDrawColor(228, 228, 231); doc.line(10, 196, 287, 196);
@@ -69,7 +69,7 @@ export function criarKitContingenciaPDF(o: OpcoesKit) {
       startY: 52, margin: { top: 52, bottom: 17, left: 10, right: 10 }, theme: 'grid',
       head: [['Inscrição / atleta / equipe', 'Situação na emissão', 'Presença / conferência', 'Peso / liberação no papel', 'Chamadas / envio ao tatame']],
       body: lista.length ? [...lista].sort((a, b) => a.atleta.localeCompare(b.atleta, 'pt-BR')).map(i => [
-        `#${i.id || '-'} · ${i.atleta}\n${t(i.equipe)}`,
+        `#${i.id || '-'} · ${i.atleta}\n${t(i.equipe)} · Faixa ${t(i.faixa)}`,
         `${i.pagamento_ok === true ? 'Pago' : i.pagamento_ok === false ? 'Pagamento pendente' : 'Pagamento: conferir'} · ${t(i.status_checkin, 'pendente')}${i.peso_aferido != null ? `\nPeso: ${i.peso_aferido} kg` : ''}`,
         '[ ] Presente  [ ] Ausente\n[ ] Documento  [ ] Kimono/faixa',
         'Peso: ______ kg  [ ] Apto  [ ] Reprovado\nMotivo / rubrica: __________________',

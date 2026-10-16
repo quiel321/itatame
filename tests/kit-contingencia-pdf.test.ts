@@ -50,3 +50,17 @@ test('kit funciona sem lutas e rejeita identificadores ambíguos', () => {
   opcoes.lutas = [{ id: '1' }, { id: '1' }];
   assert.throws(() => criarKitContingenciaPDF(opcoes), /identificação/);
 });
+
+test('uma categoria com atletas de faixas diferentes gera uma lista e uma árvore', () => {
+  const opcoes = exemploKit([4]);
+  opcoes.inscricoes!.forEach((i, n) => { i.faixa = n % 2 ? 'Azul' : 'Branca'; });
+  opcoes.lutas.forEach((l, n) => { l.faixa = n % 2 ? 'Azul' : 'Branca'; });
+  const antes = structuredClone(opcoes);
+  const doc = criarKitContingenciaPDF(opcoes);
+  assert.equal(doc.getNumberOfPages(), 2);
+  const recepcao = doc.internal.pages[1].join('\n');
+  for (const inscricao of opcoes.inscricoes!) assert.ok(recepcao.includes(inscricao.atleta));
+  assert.ok(recepcao.includes('Faixa Azul'));
+  assert.ok(recepcao.includes('Faixa Branca'));
+  assert.deepEqual(opcoes, antes);
+});

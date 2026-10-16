@@ -51,7 +51,7 @@ export function criarChavesImpressao({ eventoNome, eventoCidade, lutas, document
   const doc = documento || new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const grupos = new Map<string, LutaImpressao[]>();
   for (const l of lutas) {
-    const k = chaveGrupoPDF(l);
+    const k = contingencia ? JSON.stringify([l.categoria_id || l.categoria || '', l.categoria || '']) : chaveGrupoPDF(l);
     grupos.set(k, [...(grupos.get(k) || []), l]);
   }
   let folhas = documento ? documento.getNumberOfPages() : 0;
@@ -74,7 +74,7 @@ export function criarChavesImpressao({ eventoNome, eventoCidade, lutas, document
 
   function pagina(base: LutaImpressao, titulo: string, atletas: number) {
     if (folhas++) doc.addPage();
-    const codigo = codigoNumerico(`${tituloEvento}|${base.categoria}|${base.faixa}`);
+    const codigo = codigoNumerico(contingencia ? `${tituloEvento}|${base.categoria_id || ''}|${base.categoria}` : `${tituloEvento}|${base.categoria}|${base.faixa}`);
     const area = limpo(base.tatame) || '_______';
     const horario = base.horario_estimado
       ? new Date(base.horario_estimado).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', ...(contingencia ? { timeZone: contingencia.fuso } : {}) })
@@ -103,7 +103,7 @@ export function criarChavesImpressao({ eventoNome, eventoCidade, lutas, document
     doc.rect(0, 25.7, 297, 16.2, 'F');
     doc.setTextColor(255, 255, 255);
     doc.setFont('helvetica', 'bold');
-    texto(`${limpo(base.categoria) || 'Categoria'}  ·  Faixa ${limpo(base.faixa) || '—'}`, 10, 31.4, 277, 9, 2);
+    texto(contingencia ? (limpo(base.categoria) || 'Categoria') : `${limpo(base.categoria) || 'Categoria'}  ·  Faixa ${limpo(base.faixa) || '—'}`, 10, 31.4, 277, 9, 2);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.4);
     doc.setTextColor(212, 212, 216);
