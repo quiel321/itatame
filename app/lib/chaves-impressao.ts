@@ -27,7 +27,7 @@ function codigoNumerico(texto: string) {
   return String(100000 + ((h >>> 0) % 900000));
 }
 
-function desenharLogo(doc: jsPDF, x: number, y: number) {
+export function desenharLogo(doc: jsPDF, x: number, y: number) {
   doc.setFillColor(220, 38, 38);
   doc.roundedRect(x, y, 4.2, 9.2, 2.1, 2.1, 'F');
   doc.setFillColor(24, 24, 27);
@@ -45,16 +45,16 @@ function desenharLogo(doc: jsPDF, x: number, y: number) {
 }
 
 /** Imprime a árvore real, inclusive BYEs. Grandes chaves são repartidas com referências entre páginas. */
-export function criarChavesImpressao({ eventoNome, eventoCidade, lutas }: { eventoNome: string; eventoCidade?: string | null; lutas: LutaImpressao[] }) {
+export function criarChavesImpressao({ eventoNome, eventoCidade, lutas, documento, contingencia }: { eventoNome: string; eventoCidade?: string | null; lutas: LutaImpressao[]; documento?: jsPDF; contingencia?: { fuso: string; emissao: string } }) {
   if (!lutas.length) throw new Error('Nenhuma chave para imprimir.');
   const tituloEvento = tituloEventoImpressao(eventoNome, eventoCidade);
-  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  const doc = documento || new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const grupos = new Map<string, LutaImpressao[]>();
   for (const l of lutas) {
     const k = chaveGrupoPDF(l);
     grupos.set(k, [...(grupos.get(k) || []), l]);
   }
-  let folhas = 0;
+  let folhas = documento ? documento.getNumberOfPages() : 0;
 
   function texto(s: string, x: number, y: number, w: number, size = 8, maxLines = 2, align: 'left' | 'center' | 'right' = 'left') {
     doc.setFontSize(size);
@@ -77,7 +77,7 @@ export function criarChavesImpressao({ eventoNome, eventoCidade, lutas }: { even
     const codigo = codigoNumerico(`${tituloEvento}|${base.categoria}|${base.faixa}`);
     const area = limpo(base.tatame) || '_______';
     const horario = base.horario_estimado
-      ? new Date(base.horario_estimado).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+      ? new Date(base.horario_estimado).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', ...(contingencia ? { timeZone: contingencia.fuso } : {}) })
       : '____:____';
     const tempo = base.tempo_minutos || obterTempoRegulamentar(base.categoria || '', base.faixa || '');
 
@@ -109,6 +109,7 @@ export function criarChavesImpressao({ eventoNome, eventoCidade, lutas }: { even
     doc.setTextColor(212, 212, 216);
     doc.text(`${titulo}   ·   Chave Nº ${codigo}   ·   ${atletas} atleta(s)   ·   Tempo: ${tempo} min   ·   Área: ${area}   ·   Horário: ${horario}`, 10, 38.2);
 
+    if (!contingencia) {
     doc.setFillColor(247, 247, 248);
     doc.roundedRect(10, 169, 277, 23.5, 2, 2, 'F');
     doc.setDrawColor(220, 38, 38);
@@ -148,18 +149,44 @@ export function criarChavesImpressao({ eventoNome, eventoCidade, lutas }: { even
     doc.text('Entrega: ____:____  Devolução: ____:____', 228, 182.2);
     doc.text('Pesagem: ___  Premiação: ___', 228, 186.4);
     doc.text('Resultado registrado: ___', 228, 190.2);
+    }
 
     doc.setDrawColor(228, 228, 231);
     doc.line(10, 196, 287, 196);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(6.2);
     doc.setTextColor(113, 113, 122);
-    doc.text('Avanço sem adversário não é combate. Vagas futuras dependem dos resultados anteriores. Número = posição na chave.', 10, 201);
+    doc.text(contingencia ? `Emissão: ${contingencia.emissao}. Confira resultados já salvos antes de lançar o papel no sistema.` : 'Avanço sem adversário não é combate. Vagas futuras dependem dos resultados anteriores. Número = posição na chave.', 10, 201);
     doc.text(`itatame.com.br  ·  Página ${doc.getNumberOfPages()}`, 287, 201, { align: 'right' });
     doc.setTextColor(24, 24, 27);
     doc.setDrawColor(100, 100, 100);
     doc.setLineWidth(0.25);
     return doc.getNumberOfPages();
+  }
+
+  // Os registros ficam na própria folha da árvore, sem súmulas adicionais.
+  function resultados(lista: LutaImpressao[]) {
+    if (!contingencia) return;
+    doc.setFillColor(247, 247, 248); doc.rect(10, 149, 277, 45, 'F');
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(7); doc.setTextColor(24, 24, 27);
+    doc.text('RESULTADOS NO PAPEL', 13, 153);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(6);
+    doc.text('AZ = acima/esquerda; VM = abaixo/direita. Placar: pontos/vantagens/punições. [ ] = lançado no sistema.', 76, 153);
+    lista.forEach((l, i) => {
+      const duasColunas = lista.length > 7;
+      const x = 13 + (i >= 8 ? 139 : 0), y = 158 + (i % 8) * (duasColunas ? 4.8 : 5.2);
+      const largura = duasColunas ? 132 : 271;
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(24, 24, 27);
+      if (l.vencedor || l.status_luta === 'concluida') {
+        const p = (v: any) => `${v?.pontos ?? 0}/${v?.vantagens ?? 0}/${v?.punicoes ?? 0}`;
+        texto(`L${l.id_visual} JÁ SALVO: ${l.vencedor || '-'} · ${l.pontuacao_atleta_1?.metodo_sumula || l.metodo_vitoria || '-'} · AZ ${p(l.pontuacao_atleta_1)} VM ${p(l.pontuacao_atleta_2)}`, x, y, largura, 7, 1);
+      } else {
+        const nome = duasColunas ? '________________________' : '________________________________________________';
+        const metodo = duasColunas ? '______________' : '________________________';
+        doc.text(`L${l.id_visual}  Venc.: ${nome}  AZ ___/___/___  VM ___/___/___  Mét.: ${metodo} [ ]`, x, y);
+      }
+      doc.setDrawColor(210); doc.setLineWidth(0.15); doc.line(x, y + 1.3, x + largura, y + 1.3);
+    });
   }
 
   for (const grupo of grupos.values()) {
@@ -176,7 +203,7 @@ export function criarChavesImpressao({ eventoNome, eventoCidade, lutas }: { even
         doc.roundedRect(x, 48, 87, 88, 2, 2, 'FD');
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(220, 38, 38);
-        texto(rotuloLuta(l), x + 4, 56, 79, 9);
+        texto(`${contingencia ? `L${l.id_visual} · ` : ''}${rotuloLuta(l)}`, x + 4, 56, 79, 9);
         doc.setTextColor(24, 24, 27);
         doc.setFont('helvetica', 'normal');
         const a1 = real(l.atleta_1) ? `${l.numero_1 ? `${l.numero_1}  ` : ''}${l.atleta_1}` : (i === 1 ? 'Perdedor da luta 1' : 'Vencedor da luta 1');
@@ -191,7 +218,8 @@ export function criarChavesImpressao({ eventoNome, eventoCidade, lutas }: { even
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(7.4);
       doc.setTextColor(82, 82, 91);
-      texto('Luta 1: o vencedor vai à final; o perdedor enfrenta o terceiro atleta na luta 2. O vencedor da luta 2 completa a final.', 10, 146, 277, 7.4, 2);
+      texto('Luta 1: o vencedor vai à final; o perdedor enfrenta o terceiro atleta na luta 2. O vencedor da luta 2 completa a final.', 10, contingencia ? 143 : 146, 277, 7.4, 2);
+      resultados(ordenadas);
       continue;
     }
 
@@ -236,7 +264,7 @@ export function criarChavesImpressao({ eventoNome, eventoCidade, lutas }: { even
       const primeiraW = colunas === 1 ? util : Math.min(colunas >= 3 ? 48 : 55, util - (colunas - 1) * 28);
       const larguras = Array.from({ length: colunas }, (_, i) => i ? (util - primeiraW) / (colunas - 1) : primeiraW);
       const posicoes = larguras.map((_, i) => 10 + larguras.slice(0, i).reduce((soma, w) => soma + w + gap, 0));
-      const top = 60, bottom = 163, meio = (top + bottom) / 2;
+      const top = 60, bottom = contingencia ? 143 : 163, meio = (top + bottom) / 2;
       const rotulos = new Map<number, string>();
       function coletarRotulos(no: No) {
         if (!no.filhos) return;
@@ -251,7 +279,7 @@ export function criarChavesImpressao({ eventoNome, eventoCidade, lutas }: { even
       });
       function dadosSlot(no: No): No {
         if (!no.luta) return no;
-        return { nome: limpo(no.luta.vencedor) || '________________', equipe: `Vencedor: ${rotuloLuta(no.luta)}` };
+        return { nome: limpo(no.luta.vencedor) || '________________', equipe: `Vencedor: ${contingencia ? `L${no.luta.id_visual} · ` : ''}${rotuloLuta(no.luta)}` };
       }
       function cartao(no: No, x: number, y: number, w: number, h: number) {
         const dados = dadosSlot(no), nome = limpo(dados.nome), vazio = !real(nome);
@@ -300,7 +328,7 @@ export function criarChavesImpressao({ eventoNome, eventoCidade, lutas }: { even
         doc.line(x, meio, direita ? centroX + centroW : centroX, meio);
       });
       doc.setFont('helvetica', 'bold'); doc.setTextColor(220, 38, 38);
-      texto((rotulos.get(niveis - 1) || 'Final').toUpperCase(), 148.5, meio - 20, centroW, 7.4, 1, 'center');
+      texto(`${contingencia ? `L${n.luta?.id_visual} · ` : ''}${(rotulos.get(niveis - 1) || 'Final').toUpperCase()}`, 148.5, meio - 20, centroW, 7.4, 1, 'center');
       doc.setFillColor(252, 252, 253); doc.setDrawColor(220, 38, 38); doc.setLineWidth(0.4);
       doc.roundedRect(centroX, meio - 16, centroW, 32, 2, 2, 'FD');
       n.filhos?.forEach((lado, i) => cartao(lado, centroX + 2, meio + (i ? 7 : -7), centroW - 4, 12));
@@ -308,6 +336,10 @@ export function criarChavesImpressao({ eventoNome, eventoCidade, lutas }: { even
       doc.text(n.luta?.proxima_luta ? 'CLASSIFICADO' : 'CAMPEÃO', 148.5, 48, { align: 'center' });
       doc.setTextColor(24, 24, 27);
       texto(limpo(n.luta?.vencedor) || '________________________', 148.5, 52, Math.max(42, centroW), 7.3, 1, 'center');
+      const impressas: LutaImpressao[] = [];
+      function coletar(no: No) { if (no.luta) impressas.push(no.luta); no.filhos?.forEach(coletar); }
+      coletar(n);
+      resultados(impressas.sort((a, b) => Number(a.id_visual) - Number(b.id_visual)));
       return p;
     }
     imprimir(raiz);
