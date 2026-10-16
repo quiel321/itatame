@@ -1,4 +1,5 @@
 'use client';
+import { executarOperacao, baseLuta, notificarSemBloquear } from '@/app/lib/operacao-segura';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -239,6 +240,7 @@ export default function ChamadorOperacao() {
     const aoVoltar = () => { if (document.visibilityState === 'visible') void carregar(true); };
     document.addEventListener('visibilitychange', aoVoltar);
     window.addEventListener('itatame:conexao-restabelecida', aoVoltar);
+    window.addEventListener('itatame:operacao-confirmada',aoVoltar);
     const aoDespachar = (event: Event) => {
       if ((event as CustomEvent<{ eventoId: string }>).detail?.eventoId === String(sessao.evento_id)) void carregar(true);
     };
@@ -248,6 +250,7 @@ export default function ChamadorOperacao() {
       window.clearInterval(intervalo);
       document.removeEventListener('visibilitychange', aoVoltar);
       window.removeEventListener('itatame:conexao-restabelecida', aoVoltar);
+      window.removeEventListener('itatame:operacao-confirmada',aoVoltar);
       window.removeEventListener('itatame:recepcao-atualizada', aoDespachar);
       canalOperacaoRef.current = null;
       void supabase.removeChannel(canal);
@@ -372,21 +375,14 @@ export default function ChamadorOperacao() {
       : { ...base, chamador_presente: atual.presente, chamador_chamadas: Math.min(3, atual.chamadas + 1) };
 
     setAcaoId(`${luta.id}-${lado}`);
-    let registro = supabase.from('chaves').update({ [campo]: novo }).eq('id', luta.id).eq('evento_id', sessao.evento_id)
-      .neq('status_luta', 'concluida').neq('status_luta', 'em_andamento').is('iniciada_em', null);
-    registro = luta.tatame == null ? registro.is('tatame', null) : registro.eq('tatame', luta.tatame);
-    const { data: registradas, error } = await registro.select('id');
-    if (error || !registradas?.length) {
-      setToast({ mensagem: error ? `Não foi possível registrar: ${error.message}` : 'Esta luta mudou de tatame ou já foi liberada. Atualize a fila.', tipo: 'erro' });
-      await carregar(true);
-    }
+    let error: Error | null = null;
+    try { await executarOperacao('controle',luta.id,{tatame:luta.tatame,lado,acao,presente:!atual.presente},{...baseLuta(luta),presente:atual.presente,chamadas:atual.chamadas}); }
+    catch(e) { error=e as Error; }
+    if(error) { setToast({mensagem:error.message,tipo:'erro'}); await carregar(true); }
     else {
       if (acao === 'chamada' && atletaId) {
         const numero = Math.min(3, atual.chamadas + 1);
-        await fetch('/api/notificar', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ atleta_id: atletaId, titulo: `${numero}ª chamada da categoria`, mensagem: `${texto(nome)}, apresente-se ao Chamador para ${luta.categoria} · ${luta.faixa || 'faixa não informada'}.`, url: `/evento/${sessao.evento_id}/ao-vivo` }),
-        }).catch(() => null);
+        notificarSemBloquear({ atleta_id: atletaId, titulo: `${numero}ª chamada da categoria`, mensagem: `${texto(nome)}, apresente-se ao Chamador para ${luta.categoria} · ${luta.faixa || 'faixa não informada'}.`, url: `/evento/${sessao.evento_id}/ao-vivo` });
         setToast({ mensagem: `${numero}ª chamada registrada para ${texto(nome)}.`, tipo: 'sucesso' });
       }
       await carregar(true);
@@ -403,8 +399,7 @@ export default function ChamadorOperacao() {
     try {
       const vinculo = await garantirVinculoStaff();
       if (!vinculo.ok) throw new Error(vinculo.erro);
-      const { data, error } = await supabase.rpc('recepcao_wo_tatame', { p_luta: luta.id, p_lado: ladoAusente, p_tatame: luta.tatame || null });
-      if (error) throw new Error(error.message);
+      const data=await executarOperacao('wo',luta.id,{lado:ladoAusente,tatame:luta.tatame||null});
       await processarAvancosAutomaticosChaves(supabase, sessao.evento_id);
       setToast({ mensagem: ambos ? 'Ambos ausentes. Confronto encerrado sem vencedor; chave atualizada.' : `Ausência confirmada. ${data.vencedor} avançou sem pontos de W.O. no ranking.`, tipo: 'sucesso' });
       await carregar(true);
@@ -418,16 +413,12 @@ export default function ChamadorOperacao() {
 
   const notificarAtleta = async (atletaId: number | null | undefined, nome: string | null | undefined, oponente: string | null | undefined, luta: Luta) => {
     if (!atletaId || !sessao) return;
-    await fetch('/api/notificar', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+    notificarSemBloquear({
         atleta_id: atletaId,
         titulo: 'Dirija-se à área de chamada',
         mensagem: `${texto(nome)}, sua luta contra ${texto(oponente)} foi liberada para o ${luta.tatame || 'tatame definido'}.`,
         url: `/evento/${sessao.evento_id}/ao-vivo`,
-      }),
-    });
+      });
   };
 
   const chamar = async (luta: Luta) => {
@@ -449,21 +440,8 @@ export default function ChamadorOperacao() {
       return;
     }
 
-    let chamada = supabase
-      .from('chaves')
-      .update({ iniciada_em: new Date().toISOString() })
-      .eq('id', luta.id)
-      .eq('evento_id', sessao.evento_id)
-      .neq('status_luta', 'concluida').neq('status_luta', 'em_andamento').is('iniciada_em', null)
-      .eq('pontuacao_atleta_1->>chamador_presente', 'true').eq('pontuacao_atleta_2->>chamador_presente', 'true');
-    chamada = luta.tatame == null ? chamada.is('tatame', null) : chamada.eq('tatame', luta.tatame);
-    const { data: chamadasRegistradas, error } = await chamada.select('id');
-
-    if (error || !chamadasRegistradas?.length) {
-      setToast({ mensagem: error ? `Não foi possível chamar a luta: ${error.message}` : 'A luta mudou ou a presença não está confirmada neste tatame. Atualize a fila.', tipo: 'erro' });
-      setAcaoId(null);
-      return;
-    }
+    try { await executarOperacao('chamar',luta.id,{tatame:luta.tatame},{...baseLuta(luta),status_luta:luta.status_luta,iniciada_em:luta.iniciada_em??null}); }
+    catch(e) { setToast({mensagem:(e as Error).message,tipo:'erro'});setAcaoId(null);return; }
 
     void canalOperacaoRef.current?.send({
       type: 'broadcast',

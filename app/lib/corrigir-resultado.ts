@@ -1,5 +1,5 @@
-import { idBaiaDaPrimeiraChaveDeTres } from '@/app/lib/chave-de-tres';
-import { processarAvancosAutomaticosChaves, propagarResultadoChave, type ChaveLutaAuto } from '@/app/lib/chaves-auto-avanco';
+import { executarOperacao, baseLuta } from './operacao-segura';
+import type { ChaveLutaAuto } from '@/app/lib/chaves-auto-avanco';
 
 type SupabaseLike = {
   from: (table: string) => any;
@@ -51,71 +51,10 @@ export async function corrigirResultadoLuta(
   metodo: MetodoResultado,
 ) {
   const novoNome = ladoVencedor === 1 ? luta.atleta_1 : luta.atleta_2;
-  const novaEquipe = ladoVencedor === 1 ? luta.equipe_1 : luta.equipe_2;
-  const novoId = ladoVencedor === 1 ? luta.atleta_1_id : luta.atleta_2_id;
-  const nomePerdedor = ladoVencedor === 1 ? luta.atleta_2 : luta.atleta_1;
-  const equipePerdedor = ladoVencedor === 1 ? luta.equipe_2 : luta.equipe_1;
-  const novoPerdedorId = ladoVencedor === 1 ? luta.atleta_2_id : luta.atleta_1_id;
 
   if (fantasma(novoNome)) throw new Error('Escolha um atleta válido como vencedor.');
 
-  const metodoFinal = metodo === 'decisao_arbitro' ? 'pontos' : metodo;
-  const antigoVencedorId = luta.vencedor_id;
-  const antigoPerdedorId = String(antigoVencedorId) === String(luta.atleta_1_id) ? luta.atleta_2_id : luta.atleta_1_id;
-  const mudouVencedor = String(antigoVencedorId || '') !== String(novoId || '');
-  const metodoAntigo = luta.metodo_vitoria || 'pontos';
-  const perdedorEhReal = !fantasma(nomePerdedor);
-  const ignoraAntigo = (metodoAntigo === 'wo' || metodoAntigo === 'ausencia') && perdedorEhReal;
-  const ignoraNovo = metodoFinal === 'wo' && perdedorEhReal;
-  const isFinal = String(luta.fase || '').toLowerCase().startsWith('final') || String(luta.id_visual) === '999';
-  const primeiraDaChaveDeTres = Boolean(idBaiaDaPrimeiraChaveDeTres(luta.id_visual, luta.fase));
-  const isSemifinal = String(luta.proxima_luta) === '999' && !primeiraDaChaveDeTres;
-
-  const ajustar = async (id: number | null | undefined, coluna: string, delta: number) => {
-    if (!id || delta === 0) return;
-    const { error } = await supabase.rpc('ajustar_medalha_staff', { p_atleta: id, p_coluna: coluna, p_incremento: delta });
-    if (error) throw new Error('Não foi possível corrigir a medalha: ' + error.message);
-  };
-
-  if (mudouVencedor) {
-    if (isFinal) {
-      if (!ignoraAntigo) {
-        await ajustar(antigoVencedorId, 'ouro', -1);
-        await ajustar(antigoPerdedorId, 'prata', -1);
-      }
-      if (!ignoraNovo) {
-        await ajustar(novoId, 'ouro', 1);
-        await ajustar(novoPerdedorId, 'prata', 1);
-      }
-    }
-    if (isSemifinal) {
-      if (!ignoraAntigo) await ajustar(antigoPerdedorId, 'bronze', -1);
-      if (!ignoraNovo) await ajustar(novoPerdedorId, 'bronze', 1);
-    }
-  }
-  if (!ignoraAntigo && metodoAntigo === 'wo' && (mudouVencedor || metodoFinal !== 'wo')) await ajustar(antigoVencedorId, 'vitorias_wo', -1);
-  if (!ignoraNovo && metodoFinal === 'wo' && (mudouVencedor || metodoAntigo !== 'wo')) await ajustar(novoId, 'vitorias_wo', 1);
-
-  const { error } = await supabase.from('chaves').update({
-    vencedor: novoNome,
-    vencedor_id: novoId,
-    metodo_vitoria: metodoFinal,
-    status_luta: 'concluida',
-    finalizada_em: new Date().toISOString(),
-  }).eq('id', luta.id);
-  if (error) throw error;
-
-  await propagarResultadoChave(supabase, todas, luta, {
-    vencedorNome: String(novoNome),
-    vencedorEquipe: novaEquipe,
-    vencedorId: novoId,
-    perdedorNome: nomePerdedor,
-    perdedorEquipe: equipePerdedor,
-    perdedorId: novoPerdedorId,
-    propagarPerdedor: metodoFinal !== 'wo',
-  });
-  await processarAvancosAutomaticosChaves(supabase, luta.evento_id);
-
-  return alertaProximaLuta(todas, luta);
+  await executarOperacao('corrigir',String(luta.id),{tatame:luta.tatame,lado:ladoVencedor,metodo},
+    {...baseLuta(luta),vencedor_id:luta.vencedor_id??null,metodo_vitoria:luta.metodo_vitoria??null});
+  return alertaProximaLuta(todas,luta);
 }
-

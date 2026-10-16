@@ -11,6 +11,8 @@ import { processarAvancosAutomaticosChaves } from '@/app/lib/chaves-auto-avanco'
 import ProgramacaoLutas from './ProgramacaoLutas';
 import { AVISO_TATAMES, categoriasComTatamesProntos } from '@/app/lib/planejamento-operacao';
 import { FILTRO_INSCRICOES_ATIVAS } from '@/app/lib/inscricao-ativa';
+import { executarOperacao, contextoOperacao, notificarSemBloquear } from '@/app/lib/operacao-segura';
+import { guardarRascunho, lerRascunho } from '@/app/lib/operacao-persistente';
 import { dataOperacionalEvento } from '@/app/lib/evento-datas';
 import { categoriasRecepcaoOrdenadas, filtrarCheckin, listaCheckinPorChave, todasCategoriasRecepcaoFinalizadas, type ChaveCheckin, type InscritoCheckin } from '@/app/lib/operacao-campeonato';
 
@@ -79,6 +81,11 @@ export default function RecepcaoOperacao({ ativa = true }: { ativa?: boolean }) 
 
   const [pesoAferido, setPesoAferido] = useState('');
   const [kimonoAprovado, setKimonoAprovado] = useState(false);
+  useEffect(() => {
+    if (!atleta?.id) return;
+    try { guardarRascunho(localStorage,contextoOperacao(),'pesagem',String(atleta.id),{peso:pesoAferido,kimono:kimonoAprovado,documento:documentoConferido,statusAnterior:atleta.status_checkin||'pendente',confirmada:false}); }
+    catch(e) { setErro((e as Error).message); }
+  },[atleta?.id,pesoAferido,kimonoAprovado,documentoConferido]);
 
   // =========================================================================
   // SEGURANÇA DE PORTA: Garante que o operador está logado via PIN
@@ -106,6 +113,8 @@ export default function RecepcaoOperacao({ ativa = true }: { ativa?: boolean }) 
       .on('postgres_changes', { event: '*', schema: 'public', table: 'recepcao_inscricoes', filter: `evento_id=eq.${sessaoParse.evento_id}` }, () => { void carregarLista(sessaoParse.evento_id); })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'chaves', filter: `evento_id=eq.${sessaoParse.evento_id}` }, () => { void carregarLista(sessaoParse.evento_id); }).subscribe();
     canalOperacaoRef.current = canal;
+    const aoConfirmar = () => { void carregarLista(sessaoParse.evento_id); };
+    window.addEventListener('itatame:operacao-confirmada',aoConfirmar);
     const intervalo = window.setInterval(() => void carregarLista(sessaoParse.evento_id), 10000);
     const aoReconectar = () => { void carregarLista(sessaoParse.evento_id); };
     window.addEventListener('itatame:conexao-restabelecida', aoReconectar);
@@ -114,6 +123,7 @@ export default function RecepcaoOperacao({ ativa = true }: { ativa?: boolean }) 
       document.body.classList.remove('hide-global-nav');
       canalOperacaoRef.current = null;
       window.clearInterval(intervalo);
+      window.removeEventListener('itatame:operacao-confirmada',aoConfirmar);
       window.removeEventListener('itatame:conexao-restabelecida', aoReconectar);
       void supabase.removeChannel(canal);
     };
@@ -181,8 +191,7 @@ export default function RecepcaoOperacao({ ativa = true }: { ativa?: boolean }) 
     try {
       const vinculo = await garantirVinculoStaff();
       if (!vinculo.ok) throw new Error(vinculo.erro);
-      const { data, error } = await supabase.rpc('recepcao_operar', { p_categoria: categoriaId, p_acao: acao, p_inscricao: item?.id || null });
-      if (error) throw new Error(error.message);
+      const data = await executarOperacao('recepcao',categoriaId,{acao,inscricao:item?.id||null});
       if (acao === 'fechar') {
         setAvisoRecepcao(`Categoria despachada. ${aprovadosRecepcao} aprovado(s) liberado(s) para Chamada / Tatames. ${Number(data?.avancos_por_ausencia || 0)} avanço(s) por ausência/reprovação.`);
         try {
@@ -348,8 +357,14 @@ export default function RecepcaoOperacao({ ativa = true }: { ativa?: boolean }) 
     }
 
     setAtleta({ ...inscricaoData, limite_categoria: limiteCategoria, foto_url: fotoUrl, evento_nome: eventoData.nome, inscricoes_liberadas: inscricoesData.length });
-    setPesoAferido(inscricaoData.peso || '');
-    setKimonoAprovado(false);
+    try {
+      const r=lerRascunho<any>(localStorage,contextoOperacao(),'pesagem',String(inscricaoData.id));
+      const recuperar=r&&!r.confirmada&&r.statusAnterior===(inscricaoData.status_checkin||'pendente');
+      setPesoAferido(recuperar?r.peso:(inscricaoData.peso||''));
+      setKimonoAprovado(recuperar?Boolean(r.kimono):false);
+      setDocumentoConferido(false);
+      if(recuperar)setAvisoRecepcao('Pesagem digitada recuperada deste aparelho. Confira novamente o documento e os dados antes de confirmar.');
+    }catch(e){setErro((e as Error).message);}
     setLoading(false);
   };
   // =========================================================================
@@ -396,11 +411,10 @@ export default function RecepcaoOperacao({ ativa = true }: { ativa?: boolean }) 
     
     // Atualização segura: Atualiza usando o cruzamento absoluto (Evento + User_ID)
     try {
-      const { error } = await supabase.rpc('recepcao_salvar_checkin', { p_inscricao: atleta.id, p_peso: peso, p_kimono: kimonoAprovado, p_status: statusFinal, p_estado_anterior: atleta.status_checkin || 'pendente' });
-      if (error) throw new Error(error.message);
+      await executarOperacao('checkin',atleta.id,{peso,kimono:kimonoAprovado,status:statusFinal,estado_anterior:atleta.status_checkin||'pendente'});
+      guardarRascunho(localStorage,contextoOperacao(),'pesagem',String(atleta.id),{confirmada:true});
     } catch (error) {
-      setAtleta(null);
-      setErro(error instanceof Error ? error.message : 'Não foi possível validar a inscrição para o check-in.');
+      setErro(error instanceof Error ? error.message : 'Não foi possível confirmar a pesagem. A ação permanece protegida neste aparelho.');
       setLoading(false);
       return;
     }
@@ -432,11 +446,7 @@ export default function RecepcaoOperacao({ ativa = true }: { ativa?: boolean }) 
           const horario = minhaLuta.horario_estimado ? new Date(minhaLuta.horario_estimado).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : null;
           mensagemPush = `${atleta.atleta}, check-in aprovado. Há ${lutasNaFrente} luta(s) antes da sua no ${minhaLuta.tatame || 'tatame'}. Previsão dinâmica: cerca de ${minutosFila} min${horario ? ` (cronograma ${horario})` : ''}.`;
         }
-        await fetch('/api/notificar', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ atleta_id: atleta.atleta_id, titulo: 'Check-in aprovado', mensagem: mensagemPush, url: `/evento/${atleta.evento_id}/ao-vivo` }),
-        }).catch(() => null);
+        notificarSemBloquear({ atleta_id: atleta.atleta_id, titulo: 'Check-in aprovado', mensagem: mensagemPush, url: '/evento/'+atleta.evento_id+'/ao-vivo' });
         alert(`Atleta ${atleta.atleta} aprovado no check-in.`);
     } else {
         alert(`Atleta ${atleta.atleta} desclassificado no check-in.`);

@@ -167,24 +167,23 @@ export default function GerarChavesPage() {
   const formatarEquipe = (nome: string, equipe: string) => (nome === "BYE" || nome === "TBD") ? "" : (equipe || "-");
 
   const exportarMesarioPDF = async () => {
-    const lutas = await buscarChavesParaExportacao();
-    if (!lutas) return;
-
-    const nomeEventoAtual = eventos.find(e => e.id.toString() === eventoId)?.nome || "Evento";
-    const nomeArquivoCompl = tipoGeracao === 'peso' ? 'Categorias' : 'Absoluto';
-    const doc = criarKitContingenciaPDF({
-      eventoNome: nomeEventoAtual,
-      tipoChave: nomeArquivoCompl,
-      lutas,
-    });
-    doc.save(`kit_contingencia_${nomeArquivoCompl}_${nomeEventoAtual.replace(/\s+/g, '_')}.pdf`);
-  }
+    if(!eventoId||exportando)return;
+    setExportando(true);
+    try {
+      const {data,error}=await supabase.rpc('operacao_kit_offline',{p_evento:eventoId});
+      if(error||!data)throw new Error(error?.message||'Não foi possível conferir a edição do kit.');
+      const doc=criarKitContingenciaPDF({eventoId:String(data.evento.id),eventoNome:data.evento.nome,estado:data.evento.estado,tipoChave:'Completo - peso e absoluto',lutas:data.lutas,inscricoes:data.inscricoes,categorias:data.categorias,geradoEm:new Date(data.gerado_em)});
+      doc.save('kit_offline_completo_'+String(data.evento.nome).replace(/[^a-zA-Z0-9]/g,'_')+'.pdf');
+      setMensagem({tipo:'sucesso',texto:'Kit completo gerado: recepção, chamador, súmulas dos mesários, chaves e conferência. Inclui peso e absoluto.'});
+    }catch(e){setMensagem({tipo:'erro',texto:(e as Error).message});}
+    finally{setExportando(false);}
+  };
 
   const exportarMesarioCSV = async () => {
     const lutas = await buscarChavesParaExportacao();
     if (!lutas) return;
 
-    const headers = ["Categoria", "Faixa", "Fase", "Identificação", "Atleta 1 (Vermelho)", "Equipe 1", "Atleta 2 (Azul)", "Equipe 2", "Vencedor"];
+    const headers = ["Categoria", "Faixa", "Fase", "Identificação", "Atleta 1 (Azul)", "Equipe 1", "Atleta 2 (Vermelho)", "Equipe 2", "Vencedor"];
     
     const csvRows = lutas.map(l => [
       `"${l.categoria}"`,
@@ -352,4 +351,3 @@ export default function GerarChavesPage() {
     </main>
   )
 }
-

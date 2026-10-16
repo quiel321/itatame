@@ -7,6 +7,10 @@ import { processarAvancosAutomaticosChaves, propagarResultadoChave } from "../..
 import { idBaiaDaPrimeiraChaveDeTres } from "@/app/lib/chave-de-tres";
 import { garantirVinculoStaff } from "../../../lib/staff-sessao";
 import ConexaoOperacao from '@/app/components/staff/ConexaoOperacao';
+import PendenciasOperacao from '@/app/components/staff/PendenciasOperacao';
+import { executarOperacao, contextoOperacao, baseLuta, baseRelogio, recuperarOperacao } from '@/app/lib/operacao-segura';
+import { guardarRascunho, lerRascunho, pendenciasOperacao } from '@/app/lib/operacao-persistente';
+import { corrigirResultadoLuta, type MetodoResultado } from '@/app/lib/corrigir-resultado';
 import { obterTempoRegulamentar } from "../../../lib/cronograma";
 
 export default function PlacarMesarioDB() {
@@ -18,6 +22,8 @@ export default function PlacarMesarioDB() {
   const [lutaAtual, setLutaAtual] = useState<any>(null);
   const [todasLutasCategoria, setTodasLutasCategoria] = useState<any[]>([]);
   const [loadingDB, setLoadingDB] = useState(true);
+  const [erroCarregamento,setErroCarregamento] = useState('');
+  const [tentativaCarregamento,setTentativaCarregamento] = useState(0);
 
   // CONFIGURAÇÕES DA LUTA
   const [configOpen, setConfigOpen] = useState(true);
@@ -32,6 +38,34 @@ export default function PlacarMesarioDB() {
   const [metodoCorrecao, setMetodoCorrecao] = useState('pontos');
   const [salvandoResultado, setSalvandoResultado] = useState(false);
   const resultadoGravandoRef = useRef(false);
+  const estadoOperacaoRef = useRef<any>(null);
+  const rascunhoPlacarRef = useRef<any>(null);
+  function protegerPlacar(patch: Record<string, unknown>) {
+    const novo = { ...rascunhoPlacarRef.current, ...patch, atleta1: estadoOperacaoRef.current?.atleta_1_id, atleta2: estadoOperacaoRef.current?.atleta_2_id };
+    guardarRascunho(localStorage, contextoOperacao(), 'placar', matchId, novo);
+    rascunhoPlacarRef.current = novo;
+  }
+  useEffect(() => {
+    const confirmar = (e: Event) => {
+      const { pedido, resposta } = (e as CustomEvent).detail;
+      if (pedido.alvo === matchId && resposta.luta) {
+        estadoOperacaoRef.current = resposta.luta;
+        setLutaAtual(resposta.luta);
+        if(pedido.tipo==='relogio') {
+          const l=resposta.luta;
+          const fim=l.iniciada_em?new Date(l.iniciada_em).getTime()+Number(l.duracao_segundos)*1000:null;
+          timerFimRef.current=fim;setTimerAtivo(Boolean(fim&&fim>Date.now()));setTempoRestante(fim?Math.max(0,Math.ceil((fim-Date.now())/1000)):Number(l.duracao_segundos));
+        }
+        if (resposta.luta.status_luta === 'concluida') {
+          const lado = resposta.luta.vencedor_id === resposta.luta.atleta_1_id ? 'azul' : 'vermelho';
+          setVencedor(lado); setTimerAtivo(false); timerFimRef.current = null;
+          setShowResumo(true); setAvisoPontuacao('');
+        }
+      }
+    };
+    window.addEventListener('itatame:operacao-confirmada', confirmar);
+    return () => window.removeEventListener('itatame:operacao-confirmada', confirmar);
+  }, [matchId]);
   const [avisoResultado, setAvisoResultado] = useState('');
   const [avisoPontuacao, setAvisoPontuacao] = useState('');
   const [reenviandoPontuacao, setReenviandoPontuacao] = useState(false);
@@ -86,6 +120,7 @@ export default function PlacarMesarioDB() {
   useEffect(() => {
     async function carregarLuta() {
       if (!matchId) return;
+      setErroCarregamento('');setLoadingDB(true);
 
       const sessaoSalva = localStorage.getItem('itatame_staff_session');
       if (!sessaoSalva) {
@@ -106,15 +141,19 @@ export default function PlacarMesarioDB() {
         return;
       }
 
+      const vinculo = await garantirVinculoStaff();
+      if (!vinculo.ok) { setErroCarregamento(vinculo.erro || 'Não foi possível conferir o posto.');setLoadingDB(false);return; }
       const { data: luta, error } = await supabase
         .from("chaves")
         .select("*")
         .eq("id", matchId)
-        .single();
+        .maybeSingle();
 
       if (error || !luta) {
-        alert("Luta não encontrada!");
-        router.push("/staff/painel");
+        setErroCarregamento(error
+          ? 'Não foi possível consultar a luta agora. Confira a conexão e tente novamente. Os rascunhos deste aparelho foram preservados.'
+          : 'Esta luta não está disponível para este posto. Confira a fila com o organizador.');
+        setLoadingDB(false);
         return;
       }
 
@@ -134,6 +173,7 @@ export default function PlacarMesarioDB() {
         }
       }
       setLutaAtual(luta);
+      estadoOperacaoRef.current = luta;
       let tempoCategoria = Number(luta.tempo_minutos);
       if ((!Number.isFinite(tempoCategoria) || tempoCategoria <= 0) && luta.categoria_id) {
         const { data: categoriaTempo, error: erroTempo } = await supabase.from('categorias_evento')
@@ -182,6 +222,26 @@ export default function PlacarMesarioDB() {
         setPunicoesVermelho(luta.pontuacao_atleta_2.punicoes || 0);
       }
 
+      rascunhoPlacarRef.current = { pontosAzul:luta.pontuacao_atleta_1?.pontos||0, vantagensAzul:luta.pontuacao_atleta_1?.vantagens||0, punicoesAzul:luta.pontuacao_atleta_1?.punicoes||0, pontosVermelho:luta.pontuacao_atleta_2?.pontos||0, vantagensVermelho:luta.pontuacao_atleta_2?.vantagens||0, punicoesVermelho:luta.pontuacao_atleta_2?.punicoes||0, confirmada:true };
+      if (luta.status_luta === 'em_andamento' && luta.iniciada_em) {
+        const fim = new Date(luta.iniciada_em).getTime() + Number(luta.duracao_segundos ?? tempoCategoria * 60) * 1000;
+        timerFimRef.current = fim; setTempoRestante(Math.max(0,Math.ceil((fim-Date.now())/1000))); setTimerAtivo(fim>Date.now()); setConfigOpen(false);
+      }
+      try {
+        const salvo = lerRascunho<any>(localStorage,contextoOperacao(),'placar',matchId);
+        if (salvo && !salvo.confirmada && luta.status_luta !== 'concluida') {
+          if (salvo.atleta1 !== luta.atleta_1_id || salvo.atleta2 !== luta.atleta_2_id) {
+            setAvisoPontuacao('Há um rascunho preservado com participantes diferentes. Não será aplicado. Procure o organizador.');
+          } else {
+            rascunhoPlacarRef.current = salvo;
+            setPontosAzul(salvo.pontosAzul);setVantagensAzul(salvo.vantagensAzul);setPunicoesAzul(salvo.punicoesAzul);
+            setPontosVermelho(salvo.pontosVermelho);setVantagensVermelho(salvo.vantagensVermelho);setPunicoesVermelho(salvo.punicoesVermelho);
+            if (salvo.tempoRestante != null) { setTempoRestante(salvo.fimEm ? Math.max(0,Math.ceil((salvo.fimEm-Date.now())/1000)) : salvo.tempoRestante); timerFimRef.current=salvo.fimEm||null;setTimerAtivo(Boolean(salvo.fimEm&&salvo.fimEm>Date.now()));setConfigOpen(false); }
+            setAvisoPontuacao('Rascunho recuperado deste aparelho. Confira as ações pendentes e salve a pontuação antes de continuar.');
+          }
+        }
+      } catch(e) { setAvisoPontuacao((e as Error).message); }
+
       const { data: todas } = await supabase
         .from("chaves")
         .select("*")
@@ -193,8 +253,8 @@ export default function PlacarMesarioDB() {
       setLoadingDB(false);
     }
 
-    carregarLuta();
-  }, [matchId, router]);
+    void carregarLuta().catch(()=>{setErroCarregamento('Não foi possível carregar a operação. Preserve os dados deste navegador e tente novamente.');setLoadingDB(false);});
+  }, [matchId, router,tentativaCarregamento]);
 
   // ==========================================
   // 2. ATUALIZAÇÃO NO SUPABASE (PLACAR AO VIVO)
@@ -208,17 +268,16 @@ export default function PlacarMesarioDB() {
     // Mantém a ordem de cliques do mesmo lado mesmo em uma rede lenta.
     const gravar = async () => {
       try {
-        const { data, error } = await supabase.from("chaves").update({ [campo]: payload })
-          .eq("id", matchId).eq("evento_id",lutaAtual.evento_id).eq("tatame",lutaAtual.tatame)
-          .neq('status_luta', 'concluida').select('id');
-        if (error || !data?.length) throw error || new Error('Luta encerrada ou transferida.');
+        const atual = estadoOperacaoRef.current;
+        const resposta = await executarOperacao('pontuacao',matchId,{tatame:atual.tatame,lado:lado==='azul'?1:2,pontuacao:payload},{...baseLuta(atual),pontuacao:atual[campo]});
+        estadoOperacaoRef.current = resposta.luta;
         if (versao === versaoPontuacaoRef.current[lado]) pontuacoesPendentesRef.current.delete(lado);
-        if (!pontuacoesPendentesRef.current.size) setAvisoPontuacao('');
+        if (!pontuacoesPendentesRef.current.size) { setAvisoPontuacao(''); protegerPlacar({confirmada:true}); }
       } catch {
         setAvisoPontuacao('A pontuação deste aparelho ainda não foi confirmada no servidor. Mantenha a tela aberta e salve novamente quando a conexão voltar.');
       }
     };
-    filasPontuacaoRef.current[lado] = filasPontuacaoRef.current[lado].then(gravar, gravar);
+    filasPontuacaoRef.current[lado] = Promise.all(Object.values(filasPontuacaoRef.current)).then(gravar, gravar);
     await filasPontuacaoRef.current[lado];
   };
 
@@ -226,38 +285,28 @@ export default function PlacarMesarioDB() {
     if (reenviandoPontuacao) return;
     setReenviandoPontuacao(true);
     try {
+      for(const p of pendenciasOperacao(localStorage,contextoOperacao()).filter(p=>p.alvo===matchId&&p.tipo==='pontuacao')) await recuperarOperacao(p);
       await Promise.all([
         salvarPontuacaoDB('azul', pontosAzul, vantagensAzul, punicoesAzul),
         salvarPontuacaoDB('vermelho', pontosVermelho, vantagensVermelho, punicoesVermelho),
       ]);
-    } finally { setReenviandoPontuacao(false); }
+    } catch(e) { setAvisoPontuacao((e as Error).message); } finally { setReenviandoPontuacao(false); }
   };
 
-  const updatePontos = (lado: "azul" | "vermelho", tipo: "pontos" | "vantagens" | "punicoes", valor: number, acao: "quedas" | "passagens" | "montadas" | null = null) => {
+  const updatePontos = (lado: 'azul' | 'vermelho', tipo: 'pontos' | 'vantagens' | 'punicoes', valor: number, acao: 'quedas' | 'passagens' | 'montadas' | null = null) => {
     if (resultadoGravandoRef.current || vencedor || modoCorrecao) return;
-    if (lado === "azul") {
-      let nP = pontosAzul, nV = vantagensAzul, nPun = punicoesAzul;
-      if (tipo === "pontos") { nP = Math.max(0, nP + valor); setPontosAzul(nP); if (acao && valor > 0) setStats(s => ({ ...s, azul: { ...s.azul, [acao]: s.azul[acao] + 1 } })); }
-      if (tipo === "vantagens") { nV = Math.max(0, nV + valor); setVantagensAzul(nV); }
-      if (tipo === "punicoes") { nPun = Math.max(0, nPun + valor); setPunicoesAzul(nPun); }
-      salvarPontuacaoDB("azul", nP, nV, nPun);
-    } else {
-      let nP = pontosVermelho, nV = vantagensVermelho, nPun = punicoesVermelho;
-      if (tipo === "pontos") { nP = Math.max(0, nP + valor); setPontosVermelho(nP); if (acao && valor > 0) setStats(s => ({ ...s, vermelho: { ...s.vermelho, [acao]: s.vermelho[acao] + 1 } })); }
-      if (tipo === "vantagens") { nV = Math.max(0, nV + valor); setVantagensVermelho(nV); }
-      if (tipo === "punicoes") { nPun = Math.max(0, nPun + valor); setPunicoesVermelho(nPun); }
-      salvarPontuacaoDB("vermelho", nP, nV, nPun);
-    }
-  };
-
-  // ==========================================
-  // 3. ENCERRAMENTO E AVANÇO NA CHAVE
-  // ==========================================
-  const limparNome = (nome: string | null) => {
-    if (!nome) return "";
-    const strLimpa = String(nome).trim().toUpperCase();
-    if (strLimpa === "BYE" || strLimpa === "TBD") return "";
-    return String(nome);
+    const r=rascunhoPlacarRef.current;
+    if(!r)return;
+    const azul=lado==='azul';
+    let pts=Number(azul?r.pontosAzul:r.pontosVermelho),vts=Number(azul?r.vantagensAzul:r.vantagensVermelho),pun=Number(azul?r.punicoesAzul:r.punicoesVermelho);
+    if(tipo==='pontos')pts=Math.max(0,pts+valor);
+    if(tipo==='vantagens')vts=Math.max(0,vts+valor);
+    if(tipo==='punicoes')pun=Math.max(0,pun+valor);
+    try { protegerPlacar(azul?{pontosAzul:pts,vantagensAzul:vts,punicoesAzul:pun,confirmada:false}:{pontosVermelho:pts,vantagensVermelho:vts,punicoesVermelho:pun,confirmada:false}); }
+    catch(e){setAvisoPontuacao((e as Error).message);return;}
+    if(azul){setPontosAzul(pts);setVantagensAzul(vts);setPunicoesAzul(pun);}else{setPontosVermelho(pts);setVantagensVermelho(vts);setPunicoesVermelho(pun);}
+    if(acao&&valor>0)setStats(atual=>({...atual,[lado]:{...atual[lado],[acao]:atual[lado][acao]+1}}));
+    void salvarPontuacaoDB(lado,pts,vts,pun);
   };
 
   const processarFimDeLuta = async (vencedorLado: "azul" | "vermelho" | "empate", metodo: string) => {
@@ -284,75 +333,14 @@ export default function PlacarMesarioDB() {
       return false;
     }
 
-      const finalizadaEm = new Date().toISOString();
-      // O enum legado do banco aceita "pontos", "finalizacao" e "wo".
-      // A decisao do arbitro fica identificada no JSON do placar sem enviar
-      // um novo valor ao enum durante a operacao do campeonato.
-      const decisaoArbitro = metodo === "decisao_arbitro";
-      const metodoCompativel = decisaoArbitro ? "pontos" : (metodo === "ausencia" ? "wo" : metodo);
-      const { data: gravadas, error } = await supabase.from("chaves").update({
-        vencedor: nomeVencedor,
-        vencedor_id: idVencedor,
-        status_luta: "concluida",
-        metodo_vitoria: metodoCompativel,
-        finalizada_em: finalizadaEm,
-        iniciada_em: null,
-        pontuacao_atleta_1: { pontos: pontosAzul, vantagens: vantagensAzul, punicoes: punicoesAzul, decisao_arbitro: decisaoArbitro && vencedorLado === "azul" },
-        pontuacao_atleta_2: { pontos: pontosVermelho, vantagens: vantagensVermelho, punicoes: punicoesVermelho, decisao_arbitro: decisaoArbitro && vencedorLado === "vermelho" },
-      }).eq("id", matchId).eq("evento_id",lutaAtual.evento_id).eq("tatame",lutaAtual.tatame).select("id");
-      if (error) throw error;
-      if (!gravadas?.length) throw new Error("Esta luta mudou de tatame. Atualize a fila antes de operar.");
-
-      await propagarResultadoChave(supabase, todasLutasCategoria, lutaAtual, {
-        vencedorNome: nomeVencedor,
-        vencedorEquipe: equipeVencedor,
-        vencedorId: idVencedor,
-        perdedorNome: nomePerdedor,
-        perdedorEquipe: equipePerdedor,
-        perdedorId: idPerdedor,
-        propagarPerdedor: !['wo', 'ausencia'].includes(metodoCompativel),
-      });
-
-      setLutaAtual((atual: any) => atual ? {
-        ...atual,
-        vencedor: nomeVencedor,
-        vencedor_id: idVencedor,
-        status_luta: 'concluida',
-        metodo_vitoria: metodo,
-        finalizada_em: finalizadaEm,
-      } : atual);
-      pontuacoesPendentesRef.current.clear();
-      setAvisoPontuacao('');
-
-      const ganhouPorWO = metodo === "wo" || metodo === "ausencia";
-      const perdedorEhReal = Boolean(limparNome(nomePerdedor));
-      const ignoraMedalha = ganhouPorWO && perdedorEhReal;
-      const isFinal = String(lutaAtual.fase || '').toLowerCase().startsWith('final') || String(lutaAtual.id_visual) === "999";
-      const primeiraDaChaveDeTres = Boolean(idBaiaDaPrimeiraChaveDeTres(lutaAtual.id_visual, lutaAtual.fase));
-      const isSemifinal = String(lutaAtual.proxima_luta) === "999" && !primeiraDaChaveDeTres;
-
-      const updateEstatistica = async (idAtletaNum: number, coluna: string, incremento: number) => {
-        if (!idAtletaNum) return;
-        const { error } = await supabase.rpc('ajustar_medalha_staff', { p_atleta: idAtletaNum, p_coluna: coluna, p_incremento: incremento });
-        if (error) throw new Error('Não foi possível registrar a medalha: ' + error.message);
-      };
-
-      if (!ignoraMedalha && ganhouPorWO && idVencedor) await updateEstatistica(idVencedor, "vitorias_wo", 1);
-
-      if (!ignoraMedalha && isFinal) {
-        if (idVencedor) await updateEstatistica(idVencedor, "ouro", 1);
-        if (idPerdedor) await updateEstatistica(idPerdedor, "prata", 1);
-      }
-
-      if (!ignoraMedalha && isSemifinal) {
-        if (idPerdedor) await updateEstatistica(idPerdedor, "bronze", 1);
-      }
-
-      try {
-        await processarAvancosAutomaticosChaves(supabase, lutaAtual.evento_id, lutaAtual.categoria_id || undefined);
-      } catch {
-        setAvisoResultado('Resultado salvo. A atualização dos demais avanços desta categoria ficou pendente; avise o organizador. Não registre o vencedor novamente.');
-      }
+      if(pontuacoesPendentesRef.current.size) throw new Error('Há pontuação sem confirmação. Salve o placar antes de encerrar.');
+      const atual = estadoOperacaoRef.current;
+      const resposta = await executarOperacao('finalizar',matchId,{tatame:atual.tatame,lado:vencedorLado==='azul'?1:2,metodo:metodo==='ausencia'?'wo':metodo},
+        {...baseLuta(atual),pontuacao_atleta_1:atual.pontuacao_atleta_1,pontuacao_atleta_2:atual.pontuacao_atleta_2});
+      estadoOperacaoRef.current = resposta.luta; setLutaAtual(resposta.luta);
+      pontuacoesPendentesRef.current.clear();setAvisoPontuacao('');protegerPlacar({confirmada:true});
+      try { await processarAvancosAutomaticosChaves(supabase,lutaAtual.evento_id,lutaAtual.categoria_id||undefined); }
+      catch { setAvisoResultado('Resultado, avanço e medalhas confirmados juntos. Confira os demais avanços automáticos da categoria quando a conexão voltar.'); }
       return true;
     } catch (error: any) {
       alert(`Não foi possível concluir a luta: ${error?.message || 'erro inesperado'}`);
@@ -540,14 +528,12 @@ export default function PlacarMesarioDB() {
     timerSalvandoRef.current = true;
     try {
     if (!timerAtivo && tempoRestante > 0) {
-      const { data, error } = await supabase.from("chaves").update({
-        status_luta: "em_andamento",
-        iniciada_em: new Date().toISOString(),
-        duracao_segundos: tempoRestante,
-      }).eq("id", matchId).eq('evento_id', lutaAtual.evento_id).eq('tatame', lutaAtual.tatame).neq('status_luta','concluida').select('id');
-      if (error || !data?.length) { window.alert('Não foi possível iniciar o cronômetro. Confira a conexão e atualize o placar.'); return; }
+      const atual=estadoOperacaoRef.current;
+      const resposta=await executarOperacao('relogio',matchId,{tatame:atual.tatame,segundos:tempoRestante,rodando:true},baseRelogio(atual));
+      estadoOperacaoRef.current=resposta.luta;
       timerFimRef.current = Date.now() + tempoRestante * 1000;
       setTimerAtivo(true);
+      protegerPlacar({tempoRestante,fimEm:timerFimRef.current,confirmada:true});
       tocarSom('inicio');
     } else if (timerAtivo) {
       const restante = Math.max(0, Math.ceil(((timerFimRef.current || Date.now()) - Date.now()) / 1000));
@@ -556,10 +542,13 @@ export default function PlacarMesarioDB() {
       setTimerAtivo(false);
       setTempoRestante(restante);
       tocarSom('pause');
-      const { data, error } = await supabase.from("chaves").update({ iniciada_em: null, duracao_segundos: restante }).eq("id", matchId).eq('evento_id',lutaAtual.evento_id).eq('tatame',lutaAtual.tatame).neq('status_luta','concluida').select('id');
-      if (error || !data?.length) window.alert('O cronômetro está pausado neste aparelho, mas não foi possível salvar a pausa. Confira a conexão antes de continuar.');
+      protegerPlacar({tempoRestante:restante,fimEm:null,confirmada:false});
+      const atual=estadoOperacaoRef.current;
+      const resposta=await executarOperacao('relogio',matchId,{tatame:atual.tatame,segundos:restante,rodando:false},baseRelogio(atual));
+      estadoOperacaoRef.current=resposta.luta;
+
     }
-    } finally {
+    } catch(e) { setAvisoPontuacao((e as Error).message); } finally {
       timerSalvandoRef.current = false;
     }
   };
@@ -588,86 +577,10 @@ export default function PlacarMesarioDB() {
       return;
     }
 
-    const novoNome = lado === 'azul' ? lutaAtual.atleta_1 : lutaAtual.atleta_2;
-    const novaEquipe = lado === 'azul' ? lutaAtual.equipe_1 : lutaAtual.equipe_2;
-    const novoId = lado === 'azul' ? lutaAtual.atleta_1_id : lutaAtual.atleta_2_id;
-    const novoPerdedorId = lado === 'azul' ? lutaAtual.atleta_2_id : lutaAtual.atleta_1_id;
-    const nomePerdedor = lado === 'azul' ? lutaAtual.atleta_2 : lutaAtual.atleta_1;
-    const perdedorNormalizado = String(nomePerdedor || '').trim().toUpperCase();
-    const perdedorEhReal = Boolean(perdedorNormalizado) && !['BYE', 'TBD'].includes(perdedorNormalizado) && !perdedorNormalizado.includes('SEM OPONENTE');
-    const metodoFinal = metodoCorrecao === 'ausencia' ? 'wo' : metodoCorrecao;
-    const antigoVencedorId = lutaAtual.vencedor_id;
-    const antigoPerdedorId = String(antigoVencedorId) === String(lutaAtual.atleta_1_id) ? lutaAtual.atleta_2_id : lutaAtual.atleta_1_id;
-    const mudouVencedor = String(antigoVencedorId || '') !== String(novoId || '');
-    const metodoAntigo = lutaAtual.metodo_vitoria || 'pontos';
-    const ignoraAntigo = (metodoAntigo === 'wo' || metodoAntigo === 'ausencia') && perdedorEhReal;
-    const ignoraNovo = metodoFinal === 'wo' && perdedorEhReal;
-    const isFinal = String(lutaAtual.fase || '').toLowerCase().startsWith('final') || String(lutaAtual.id_visual) === '999';
-    const primeiraDaChaveDeTres = Boolean(idBaiaDaPrimeiraChaveDeTres(lutaAtual.id_visual, lutaAtual.fase));
-    const isSemifinal = String(lutaAtual.proxima_luta) === '999' && !primeiraDaChaveDeTres;
-
-    const ajustar = async (id: number | null | undefined, coluna: string, delta: number) => {
-      if (!id || delta === 0) return;
-      const { error } = await supabase.rpc('ajustar_medalha_staff', { p_atleta: id, p_coluna: coluna, p_incremento: delta });
-      if (error) throw new Error('Não foi possível corrigir a medalha: ' + error.message);
-    };
-
-    if (mudouVencedor) {
-      if (isFinal) {
-        if (!ignoraAntigo) {
-          await ajustar(antigoVencedorId, 'ouro', -1);
-          await ajustar(antigoPerdedorId, 'prata', -1);
-        }
-        if (!ignoraNovo) {
-          await ajustar(novoId, 'ouro', 1);
-          await ajustar(novoPerdedorId, 'prata', 1);
-        }
-      }
-      if (isSemifinal) {
-        if (!ignoraAntigo) await ajustar(antigoPerdedorId, 'bronze', -1);
-        if (!ignoraNovo) await ajustar(novoPerdedorId, 'bronze', 1);
-      }
-    }
-    if (!ignoraAntigo && metodoAntigo === 'wo' && (mudouVencedor || metodoFinal !== 'wo')) await ajustar(antigoVencedorId, 'vitorias_wo', -1);
-    if (!ignoraNovo && metodoFinal === 'wo' && (mudouVencedor || metodoAntigo !== 'wo')) await ajustar(novoId, 'vitorias_wo', 1);
-
-    const { error } = await supabase.from('chaves').update({
-      vencedor: novoNome,
-      vencedor_id: novoId,
-      metodo_vitoria: metodoFinal,
-      status_luta: 'concluida',
-      finalizada_em: new Date().toISOString(),
-      pontuacao_atleta_1: { pontos: pontosAzul, vantagens: vantagensAzul, punicoes: punicoesAzul },
-      pontuacao_atleta_2: { pontos: pontosVermelho, vantagens: vantagensVermelho, punicoes: punicoesVermelho },
-    }).eq('id', matchId);
-
-    if (error) {
-      alert(`Não foi possível salvar a correção: ${error.message}`);
-      return;
-    }
-
-    if (lutaAtual.proxima_luta) {
-      const proximaLuta = todasLutasCategoria.find((item) => String(item.id_visual) === String(lutaAtual.proxima_luta));
-      if (proximaLuta) {
-        const campo = Number(lutaAtual.id_visual) % 2 !== 0
-          ? { atleta_1: novoNome, equipe_1: novaEquipe, atleta_1_id: novoId }
-          : { atleta_2: novoNome, equipe_2: novaEquipe, atleta_2_id: novoId };
-        await supabase.from('chaves').update(campo).eq('id', proximaLuta.id);
-      }
-    }
-
-    await propagarResultadoChave(supabase, todasLutasCategoria, lutaAtual, {
-      vencedorNome: novoNome,
-      vencedorEquipe: novaEquipe,
-      vencedorId: novoId,
-      perdedorNome: nomePerdedor,
-      perdedorEquipe: lado === 'azul' ? lutaAtual.equipe_2 : lutaAtual.equipe_1,
-      perdedorId: novoPerdedorId,
-      propagarPerdedor: !['wo', 'ausencia'].includes(metodoFinal),
-    });
-    await processarAvancosAutomaticosChaves(supabase, lutaAtual.evento_id, lutaAtual.categoria_id || undefined);
-
-    router.push('/staff/painel');
+    try {
+      await corrigirResultadoLuta(supabase,todasLutasCategoria,estadoOperacaoRef.current,lado==='azul'?1:2,metodoCorrecao as MetodoResultado);
+      alert('Correção confirmada no servidor.'); router.push('/staff/painel');
+    } catch(e) { setAvisoResultado((e as Error).message); }
   };
 
   const abrirAjusteTempo = () => {
@@ -687,10 +600,10 @@ export default function PlacarMesarioDB() {
     setSalvandoTempo(true);
     timerSalvandoRef.current = true;
     try {
-      const { data, error } = await supabase.from('chaves').update({ duracao_segundos: total })
-        .eq('id', matchId).eq('evento_id', lutaAtual.evento_id).eq('tatame', lutaAtual.tatame)
-        .neq('status_luta', 'concluida').is('iniciada_em', null).select('id');
-      if (error || !data?.length) throw new Error('Não foi possível ajustar. Atualize o placar e confira se a luta continua pausada neste tatame.');
+      const atual=estadoOperacaoRef.current;
+      const resposta=await executarOperacao('relogio',matchId,{tatame:atual.tatame,segundos:total,rodando:false},baseRelogio(atual));
+      estadoOperacaoRef.current=resposta.luta;
+      protegerPlacar({tempoRestante:total,fimEm:null,confirmada:false});
     timerFimRef.current = null;
     setTimerAtivo(false);
       setTempoRestante(total);
@@ -712,6 +625,7 @@ export default function PlacarMesarioDB() {
   if (loadingDB) {
     return <div className="h-screen bg-black flex items-center justify-center text-white text-xl font-bold animate-pulse">Carregando Luta do Banco de Dados...</div>;
   }
+  if (erroCarregamento) return <main className="min-h-screen bg-black text-white"><ConexaoOperacao/><PendenciasOperacao/><section className="mx-auto max-w-lg p-6"><h1 className="text-xl font-bold">Não foi possível abrir o placar</h1><p role="alert" className="my-4 text-amber-200">{erroCarregamento}</p><button type="button" onClick={()=>setTentativaCarregamento(n=>n+1)} className="min-h-11 rounded-lg bg-amber-400 px-4 font-bold text-black">Tentar novamente</button><button type="button" onClick={()=>router.push('/staff/painel')} className="ml-3 min-h-11 rounded-lg border px-4">Voltar à fila</button></section></main>;
 
   const atletaAzul = lutaAtual?.atleta_1 || "TBD";
   const atletaVermelho = lutaAtual?.atleta_2 || "TBD";
@@ -764,7 +678,7 @@ export default function PlacarMesarioDB() {
 
       <div ref={placarRef} className="placar-wrapper bg-black h-screen w-screen flex flex-row font-sans select-none text-white relative overflow-hidden">
         <div className="absolute inset-x-0 top-0 z-[200]">
-          <ConexaoOperacao />
+          <ConexaoOperacao /><PendenciasOperacao />
           {avisoPontuacao && <div role="alert" className="border-b border-red-400/50 bg-red-950 px-3 py-2 text-sm text-red-100">
             <p>{avisoPontuacao}</p>
             <button type="button" disabled={reenviandoPontuacao} onClick={() => void reenviarPontuacao()} className="mt-2 min-h-11 rounded-lg border border-red-300/50 px-3 text-xs font-bold disabled:opacity-50">{reenviandoPontuacao ? 'Salvando pontuação…' : 'Salvar pontuação deste aparelho'}</button>

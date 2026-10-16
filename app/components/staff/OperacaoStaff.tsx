@@ -8,6 +8,7 @@ import { lerSessaoStaff, type SessaoStaff } from '@/app/lib/staff-sessao';
 import RecepcaoOperacao from './RecepcaoOperacao';
 import ChamadorOperacao from './ChamadorOperacao';
 import ConexaoOperacao from './ConexaoOperacao';
+import PendenciasOperacao from './PendenciasOperacao';
 
 type Aba = 'recepcao' | 'chamada';
 export default function OperacaoStaff({ inicial = 'recepcao' }: { inicial?: Aba }) {
@@ -51,7 +52,7 @@ export default function OperacaoStaff({ inicial = 'recepcao' }: { inicial?: Aba 
     await supabase.auth.signOut(); router.replace('/staff/login');
   }
   return <div className="fixed inset-x-0 bottom-0 top-0 z-[100] flex flex-col overflow-hidden bg-[#050505] text-white">
-    <ConexaoOperacao />
+    <ConexaoOperacao /><PendenciasOperacao />
     <style>{`.hide-global-nav .nav-global-mobile, .hide-global-nav > header, .hide-global-nav > nav, .hide-global-nav footer { display:none!important; }`}</style>
     <header className="shrink-0 border-b border-white/10 bg-black px-3 py-2 sm:px-5">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">

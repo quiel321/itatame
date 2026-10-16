@@ -7,9 +7,9 @@ export type LutaResultadoManual = {
   vencedor: string | null; vencedor_id?: number | null; status_luta: string | null; iniciada_em?: string | null;
 };
 
-export function bloqueioResultadoManual(todas: LutaResultadoManual[], luta: LutaResultadoManual): string {
+export function bloqueioResultadoManual(todas: LutaResultadoManual[], luta: LutaResultadoManual, contingencia = false): string {
   if (luta.status_luta === 'concluida' || luta.vencedor || luta.vencedor_id) return 'Resultado já registrado. Não será sobrescrito.';
-  if (luta.status_luta === 'em_andamento' || luta.iniciada_em) return 'Esta luta já iniciou no placar. Finalize a operação no placar.';
+  if (!contingencia && (luta.status_luta === 'em_andamento' || luta.iniciada_em)) return 'Esta luta já iniciou no placar. Finalize a operação no placar.';
   const grupo = todas.filter(l => l.categoria === luta.categoria && l.faixa === luta.faixa);
   if (grupo.filter(l => String(l.id_visual) === String(luta.id_visual)).length !== 1) return 'Identificação de luta ambígua. Procure a organização.';
   const anteriores = grupo.filter(l => l.id !== luta.id && (

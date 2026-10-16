@@ -21,6 +21,18 @@ export async function POST(request: Request) {
     }
     const { data: evento } = await db.from('eventos').select('id').eq('id', body.eventoId).eq('organizador_id', auth.user.id).maybeSingle();
     if (!evento) return NextResponse.json({ error: 'Campeonato não autorizado.' }, { status: 403 });
+    if (body.operacaoId) {
+      if(!Number.isInteger(body.vencedor)||body.vencedor<=0||![body.atleta1,body.atleta2].includes(body.vencedor))return NextResponse.json({error:'Escolha um vencedor válido.'},{status:400});
+      if (!/^[0-9a-f-]{36}$/i.test(String(body.operacaoId))) return NextResponse.json({error:'Identificação da operação inválida.'},{status:400});
+      const { data, error: registroError } = await db.rpc('operacao_executar', {
+        p_id:body.operacaoId,p_evento:body.eventoId,p_tipo:'sumula',p_alvo:body.lutaId,
+        p_dados:{tatame:body.tatame??null,lado:body.vencedor===body.atleta1?1:2,metodo:body.metodo,motivo,
+          contingencia:body.contingencia===true,placar1:body.placar1,placar2:body.placar2},
+        p_base:{atleta_1_id:body.atleta1,atleta_2_id:body.atleta2,pontuacao_atleta_1:body.base1,pontuacao_atleta_2:body.base2},
+      });
+      if(registroError)return NextResponse.json({error:registroError.message},{status:409});
+      return NextResponse.json({success:true,...data});
+    }
     const { data: luta, error } = await db.from('chaves').select('*').eq('id', body.lutaId).eq('evento_id', body.eventoId).maybeSingle();
     if (error || !luta) return NextResponse.json({ error: 'Luta não encontrada.' }, { status: 404 });
     if (luta.atleta_1_id !== body.atleta1 || luta.atleta_2_id !== body.atleta2) return NextResponse.json({ error: 'Os atletas mudaram. Atualize antes de registrar.' }, { status: 409 });
