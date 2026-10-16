@@ -11,6 +11,17 @@ const limpo = (v: unknown) => String(v ?? '').replace(/\s+/g, ' ').trim();
 const real = (v: unknown) => v && !['BYE', 'TBD'].includes(limpo(v).toUpperCase());
 export const chaveGrupoPDF = (l: LutaImpressao) => JSON.stringify([l.categoria || '', l.faixa || '']);
 
+function rotuloLutaPDF(luta: LutaImpressao) {
+  const rotulo = rotuloLuta(luta);
+  // A quantidade da rodada (16/32 avos) não é o número do confronto.
+  if (/^\d+\s*-?\s*avos(?: de final)?$/i.test(rotulo)) {
+    const posicao = Number(luta.ordem || luta.id_visual || 0) % 100;
+    return posicao > 0 ? `${rotulo} ${posicao}` : rotulo;
+  }
+  return rotulo;
+}
+export const referenciaLutaImpressao = (luta: LutaImpressao) => rotuloLutaPDF(luta).replace(/de final/gi, '').replace(/\s+/g, ' ').trim();
+
 export function tituloEventoImpressao(nome: string, cidade?: string | null) {
   const evento = limpo(nome) || 'Campeonato';
   const local = limpo(cidade);
@@ -180,11 +191,13 @@ export function criarChavesImpressao({ eventoNome, eventoCidade, lutas, document
       doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(24, 24, 27);
       if (l.vencedor || l.status_luta === 'concluida') {
         const p = (v: any) => `${v?.pontos ?? 0}/${v?.vantagens ?? 0}/${v?.punicoes ?? 0}`;
-        texto(`L${l.id_visual} JÁ SALVO: ${l.vencedor || '-'} · ${l.pontuacao_atleta_1?.metodo_sumula || l.metodo_vitoria || '-'} · AZ ${p(l.pontuacao_atleta_1)} VM ${p(l.pontuacao_atleta_2)}`, x, y, largura, 7, 1);
+        texto(`${referenciaLutaImpressao(l)} JÁ SALVO: ${l.vencedor || '-'} · ${l.pontuacao_atleta_1?.metodo_sumula || l.metodo_vitoria || '-'} · AZ ${p(l.pontuacao_atleta_1)} VM ${p(l.pontuacao_atleta_2)}`, x, y, largura, 7, 1);
       } else {
-        const nome = duasColunas ? '________________________' : '________________________________________________';
-        const metodo = duasColunas ? '______________' : '________________________';
-        doc.text(`L${l.id_visual}  Venc.: ${nome}  AZ ___/___/___  VM ___/___/___  Mét.: ${metodo} [ ]`, x, y);
+        texto(referenciaLutaImpressao(l), x, y, 25, 7.2, 1);
+        const nome = duasColunas ? '______________________' : '________________________________________________';
+        const metodo = duasColunas ? '____________' : '________________________';
+        doc.setFontSize(duasColunas ? 7.2 : 8);
+        doc.text(`Venc.: ${nome}  AZ ___/___/___  VM ___/___/___  Mét.: ${metodo} [ ]`, x + 27, y);
       }
       doc.setDrawColor(210); doc.setLineWidth(0.15); doc.line(x, y + 1.3, x + largura, y + 1.3);
     });
@@ -204,7 +217,7 @@ export function criarChavesImpressao({ eventoNome, eventoCidade, lutas, document
         doc.roundedRect(x, 48, 87, 88, 2, 2, 'FD');
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(220, 38, 38);
-        texto(`${contingencia ? `L${l.id_visual} · ` : ''}${rotuloLuta(l)}`, x + 4, 56, 79, 9);
+        texto(rotuloLutaPDF(l), x + 4, 56, 79, 9);
         doc.setTextColor(24, 24, 27);
         doc.setFont('helvetica', 'normal');
         const a1 = real(l.atleta_1) ? `${l.numero_1 ? `${l.numero_1}  ` : ''}${l.atleta_1}` : (i === 1 ? 'Perdedor da luta 1' : 'Vencedor da luta 1');
@@ -252,9 +265,9 @@ export function criarChavesImpressao({ eventoNome, eventoCidade, lutas, document
 
     function imprimir(n: No): number {
       if (folhasNo(n) > 16) {
-        n = { ...n, filhos: n.filhos!.map(f => ({ nome: `Vencedor da ${rotuloLuta(f.luta || {})}`, pagina: imprimir(f) })) };
+        n = { ...n, filhos: n.filhos!.map(f => ({ nome: `Vencedor da ${rotuloLutaPDF(f.luta || {})}`, pagina: imprimir(f) })) };
       }
-      const p = pagina(base, n.luta?.proxima_luta ? `Seção até ${rotuloLuta(n.luta)}` : 'Chave / fase final', atletas.size);
+      const p = pagina(base, n.luta?.proxima_luta ? `Seção até ${rotuloLutaPDF(n.luta)}` : 'Chave / fase final', atletas.size);
       const niveis = profundidade(n);
       const colunas = Math.max(0, niveis - 1);
       const centroW = colunas ? 42 : 80;
@@ -280,7 +293,7 @@ export function criarChavesImpressao({ eventoNome, eventoCidade, lutas, document
       });
       function dadosSlot(no: No): No {
         if (!no.luta) return no;
-        return { nome: limpo(no.luta.vencedor) || '________________', equipe: `Vencedor: ${contingencia ? `L${no.luta.id_visual} · ` : ''}${rotuloLuta(no.luta)}` };
+        return { nome: limpo(no.luta.vencedor) || '________________', equipe: `Vencedor: ${rotuloLutaPDF(no.luta)}` };
       }
       function cartao(no: No, x: number, y: number, w: number, h: number) {
         const dados = dadosSlot(no), nome = limpo(dados.nome), vazio = !real(nome);
@@ -297,7 +310,7 @@ export function criarChavesImpressao({ eventoNome, eventoCidade, lutas, document
         }
         const tx = x + (numerado ? 7 : 2), tw = w - (numerado ? 8.5 : 4);
         doc.setFont('helvetica', 'bold'); doc.setTextColor(vazio ? 130 : 24, vazio ? 130 : 24, vazio ? 136 : 27);
-        texto(nomeVisivel, tx, y - h / 2 + 3.1, tw, w > 70 ? 8 : w < 35 ? 6.1 : 7, 2);
+        texto(nomeVisivel, tx, y - h / 2 + 3.1, tw, h < 10 ? 6.2 : w > 70 ? 8 : w < 35 ? 6.1 : 7, 2);
         doc.setFont('helvetica', 'normal'); doc.setTextColor(110, 110, 120);
         texto(dados.pagina ? `Continua da página ${dados.pagina}` : (dados.equipe || ''), tx, y + h / 2 - 1.2, tw, 5.2, 1);
       }
@@ -329,7 +342,7 @@ export function criarChavesImpressao({ eventoNome, eventoCidade, lutas, document
         doc.line(x, meio, direita ? centroX + centroW : centroX, meio);
       });
       doc.setFont('helvetica', 'bold'); doc.setTextColor(220, 38, 38);
-      texto(`${contingencia ? `L${n.luta?.id_visual} · ` : ''}${(rotulos.get(niveis - 1) || 'Final').toUpperCase()}`, 148.5, meio - 20, centroW, 7.4, 1, 'center');
+      texto((rotulos.get(niveis - 1) || 'Final').toUpperCase(), 148.5, meio - 20, centroW, 7.4, 1, 'center');
       doc.setFillColor(252, 252, 253); doc.setDrawColor(220, 38, 38); doc.setLineWidth(0.4);
       doc.roundedRect(centroX, meio - 16, centroW, 32, 2, 2, 'FD');
       n.filhos?.forEach((lado, i) => cartao(lado, centroX + 2, meio + (i ? 7 : -7), centroW - 4, 12));

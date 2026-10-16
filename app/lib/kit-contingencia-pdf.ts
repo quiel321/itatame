@@ -32,7 +32,22 @@ export function criarKitContingenciaPDF(o: OpcoesKit) {
     categoria: l.categoria, categoria_id: l.categoria_id, faixa: l.faixa,
     equipe: lado === 1 ? l.equipe_1 : l.equipe_2,
   } as InscricaoKit)));
-  const unicos = [...new Map(inscritos.map(i => [JSON.stringify([i.categoria_id || i.categoria, i.id || i.atleta_id || i.atleta]), i])).values()];
+  // Inscrições legadas de absoluto não têm categoria_id. Resolve somente quando
+  // a participação na chave confirma uma única categoria; não altera o cadastro.
+  const normalizar = (v: unknown) => t(v, '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+  const enquadrados = inscritos.map(i => {
+    if (i.categoria_id) return i;
+    const absoluto = normalizar(i.categoria).includes('ABSOLUTO');
+    const candidatas = o.lutas.filter(l => normalizar(l.categoria).includes('ABSOLUTO') === absoluto && (
+      i.atleta_id ? [l.atleta_1_id, l.atleta_2_id].includes(i.atleta_id) :
+        [l.atleta_1, l.atleta_2].some(nome => real(nome) && normalizar(nome) === normalizar(i.atleta))
+    ));
+    const categorias = new Map(candidatas.map(l => [l.categoria_id || l.categoria, l]));
+    if (categorias.size !== 1) return i;
+    const luta = categorias.values().next().value!;
+    return { ...i, categoria_id: luta.categoria_id, categoria: luta.categoria };
+  });
+  const unicos = [...new Map(enquadrados.map(i => [JSON.stringify([i.categoria_id || i.categoria, i.id || i.atleta_id || i.atleta]), i])).values()];
   const grupos = new Map<string, InscricaoKit[]>();
   for (const i of unicos) {
     const chave = JSON.stringify([i.categoria_id || i.categoria]);

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { montarChaves } from '../app/lib/gerar-chaves';
 import { criarKitContingenciaPDF, type OpcoesKit } from '../app/lib/kit-contingencia-pdf';
+import { referenciaLutaImpressao } from '../app/lib/chaves-impressao';
 
 export function exemploKit(tamanhos = [3, 4, 8, 16, 32]): OpcoesKit {
   let id = 0;
@@ -36,12 +37,41 @@ test('cada luta possui um único campo de resultado, inclusive em chaves reparti
     const opcoes = exemploKit([total]);
     const doc = criarKitContingenciaPDF(opcoes);
     const texto = doc.internal.pages.flat().join('\n');
+    const resultados = doc.internal.pages.flatMap(pagina => {
+      const inicio = pagina.findIndex(comando => comando.includes('RESULTADOS NO PAPEL'));
+      return inicio < 0 ? [] : pagina.slice(inicio + 1);
+    }).join('\n');
     for (const luta of opcoes.lutas) {
-      assert.equal(texto.split(`(L${luta.id_visual}  Venc.:`).length - 1, 1, `${total} atletas: resultado L${luta.id_visual}`);
+      const referencia = referenciaLutaImpressao(luta);
+      assert.equal(resultados.split(`(${referencia}) Tj`).length - 1, 1, `${total} atletas: resultado ${referencia}`);
     }
     assert.ok(!texto.includes('Central /'));
     assert.ok(!texto.includes('Coordena'));
+    assert.ok(!/\bL(?:999|[1-9]0[1-9])\b/.test(texto));
   }
+});
+
+test('inscrição legada de absoluto usa a categoria e área da chave sem alterar o cadastro', () => {
+  const opcoes = exemploKit([4]);
+  opcoes.lutas.forEach(l => { l.categoria = 'Absoluto GP'; l.tatame = 'Área 1'; });
+  opcoes.inscricoes!.forEach(i => { i.categoria = 'Absoluto'; i.categoria_id = null; });
+  const antes = structuredClone(opcoes);
+  const doc = criarKitContingenciaPDF(opcoes);
+  const recepcao = doc.internal.pages[1].join('\n');
+  assert.equal(doc.getNumberOfPages(), 2);
+  assert.ok(recepcao.includes('Absoluto GP'));
+  assert.ok(recepcao.includes('ÁREA: Área 1'));
+  assert.ok(!recepcao.includes('Não definida'));
+  assert.deepEqual(opcoes, antes);
+});
+
+test('cadastro sem participação em chave não recebe uma área por suposição', () => {
+  const opcoes = exemploKit([2]);
+  opcoes.lutas.forEach(l => { l.categoria = 'Absoluto GP'; l.tatame = 'Área 1'; });
+  opcoes.inscricoes = [{ id: 9999, atleta_id: 9999, atleta: 'SEM CHAVE', categoria: 'Absoluto' }];
+  const recepcao = criarKitContingenciaPDF(opcoes).internal.pages[1].join('\n');
+  assert.ok(recepcao.includes('ÁREA: Não definida'));
+  assert.ok(recepcao.includes('SEM CHAVE'));
 });
 
 test('kit funciona sem lutas e rejeita identificadores ambíguos', () => {

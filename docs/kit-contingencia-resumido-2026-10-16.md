@@ -12,4 +12,6 @@ Ordem das folhas: tanto a recepção e as árvores do kit quanto o PDF normal da
 
 A lista da recepção mostra a área no cabeçalho de todas as páginas, inclusive continuações, e preenche o tatame de envio quando há uma única área na categoria. Categorias divididas mostram todas as áreas no cabeçalho e mantêm o envio em branco para conferência; sem distribuição, o cabeçalho informa Não definida. Backup anterior em tmp/pdf-area-20261016/antes.
 
+Inscrições antigas com categoria genérica e sem categoria_id são vinculadas apenas na impressão à categoria em que o atleta efetivamente aparece nas chaves. O vínculo exige uma única categoria compatível com peso/absoluto; sem confirmação, a inscrição permanece visível sem atribuição presumida. Isso corrige o absoluto GP sem alterar inscrições ou programação no banco. As referências impressas agora usam a fase e sua posição (Quartas 1, Semifinal 1, Final), sem expor L101/L201/L999. Backup em tmp/pdf-absoluto-referencias-20261016/antes.
+
 Validação: amostra fictícia de 63 atletas em cinco categorias (3, 4, 8, 16 e 32), com resultado já salvo, caiu de 61 para 16 páginas. Inspeção de todas as páginas renderizadas, testes de preservação dos dados, paginação e campos únicos por luta, incluindo chaves de 1, 2, 3, 6, 13, 32 e 64 atletas.
