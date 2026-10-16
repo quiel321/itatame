@@ -15,6 +15,7 @@ import {
 import Link from "next/link";
 import { agendarChavesAutomaticas } from "@/app/lib/agendar-chaves-automaticas";
 import { formatarValorInscricao, idadeMaxInfantil, valorAbsolutoAvulso, valorAddonAbsoluto, valorComboPesoAbsoluto, valorInfantilLote, type EventoValoresInscricao, type RegrasValoresInscricao } from "@/app/lib/valor-inscricao";
+import { usePublicacaoChaves } from '@/app/lib/use-publicacao-chaves';
 import { ChatEvento } from "@/app/components/ChatEvento";
 import type { InscricaoCompeticao } from "@/app/lib/categorias-competicao";
 import { existeComboCategorias, type CategoriaValoresPublicos } from "@/app/lib/valores-categorias-publicas";
@@ -63,6 +64,7 @@ export default function EventoDetalhesPage() {
   const [loading, setLoading] = useState(true);
   const [inscricoes, setInscricoes] = useState<Pick<InscricaoCompeticao, "atleta" | "equipe" | "faixa" | "categoria">[]>([]);
   const [resumoLutas, setResumoLutas] = useState<ResumoLutasEvento>({ total: 0, concluidas: 0, emAndamento: 0, pendentes: 0 });
+  const publicacoes = usePublicacaoChaves([String(params.id || '')]);
   const [abaAtiva, setAbaAtiva] = useState("sobre");
 
   // 🔥 STATE DO ACORDEÃO NOVO!
@@ -143,8 +145,8 @@ export default function EventoDetalhesPage() {
 
   // O mesmo motor temporal alimenta o card público, os avisos e esta página.
   const agora = new Date();
-  const etapaAtual = obterEtapaEvento(evento, agora, resumoLutas);
-  const linhaDoTempo = obterLinhaDoTempoEvento(evento, agora);
+  const etapaAtual = obterEtapaEvento(evento, agora, resumoLutas, publicacoes[String(params.id)]);
+  const linhaDoTempo = obterLinhaDoTempoEvento(evento, agora, publicacoes[String(params.id)]);
   const estiloAtual = estiloEtapa[etapaAtual.tom];
   const lutasEmAndamento = resumoLutas.emAndamento;
   const fimPagamento = dataOperacional(evento.data_fim_pagamento, true, evento.estado);

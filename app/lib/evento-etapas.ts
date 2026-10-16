@@ -21,6 +21,7 @@ export type CodigoEtapaEvento =
   | "AGUARDANDO_CHECAGEM"
   | "CHECAGEM_ABERTA"
   | "EM_CHAVEAMENTO"
+  | "CHAVES_PARCIAIS"
   | "CHAVES_PUBLICADAS"
   | "LUTAS_AO_VIVO"
   | "ENCERRADO";
@@ -48,6 +49,8 @@ export type ResumoLutasEvento = {
   emAndamento: number;
   pendentes: number;
 };
+
+export type ResumoPublicacaoChaves = { total: number; publicadas: number };
 
 export type EstadoMarco = "concluido" | "atual" | "futuro";
 
@@ -121,6 +124,7 @@ export function obterEtapaEvento(
   evento: EventoComEtapas,
   agora = new Date(),
   resumoLutas?: ResumoLutasEvento | null,
+  publicacao?: ResumoPublicacaoChaves | null,
 ): EtapaEvento {
   const status = String(evento.status || "").toUpperCase();
   const inicioInscricoes = dataOperacional(evento.data_inicio_inscricoes, false, evento.estado);
@@ -209,15 +213,21 @@ export function obterEtapaEvento(
     );
   }
 
-  if (divulgacaoChaves && agora >= divulgacaoChaves) {
+  if (publicacao && publicacao.total > 0 && publicacao.publicadas === publicacao.total) {
     return criarEtapa(
       "CHAVES_PUBLICADAS",
-      "Chaves publicadas",
+      "Todas as chaves publicadas",
       "Confira categoria, horário e caminho até o pódio",
       inicioEvento ? `Próxima etapa: lutas em ${formatarCurto(inicioEvento, evento.estado)}` : "Próxima etapa: início das lutas",
       "blue",
       4,
     );
+  }
+
+  if (publicacao && publicacao.publicadas > 0) {
+    return criarEtapa("CHAVES_PARCIAIS", "Chaves parcialmente publicadas",
+      `${publicacao.publicadas} de ${publicacao.total} categorias publicadas`,
+      "As demais categorias aguardam a revisão e publicação do organizador", "amber", 3);
   }
 
   if (inicioChecagem && agora >= inicioChecagem && (!fimChecagem || agora <= fimChecagem)) {
@@ -234,12 +244,12 @@ export function obterEtapaEvento(
   }
 
   const checagemTerminou = Boolean(fimChecagem && agora > fimChecagem);
-  if (checagemTerminou || (fimInscricoes && agora > fimInscricoes && (!inicioChecagem || agora >= inicioChecagem))) {
+  if (checagemTerminou || (divulgacaoChaves && agora >= divulgacaoChaves) || (fimInscricoes && agora > fimInscricoes && (!inicioChecagem || agora >= inicioChecagem))) {
     return criarEtapa(
       "EM_CHAVEAMENTO",
-      "Chaveamento em preparação",
-      "Inscrições e correções foram concluídas",
-      divulgacaoChaves ? `Chaves previstas para ${formatarCurto(divulgacaoChaves, evento.estado)}` : "Aguarde a publicação das chaves",
+      "Chaves em preparação",
+      "A organização está revisando os confrontos",
+      "Aguarde a publicação das chaves pelo organizador",
       "violet",
       3,
     );
@@ -288,8 +298,8 @@ function estadoPorIndice(indiceMarco: number, indiceAtual: number): EstadoMarco 
   return "futuro";
 }
 
-export function obterLinhaDoTempoEvento(evento: EventoComEtapas, agora = new Date()): MarcoEvento[] {
-  const etapa = obterEtapaEvento(evento, agora);
+export function obterLinhaDoTempoEvento(evento: EventoComEtapas, agora = new Date(), publicacao?: ResumoPublicacaoChaves | null): MarcoEvento[] {
+  const etapa = obterEtapaEvento(evento, agora, null, publicacao);
   const indiceAtual = etapa.codigo === "EM_BREVE" ? 0 : etapa.indice;
   const inicioInscricoes = formatarDataHoraEvento(evento.data_inicio_inscricoes, false, evento.estado);
   const fimInscricoesFormatado = formatarDataHoraEvento(evento.data_fim_inscricoes, true, evento.estado);
@@ -334,8 +344,8 @@ export function obterLinhaDoTempoEvento(evento: EventoComEtapas, agora = new Dat
       id: "chaves",
       titulo: "Chaves e cronograma",
       periodo: divulgacaoChaves,
-      observacao: "Publicação dos confrontos e horários oficiais.",
-      estado: estadoPorIndice(4, indiceAtual),
+      observacao: etapa.codigo === 'CHAVES_PARCIAIS' ? etapa.detalhe : "Publicação após a revisão e confirmação do organizador.",
+      estado: etapa.codigo === 'CHAVES_PARCIAIS' ? 'atual' : estadoPorIndice(4, indiceAtual),
     },
     {
       id: "lutas",

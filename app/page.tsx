@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState, useRef } from "react";
 import { CalendarDays, Camera, ChevronRight, CirclePlay, MapPin, MonitorDot, Search, ShieldCheck, Trophy } from "lucide-react";
 import { supabase } from "./lib/supabase";
 import { obterEtapaEvento, type ResumoLutasEvento, type TomEtapaEvento } from "./lib/evento-etapas";
+import { usePublicacaoChaves } from './lib/use-publicacao-chaves';
 import TutorialVideoCard from "./components/TutorialVideoCard";
 import { canalItatame, tutoriais } from "./lib/tutoriais";
 import { normalizarTextoLocalidade } from "./lib/localidades";
@@ -68,6 +69,7 @@ function proximoResumo(
 export default function Home() {
   const [eventos, setEventos] = useState<any[]>([]);
   const [resumosLutas, setResumosLutas] = useState<Record<string, ResumoLutasEvento>>({});
+  const publicacoes = usePublicacaoChaves(eventos.map(e => String(e.id)));
   const [busca, setBusca] = useState("");
   const [modalidadeFiltro, setModalidadeFiltro] = useState("Todas");
   const [estadoFiltro, setEstadoFiltro] = useState("Todos");
@@ -255,7 +257,7 @@ export default function Home() {
           )}
 
           {eventosFiltrados.map((evento) => {
-            const etapa = obterEtapaEvento(evento, new Date(), resumosLutas[String(evento.id)]);
+            const etapa = obterEtapaEvento(evento, new Date(), resumosLutas[String(evento.id)], publicacoes[String(evento.id)]);
             const estilo = estiloEtapa[etapa.tom];
             const lutasEmAndamento = resumosLutas[String(evento.id)]?.emAndamento || 0;
 
