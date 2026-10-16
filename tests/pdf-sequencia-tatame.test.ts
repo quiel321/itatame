@@ -32,7 +32,26 @@ test('kit e PDF das chaves seguem a mesma sequência salva, por tatame e posiç�
     assert.ok(kit.internal.pages[n + 6].join('\n').includes(nome), `árvore do kit: ${nome}`);
     assert.ok(chaves.internal.pages[n + 1].join('\n').includes(nome), `chaves: ${nome}`);
   });
+  const areas = ['Tatame 1', 'Tatame 1', 'Tatame 2', 'Tatame 10'];
+  areas.forEach((area, n) => {
+    const folha = kit.internal.pages[n + 1].join('\n');
+    assert.ok(folha.includes(`ÁREA: ${area}`));
+    assert.ok(folha.includes(`Tatame: ${area}  Envio:`));
+  });
+  assert.ok(kit.internal.pages[5].join('\n').includes('ÁREA: Não definida'));
   assert.deepEqual(o, antes);
+});
+
+test('área da recepção se repete nas continuações e não presume um tatame em categoria dividida', () => {
+  const o = exemploKit([16]);
+  for (const l of o.lutas) l.tatame = 'Tatame 2';
+  const kit = criarKitContingenciaPDF(o);
+  assert.ok(kit.internal.pages[1].join('\n').includes('ÁREA: Tatame 2'));
+  assert.ok(kit.internal.pages[2].join('\n').includes('ÁREA: Tatame 2'));
+  o.lutas[0].tatame = 'Tatame 1';
+  const dividido = criarKitContingenciaPDF(o).internal.pages[1].join('\n');
+  assert.ok(dividido.includes('ÁREA: Tatame 1 / Tatame 2'));
+  assert.ok(dividido.includes('Tatame: ______  Envio:'));
 });
 
 test('sem tatame fica ao final; posição ausente fica depois da fila salva no mesmo tatame', () => {

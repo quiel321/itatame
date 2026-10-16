@@ -52,6 +52,14 @@ export function criarKitContingenciaPDF(o: OpcoesKit) {
     primeira = false;
     const base = lista[0];
     const categoria = o.categorias?.find(c => c.id === base?.categoria_id);
+    const lutasCategoria = base ? o.lutas.filter(l => base.categoria_id ? l.categoria_id === base.categoria_id : l.categoria === base.categoria) : [];
+    const areas = [...new Map(lutasCategoria.flatMap(l => {
+      const nome = t(l.tatame, '');
+      const chave = nome.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+      return !chave || ['NAO DEFINIDO', 'SEM TATAME', 'SEM TATAME DEFINIDO'].includes(chave) ? [] : [[chave, nome] as const];
+    })).values()].sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true }));
+    const areaCabecalho = `ÁREA: ${areas.length ? areas.join(' / ') : 'Não definida'}`;
+    const areaEnvio = areas.length === 1 ? areas[0] : '______';
     const limite = categoria?.tipo === 'absoluto' ? 'Absoluto: sem limite de peso' : categoria ? `Peso: acima de ${categoria.peso_min ?? 0} kg${categoria.peso_max != null ? ` até ${categoria.peso_max} kg` : ''}` : '';
     const cabecalho = () => {
       doc.setFillColor(220, 38, 38); doc.rect(0, 0, 297, 3.2, 'F');
@@ -64,6 +72,10 @@ export function criarKitContingenciaPDF(o: OpcoesKit) {
       doc.setFillColor(24, 24, 27); doc.rect(0, 25.7, 297, 16.2, 'F');
       doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
       doc.text('RECEPÇÃO / LISTA DE CHAMADA E PESAGEM', 10, 31.5);
+      let tamanhoArea = 8.5;
+      doc.setFontSize(tamanhoArea);
+      while (doc.getTextWidth(areaCabecalho) > 145 && tamanhoArea > 6) doc.setFontSize(tamanhoArea -= 0.5);
+      doc.text(areaCabecalho, 287, 31.5, { align: 'right' });
       doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5);
       doc.text(doc.splitTextToSize(`${t(base?.categoria, 'Sem inscrições')} · ${limite} · ${lista.length} atleta(s)`, 277).slice(0, 1), 10, 38.2);
       doc.setTextColor(82, 82, 91); doc.setFontSize(7);
@@ -80,7 +92,7 @@ export function criarKitContingenciaPDF(o: OpcoesKit) {
         `${i.pagamento_ok === true ? 'Pago' : i.pagamento_ok === false ? 'Pagamento pendente' : 'Pagamento: conferir'} · ${t(i.status_checkin, 'pendente')}${i.peso_aferido != null ? `\nPeso: ${i.peso_aferido} kg` : ''}`,
         '[ ] Presente  [ ] Ausente\n[ ] Documento  [ ] Kimono/faixa',
         'Peso: ______ kg  [ ] Apto  [ ] Reprovado\nMotivo / rubrica: __________________',
-        '1ª __:__  2ª __:__  3ª __:__\nTatame: ______  Envio: __:__',
+        `1ª __:__  2ª __:__  3ª __:__\nTatame: ${areaEnvio}  Envio: __:__`,
       ]) : [['Sem inscrições disponíveis. Confira antes de usar.', '-', '-', '-', '-']],
       styles: { font: 'helvetica', fontSize: 8, cellPadding: 2.4, minCellHeight: 14, valign: 'middle', overflow: 'linebreak' },
       headStyles: { fillColor: [24, 24, 27], textColor: 255, fontStyle: 'bold' },
