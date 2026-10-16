@@ -8,7 +8,7 @@ import { Clock, Search } from "lucide-react"
 import { rotuloLuta } from "@/app/lib/lutas-rotulos"
 import { rotuloCategoriaAoVivo } from "@/app/lib/categorias-competicao"
 import { lutasFormamChaveDeTres, placeholderSlotChaveDeTres, resumoHumanoChave, textoAguardandoChaveDeTres, textoOuroAposChecagem } from "@/app/lib/chave-de-tres"
-import { resumoAvancoSemCombate } from '@/app/lib/avanco-sem-combate';
+import { resumoAvancoSemCombate, faseVisivelNoGrid } from '@/app/lib/avanco-sem-combate';
 import AvancoSemCombateCard from '@/app/components/AvancoSemCombateCard';
 import ArvoreChaveDesktop from "@/app/components/ArvoreChaveDesktop"
 import AvisoChaves from "@/app/components/AvisoChaves"
@@ -217,7 +217,7 @@ export default function ChavesPublicoPage() {
   const lutasEmAndamento = lutas.filter(l => l.status_luta === 'em_andamento');
 
   const lutasCards = [...lutas]
-    .filter((luta) => ehChaveDeTres || isAtletaValido(luta.atleta_1) || isAtletaValido(luta.atleta_2) || isAtletaValido(luta.vencedor))
+    .filter(faseVisivelNoGrid)
     .sort((a, b) => (parseInt(a.id_visual) || 0) - (parseInt(b.id_visual) || 0));
 
   const atletasNaBaia = lutasAtivas.flatMap((luta) => ([

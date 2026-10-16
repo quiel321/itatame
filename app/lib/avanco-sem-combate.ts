@@ -1,5 +1,10 @@
 import { ehFaseChaveDeTres } from './chave-de-tres';
 type Luta = { id_visual?:string|number|null;proxima_luta?:string|number|null;fase?:string|null;atleta_1?:string|null;atleta_2?:string|null;equipe_1?:string|null;equipe_2?:string|null;status_luta?:string|null;vencedor?:string|null };
+/** Fases futuras pertencem à chave mesmo sem vencedores definidos. */
+export function faseVisivelNoGrid(luta:Luta) {
+ const nomes=[luta.atleta_1,luta.atleta_2,luta.vencedor].map(n=>String(n||'').trim().toUpperCase());
+ return ehFaseChaveDeTres(luta.fase) || nomes.some(n=>n && n!=='BYE' && !n.includes('SEM OPONENTE'));
+}
 export function resumoAvancoSemCombate(luta:Luta,todas:Luta[]) {
  if(ehFaseChaveDeTres(luta.fase)||luta.proxima_luta==null||luta.status_luta==='cancelada')return null;
  const nomes=[luta.atleta_1,luta.atleta_2].map(n=>String(n||'').trim());

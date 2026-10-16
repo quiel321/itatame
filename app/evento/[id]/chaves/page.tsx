@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { useParams } from "next/navigation"
 import { supabase } from "@/app/lib/supabase"
 import { rotuloLuta } from "@/app/lib/lutas-rotulos"
-import { resumoAvancoSemCombate } from '@/app/lib/avanco-sem-combate';
+import { resumoAvancoSemCombate, faseVisivelNoGrid } from '@/app/lib/avanco-sem-combate';
 import AvancoSemCombateCard from '@/app/components/AvancoSemCombateCard';
 import ArvoreChaveDesktop from "@/app/components/ArvoreChaveDesktop"
 import AvisoChaves from "@/app/components/AvisoChaves"
@@ -132,12 +132,7 @@ export default function ChavesPage() {
   }
 
   const lutasMobile = [...lutas]
-    .filter(luta => {
-      const a1 = limparNome(luta.atleta_1);
-      const a2 = limparNome(luta.atleta_2);
-      if ((!a1 || a1 === "BYE") && (!a2 || a2 === "BYE")) return false;
-      return true;
-    })
+    .filter(faseVisivelNoGrid)
     .sort((a, b) => (parseInt(a.id_visual) || 0) - (parseInt(b.id_visual) || 0));
 
   const divulgacao = dataOperacional(evento?.data_divulgacao_chaves, false, evento?.estado);
