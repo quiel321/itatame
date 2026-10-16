@@ -12,7 +12,7 @@ import ProgramacaoLutas from './ProgramacaoLutas';
 import { AVISO_TATAMES, categoriasComTatamesProntos } from '@/app/lib/planejamento-operacao';
 import { FILTRO_INSCRICOES_ATIVAS } from '@/app/lib/inscricao-ativa';
 import { dataOperacionalEvento } from '@/app/lib/evento-datas';
-import { categoriasRecepcaoOrdenadas, filtrarCheckin, listaCheckinPorChave, type ChaveCheckin, type InscritoCheckin } from '@/app/lib/operacao-campeonato';
+import { categoriasRecepcaoOrdenadas, filtrarCheckin, listaCheckinPorChave, todasCategoriasRecepcaoFinalizadas, type ChaveCheckin, type InscritoCheckin } from '@/app/lib/operacao-campeonato';
 
 export default function RecepcaoOperacao({ ativa = true }: { ativa?: boolean }) {
   const router = useRouter();
@@ -45,6 +45,14 @@ export default function RecepcaoOperacao({ ativa = true }: { ativa?: boolean }) 
   const [erroLista, setErroListaInterno] = useState('');
   const [avisoVersao, setAvisoVersao] = useState(0);
   const avisoRef = useRef<HTMLDivElement>(null);
+  const conclusaoRef = useRef<HTMLDivElement>(null);
+  const recepcaoFinalizada = controlePronto && !acaoRecepcao && !avancoPendente
+    && todasCategoriasRecepcaoFinalizadas(lista, planejamento, categoriasFechadas);
+  useEffect(() => {
+    if (ativa && !atleta && recepcaoFinalizada) {
+      conclusaoRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [ativa, atleta, recepcaoFinalizada]);
   function setErro(mensagem: string) { setErroInterno(mensagem); if (mensagem) setAvisoVersao(v => v + 1); }
   function setErroLista(mensagem: string) { setErroListaInterno(mensagem); }
   useEffect(() => {
@@ -492,6 +500,11 @@ export default function RecepcaoOperacao({ ativa = true }: { ativa?: boolean }) 
 
       <div className="flex-1 w-full max-w-md mx-auto p-3 sm:p-4 flex flex-col gap-3 relative z-10 mt-2">
         {atleta && <button onClick={resetarTela} className="flex min-h-11 items-center gap-2 self-start rounded-lg bg-white/5 px-3 text-sm"><ArrowLeft size={16} /> Voltar à lista</button>}
+        {!atleta && recepcaoFinalizada && <div ref={conclusaoRef} role="status" className="scroll-mt-24 rounded-xl border border-emerald-400/40 bg-emerald-950/50 p-4 text-emerald-100">
+          <span className="mb-2 inline-flex text-emerald-400"><CheckCircle size={24} aria-hidden="true" /></span>
+          <h2 className="text-base font-bold">Todas as categorias finalizadas!</h2>
+          <p className="mt-1 text-sm">Check-in e pesagem encerrados. Todas as categorias foram despachadas para os tatames.</p>
+        </div>}
         {avisoRecepcao && <div role="status" className="rounded-xl border border-cyan-500/30 bg-cyan-950/40 p-3 text-xs text-cyan-100">{avisoRecepcao}</div>}
         {(erro || erroLista) && <div ref={avisoRef} role="alert" tabIndex={-1} className="scroll-mt-24 rounded-xl border border-red-500/40 bg-red-950/70 p-3 text-sm text-red-200 outline-none">{erro || erroLista}</div>}
         {avancoPendente && <div ref={avisoRef} role="alert" tabIndex={-1} className="scroll-mt-24 rounded-xl border border-amber-400/50 bg-amber-950/50 p-3 text-sm text-amber-100 outline-none">
