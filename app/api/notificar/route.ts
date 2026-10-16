@@ -1,7 +1,7 @@
 import { after,NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/app/lib/supabase-server';
 import { processarAvisosDisponiveis } from '@/app/lib/push-fila';
-import { previaProgramacaoPush } from '@/app/lib/push-programacao';
+import { categoriasPushDaInscricao,previaProgramacaoPush,todasLinhas } from '@/app/lib/push-programacao';
 import { hashPush } from '@/app/lib/push-regras';
 export const runtime='nodejs';
 export const maxDuration=60;
@@ -31,7 +31,9 @@ export async function POST(request:Request) {
    const {data:c,error:ce}=await db.from('recepcao_categorias').select('fechada').eq('categoria_id',l.categoria_id).maybeSingle();if(ce)throw Error('Categoria indisponível.');
    const diferenca=(Date.parse(l.horario_estimado)-Date.now())/60000;
    if(!c?.fechada||l.status_luta!=='agendada'||l.iniciada_em||!l.tatame||!Number.isFinite(diferenca)||diferenca<0||diferenca>body.marco)return NextResponse.json({success:true,registrados:0});
-   const {data:ins,error:ie}=await db.from('inscricoes').select('atleta_id,atleta,status_checkin,pagamento_ok,pesagem_ok,kimono_aprovado,estorno_status').eq('evento_id',ev).eq('categoria_id',l.categoria_id).in('atleta_id',[l.atleta_1_id,l.atleta_2_id].filter(Boolean));if(ie)throw Error('Pesagem indisponível.');
+   const {data:candidatas,error:ie}=await db.from('inscricoes').select('atleta_id,atleta,status_checkin,pagamento_ok,pesagem_ok,kimono_aprovado,estorno_status,categoria_id,categoria,faixa,sexo,idade,peso,modalidade,absoluto').eq('evento_id',ev).in('atleta_id',[l.atleta_1_id,l.atleta_2_id].filter(Boolean));if(ie)throw Error('Pesagem indisponível.');
+   const categorias=await todasLinhas(db,'categorias_evento','*',ev);
+   const ins=(candidatas||[]).filter(i=>categoriasPushDaInscricao(i,categorias).includes(l.categoria_id));
    if((ins||[]).filter(i=>i.status_checkin==='aprovado'&&i.pagamento_ok&&i.pesagem_ok&&i.kimono_aprovado&&i.estorno_status!=='estornado').length!==2)return NextResponse.json({success:true,registrados:0});
    const itens=ins!.map(i=>({evento_id:ev,atleta_id:i.atleta_id,luta_id:l.id,chave:'preparo:'+hashPush(JSON.stringify([ev,l.id,i.atleta_id,body.marco,l.horario_estimado])),tipo:'preparo',titulo:body.marco===5?'Sua luta está próxima':'Prepare-se para sua luta',mensagem:`${i.atleta}: sua luta está prevista para os próximos ${body.marco} minutos no ${l.tatame}. É uma estimativa; acompanhe a chamada.`,url:`/evento/${ev}/ao-vivo`,expira_em:new Date(Math.min(Date.parse(l.horario_estimado)+5*60000,Date.now()+body.marco*60000)).toISOString()}));
    const {error}=await db.from('push_fila').upsert(itens,{onConflict:'chave',ignoreDuplicates:true});if(error)throw Error('Não foi possível proteger os avisos.');

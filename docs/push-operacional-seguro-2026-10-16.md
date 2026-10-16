@@ -1,10 +1,10 @@
-# Push operacional seguro — implementação preparada em 16/10/2026
+# Push operacional seguro — implantação de 16/10/2026
 
 ## Situação
 
-Implementação local concluída e verificada. **Ainda não implantada em produção:** a sessão perdeu o acesso de execução SQL ao banco e o mecanismo de navegador deixou de estar disponível. O plugin Supabase foi localizado e sugerido; sua conexão ainda não foi confirmada. Não publicar o frontend antes da migração, pois ele depende das tabelas novas.
+Migrações aditivas instaladas em produção pelo conector Supabase: `push_operacao_responsaveis_programacao` e `push_politicas_privadas_explicitas`. A instalação comparou integralmente as tabelas anteriores na mesma transação e confirmou a preservação dos registros. As novas tabelas têm RLS e permissões explícitas; fila, entregas e processamento são privados do servidor. Publicação do frontend ocorre somente após essa instalação.
 
-Nenhum push foi enviado aos atletas nos testes. Todas as entregas de teste usaram provedor simulado. Nenhum dado do banco real foi alterado nesta preparação. Backup prévio em `tmp/push-seguro-20261016/.env.backup-anterior.json`, com SHA-256; 37 tabelas/views, 1.641 registros, incluindo 14 assinaturas existentes.
+Nenhum push foi enviado aos atletas nos testes. Todas as entregas de teste usaram provedor simulado. Nenhum registro anterior do campeonato foi alterado. Backup prévio em `tmp/push-seguro-20261016/.env.backup-anterior.json`, com SHA-256; 37 tabelas/views, 1.641 registros, incluindo 14 assinaturas existentes.
 
 ## Mudanças
 
@@ -14,6 +14,7 @@ Nenhum push foi enviado aos atletas nos testes. Todas as entregas de teste usara
 - Fila com prazo, tentativas limitadas, trava temporária, recibos por aparelho e reenvio somente dos destinos ainda sem confirmação. Notificações substituídas por uma etapa mais nova expiram.
 - O serviço de push confirma aceitação pelo provedor, não leitura/exibição física no celular. Uma resposta perdida do provedor pode ocasionar nova tentativa; tag estável no service worker evita empilhar a mesma notificação.
 - Horário/tatame são avisados exclusivamente após prévia e confirmação do organizador. Usa somente categorias publicadas, programação salva e inscrição paga ativa. A mesma versão não é reenviada; uma versão pendente que deixou de corresponder à programação atual expira.
+- Inscrições de absoluto sem `categoria_id` usam o mesmo enquadramento da geração das chaves. Isso inclui as 13 inscrições de absoluto do Spartan sem editar os cadastros.
 - Aprovação de check-in, chamadas, liberação para o tatame e preparação a 15/5 minutos. Preparação exige horário futuro e check-in/despacho liberados.
 - Nenhuma reprodução de avisos históricos na migração. A fila começa vazia.
 - O processamento é acionado pelas telas operacionais conectadas e pelo pedido explícito do organizador. A fila é durável, mas não há um agendador independente 24h nesta implementação. Avisos vencidos não são enviados ao retornar.
@@ -25,12 +26,12 @@ Build de produção e TypeScript passaram. Testes com provedor simulado cobrem r
 
 PostgreSQL local: migração preserva inscrições e não cria avisos antigos; recibo repetido não duplica; nova aprovação do mesmo estado não avisa; reversão atômica também reverte o aviso; trava impede dois processadores; lease vencido pode ser retomado; prazo vencido expira; usuário só cadastra seus aparelhos e não acessa a fila privada.
 
-## Concluir implantação
+## Verificação em produção
 
-1. Conectar Supabase ao projeto `sivdvcuggjswfcuzrvgs` ou recuperar a ferramenta autorizada do editor SQL.
-2. Executar `tmp/push-seguro-20261016/instalar-preservando-dados.sql`, que instala somente estruturas novas e compara integralmente todas as tabelas anteriores. Verificar dados preservados e fila/entregas com zero registros.
-3. Conferir somente leitura a programação atual do Spartan, sem chamar confirmação de envio.
-4. Publicar os arquivos específicos desta mudança; conferir o deploy. Não publicar outras alterações locais antigas.
-5. Validar uma operação apenas em transação fictícia revertida ou fixture local, com provedor simulado; nunca usar push de atleta real como teste.
+- Prévia somente leitura: 56 avisos possíveis, nenhum já registrado e nenhuma inscrição sem programação futura completa no momento da conferência. Isso não significa 56 aparelhos habilitados.
+- Teste de integração no evento fictício, em subtransação intencionalmente revertida: recibo cria um aviso, repetição não duplica e reversão remove ambos. Nenhuma ação de check-in ou luta foi executada.
+- Após o teste, fila e entregas permaneceram vazias. As 14 assinaturas legadas foram preservadas.
+- Nenhum alerta dos assessores de segurança faz referência às novas estruturas.
+- Os arquivos desta mudança são publicados isoladamente, preservando as demais alterações antigas do checkout.
 
 A interface fica em Organizar tatames → Avisar atletas sobre horário e tatame → Conferir prévia → Confirmar envio. O botão de confirmação não foi acionado em produção.
