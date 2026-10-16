@@ -4,6 +4,7 @@ import { obterEventoOrganizador, guardarEventoOrganizador } from '@/app/lib/even
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { AlertCircle, ArrowDown, ArrowUp, CheckCircle, Clock, Play, RefreshCw, Search, X } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { ehFaseChaveDeTres, ordemOperacionalChaveTriangular } from '@/app/lib/chave-de-tres';
@@ -128,6 +129,7 @@ function ordenarLutasCronograma(a: Luta, b: Luta) {
 }
 
 export default function GestaoTatames() {
+  const router = useRouter();
   const [eventos, setEventos] = useState<Evento[]>([]);
   const [eventoSelecionado, setEventoSelecionado] = useState('');
   useEffect(() => { if (eventoSelecionado && eventoSelecionado !== 'todos') guardarEventoOrganizador(eventoSelecionado); }, [eventoSelecionado]);
@@ -429,6 +431,14 @@ export default function GestaoTatames() {
     setShowCronoModal(true);
   };
 
+  const concluirProgramacao = () => {
+    if (gerandoCrono || loadingLutas || salvando || temAlteracoesPendentes
+      || resumo.semTatame > 0 || !tatamesUsados.length || tatamesPendentesCrono.length) return;
+    setShowCronoModal(false);
+    const evento = encodeURIComponent(eventoSelecionado);
+    router.push(`/admin?evento=${evento}&programacao_concluida=${evento}`);
+  };
+
   const eventoCrono = eventos.find(e => String(e.id) === eventoSelecionado);
   const selecionarTatameCrono = (nome: string) => {
     setCronoTatame(nome);
@@ -680,7 +690,7 @@ export default function GestaoTatames() {
                 {gerandoCrono ? <RefreshCw size={16} className="animate-spin" /> : <Play size={16} fill="currentColor" />}
                 {gerandoCrono ? 'Gerando...' : 'Aplicar horário neste tatame'}
               </button>
-              {tatamesPendentesCrono.length === 0 && <button onClick={() => setShowCronoModal(false)} className="w-full rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-xs font-black uppercase tracking-widest text-emerald-300">Concluir</button>}
+              {tatamesPendentesCrono.length === 0 && tatamesUsados.length > 0 && <button onClick={concluirProgramacao} disabled={gerandoCrono || loadingLutas || Boolean(salvando) || temAlteracoesPendentes || resumo.semTatame > 0} className="w-full rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-xs font-black uppercase tracking-widest text-emerald-300 disabled:opacity-50">Concluir</button>}
             </div>
           </div>
         </div>

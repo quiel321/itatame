@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { supabase } from '@/app/lib/supabase'; 
 import { Scanner } from '@yudiel/react-qr-scanner';
 import { CheckCircle, XCircle, Scale, ArrowLeft, QrCode } from 'lucide-react';
@@ -19,6 +19,15 @@ export default function RecepcaoOperacao({ ativa = true }: { ativa?: boolean }) 
   const [scannedId, setScannedId] = useState<string | null>(null);
   const [atleta, setAtleta] = useState<any>(null);
   const [opcoesQr, setOpcoesQr] = useState<any[]>([]);
+  const topoRecepcaoRef = useRef<HTMLElement>(null);
+  useLayoutEffect(() => {
+    if (!ativa) return;
+    // A operação tem rolagem própria dentro de um painel fixo. Voltar apenas
+    // o window não reposiciona a pesagem ao selecionar um atleta no fim da lista.
+    for (let elemento = topoRecepcaoRef.current; elemento; elemento = elemento.parentElement) {
+      elemento.scrollTo({ top: 0, left: elemento.scrollLeft, behavior: 'instant' });
+    }
+  }, [ativa, atleta?.id, opcoesQr.length]);
   const [loading, setLoading] = useState(false);
   const [erro, setErroInterno] = useState('');
   const [eventoStaff, setEventoStaff] = useState('');
@@ -449,7 +458,7 @@ export default function RecepcaoOperacao({ ativa = true }: { ativa?: boolean }) 
   };
 
   return (
-    <main className="relative min-h-full bg-[#050505] text-white overflow-y-auto overflow-x-hidden font-sans pb-10 selection:bg-red-500/30 flex flex-col">
+    <main ref={topoRecepcaoRef} className="relative min-h-full bg-[#050505] text-white overflow-y-auto overflow-x-hidden font-sans pb-10 selection:bg-red-500/30 flex flex-col">
       
       <style dangerouslySetInnerHTML={{__html: `
         .hide-global-nav > header:first-of-type,

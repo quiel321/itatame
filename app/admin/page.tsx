@@ -5,7 +5,8 @@ import RecepcaoOrganizador from '@/app/components/staff/RecepcaoOrganizador';
 
 import { obterEventoOrganizador, guardarEventoOrganizador } from '@/app/lib/evento-organizador';
 
-import { useEffect, useState, useRef } from "react";
+import { Suspense, useEffect, useState, useRef } from "react";
+import AvisoProgramacaoConcluida from './_components/AvisoProgramacaoConcluida';
 import { supabase } from "../lib/supabase";
 import CidadeEstadoInput from "@/app/components/CidadeEstadoInput";
 import { comprimirAvatar } from "../lib/comprimir-avatar";
@@ -712,6 +713,8 @@ export default function AdminPage() {
             </button>
           </div>
         </div>
+
+        <Suspense fallback={null}><AvisoProgramacaoConcluida eventoId={eventoSelecionado} /></Suspense>
 
         {eventoAtual && (
           <section className="mb-5 rounded-2xl border border-white/10 bg-gradient-to-r from-red-950/30 to-black/40 p-3 shadow-xl md:mb-6 md:p-5">
