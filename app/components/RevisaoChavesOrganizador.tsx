@@ -15,6 +15,7 @@ export default function RevisaoChavesOrganizador({ eventoId, atualizacao }: { ev
  const [motivo, setMotivo] = useState('');
  const [mensagem, setMensagem] = useState('');
  const [ocupado, setOcupado] = useState(false);
+ const [revisaoAberta, setRevisaoAberta] = useState(false);
  const aviso = useRef<HTMLDivElement>(null);
  const pedido = useRef(0);
  const carregar = useCallback(async () => {
@@ -25,6 +26,7 @@ export default function RevisaoChavesOrganizador({ eventoId, atualizacao }: { ev
   if (numero !== pedido.current) return;
   if (error) { setCategorias([]); setMensagem(`Revisão indisponível: ${error.message}`); return; }
   setCategorias(data || []);
+  setRevisaoAberta(false);
   setCategoriaId(anterior => (data || []).some((c: Categoria) => c.categoria_id === anterior) ? anterior : data?.[0]?.categoria_id || '');
  }, [eventoId]);
  useEffect(() => { const inicio = window.setTimeout(() => { void carregar(); }, 0); return () => window.clearTimeout(inicio); }, [carregar, atualizacao]);
@@ -33,6 +35,8 @@ export default function RevisaoChavesOrganizador({ eventoId, atualizacao }: { ev
  const b = categoria?.posicoes.find(p => chave(p) === segunda);
  const podeTrocar = !!a && !!b && primeira !== segunda && a.divisao === b.divisao && a.faixa === b.faixa && motivo.trim().length >= 3;
  const rascunhos = categorias.filter(c => !c.publicada);
+ const todasPublicadas = categorias.length > 0 && rascunhos.length === 0;
+ const expandido = !todasPublicadas || revisaoAberta;
  const trocaSelecionada = Boolean(primeira || segunda);
  async function publicarTodas() {
   if (ocupado || !rascunhos.length || trocaSelecionada) return;
@@ -64,8 +68,9 @@ export default function RevisaoChavesOrganizador({ eventoId, atualizacao }: { ev
 
  }
  return <section className="rounded-2xl border border-cyan-500/20 bg-[#111116] p-4 md:p-6 space-y-4">
-  <div><h2 className="font-bold text-lg">Revisar e publicar chaves</h2><p className="text-xs text-zinc-400 mt-1">1. Escolha a categoria. 2. Salve cada troca em rascunho. 3. Após conferir todas, use “Publicar todas as chaves”.</p></div>
+  <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-bold text-lg">Revisar e publicar chaves</h2>{todasPublicadas ? <p className="mt-1 text-xs text-green-400">Todas as chaves publicadas · {categorias.length} categoria(s)</p> : <p className="text-xs text-zinc-400 mt-1">Confira as categorias, salve as trocas e publique as chaves.</p>}</div>{todasPublicadas && <button type="button" aria-expanded={expandido} aria-controls="conteudo-revisao-chaves" onClick={()=>setRevisaoAberta(v=>!v)} className="min-h-11 rounded-lg border border-cyan-500/30 px-3 text-xs text-cyan-200">{expandido ? 'Recolher revisão' : 'Ver revisão das chaves'}</button>}</div>
   <div ref={aviso} role="status" className={mensagem ? 'rounded-xl border border-cyan-500/30 p-3 text-sm text-cyan-200' : ''}>{mensagem}</div>
+  <div id="conteudo-revisao-chaves" hidden={!expandido} className="space-y-4">
   <button disabled={ocupado} onClick={() => void carregar()} className="text-xs text-cyan-300">Atualizar revisão</button>
   {!categorias.length ? <p className="text-sm text-zinc-400">Gere as chaves para iniciar a revisão.</p> : <>
    <div className="rounded-xl border border-green-500/20 bg-green-500/5 p-3 space-y-2">
@@ -99,5 +104,6 @@ export default function RevisaoChavesOrganizador({ eventoId, atualizacao }: { ev
     </>}
    </>}
   </>}
+  </div>
  </section>;
 }

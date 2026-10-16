@@ -279,25 +279,15 @@ export default function GerarChavesPage() {
               </div>
             </label>
 
-            <div className="relative bg-[#2f0404] border border-red-500/50 rounded-xl p-4 md:p-5 shadow-[0_0_20px_rgba(239,68,68,0.15)] overflow-hidden">
-              <div className="absolute inset-0 bg-red-500/5 animate-pulse pointer-events-none"></div>
-              <div className="relative z-10 flex items-start gap-4">
-                <div className="bg-red-500/20 p-2.5 rounded-full shrink-0">
-                  <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-                </div>
-                <div>
-                  <h4 className="text-red-500 font-black text-[11px] md:text-xs uppercase tracking-widest mb-1.5 drop-shadow-md">Conferência antes do sorteio</h4>
-                  <p className="text-red-200/90 text-[10px] md:text-xs font-medium leading-relaxed">
-                    Gere o chaveamento <strong>APENAS APÓS o encerramento das inscrições</strong>. O algoritmo incluirá apenas os atletas com <strong>Pagamento Confirmado</strong>. Você verá as divisões antes de confirmar. Eventos com lutas iniciadas ou resultados não podem ser regenerados.
-                  </p>
-                </div>
-              </div>
+            <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-3 text-[11px] leading-relaxed text-red-200 md:text-xs">
+              <strong>Antes do sorteio:</strong> encerre as inscrições e confira os pagamentos. Lutas iniciadas ou com resultado impedem nova geração.
             </div>
           </div>
 
-          <section className="mb-4 rounded-xl border border-white/10 bg-white/[0.03] p-4 text-[10px] leading-relaxed text-zinc-300 md:text-xs">
-            <strong className="text-white">Separação de equipes:</strong> com até dois atletas da mesma equipe na divisão, eles são colocados em lados opostos e só podem se encontrar na final. Em chave de três atletas aplica-se a exceção própria desse formato. Com três ou mais atletas da mesma equipe, o sistema maximiza a distância entre eles e mostra o alerta na conferência. Na primeira rodada, o sorteio prioriza equipes e academias diferentes e, depois, pesos declarados próximos, inclusive no absoluto. Quando a composição dos inscritos não permite todos esses critérios, prevalece a separação por equipe.
-          </section>
+          <details className="mb-4 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-[11px] leading-relaxed text-zinc-400 md:text-xs">
+            <summary className="cursor-pointer text-zinc-300"><strong className="text-white">Separação de equipes:</strong> o sorteio afasta companheiros de equipe. Ver critérios.</summary>
+            <p className="mt-2">Até dois atletas da mesma equipe ficam em lados opostos, com exceção da chave de três. Com três ou mais, a distância possível é maximizada e os limites aparecem na conferência. A primeira rodada prioriza equipes e academias diferentes, depois pesos declarados próximos, inclusive no absoluto. A separação por equipe prevalece quando não for possível atender a todos os critérios.</p>
+          </details>
           {previa && <section className="mb-4 rounded-xl border border-cyan-500/30 p-4"><h2 className="font-bold mb-3">Confira as divisões</h2><ul className="space-y-3 text-xs">{previa.grupos.map(g => <li key={g.categoria}>{g.categoria}: <strong>{g.atletas} atleta(s)</strong>{g.atletas === 1 ? ' · Sem adversário' : ''}{g.equipesAcimaDoLimite.length > 0 && <div className="mt-1 rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-2 text-yellow-200">Atenção: {g.equipesAcimaDoLimite.map(e => `${e.nome} (${e.total})`).join(', ')}. Há mais de dois atletas da mesma equipe; o encontro antes da final pode ser inevitável.</div>}</li>)}</ul><button onClick={() => setPrevia(null)} className="mt-3 text-zinc-400 underline">Cancelar prévia</button></section>}
           <button onClick={gerarChaves} disabled={loading || !eventoId || chaveamentoBloqueado || !fimInscricoesSelecionado} className="cursor-pointer disabled:cursor-not-allowed w-full bg-red-600 hover:bg-red-500 text-white rounded-xl py-3.5 font-black text-xs md:text-sm uppercase tracking-widest transition-all shadow-[0_0_15px_rgba(239,68,68,0.2)]">
             {loading ? "Processando Algoritmo..." : `${previa ? "Confirmar geração" : "Conferir inscritos"} - ${tipoGeracao === 'peso' ? 'Categoria' : 'Absoluto'}`}
