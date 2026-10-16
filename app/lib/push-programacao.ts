@@ -13,7 +13,11 @@ export function categoriasPushDaInscricao(i:InscricaoCompeticao,cats:CategoriaCo
  return [...ids];
 }
 export async function todasLinhas(db:any,tabela:string,campos:string,evento:string) {const lista:any[]=[];for(let n=0;;n+=500){const {data,error}=await db.from(tabela).select(campos).eq('evento_id',evento).range(n,n+499);if(error)throw Error('Não foi possível conferir a programação.');lista.push(...(data||[]));if(!data||data.length<500)return lista;}}
-export async function previaProgramacaoPush(db:any,evento:string) {
+// O reenvio guarda outra intenção; a chave original permite invalidar horários antigos.
+export function chaveOriginalProgramacao(chave:string) {
+ return /^reenvio:(programacao:[a-f0-9]{64}):[a-f0-9]{64}$/.exec(chave)?.[1]||chave;
+}
+export async function previaProgramacaoPush(db:any,evento:string,modo:'novos'|'reenvio'='novos') {
  const {data:e,error}=await db.from('eventos').select('id,nome,estado,status').eq('id',evento).single();if(error||!e||e.status==='ENCERRADO')throw Error('Evento indisponível para avisos.');
  const [ins,cats,lutas,pubs,postos]=await Promise.all([
  todasLinhas(db,'inscricoes','id,atleta,atleta_id,categoria_id,categoria,faixa,sexo,idade,peso,modalidade,absoluto,pagamento_ok,estorno_status',evento),todasLinhas(db,'categorias_evento','*',evento),todasLinhas(db,'chaves','id,categoria_id,atleta_1_id,atleta_2_id,tatame,horario_estimado,status_luta',evento),todasLinhas(db,'chaves_publicacoes','categoria_id,publicada',evento),todasLinhas(db,'staff_eventos','funcao,identificacao',evento)]);
@@ -30,6 +34,14 @@ export async function previaProgramacaoPush(db:any,evento:string) {
   if(!filas.some(x=>x.chave===chave))filas.push(item);
   }
  }
- const existentes=await todasLinhas(db,'push_fila','chave,estado',evento);const repetidas=new Set(existentes.map(x=>x.chave));const novas=filas.filter(x=>!repetidas.has(x.chave));
- return {evento:e.nome,filas:novas,chavesAtuais:filas.map(f=>f.chave),total:novas.length,jaRegistrados:filas.length-novas.length,semProgramacao,versao:hashPush(JSON.stringify(filas.map(f=>f.chave).sort())),amostra:novas.slice(0,8).map(x=>x.mensagem)};
+ const existentes=await todasLinhas(db,'push_fila','chave,estado,criada_em',evento);const repetidas=new Set(existentes.map(x=>x.chave));const novas=filas.filter(x=>!repetidas.has(x.chave));
+ const atuais=new Set(filas.map(f=>f.chave));
+ const historico=existentes.filter(x=>atuais.has(chaveOriginalProgramacao(x.chave)));
+ const pendentes=new Set(historico.filter(x=>['pendente','processando'].includes(x.estado)).map(x=>chaveOriginalProgramacao(x.chave)));
+ const ultimoReenvio=Math.max(0,...existentes.filter(x=>x.chave.startsWith('reenvio:programacao:')).map(x=>Date.parse(x.criada_em)||0));
+ const bloqueadoAte=modo==='reenvio'&&ultimoReenvio+300000>Date.now()?new Date(ultimoReenvio+300000).toISOString():null;
+ // A mesma prévia usa o mesmo lote, inclusive em duas abas ou após repetir a requisição.
+ const lote=hashPush(JSON.stringify([filas.map(f=>f.chave).sort(),historico.map(x=>x.chave).sort()]));
+ const selecionadas=modo==='reenvio'?filas.filter(x=>repetidas.has(x.chave)&&!pendentes.has(x.chave)).map(x=>({...x,chave:`reenvio:${x.chave}:${lote}`})):novas;
+ return {evento:e.nome,modo,filas:selecionadas,chavesAtuais:[...atuais],total:selecionadas.length,jaRegistrados:filas.length-novas.length,aguardando:pendentes.size,bloqueadoAte,semProgramacao,versao:modo==='reenvio'?hashPush(JSON.stringify([lote,selecionadas.map(f=>f.chave).sort()])):hashPush(JSON.stringify(filas.map(f=>f.chave).sort())),amostra:selecionadas.slice(0,8).map(x=>x.mensagem)};
 }

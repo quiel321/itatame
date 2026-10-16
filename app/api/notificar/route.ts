@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from '@/app/lib/supabase-server';
 import { processarAvisosDisponiveis } from '@/app/lib/push-fila';
 import { categoriasPushDaInscricao,previaProgramacaoPush,todasLinhas } from '@/app/lib/push-programacao';
 import { hashPush } from '@/app/lib/push-regras';
+import { resumoDestinatariosPush } from '@/app/lib/push-destinatarios';
 export const runtime='nodejs';
 export const maxDuration=60;
 export async function POST(request:Request) {
@@ -16,10 +17,14 @@ export async function POST(request:Request) {
   if(!e||(!dono&&!posto))return NextResponse.json({error:'Evento não autorizado.'},{status:403});
   if(body.acao==='previa_programacao'||body.acao==='programacao'){
    if(!dono)return NextResponse.json({error:'Somente o organizador pode divulgar a programação.'},{status:403});
-   const p=await previaProgramacaoPush(db,ev);const {filas,chavesAtuais,...publica}=p;
-   if(body.acao==='previa_programacao')return NextResponse.json({success:true,...publica});
+   if(body.modo!==undefined&&!['novos','reenvio'].includes(body.modo))return NextResponse.json({error:'Opção de envio inválida.'},{status:400});
+   const modo=body.modo==='reenvio'?'reenvio':'novos';
+   const p=await previaProgramacaoPush(db,ev,modo);const {filas,chavesAtuais,...publica}=p;
+   if(body.acao==='previa_programacao')return NextResponse.json({success:true,...publica,destinatarios:await resumoDestinatariosPush(db,filas)});
    if(body.confirmado!==true||body.versao!==p.versao)return NextResponse.json({error:'A programação mudou ou não foi confirmada. Confira a prévia novamente.'},{status:409});
-   // Não atualiza avisos antigos, nem reenvia a mesma programação.
+   if(modo==='reenvio'&&body.confirmar_reenvio!==true)return NextResponse.json({error:'Confirme que deseja repetir os avisos já registrados.'},{status:409});
+   if(p.bloqueadoAte)return NextResponse.json({error:'Aguarde cinco minutos entre reenvios e confira uma nova prévia.'},{status:429});
+   // Cada reenvio confirmado acrescenta um lote; os registros antigos são preservados.
    if(filas.length){const {error}=await db.from('push_fila').upsert(filas,{onConflict:'chave',ignoreDuplicates:true});if(error)throw Error('Não foi possível guardar os avisos.');}
    after(async()=>{await processarAvisosDisponiveis(db,ev).catch(()=>{});});return NextResponse.json({success:true,registrados:filas.length,...publica});
   }

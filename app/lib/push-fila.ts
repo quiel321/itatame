@@ -1,6 +1,6 @@
 import webpush from 'web-push';
 import { destinosPush,assinaturasUnicas,hashPush,proximaTentativa } from './push-regras';
-import { previaProgramacaoPush } from './push-programacao';
+import { chaveOriginalProgramacao,previaProgramacaoPush } from './push-programacao';
 type DB=any;
 export async function processarAvisosDisponiveis(db:DB,evento:string) {
  const limite=Date.now()+40000;let total=0;
@@ -21,7 +21,7 @@ export async function processarFilaPush(db:DB,evento:string,enviar:typeof webpus
    const {data:inscricoes,error:ei}=await db.from('inscricoes').select('pagamento_ok,estorno_status').eq('evento_id',evento).eq('atleta_id',a.atleta_id);
    if(ei)throw Error('Inscrição indisponível.');
    if(!(inscricoes||[]).some((i:any)=>i.pagamento_ok&&i.estorno_status!=='estornado')){const r=await db.from('push_fila').update({estado:'expirado',finalizada_em:new Date().toISOString(),trava_ate:null}).eq('id',a.id);if(r.error)throw Error('Recibo indisponível.');return 'expirado';}
-   if(a.tipo==='programacao'&&!chavesAtuais?.has(a.chave)){const r=await db.from('push_fila').update({estado:'expirado',finalizada_em:new Date().toISOString(),trava_ate:null}).eq('id',a.id);if(r.error)throw Error('Recibo indisponível.');return 'expirado';}
+   if(a.tipo==='programacao'&&!chavesAtuais?.has(chaveOriginalProgramacao(a.chave))){const r=await db.from('push_fila').update({estado:'expirado',finalizada_em:new Date().toISOString(),trava_ate:null}).eq('id',a.id);if(r.error)throw Error('Recibo indisponível.');return 'expirado';}
    // Avisos de chamada deixam de fazer sentido quando a luta terminou ou a categoria foi reaberta.
    if(a.luta_id){const {data:l,error:le}=await db.from('chaves').select('status_luta,categoria_id,iniciada_em,atleta_1_id,pontuacao_atleta_1,pontuacao_atleta_2').eq('id',a.luta_id).eq('evento_id',evento).single();if(le)throw Error('Consulta da luta indisponível.');
     const {data:c,error:ce}=await db.from('recepcao_categorias').select('fechada').eq('categoria_id',l.categoria_id).maybeSingle();if(ce)throw Error('Consulta da categoria indisponível.');
