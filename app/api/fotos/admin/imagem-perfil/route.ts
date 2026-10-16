@@ -20,17 +20,18 @@ export async function POST(request: Request) {
   if (tipo !== "avatar" && tipo !== "capa") {
     return NextResponse.json({ error: "Tipo de imagem inválido." }, { status: 400 });
   }
-  if (!(file instanceof File) || file.type !== "image/webp" || file.size === 0 || file.size > MAX_BYTES) {
-    return NextResponse.json({ error: "Envie uma imagem WebP comprimida de até 3 MB." }, { status: 400 });
+  if (!(file instanceof File) || !["image/webp","image/jpeg"].includes(file.type) || file.size === 0 || file.size > MAX_BYTES) {
+    return NextResponse.json({ error: "Envie uma imagem JPG ou WebP comprimida de até 3 MB." }, { status: 400 });
   }
 
   const { data: perfil, error: perfilError } = await supabase.from("foto_organizadores")
     .select("id").eq("id", auth.user.id).maybeSingle();
   if (perfilError || !perfil) return NextResponse.json({ error: "Perfil de organizador não encontrado." }, { status: 404 });
 
-  const caminho = `fotos-organizadores/${auth.user.id}/${tipo}-${crypto.randomUUID()}.webp`;
+  const extensao=file.type==='image/jpeg'?'jpg':'webp';
+  const caminho = `fotos-organizadores/${auth.user.id}/${tipo}-${crypto.randomUUID()}.${extensao}`;
   const { error: uploadError } = await supabase.storage.from("avatars")
-    .upload(caminho, file, { contentType: "image/webp", upsert: false });
+    .upload(caminho, file, { contentType: file.type, upsert: false });
   if (uploadError) return NextResponse.json({ error: uploadError.message }, { status: 500 });
 
   const publicUrl = supabase.storage.from("avatars").getPublicUrl(caminho).data.publicUrl;

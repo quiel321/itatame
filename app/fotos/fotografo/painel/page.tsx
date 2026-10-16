@@ -1,9 +1,10 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import imageCompression from "browser-image-compression";
+import { ACCEPT_MIDIAS_RETRATT, FOTO_ORIGEM_MAX_BYTES, TIPOS_FOTO_RETRATT, normalizarMidiaRetratt } from "@/app/lib/fotos-formatos";
+import { otimizarFotoParaUpload } from "@/app/lib/fotos-preparar";
 import { FOTO_IA_MAX_BYTES, FOTO_IA_MAX_DIMENSAO } from "@/app/lib/fotos-ai";
 import { supabase } from "@/app/lib/supabase";
 import { FotoAlbum, FotoEvento, formatarPrecoFotos } from "@/app/lib/fotos";
@@ -55,33 +56,13 @@ async function tokenDaSessao() {
   return token;
 }
 
-const MAX_UPLOAD_BYTES = 3 * 1024 * 1024; // 🔥 Limite alterado para 3MB
-const MAX_SOURCE_BYTES = 40 * 1024 * 1024;
+const MAX_SOURCE_BYTES = FOTO_ORIGEM_MAX_BYTES;
 const MAX_UPLOAD_FILES = 5000;
 const MAX_ARQUIVOS_VISIVEIS = 100;
-const TIPOS_FOTO = new Set(["image/jpeg", "image/png", "image/webp"]);
+const TIPOS_FOTO = TIPOS_FOTO_RETRATT;
 const TIPOS_VIDEO = new Set(["video/mp4", "video/webm", "video/quicktime"]);
 
-const TIPO_POR_EXTENSAO: Record<string, string> = {
-  jpg: "image/jpeg",
-  jpeg: "image/jpeg",
-  png: "image/png",
-  webp: "image/webp",
-  mp4: "video/mp4",
-  m4v: "video/mp4",
-  webm: "video/webm",
-  mov: "video/quicktime",
-  qt: "video/quicktime",
-};
-
-// No Windows, .mov costuma chegar com type vazio porque o QuickTime não está registrado no sistema.
-function normalizarTipoArquivo(arquivo: File) {
-  if (TIPOS_FOTO.has(arquivo.type) || TIPOS_VIDEO.has(arquivo.type)) return arquivo;
-  const extensao = arquivo.name.split(".").pop()?.toLowerCase() || "";
-  const tipo = TIPO_POR_EXTENSAO[extensao];
-  if (!tipo) return arquivo;
-  return new File([arquivo], arquivo.name, { type: tipo, lastModified: arquivo.lastModified });
-}
+const normalizarTipoArquivo = normalizarMidiaRetratt;
 
 function arquivoEhVideo(arquivo: File) {
   return TIPOS_VIDEO.has(arquivo.type);
@@ -111,42 +92,6 @@ function aguardarVideo(video: HTMLVideoElement, evento: "loadedmetadata" | "load
 
 function formatarTamanho(bytes: number) {
   return `${(bytes / 1024 / 1024).toFixed(2).replace(".", ",")} MB`;
-}
-
-async function otimizarFotoParaUpload(file: File) {
-  if (file.size <= MAX_UPLOAD_BYTES) {
-    return { file, otimizada: false };
-  }
-
-  const nomeBase = file.name.replace(/\.[^/.]+$/, "") || "foto";
-  const criarArquivoJpeg = (blob: Blob) =>
-    new File([blob], `${nomeBase}.jpg`, { type: "image/jpeg", lastModified: file.lastModified });
-
-  // 1ª Tentativa: Mantém resolução altíssima (4500px) e qualidade 90%
-  let comprimida = criarArquivoJpeg(await imageCompression(file, {
-    maxSizeMB: 2.9,
-    maxWidthOrHeight: 4500,
-    useWebWorker: true,
-    fileType: "image/jpeg",
-    initialQuality: 0.90,
-  }));
-
-  // 2ª Tentativa (Garantia): Se a foto tiver muitos detalhes e ainda não bateu 3MB, reduz levemente
-  if (comprimida.size > MAX_UPLOAD_BYTES) {
-    comprimida = criarArquivoJpeg(await imageCompression(comprimida, {
-      maxSizeMB: 2.8,
-      maxWidthOrHeight: 3500, // 3500px ainda imprime um A4 perfeito
-      useWebWorker: true,
-      fileType: "image/jpeg",
-      initialQuality: 0.85,
-    }));
-  }
-
-  if (comprimida.size > MAX_UPLOAD_BYTES) {
-    throw new Error(`${file.name} não conseguiu ficar abaixo de 3 MB sem perda excessiva.`);
-  }
-
-  return { file: comprimida, otimizada: true };
 }
 
 function canvasParaJpeg(canvas: HTMLCanvasElement, qualidade: number) {
@@ -211,6 +156,17 @@ async function gerarDerivadosFoto(file: File) {
   }
 
   return { previewBlob, thumbBlob, miniaturaIa };
+}
+
+let filaPreparacaoFotos: Promise<unknown> = Promise.resolve();
+function prepararFotoParaEnvio(arquivo: File) {
+  const tarefa = async () => {
+    const { file } = await otimizarFotoParaUpload(arquivo);
+    return { file, derivados: await gerarDerivadosFoto(file) };
+  };
+  const pronta = filaPreparacaoFotos.then(tarefa, tarefa);
+  filaPreparacaoFotos = pronta.then(() => undefined, () => undefined);
+  return pronta;
 }
 
 function posicionarVideo(video: HTMLVideoElement, tempo: number) {
@@ -597,7 +553,7 @@ export default function PainelFotografoPage() {
         recusados += 1;
         motivosRecusa.push(!tipoValido
           ? `${arquivo.name}: formato não aceito.`
-          : `${arquivo.name}: ultrapassa ${ehVideo ? "250 MB" : "40 MB antes da otimização"}.`);
+          : `${arquivo.name}: ultrapassa ${ehVideo ? "250 MB" : "100 MB antes da conversão"}.`);
         continue;
       }
       aceitos.push(arquivo);
@@ -668,8 +624,9 @@ export default function PainelFotografoPage() {
   ) {
     const ehVideo = arquivoEhVideo(arquivo);
     onEtapa("preparando");
-    const arquivoPronto = ehVideo ? arquivo : (await otimizarFotoParaUpload(arquivo)).file;
-    const derivadosFoto = ehVideo ? null : await gerarDerivadosFoto(arquivoPronto);
+    const preparada = ehVideo ? null : await prepararFotoParaEnvio(arquivo);
+    const arquivoPronto = ehVideo ? arquivo : preparada!.file;
+    const derivadosFoto = preparada?.derivados || null;
     const derivadosVideo = ehVideo ? await gerarDerivadosVideo(arquivo) : null;
     const previewBlob = derivadosVideo?.previewBlob || derivadosFoto!.previewBlob;
     const miniaturaIa = derivadosVideo?.miniaturaIa || derivadosFoto!.miniaturaIa;
@@ -717,6 +674,7 @@ export default function PainelFotografoPage() {
       try {
         await enviarDiretoAoR2(url, blob, onProgress);
       } catch (erroDireto) {
+        if (blob.size > 3 * 1024 * 1024) throw new Error("A transferência direta falhou. Confira a conexão e tente novamente; a foto foi mantida na fila sem reduzir sua resolução.");
         const resposta = await enviarArquivo(blob, tipo, blob.type);
         if (!resposta.ok) {
           const detalhe = await resposta.json().catch(() => null);
@@ -878,7 +836,7 @@ export default function PainelFotografoPage() {
                 </p>
                 <h1 className="mt-4 text-3xl font-black uppercase leading-none md:text-5xl">Adicionar mídias</h1>
                 <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-400">
-                  Escolha o álbum, selecione as fotos ou vídeos e confira os preços antes de publicar. As fotos continuam otimizadas automaticamente até 3MB.
+                  Escolha o álbum, selecione as fotos ou vídeos e confira os preços antes de publicar. As fotos são preparadas em alta qualidade, preservando a resolução.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -980,7 +938,7 @@ export default function PainelFotografoPage() {
             <div className="rounded-2xl border border-white/10 bg-zinc-950 p-4">
               <p className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-white"><ShieldCheck size={16} className="text-emerald-400" /> Pode deixar com a gente</p>
               <div className="mt-3 space-y-2 text-xs text-zinc-400">
-                <p>✓ Fotos grandes continuam sendo otimizadas automaticamente até 3MB.</p>
+                <p>✓ Compressão de alta qualidade sem reduzir a resolução. RAW e HEIC são convertidos para JPG.</p>
                 <p>✓ Fotos e vídeos entram na busca facial; o vídeo recebe uma amostra protegida de {VIDEO_PREVIEW_DURATION_SECONDS} segundos, leve e sem áudio.</p>
                 <p>✓ Dica: clipes curtos (10 a 30 segundos) de um momento marcante vendem mais e carregam rápido. Prefira MP4.</p>
                 <p>✓ Vídeos: até {formatarDuracaoVideo(VIDEO_MAX_DURATION_SECONDS)} e 250 MB por arquivo.</p>
@@ -1009,7 +967,7 @@ export default function PainelFotografoPage() {
 
             <div className="grid gap-4 lg:grid-cols-[1fr_250px]">
               <div className={`relative flex min-h-[250px] flex-col items-center justify-center rounded-2xl border-2 border-dashed bg-black p-5 text-center transition ${arquivos.length ? "border-emerald-500/30" : "border-white/10 hover:border-retratt/60 hover:bg-retratt/5"}`}>
-                <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime,.jpg,.jpeg,.png,.webp,.mp4,.m4v,.webm,.mov" multiple disabled={enviando} onChange={(e) => selecionarArquivos(e.target.files)} className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0 disabled:cursor-wait" />
+                <input ref={fileInputRef} type="file" accept={ACCEPT_MIDIAS_RETRATT} multiple disabled={enviando} onChange={(e) => selecionarArquivos(e.target.files)} className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0 disabled:cursor-wait" />
                 <div className={`mb-3 flex h-16 w-16 items-center justify-center rounded-full ${arquivos.length ? "bg-emerald-500/10 text-emerald-400" : "bg-white/5 text-zinc-500"}`}>
                   {arquivos.length ? <CheckCircle2 size={30} /> : <CloudUpload size={30} />}
                 </div>
@@ -1019,7 +977,8 @@ export default function PainelFotografoPage() {
                 <p className="mt-2 max-w-sm text-xs leading-5 text-zinc-500">
                   {arquivos.length ? "Clique novamente para adicionar mais mídias ou revise a lista logo abaixo." : "Escolha fotos e vídeos. Você verá o andamento de cada etapa antes da publicação."}
                 </p>
-                <p className="mt-3 text-[10px] font-black uppercase tracking-wider text-retratt">Fotos: JPG, PNG ou WebP · Vídeos: MP4, WebM ou MOV · Até {formatarDuracaoVideo(VIDEO_MAX_DURATION_SECONDS)} / 250 MB</p>
+                <p className="mt-3 text-[10px] text-zinc-400">RAW e formatos especiais: JPG em alta qualidade. Guarde os arquivos RAW originais. Até 100 MB por foto na seleção e 40 MB após a preparação.</p>
+                <p className="mt-3 text-[10px] font-black uppercase tracking-wider text-retratt">Fotos: JPG, PNG, WebP, HEIC, HEIF, AVIF, TIFF, BMP e RAW (CR2, CR3, NEF, ARW, RAF, DNG e outros) · Vídeos: MP4, WebM ou MOV · Até {formatarDuracaoVideo(VIDEO_MAX_DURATION_SECONDS)} / 250 MB</p>
                 <p className="mt-2 text-[10px] text-zinc-500">Até {MAX_UPLOAD_FILES.toLocaleString("pt-BR")} mídias por lote. Mantenha esta aba aberta durante o envio.</p>
               </div>
 

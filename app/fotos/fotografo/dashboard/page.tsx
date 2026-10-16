@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
-import { comprimirAvatar } from "@/app/lib/comprimir-avatar";
+import { comprimirAvatarRetratt as comprimirAvatar, comprimirCapaRetratt } from "@/app/lib/fotos-preparar";
 import FotosShell from "../../_components/FotosShell";
 import { Camera, CheckCircle2, ChevronDown, CloudUpload, CreditCard, FolderOpen, ImagePlus, ShieldCheck, Wallet, LogOut, AlertCircle, Store, X, Edit, Calendar, MapPin, Trash2, Loader2, Check, Plus, Images, Trophy, ChartNoAxesCombined, Link2 } from "lucide-react";
 import MercadoPagoConnectButton from "@/app/admin/_components/MercadoPagoConnectButton";
@@ -15,6 +15,7 @@ import { faixasDoEvento, validarFaixasDesconto, type FaixaDesconto } from "@/app
 import { CATEGORIAS_FOTOS, nomeCategoriaFotos } from "@/app/lib/fotos-categorias";
 import CidadeEstadoInput from "@/app/components/CidadeEstadoInput";
 import OpcoesPublicacaoGaleria from "../../_components/OpcoesPublicacaoGaleria";
+import { ACCEPT_FOTOS_RETRATT } from "@/app/lib/fotos-formatos";
 import CapaGaleriaInput from "../../_components/CapaGaleriaInput";
 import { precoGaleriaCentavos, precosGaleriaValidos } from "@/app/lib/fotos-criacao-galeria";
 
@@ -50,6 +51,7 @@ export default function FotografoDashboardPage() {
   const [faixasEdicao, setFaixasEdicao] = useState<FaixaDesconto[]>([]);
   const [capaGaleria, setCapaGaleria] = useState<File | null>(null);
   const [criandoGaleria, setCriandoGaleria] = useState(false);
+  const [preparandoCapa, setPreparandoCapa] = useState(false);
   const [mensagemGaleria, setMensagemGaleria] = useState("");
 
   const [minhasGalerias, setMinhasGalerias] = useState<GaleriaFreelancer[]>([]);
@@ -226,8 +228,8 @@ export default function FotografoDashboardPage() {
     setEnviandoFoto(true);
     try {
       const leve = await comprimirAvatar(file);
-      const caminho = `fotos-fotografos/${userId}/perfil-${Date.now()}.webp`;
-      const { error: uploadError } = await supabase.storage.from("avatars").upload(caminho, leve, { contentType: "image/webp", upsert: false });
+      const caminho = `fotos-fotografos/${userId}/perfil-${Date.now()}.jpg`;
+      const { error: uploadError } = await supabase.storage.from("avatars").upload(caminho, leve, { contentType: leve.type, upsert: false });
       if (uploadError) throw uploadError;
       const fotoUrl = supabase.storage.from("avatars").getPublicUrl(caminho).data.publicUrl;
       const { error } = await supabase.from("fotografos").update({ foto_url: fotoUrl }).eq("id", perfil.id).eq("user_id", userId);
@@ -235,7 +237,7 @@ export default function FotografoDashboardPage() {
       setPerfil({ ...perfil, foto_url: fotoUrl });
     } catch (error) {
       console.error("Foto de perfil do fotógrafo:", error);
-      alert("Não foi possível enviar a foto de perfil.");
+      alert(error instanceof Error ? error.message : "Não foi possível enviar a foto de perfil.");
     } finally {
       setEnviandoFoto(false);
       event.target.value = "";
@@ -243,7 +245,7 @@ export default function FotografoDashboardPage() {
   }
 
   async function criarGaleriaFreelancer() {
-    if (criandoGaleria) return;
+    if (criandoGaleria || preparandoCapa) return;
     setMensagemGaleria("");
     if (!galeriaForm.nome.trim()) { setMensagemGaleria("Informe o nome da galeria."); return; }
     if (!galeriaForm.cidade.trim() || !galeriaForm.estado) { setMensagemGaleria("Selecione a cidade do evento na lista."); return; }
@@ -306,6 +308,7 @@ export default function FotografoDashboardPage() {
   }
 
   async function salvarEdicaoGaleria() {
+    if(preparandoCapa)return;
     if (!editandoGaleria) return;
     if (!editGaleriaForm.cidade.trim() || !editGaleriaForm.estado) { alert("Selecione a cidade do evento na lista."); return; }
     setSalvandoEdicao(true);
@@ -515,7 +518,7 @@ export default function FotografoDashboardPage() {
                        <p className="mb-2 text-[10px] leading-relaxed text-zinc-400">Crie a galeria do seu evento ou ensaio. Depois, adicione fotos e vídeos e organize-os em álbuns.</p>
                        <p className="mb-6 rounded-xl border border-retratt/20 bg-retratt/5 p-3 text-[9px] font-bold leading-relaxed text-orange-100">Em álbuns independentes não há comissão de organizador. Em cada venda, a Retratt retém 5%; você recebe 95% menos a tarifa do Mercado Pago, descontada da sua conta.</p>
 
-                       <fieldset disabled={criandoGaleria} className="grid gap-3 sm:grid-cols-2 disabled:opacity-60">
+                       <fieldset disabled={criandoGaleria || preparandoCapa} className="grid gap-3 sm:grid-cols-2 disabled:opacity-60">
                          <legend className="mb-4 text-sm font-bold text-white">1. Dados da galeria</legend>
                          <div className="sm:col-span-2">
                            <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Nome do evento ou ensaio</label>
@@ -548,14 +551,14 @@ export default function FotografoDashboardPage() {
                            </label>
                            <EditorFaixasDesconto faixas={faixasCriacao} onChange={setFaixasCriacao} />
                          </>}
-                         <CapaGaleriaInput file={capaGaleria} onChange={setCapaGaleria} />
+                         <CapaGaleriaInput file={capaGaleria} onChange={setCapaGaleria} onPreparandoChange={setPreparandoCapa} />
                        </fieldset>
 
                        <div className="mt-6 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-3 pt-4 border-t border-white/5">
-                         <button type="button" disabled={criandoGaleria} onClick={() => setMostrarCriarGaleria(false)} className="h-11 w-full sm:w-auto cursor-pointer rounded-xl border border-white/10 bg-transparent px-6 text-[10px] font-black uppercase tracking-widest text-white hover:bg-white/5 transition-colors">
+                         <button type="button" disabled={criandoGaleria || preparandoCapa} onClick={() => setMostrarCriarGaleria(false)} className="h-11 w-full sm:w-auto cursor-pointer rounded-xl border border-white/10 bg-transparent px-6 text-[10px] font-black uppercase tracking-widest text-white hover:bg-white/5 transition-colors">
                             Cancelar
                          </button>
-                         <button type="button" onClick={criarGaleriaFreelancer} disabled={criandoGaleria || !galeriaForm.nome.trim()} className="cursor-pointer h-11 w-full sm:w-auto flex items-center justify-center gap-2 rounded-xl bg-retratt px-8 text-[10px] font-black uppercase tracking-widest text-black hover:bg-retratt disabled:cursor-not-allowed disabled:opacity-50 transition-colors shadow-[0_0_15px_rgba(255,90,31,0.2)]">
+                         <button type="button" onClick={criarGaleriaFreelancer} disabled={criandoGaleria || preparandoCapa || !galeriaForm.nome.trim()} className="cursor-pointer h-11 w-full sm:w-auto flex items-center justify-center gap-2 rounded-xl bg-retratt px-8 text-[10px] font-black uppercase tracking-widest text-black hover:bg-retratt disabled:cursor-not-allowed disabled:opacity-50 transition-colors shadow-[0_0_15px_rgba(255,90,31,0.2)]">
                            {criandoGaleria ? <Loader2 size={14} className="animate-spin shrink-0" /> : <Plus size={14} className="shrink-0" />}
                            {criandoGaleria ? "Criando..." : "Criar galeria"}
                          </button>
@@ -745,9 +748,10 @@ export default function FotografoDashboardPage() {
                                          <CloudUpload size={14} className="shrink-0" /> <span className="truncate max-w-[200px] sm:max-w-none">{editCapaGaleria ? `Selecionada: ${editCapaGaleria.name}` : "Alterar Imagem de Capa"}</span>
                                          <input
                                            type="file"
-                                           accept="image/jpeg,image/png,image/webp"
+                                           accept={ACCEPT_FOTOS_RETRATT}
                                            className="hidden"
-                                           onChange={(e) => setEditCapaGaleria(e.target.files?.[0] || null)}
+                                           disabled={preparandoCapa}
+                                           onChange={async(e) => { const file=e.target.files?.[0];e.target.value='';if(!file)return;setPreparandoCapa(true);try{setEditCapaGaleria(await comprimirCapaRetratt(file));}catch(error){setMensagemGaleria(error instanceof Error?error.message:'Não foi possível preparar a capa.');}finally{setPreparandoCapa(false);} }}
                                          />
                                       </label>
                                    </div>
@@ -779,7 +783,7 @@ export default function FotografoDashboardPage() {
                                          <button
                                            type="button"
                                            onClick={salvarEdicaoGaleria}
-                                           disabled={salvandoEdicao || !editGaleriaForm.nome.trim()}
+                                           disabled={salvandoEdicao || preparandoCapa || !editGaleriaForm.nome.trim()}
                                            className="h-11 w-full sm:w-auto cursor-pointer flex items-center justify-center gap-2 rounded-xl bg-retratt px-8 text-[10px] font-black uppercase tracking-widest text-black hover:bg-retratt disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-[0_0_15px_rgba(255,90,31,0.2)]"
                                          >
                                             {salvandoEdicao ? <Loader2 size={14} className="animate-spin shrink-0" /> : <Check size={14} className="shrink-0" />}
@@ -836,7 +840,7 @@ export default function FotografoDashboardPage() {
                          <div className="flex-1 min-w-0">
                            <p className="text-xs font-black uppercase text-white">Foto de perfil</p>
                            <p className="mt-1 text-[10px] text-zinc-500">Esta imagem identifica você nas galerias e no painel.</p>
-                           <input ref={fotoInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={enviarFotoPerfil} />
+                           <input ref={fotoInputRef} type="file" accept={ACCEPT_FOTOS_RETRATT} className="hidden" onChange={enviarFotoPerfil} />
                            <button type="button" onClick={() => fotoInputRef.current?.click()} disabled={enviandoFoto} className="mt-3 w-full sm:w-auto h-9 cursor-pointer rounded-lg border border-retratt/30 bg-retratt/10 px-4 text-[9px] font-black uppercase tracking-widest text-retratt disabled:opacity-50 text-center">{enviandoFoto ? "Enviando..." : "Adicionar foto"}</button>
                          </div>
                        </div>

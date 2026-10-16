@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { FOTO_UPLOAD_MAX_BYTES } from "@/app/lib/fotos-formatos";
 import { NextResponse } from "next/server";
 import { createR2PresignedPutUrl, deleteR2Object } from "@/app/lib/r2";
 import { fotoIaStorageKey } from "@/app/lib/fotos-ai";
@@ -14,7 +15,7 @@ import {
 
 export const runtime = "nodejs";
 
-const MAX_UPLOAD_FOTO_BYTES = 5 * 1024 * 1024;
+const MAX_UPLOAD_FOTO_BYTES = FOTO_UPLOAD_MAX_BYTES;
 const TIPOS_FOTO = new Set(["image/jpeg", "image/png", "image/webp"]);
 const TIPOS_VIDEO = new Set(["video/mp4", "video/webm", "video/quicktime"]);
 
@@ -63,7 +64,7 @@ export async function POST(request: Request) {
     if (videoPreviewContentType && !videoPreviewContentTypePermitido(videoPreviewContentType)) {
       return NextResponse.json({ error: "Formato da prévia do vídeo não permitido." }, { status: 400 });
     }
-    if (!size || size > limite) return NextResponse.json({ error: ehVideo ? "O vídeo deve ter no máximo 250 MB." : "Foto acima do limite de 5 MB." }, { status: 400 });
+    if (!size || size > limite) return NextResponse.json({ error: ehVideo ? "O vídeo deve ter no máximo 250 MB." : "Foto acima do limite de 40 MB após a preparação." }, { status: 400 });
 
     const fotografo = await obterFotografoDoUsuario(supabase, auth.user.id);
     if (!fotografo || fotografo.status !== "ativo") {

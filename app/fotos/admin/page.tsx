@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
-import { comprimirAvatar, comprimirCapa } from "@/app/lib/comprimir-avatar";
+import { comprimirAvatarRetratt as comprimirAvatar, comprimirCapaRetratt as comprimirCapa } from "@/app/lib/fotos-preparar";
 import FotosShell from "../_components/FotosShell";
 import MercadoPagoConnectButton from "@/app/admin/_components/MercadoPagoConnectButton";
 import { ArrowRight, BarChart3, Camera, CheckCircle2, FolderPlus, ImagePlus, Pencil, Store, Trophy, Wallet, LogOut, Check, AlertCircle, ShieldCheck, UploadCloud, Loader2, X, Trash2, Plus } from "lucide-react";
@@ -13,6 +13,7 @@ import { formatarTelefone } from '@/app/lib/formatar-telefone';
 import { CATEGORIAS_FOTOS } from "@/app/lib/fotos-categorias";
 import CidadeEstadoInput from "@/app/components/CidadeEstadoInput";
 import OpcoesPublicacaoGaleria from "../_components/OpcoesPublicacaoGaleria";
+import { ACCEPT_FOTOS_RETRATT } from "@/app/lib/fotos-formatos";
 import CapaGaleriaInput from "../_components/CapaGaleriaInput";
 import EditorFaixasDesconto from "../_components/EditorFaixasDesconto";
 import { faixasDoEvento, validarFaixasDesconto, type FaixaDesconto } from "@/app/lib/fotos-descontos";
@@ -65,6 +66,7 @@ export default function FotosAdminPage() {
   const [categoriaEvento, setCategoriaEvento] = useState("jiu-jitsu");
   const [manualCapa, setManualCapa] = useState<File | null>(null);
   const [criandoGaleria, setCriandoGaleria] = useState(false);
+  const [preparandoCapa, setPreparandoCapa] = useState(false);
 
   const [eventoSelecionado, setEventoSelecionado] = useState("");
   const [preco, setPreco] = useState("15,00");
@@ -279,17 +281,21 @@ export default function FotosAdminPage() {
 
   async function enviarCapaGaleria(file: File) {
     if (!userId || !editandoGaleria) return;
+    if(preparandoCapa)return;setPreparandoCapa(true);
+    try{
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
     const form = new FormData();
-    form.append("file", file);
+    form.append("file", await comprimirCapa(file));
     const response = await fetch("/api/fotos/capa-upload", { method: "POST", headers: { Authorization: `Bearer ${session.access_token}` }, body: form });
     const resultado = await response.json().catch(() => null);
     if (!response.ok || !resultado?.publicUrl) { setMensagem(resultado?.error || "Não foi possível enviar a capa da galeria."); return; }
     setEdicaoGaleria((atual) => ({ ...atual, capa_url: resultado.publicUrl }));
+    }finally{setPreparandoCapa(false);}
   }
 
   async function salvarEdicaoGaleria() {
+    if(preparandoCapa)return;
     if (!userId || !editandoGaleria || !edicaoGaleria.nome.trim()) return;
     const precoFotoCentavos = converterPrecoCentavos(edicaoGaleria.precoFoto);
     const precoVideoCentavos = converterPrecoCentavos(edicaoGaleria.precoVideo);
@@ -323,7 +329,7 @@ export default function FotosAdminPage() {
   }
 
   async function publicarGaleria() {
-    if (criandoGaleria) return;
+    if (criandoGaleria || preparandoCapa) return;
     setErroCriacao("");
     if (isManual && !manualForm.nome.trim()) { setErroCriacao("Informe o nome da galeria."); return; }
     if (isManual && (!manualForm.cidade.trim() || !manualForm.estado)) { setErroCriacao("Selecione a cidade do evento na lista."); return; }
@@ -643,21 +649,21 @@ export default function FotosAdminPage() {
                   <div className="flex flex-wrap gap-2 mb-6 bg-black/50 p-1.5 rounded-xl border border-white/5 w-fit">
                     <button
                       type="button"
-                      disabled={criandoGaleria} aria-pressed={!isManual} onClick={() => setIsManual(false)}
+                      disabled={criandoGaleria || preparandoCapa} aria-pressed={!isManual} onClick={() => setIsManual(false)}
                       className={`px-4 py-2.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${!isManual ? 'bg-retratt text-black shadow-md' : 'text-zinc-500 hover:text-white'}`}
                     >
                       Usar evento do iTatame
                     </button>
                     <button
                       type="button"
-                      disabled={criandoGaleria} aria-pressed={isManual} onClick={() => setIsManual(true)}
+                      disabled={criandoGaleria || preparandoCapa} aria-pressed={isManual} onClick={() => setIsManual(true)}
                       className={`px-4 py-2.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${isManual ? 'bg-retratt text-black shadow-md' : 'text-zinc-500 hover:text-white'}`}
                     >
                       Criar do zero
                     </button>
                   </div>
 
-                  <fieldset disabled={criandoGaleria} className="space-y-5 disabled:opacity-60">
+                  <fieldset disabled={criandoGaleria || preparandoCapa} className="space-y-5 disabled:opacity-60">
                     <legend className="mb-4 text-sm font-bold text-white">1. Dados da galeria</legend>
                     <p className="text-xs leading-relaxed text-zinc-400">Use os dados de um evento do iTatame ou crie uma galeria para qualquer evento. Depois, credencie os fotógrafos e defina o acordo de cada um.</p>
                     <div>
@@ -709,13 +715,13 @@ export default function FotosAdminPage() {
                       </label>
                       <EditorFaixasDesconto faixas={faixasCriacao} onChange={setFaixasCriacao} />
                     </>}
-                    <CapaGaleriaInput file={manualCapa} onChange={setManualCapa} fallbackUrl={!isManual ? eventosBase.find((evento) => evento.id === eventoSelecionado)?.banner_url : null} />
+                    <CapaGaleriaInput file={manualCapa} onChange={setManualCapa} onPreparandoChange={setPreparandoCapa} fallbackUrl={!isManual ? eventosBase.find((evento) => evento.id === eventoSelecionado)?.banner_url : null} />
                     <p className="rounded-xl border border-white/10 p-3 text-xs leading-relaxed text-zinc-400">Após criar, credencie os fotógrafos pelo e-mail e escolha o modelo de recebimento: royalty por venda ou contratação por diária.</p>
                     <div className="mt-6 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-3 pt-4 border-t border-white/5">
-                      <button type="button" disabled={criandoGaleria} onClick={() => setMostrarCriarGaleria(false)} className="h-11 w-full sm:w-auto cursor-pointer rounded-xl border border-white/10 bg-transparent px-6 text-[10px] font-black uppercase tracking-widest text-white hover:bg-white/5 transition-colors">
+                      <button type="button" disabled={criandoGaleria || preparandoCapa} onClick={() => setMostrarCriarGaleria(false)} className="h-11 w-full sm:w-auto cursor-pointer rounded-xl border border-white/10 bg-transparent px-6 text-[10px] font-black uppercase tracking-widest text-white hover:bg-white/5 transition-colors">
                          Cancelar
                       </button>
-                      <button onClick={publicarGaleria} disabled={criandoGaleria} className="h-11 w-full sm:w-auto cursor-pointer flex items-center justify-center gap-2 rounded-xl bg-retratt px-8 text-[10px] font-black uppercase tracking-widest text-black hover:bg-retratt disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-[0_0_15px_rgba(255,90,31,0.2)]">
+                      <button onClick={publicarGaleria} disabled={criandoGaleria || preparandoCapa} className="h-11 w-full sm:w-auto cursor-pointer flex items-center justify-center gap-2 rounded-xl bg-retratt px-8 text-[10px] font-black uppercase tracking-widest text-black hover:bg-retratt disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-[0_0_15px_rgba(255,90,31,0.2)]">
                         {criandoGaleria ? <Loader2 size={14} className="animate-spin shrink-0"/> : <Check size={14} className="shrink-0" />}
                         {criandoGaleria ? "Criando..." : "Criar Galeria"}
                       </button>
@@ -831,9 +837,9 @@ export default function FotosAdminPage() {
                                  <UploadCloud size={14} className="shrink-0" /> <span className="truncate max-w-[200px] sm:max-w-none">Alterar Imagem</span>
                                  <input
                                    type="file"
-                                   accept="image/jpeg,image/png,image/webp"
+                                   accept={ACCEPT_FOTOS_RETRATT}
                                    className="hidden"
-                                   onChange={(e) => { const file = e.target.files?.[0]; if (file) void enviarCapaGaleria(file); }}
+                                   onChange={(e) => { const file = e.target.files?.[0]; if (file) void enviarCapaGaleria(file).catch(error => setMensagem(error instanceof Error?error.message:'Não foi possível preparar a capa.')); }}
                                  />
                               </label>
                            </div>
@@ -867,7 +873,7 @@ export default function FotosAdminPage() {
                                  <button
                                    type="button"
                                    onClick={salvarEdicaoGaleria}
-                                   disabled={salvandoGaleria || !edicaoGaleria.nome.trim()}
+                                   disabled={salvandoGaleria || preparandoCapa || !edicaoGaleria.nome.trim()}
                                    className="h-11 w-full sm:w-auto cursor-pointer flex items-center justify-center gap-2 rounded-xl bg-retratt px-8 text-[10px] font-black uppercase tracking-widest text-black hover:bg-retratt disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-[0_0_15px_rgba(255,90,31,0.2)]"
                                  >
                                     {salvandoGaleria ? <Loader2 size={14} className="animate-spin shrink-0" /> : <Check size={14} className="shrink-0" />}
@@ -1014,14 +1020,14 @@ export default function FotosAdminPage() {
                  <div className="space-y-4">
                    <div className="grid gap-3 sm:grid-cols-2 mb-4 bg-black/40 p-4 rounded-2xl border border-white/5">
                      <div>
-                        <input type="file" accept="image/*" className="hidden" ref={avatarInputRef} onChange={(e) => handleImageUpload(e, 'avatar')} />
+                        <input type="file" accept={ACCEPT_FOTOS_RETRATT} className="hidden" ref={avatarInputRef} onChange={(e) => handleImageUpload(e, 'avatar')} />
                         <button onClick={() => avatarInputRef.current?.click()} disabled={fazendoUpload === 'avatar'} className="w-full h-10 rounded-lg border border-dashed border-white/20 hover:border-retratt bg-white/5 flex items-center justify-center gap-2 text-[9px] font-black uppercase tracking-widest text-zinc-400 hover:text-retratt transition-all cursor-pointer">
                           {fazendoUpload === 'avatar' ? <Loader2 size={12} className="animate-spin" /> : <Camera size={12} />}
                           {fazendoUpload === 'avatar' ? 'A carregar...' : 'Logo do Organizador'}
                         </button>
                      </div>
                      <div>
-                        <input type="file" accept="image/*" className="hidden" ref={capaInputRef} onChange={(e) => handleImageUpload(e, 'capa')} />
+                        <input type="file" accept={ACCEPT_FOTOS_RETRATT} className="hidden" ref={capaInputRef} onChange={(e) => handleImageUpload(e, 'capa')} />
                         <button onClick={() => capaInputRef.current?.click()} disabled={fazendoUpload === 'capa'} className="w-full h-10 rounded-lg border border-dashed border-white/20 hover:border-retratt bg-white/5 flex items-center justify-center gap-2 text-[9px] font-black uppercase tracking-widest text-zinc-400 hover:text-retratt transition-all cursor-pointer">
                           {fazendoUpload === 'capa' ? <Loader2 size={12} className="animate-spin" /> : <UploadCloud size={12} />}
                           {fazendoUpload === 'capa' ? 'A carregar...' : 'Banner (Vitrine)'}

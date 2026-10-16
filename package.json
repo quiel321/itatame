@@ -24,6 +24,7 @@
     "install": "^0.13.0",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",
+    "libraw-wasm-nothread": "1.6.0-nothread.1",
     "lucide-react": "^1.17.0",
     "mediabunny": "^1.59.1",
     "mercadopago": "^3.0.0",
@@ -35,6 +36,7 @@
     "react-qr-code": "^2.0.21",
     "resend": "^6.12.4",
     "sharp": "0.34.5",
+    "utif": "3.1.0",
     "web-push": "^3.6.7"
   },
   "devDependencies": {
