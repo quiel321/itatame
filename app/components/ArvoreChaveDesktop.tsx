@@ -63,7 +63,7 @@ function achar(lutas: LutaArvore[], id: string) {
 function slot(
   luta: LutaArvore | undefined,
   lado: 1 | 2,
-  buscarFoto: (id?: number | null) => string | null,
+  buscarFoto: (id?: number | null, nome?: string | null) => string | null,
   onAvancar?: (...args: unknown[]) => void,
 ): AtletaSlot {
   if (!luta) return { nome: '', equipe: '', foto: null };
@@ -77,7 +77,7 @@ function slot(
     nome,
     equipe: real ? String((lado === 1 ? luta.equipe_1 : luta.equipe_2) || '') : (nome ? 'Aguardando resultado' : ''),
     numero: real ? (lado === 1 ? luta.numero_1 : luta.numero_2) : '',
-    foto: real ? buscarFoto(id) : null,
+    foto: real ? buscarFoto(id, bruto) : null,
     horario: luta.horario_estimado,
     status: luta.status_luta,
     tatame: luta.tatame,
@@ -123,7 +123,7 @@ function Atleta({
         className={`flex w-full flex-col items-center justify-center gap-1.5 py-1 ${podeClicar ? 'cursor-pointer hover:scale-105' : ''}`}
       >
         <div className={`flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border-[3px] border-yellow-500 bg-black shadow-[0_0_20px_rgba(234,179,8,0.45)] ${destaque ? 'ring-2 ring-yellow-300' : ''}`}>
-          {foto && !placeholder ? <img src={foto} alt={nome} className="h-full w-full object-cover" /> : (
+          {foto && !placeholder ? <img src={foto} alt={nome} className="h-full w-full object-contain" /> : (
             <svg className="h-8 w-8 text-yellow-600" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" /></svg>
           )}
         </div>
@@ -148,7 +148,7 @@ function Atleta({
         <div className={`flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full border ${
           venceu ? 'border-green-400' : placeholder ? 'border-cyan-500/40' : vazio ? 'border-white/10' : 'border-zinc-600'
         } bg-black`}>
-          {foto && !placeholder ? <img src={foto} alt="" className="h-full w-full object-cover" /> : (
+          {foto && !placeholder ? <img src={foto} alt="" className="h-full w-full object-contain" /> : (
             <svg className={`h-4 w-4 ${placeholder ? 'text-cyan-500' : 'text-zinc-600'}`} fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" /></svg>
           )}
         </div>
@@ -200,7 +200,7 @@ function LadoArvore({
   colunas: string[][];
   reverso?: boolean;
   lutas: LutaArvore[];
-  buscarFoto: (id?: number | null) => string | null;
+  buscarFoto: (id?: number | null, nome?: string | null) => string | null;
   destaque: string;
   onAvancar?: (...args: unknown[]) => void;
   rotulos: string[];
@@ -285,7 +285,7 @@ function CartaoCentro({
   luta?: LutaArvore;
   titulo: string;
   final?: boolean;
-  buscarFoto: (id?: number | null) => string | null;
+  buscarFoto: (id?: number | null, nome?: string | null) => string | null;
   destaque: string;
   onAvancar?: (...args: unknown[]) => void;
 }) {
@@ -311,7 +311,7 @@ function CentroFinal({
 }: {
   final?: LutaArvore;
   caminho: LutaArvore[];
-  buscarFoto: (id?: number | null) => string | null;
+  buscarFoto: (id?: number | null, nome?: string | null) => string | null;
   destaque: string;
   onAvancar?: (...args: unknown[]) => void;
   rotulo: string;
@@ -345,7 +345,7 @@ export default function ArvoreChaveDesktop({
   lutas: LutaArvore[];
   abaAtual?: number;
   totalAbas?: number;
-  buscarFoto: (id?: number | null) => string | null;
+  buscarFoto: (id?: number | null, nome?: string | null) => string | null;
   destaque?: string;
   onAvancar?: (...args: unknown[]) => void;
 }) {
@@ -358,7 +358,7 @@ export default function ArvoreChaveDesktop({
   const campeao: AtletaSlot = {
     nome: campeaoNome,
     equipe: '',
-    foto: buscarFoto(final?.vencedor_id),
+    foto: buscarFoto(final?.vencedor_id, final?.vencedor),
     onAvancar,
     luta_id: final?.id_visual,
     id_banco: final?.id,

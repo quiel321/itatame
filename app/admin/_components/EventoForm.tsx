@@ -361,7 +361,7 @@ export default function EventoForm({ modo, eventoId }: EventoFormProps) {
           ? "regulamentos/reg-" + eventoId + "-" + Date.now() + "." + fileExt
           : "regulamentos/reg-" + Date.now() + "." + fileExt;
         const { error: uploadError } = await supabase.storage.from("eventos").upload(filePath, regulamentoFile, { upsert: false });
-        if (uploadError) throw new Error("Erro no upload do regulamento: " + uploadError.message);
+        if (uploadError) throw new Error("Erro no upload do cronograma: " + uploadError.message);
         finalRegulamentoUrl = supabase.storage.from("eventos").getPublicUrl(filePath).data.publicUrl;
       }
 
@@ -483,7 +483,7 @@ export default function EventoForm({ modo, eventoId }: EventoFormProps) {
         </header>
         {editando && trava !== "nenhuma" && <p className="rounded-xl border border-amber-500/25 bg-amber-500/10 p-4 text-xs text-amber-100">
           {trava === "inscricoes" ? "Já existem inscrições: preços e datas dos lotes estão protegidos." : trava === "chaves" ? "As chaves foram geradas: preços, lotes e data do evento estão protegidos." : "Lutas iniciadas: preços, lotes, data e situação manual estão protegidos."}
-          {' '}Outros dados, como local, descrição, regulamento e banner, ainda podem ser corrigidos.
+          {' '}Outros dados, como local, descrição, cronograma e banner, ainda podem ser corrigidos.
         </p>}
 
         {(erro || sucesso || comprimindo) && (
@@ -584,13 +584,13 @@ export default function EventoForm({ modo, eventoId }: EventoFormProps) {
             </div>
 
             <div className={cardClass}>
-              <SectionTitle icon={<ImagePlus size={16} />} title="Arquivos" subtitle="Banner, regulamento e tabela de peso em PDF." />
+              <SectionTitle icon={<ImagePlus size={16} />} title="Arquivos" subtitle="Banner, cronograma e tabela de peso em PDF." />
               <div className="mt-4 grid gap-3 md:grid-cols-3">
                 <Field label="Banner"><input type="file" accept="image/*" onChange={handleBannerChange} className="block w-full text-xs text-zinc-400 file:mr-3 file:rounded-lg file:border-0 file:bg-white file:px-4 file:py-2 file:text-xs file:font-black file:uppercase file:tracking-widest file:text-black" /></Field>
-                <Field label="Regulamento"><input type="file" accept="application/pdf" onChange={(e) => setRegulamentoFile(e.target.files?.[0] || null)} className="block w-full text-xs text-zinc-400 file:mr-3 file:rounded-lg file:border-0 file:bg-white file:px-4 file:py-2 file:text-xs file:font-black file:uppercase file:tracking-widest file:text-black" /></Field>
+                <Field label="Cronograma (PDF)"><input type="file" accept="application/pdf" onChange={(e) => setRegulamentoFile(e.target.files?.[0] || null)} className="block w-full text-xs text-zinc-400 file:mr-3 file:rounded-lg file:border-0 file:bg-white file:px-4 file:py-2 file:text-xs file:font-black file:uppercase file:tracking-widest file:text-black" /></Field>
                 <Field label="Tabela de Peso (PDF)"><input type="file" accept="application/pdf,.pdf" onChange={(e) => setTabelaPesoFile(e.target.files?.[0] || null)} className="block w-full text-xs text-zinc-400 file:mr-3 file:rounded-lg file:border-0 file:bg-white file:px-4 file:py-2 file:text-xs file:font-black file:uppercase file:tracking-widest file:text-black" /></Field>
               </div>
-              {regulamentoAtualUrl && <a href={regulamentoAtualUrl} target="_blank" className="mt-3 inline-flex text-xs font-bold text-cyan-300 hover:text-cyan-200">Regulamento atual cadastrado</a>}
+              {regulamentoAtualUrl && <a href={regulamentoAtualUrl} target="_blank" className="mt-3 inline-flex text-xs font-bold text-cyan-300 hover:text-cyan-200">Cronograma atual cadastrado</a>}
               {tabelaPesoAtualUrl && <a href={tabelaPesoAtualUrl} target="_blank" rel="noopener noreferrer" className="mt-3 ml-4 inline-flex text-xs font-bold text-cyan-300 hover:text-cyan-200">Tabela de peso atual cadastrada</a>}
             </div>
             <div className="flex justify-end border-t border-white/10 pt-5">

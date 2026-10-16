@@ -27,7 +27,7 @@ export default function RevisaoChavesOrganizador({ eventoId, atualizacao }: { ev
   setCategorias(data || []);
   setCategoriaId(anterior => (data || []).some((c: Categoria) => c.categoria_id === anterior) ? anterior : data?.[0]?.categoria_id || '');
  }, [eventoId]);
- useEffect(() => { void carregar(); }, [carregar, atualizacao]);
+ useEffect(() => { const inicio = window.setTimeout(() => { void carregar(); }, 0); return () => window.clearTimeout(inicio); }, [carregar, atualizacao]);
  const categoria = categorias.find(c => c.categoria_id === categoriaId);
  const a = categoria?.posicoes.find(p => chave(p) === primeira);
  const b = categoria?.posicoes.find(p => chave(p) === segunda);
@@ -48,26 +48,30 @@ export default function RevisaoChavesOrganizador({ eventoId, atualizacao }: { ev
   finally { setOcupado(false); aviso.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
  }
  async function agir(acao: string) {
-  if (!categoria || ocupado) return;
+  if (!categoria || ocupado || (acao === 'publicar' && trocaSelecionada)) return;
   setOcupado(true);
-  const { error } = await supabase.rpc('chaves_revisar', {
-   p_categoria: categoria.categoria_id, p_revisao: categoria.revisao, p_acao: acao,
-   p_luta_a: a?.luta || null, p_lado_a: a?.lado || null,
-   p_luta_b: b?.luta || null, p_lado_b: b?.lado || null, p_motivo: motivo.trim() || null,
-  });
-  setMensagem(error ? error.message : acao === 'publicar' ? 'Categoria publicada para atletas, público e operadores.' : acao === 'revisar' ? 'Categoria retirada da divulgação para revisão.' : 'Posições trocadas. Confira antes de publicar.');
-  await carregar(); setOcupado(false); if (!error) setMotivo('');
-  aviso.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  try {
+   const { error } = await supabase.rpc('chaves_revisar', {
+    p_categoria: categoria.categoria_id, p_revisao: categoria.revisao, p_acao: acao,
+    p_luta_a: a?.luta || null, p_lado_a: a?.lado || null,
+    p_luta_b: b?.luta || null, p_lado_b: b?.lado || null, p_motivo: motivo.trim() || null,
+   });
+   if (error) { setMensagem(error.message); return; }
+   setMensagem(acao === 'publicar' ? 'Categoria publicada para atletas, público e operadores.' : acao === 'revisar' ? 'Categoria retirada da divulgação para revisão.' : 'Troca salva em rascunho. Você pode ajustar outras categorias e publicar todas ao final.');
+   await carregar(); setMotivo('');
+  } catch { setMensagem('Não foi possível confirmar a alteração. Atualize a revisão para conferir antes de tentar novamente.'); }
+  finally { setOcupado(false); aviso.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+
  }
  return <section className="rounded-2xl border border-cyan-500/20 bg-[#111116] p-4 md:p-6 space-y-4">
-  <div><h2 className="font-bold text-lg">Revisar e publicar chaves</h2><p className="text-xs text-zinc-400 mt-1">Confira e ajuste os confrontos. Depois, publique todas de uma vez ou cada categoria.</p></div>
+  <div><h2 className="font-bold text-lg">Revisar e publicar chaves</h2><p className="text-xs text-zinc-400 mt-1">1. Escolha a categoria. 2. Salve cada troca em rascunho. 3. Após conferir todas, use “Publicar todas as chaves”.</p></div>
   <div ref={aviso} role="status" className={mensagem ? 'rounded-xl border border-cyan-500/30 p-3 text-sm text-cyan-200' : ''}>{mensagem}</div>
   <button disabled={ocupado} onClick={() => void carregar()} className="text-xs text-cyan-300">Atualizar revisão</button>
   {!categorias.length ? <p className="text-sm text-zinc-400">Gere as chaves para iniciar a revisão.</p> : <>
    <div className="rounded-xl border border-green-500/20 bg-green-500/5 p-3 space-y-2">
     <p className="text-xs text-zinc-300">{rascunhos.length} em rascunho · {categorias.length - rascunhos.length} publicada(s)</p>
     <button disabled={ocupado || !rascunhos.length || trocaSelecionada} onClick={() => void publicarTodas()} className="w-full rounded-xl bg-green-600 p-3 font-bold text-sm disabled:opacity-40">{ocupado ? 'Aguarde...' : rascunhos.length ? `Publicar todas as chaves (${rascunhos.length})` : 'Todas as chaves publicadas'}</button>
-    <p className="text-xs text-zinc-400">Após conferir os ajustes, este botão publica todos os rascunhos juntos.</p>
+    <p className="text-xs text-zinc-400">Cada troca salva fica guardada no servidor sem divulgar a categoria. Você pode sair e continuar depois. Este botão publica todos os rascunhos juntos.</p>
     {trocaSelecionada && <p className="text-xs text-yellow-200">Salve a troca selecionada ou <button disabled={ocupado} onClick={() => { setPrimeira(''); setSegunda(''); }} className="underline">limpe a seleção</button> antes de publicar todas.</p>}
    </div>
    <select aria-label="Categoria para revisão" value={categoriaId} disabled={ocupado} onChange={e => { setCategoriaId(e.target.value); setPrimeira(''); setSegunda(''); setMotivo(''); setMensagem(''); }} className="w-full min-w-0 rounded-xl bg-black border border-white/15 p-3 text-sm">
@@ -88,9 +92,9 @@ export default function RevisaoChavesOrganizador({ eventoId, atualizacao }: { ev
       <button disabled={ocupado || motivo.trim().length < 3} onClick={() => void agir('revisar')} className="w-full rounded-xl border border-yellow-500/40 p-3 text-sm text-yellow-200 disabled:opacity-40">Retirar da divulgação e revisar</button>
      </> : <>
       <div className="grid gap-2 sm:grid-cols-2">{[1, 2].map(n => <select key={n} aria-label={`Atleta ${n} para troca`} disabled={ocupado} value={n === 1 ? primeira : segunda} onChange={e => n === 1 ? setPrimeira(e.target.value) : setSegunda(e.target.value)} className="w-full min-w-0 rounded-xl bg-black border border-white/15 p-3 text-sm"><option value="">Escolha o atleta {n}</option>{categoria.posicoes.filter(p => n === 1 || !a || (p.divisao === a.divisao && p.faixa === a.faixa)).map(p => <option key={chave(p)} value={chave(p)}>{p.atleta} · luta {p.ordem}, posição {p.lado}</option>)}</select>)}</div>
-      <button disabled={ocupado || !podeTrocar} onClick={() => void agir('trocar')} className="w-full rounded-xl border border-white/20 p-3 text-sm disabled:opacity-40">Trocar as duas posições</button>
+      <button disabled={ocupado || !podeTrocar} onClick={() => void agir('trocar')} className="w-full rounded-xl border border-white/20 p-3 text-sm disabled:opacity-40">Salvar troca em rascunho</button>
       <p className="text-xs text-zinc-400">Trocar posições pode mudar a separação de equipes definida pelo sorteio. Confira os confrontos no PDF antes de publicar.</p>
-      <button disabled={ocupado} onClick={() => void agir('publicar')} className="w-full rounded-xl bg-green-600 p-3 font-bold text-sm disabled:opacity-40">Publicar chaves desta categoria</button>
+      <button disabled={ocupado || trocaSelecionada} onClick={() => void agir('publicar')} className="w-full rounded-xl bg-green-600 p-3 font-bold text-sm disabled:opacity-40">Publicar chaves desta categoria</button>
      </>}
     </>}
    </>}

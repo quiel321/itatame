@@ -9,7 +9,7 @@ import { processarAvancosAutomaticosChaves } from '@/app/lib/chaves-auto-avanco'
 import { obterTempoRegulamentar } from '@/app/lib/cronograma';
 import { rotuloLuta } from '@/app/lib/lutas-rotulos';
 import { semFaixaDuplicada } from '@/app/lib/categorias-competicao';
-import { sugestoesCategoriaPorTatame } from '@/app/lib/sugestao-categoria-tatame';
+import ProgramacaoLutas from './ProgramacaoLutas';
 import { ordemOperacionalChaveTriangular, placeholderSlotChaveDeTres, textoAguardandoChaveDeTres } from '@/app/lib/chave-de-tres';
 import FilaCategoriasChamador from '@/app/components/FilaCategoriasChamador';
 import { filaCategoriasTatame, normalizarTatameSequencia } from '@/app/lib/sequencia-tatames';
@@ -263,7 +263,7 @@ export default function ChamadorOperacao() {
   const aguardandoCheckin = useMemo(() => lutasVisiveis.filter((luta) => atletaReal(luta.atleta_1) && atletaReal(luta.atleta_2) && luta.status_luta !== 'em_andamento' && !luta.iniciada_em && (!checkinAprovado(luta) || !ambosPresentes(luta))), [lutasVisiveis]);
   const tatamesFila = useMemo(() => Array.from(new Set(lutasCronograma.map(l => l.tatame?.trim()).filter((t): t is string => Boolean(t)))).sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true })), [lutasCronograma]);
   const sequencias = useMemo(() => tatamesFila.filter(t => !tatameAtivo || normalizarTatameSequencia(t) === normalizarTatameSequencia(tatameAtivo)).map(tatame => ({ tatame, categorias: filaCategoriasTatame(lutasCronograma.filter(l => normalizarTatameSequencia(l.tatame) === normalizarTatameSequencia(tatame))) })), [lutasCronograma, tatamesFila, tatameAtivo]);
-  const sugestoes = useMemo(() => sugestoesCategoriaPorTatame(lutas).filter(s => !tatameAtivo || normalizarTatameSequencia(s.tatame) === normalizarTatameSequencia(tatameAtivo)), [lutas, tatameAtivo]);
+
 
   useEffect(() => {
     if (!sessao || lutas.length === 0) return;
@@ -565,7 +565,7 @@ export default function ChamadorOperacao() {
       </header>
 
       <div className="mx-auto w-full max-w-7xl min-w-0 space-y-4 p-3 md:space-y-6 md:p-6">
-        {sugestoes.length > 0 && <section className="rounded-2xl border border-cyan-500/25 bg-cyan-500/5 p-4"><h2 className="text-xs font-black uppercase text-cyan-200">Próxima categoria por tatame</h2><p className="mt-1 text-[10px] text-zinc-400">Sugestão baseada na ordem e no horário definidos em Tatames.</p><div className="mt-3 grid gap-2 md:grid-cols-2 lg:grid-cols-3">{sugestoes.map(({ tatame, proxima, aguardarHorario }) => <div key={tatame} className="rounded-xl border border-white/10 bg-black/40 p-3 text-xs"><strong className="block text-white">{tatame} · {tituloCategoria(proxima)}</strong><span className={aguardarHorario ? 'text-yellow-300' : 'text-cyan-300'}>{aguardarHorario ? `Aguardar início previsto: ${hora(proxima.horario_estimado)}` : proxima.iniciada_em ? 'Luta chamada; aguardar mesário' : `Próxima na ordem · ${hora(proxima.horario_estimado)}`}</span></div>)}</div></section>}
+        <ProgramacaoLutas eventoId={String(sessao?.evento_id || '')} tatame={tatameAtivo} />
         <section className="rounded-2xl border border-white/10 bg-[#0b0b10] p-3">
           <label htmlFor="tatame-chamador" className="mb-2 block text-xs font-bold text-zinc-300">Qual tatame você está atendendo?</label>
           <select id="tatame-chamador" value={tatameAtivo} onChange={e => { setTatameAtivo(e.target.value); setCategoriaAtiva(''); }} className="min-h-12 w-full rounded-xl border border-white/15 bg-black px-3 text-sm font-bold text-white">

@@ -13,6 +13,7 @@ import { dataOperacional, type EventoComEtapas } from "@/app/lib/evento-etapas"
 import { agendarChavesAutomaticas } from "@/app/lib/agendar-chaves-automaticas"
 import { totalAbasArvore } from "@/app/lib/chave-visual"
 import { consultarChavesPublicadas } from '@/app/lib/chaves-publicadas';
+import { carregarFotosDaChave, fotoAtletaPorIdentidade, type FotoAtletaPublica } from "@/app/lib/fotos-atletas";
 import { situacaoAtletaLuta } from '@/app/lib/situacao-atleta-luta';
 
 export default function ChavesPage() {
@@ -28,7 +29,7 @@ export default function ChavesPage() {
   const [erroSituacoes, setErroSituacoes] = useState('');
   const [abaAtual, setAbaAtual] = useState(1)
   
-  const [atletasDB, setAtletasDB] = useState<{ id?: number; nome: string; foto_url: string | null }[]>([])
+  const [atletasDB, setAtletasDB] = useState<FotoAtletaPublica[]>([])
 
   async function carregarCategorias() {
     const { data } = await consultarChavesPublicadas(supabase, String(params.id), "categoria, faixa")
@@ -38,18 +39,17 @@ export default function ChavesPage() {
     }
   }
 
-  async function carregarFotos() {
-    const { data } = await supabase.from('atletas_publico').select('id, nome, foto_url');
-    if (data) setAtletasDB(data);
-  }
-
   async function carregarChaves() {
     if (!categoriaSelecionada) return
     const [cat, fx] = categoriaSelecionada.split("__")
+    const consultaFotos = async (registros: typeof lutas) => {
+      try { setAtletasDB(await carregarFotosDaChave(supabase, registros)); } catch { /* Atualização periódica tenta novamente. */ }
+    };
     const [{ data }, resposta] = await Promise.all([
       consultarChavesPublicadas(supabase, String(params.id), "*", cat, fx),
       fetch(`/api/eventos/${params.id}/situacao-chave`, {cache:'no-store'}).catch(() => null),
     ]);
+    void consultaFotos(data || []);
     if (!resposta?.ok) { setErroSituacoes('Situação da pesagem temporariamente indisponível.'); setLutas(data || []); return; }
     const {situacoes=[]} = await resposta.json();
     const mapa = new Map<string,string>(situacoes.map((s: {categoria_id:string;atleta_id:number;situacao:string}) => [`${s.categoria_id}:${s.atleta_id}`,s.situacao]));
@@ -70,7 +70,6 @@ export default function ChavesPage() {
       cancelarGeracao = agendarChavesAutomaticas(String(params.id), divulgacao, async () => {
         if (!ativo) return;
         await carregarCategorias();
-        void carregarFotos();
         // Atualiza a tela quando o horário chega sem precisar recarregar a aba.
         if (ativo) setEvento({ ...data });
       });
@@ -108,19 +107,8 @@ export default function ChavesPage() {
     return String(nome);
   }
 
-  const buscarFoto = (idNumerico?: number | null, nomeLimpo?: string): string | null => {
-    if (idNumerico) {
-      const porId = atletasDB.find(a => Number(a.id) === Number(idNumerico) && a.foto_url);
-      if (typeof porId?.foto_url === 'string' && porId.foto_url) return porId.foto_url;
-    }
-    if (!nomeLimpo) return null;
-    const upper = nomeLimpo.toUpperCase();
-    let match = atletasDB.find(a => a.nome && a.nome.toUpperCase() === upper && a.foto_url);
-    if (!match) {
-        match = atletasDB.find(a => a.nome && a.nome.toUpperCase().includes(upper) && a.foto_url);
-    }
-    return typeof match?.foto_url === 'string' && match.foto_url ? match.foto_url : null;
-  }
+  const buscarFoto = (idNumerico?: number | null, nomeLimpo?: string): string | null =>
+    fotoAtletaPorIdentidade(atletasDB, idNumerico, nomeLimpo);
 
   const getCampeao = () => {
     const lutaFinal = lutas.find(l => String(l.id_visual) === "999") || lutas.find(l => !l.proxima_luta);
@@ -203,7 +191,7 @@ export default function ChavesPage() {
             <div className="mb-3 flex items-center gap-3 rounded-xl border border-yellow-500/30 bg-gradient-to-r from-yellow-600/20 to-[#0c1220] px-3 py-2.5">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-yellow-500 bg-black">
                 {campeaoData.foto ? (
-                  <img src={campeaoData.foto} className="h-full w-full object-cover" />
+                  <img src={campeaoData.foto} className="h-full w-full object-contain" />
                 ) : (
                   <span className="text-sm font-black text-yellow-500">{campeaoData.nome.charAt(0)}</span>
                 )}
@@ -224,8 +212,8 @@ export default function ChavesPage() {
                 if (avanco) return <AvancoSemCombateCard key={luta.id} avanco={avanco} impedimento={situacaoAtletaLuta(luta, avanco.lado)} />;
                 const a1 = limparNome(luta.atleta_1) || (modeloCombates ? nomeOrigemPrevista(modeloCombates.origem(luta, 1)) : "");
                 const a2 = limparNome(luta.atleta_2) || (modeloCombates ? nomeOrigemPrevista(modeloCombates.origem(luta, 2)) : "");
-                const foto1 = buscarFoto(luta.atleta_1_id, a1);
-                const foto2 = buscarFoto(luta.atleta_2_id, a2);
+                const foto1 = buscarFoto(luta.atleta_1_id || modeloCombates?.origem(luta, 1)?.atleta?.id, a1);
+                const foto2 = buscarFoto(luta.atleta_2_id || modeloCombates?.origem(luta, 2)?.atleta?.id, a2);
                 const situacao1 = situacaoAtletaLuta(luta,1), situacao2 = situacaoAtletaLuta(luta,2);
 
                 return (
@@ -243,7 +231,7 @@ export default function ChavesPage() {
                       <div className={`flex justify-between items-center p-2 rounded-lg border ${luta.vencedor && luta.vencedor === a1 ? 'bg-green-500/10 border-green-500/40' : 'bg-black/40 border-white/5'}`}>
                         <div className="flex items-center gap-2.5">
                           <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center text-xs font-black text-zinc-400 border border-zinc-600 overflow-hidden shrink-0">
-                            {foto1 ? <img src={foto1} className="w-full h-full object-cover"/> : a1 ? a1.charAt(0) : "?"}
+                            {foto1 ? <img src={foto1} className="w-full h-full object-contain"/> : a1 ? a1.charAt(0) : "?"}
                           </div>
                           <div className="flex flex-col overflow-hidden">
                             <span className={`text-xs font-black uppercase tracking-tight truncate ${luta.vencedor === a1 ? 'text-green-400' : 'text-white'}`}>{a1 || "A DEFINIR"}</span>
@@ -262,7 +250,7 @@ export default function ChavesPage() {
                       <div className={`flex justify-between items-center p-2 rounded-lg border ${luta.vencedor && luta.vencedor === a2 ? 'bg-green-500/10 border-green-500/40' : 'bg-black/40 border-white/5'}`}>
                         <div className="flex items-center gap-2.5">
                           <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center text-xs font-black text-zinc-400 border border-zinc-600 overflow-hidden shrink-0">
-                            {foto2 ? <img src={foto2} className="w-full h-full object-cover"/> : a2 ? a2.charAt(0) : "?"}
+                            {foto2 ? <img src={foto2} className="w-full h-full object-contain"/> : a2 ? a2.charAt(0) : "?"}
                           </div>
                           <div className="flex flex-col overflow-hidden">
                             <span className={`text-xs font-black uppercase tracking-tight truncate ${luta.vencedor === a2 ? 'text-green-400' : 'text-white'}`}>{a2 || "A DEFINIR"}</span>

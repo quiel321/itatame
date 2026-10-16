@@ -15,6 +15,8 @@ import ArvoreChaveDesktop from "@/app/components/ArvoreChaveDesktop"
 import AvisoChaves from "@/app/components/AvisoChaves"
 import { dataOperacional, type EventoComEtapas } from "@/app/lib/evento-etapas"
 import { totalAbasArvore } from "@/app/lib/chave-visual"
+import { carregarFotosDaChave, fotoAtletaPorIdentidade, type FotoAtletaPublica } from "@/app/lib/fotos-atletas";
+import { normalizarTextoLocalidade } from "@/app/lib/localidades";
 import { consultarChavesPublicadas } from '@/app/lib/chaves-publicadas';
 
 const formatarHorarioEstimado = (isoString: string | null) => {
@@ -43,7 +45,7 @@ export default function ChavesPublicoPage() {
   const [categoriaSelecionada, setCategoriaSelecionada] = useState("")
   const [lutas, setLutas] = useState<any[]>([])
   const [abaAtual, setAbaAtual] = useState(1)
-  const [atletasDB, setAtletasDB] = useState<any[]>([])
+  const [atletasDB, setAtletasDB] = useState<FotoAtletaPublica[]>([])
   const [temPendencia, setTemPendencia] = useState(false)
   const [versaoChaves, setVersaoChaves] = useState(0)
   const [eventoNome, setEventoNome] = useState("")
@@ -72,18 +74,17 @@ export default function ChavesPublicoPage() {
     }
   }
 
-  async function carregarFotos() {
-    const { data } = await supabase.from('atletas_publico').select('id, nome, foto_url');
-    if (data) setAtletasDB(data);
-  }
-
   async function carregarChaves() {
     if (!categoriaSelecionada || !idEvento) return
     const pedido = ++pedidoChaves.current
     const [cat, fx] = categoriaSelecionada.split("__")
     const { data } = await consultarChavesPublicadas(supabase, idEvento, "*", cat, fx)
     if (pedido !== pedidoChaves.current) return
-    setLutas(data || [])
+    setLutas(data || []);
+    try {
+      const fotos = await carregarFotosDaChave(supabase, data || []);
+      if (pedido === pedidoChaves.current) setAtletasDB(fotos);
+    } catch { /* Preserva fotos já carregadas e tenta novamente na próxima atualização. */ }
   }
 
   useEffect(() => {
@@ -99,7 +100,7 @@ export default function ChavesPublicoPage() {
         await fetch(`/api/eventos/${idEvento}/gerar-chaves-auto`);
         if (!ativo) return;
         await carregarCategorias();
-        void carregarFotos(); void verificarPagamento();
+        void verificarPagamento();
         setVersaoChaves(atual => atual + 1);
       }
       if (ativo) setCarregandoEvento(false);
@@ -132,12 +133,12 @@ export default function ChavesPublicoPage() {
     return tipoCategoria === "peso" ? !isAbsoluto : isAbsoluto;
   })
 
-  const termoBusca = busca.trim().toUpperCase();
+  const termoBusca = normalizarTextoLocalidade(busca);
   const categoriasVisiveis = categoriasFiltradas.filter((chave) => {
     if (!termoBusca) return true;
-    if (chave.toUpperCase().includes(termoBusca)) return true;
+    if (normalizarTextoLocalidade(chave).includes(termoBusca)) return true;
     const [cat, fx] = chave.split("__");
-    return indice.some((luta) => luta.categoria === cat && luta.faixa === fx && [luta.atleta_1, luta.atleta_2, luta.equipe_1, luta.equipe_2].some((valor) => String(valor || "").toUpperCase().includes(termoBusca)));
+    return indice.some((luta) => luta.categoria === cat && luta.faixa === fx && [luta.atleta_1, luta.atleta_2, luta.equipe_1, luta.equipe_2].some((valor) => normalizarTextoLocalidade(String(valor || "")).includes(termoBusca)));
   })
 
   useEffect(() => {
@@ -184,12 +185,8 @@ export default function ChavesPublicoPage() {
     }
   };
 
-  const buscarFotoPorId = (idNumerico?: number | null): string | null => {
-    if (!idNumerico) return null;
-    const match = atletasDB.find(a => Number(a.id) === Number(idNumerico));
-    const foto = match?.foto_url;
-    return typeof foto === 'string' && foto ? foto : null;
-  }
+  const buscarFotoPorId = (idNumerico?: number | null, nome?: string | null): string | null =>
+    fotoAtletaPorIdentidade(atletasDB, idNumerico, nome);
 
   const getLutaFinal = () => {
     const finalNormal = lutas.find(l => String(l.id_visual) === "999");
@@ -201,7 +198,7 @@ export default function ChavesPublicoPage() {
     const lutaFinal = getLutaFinal();
     const campeao = limparNome(lutaFinal?.vencedor || null);
     const idCampeao = lutaFinal?.vencedor_id || null;
-    return { nome: campeao, equipe: "", foto: buscarFotoPorId(idCampeao) }
+    return { nome: campeao, equipe: "", foto: buscarFotoPorId(idCampeao, campeao) }
   }
 
   const campeaoData = getCampeao();
@@ -345,23 +342,16 @@ export default function ChavesPublicoPage() {
             </label>
           </div>
 
-          <div className="mt-2 flex gap-2 overflow-x-auto pb-0.5 md:mt-3 md:flex-wrap">
-            {categoriasVisiveis.length === 0 && (
-              <span className="rounded-full border border-dashed border-white/10 px-4 py-2 text-[11px] text-zinc-500">Nenhuma chave neste filtro.</span>
-            )}
-            {categoriasVisiveis.map((chave) => (
-              <button
-                key={chave}
-                type="button"
-                onClick={() => setCategoriaSelecionada(chave)}
-                className={`max-w-[220px] shrink-0 truncate rounded-full border px-3 py-1.5 text-left text-[10px] font-bold transition md:max-w-[280px] md:px-4 md:py-2 md:text-[11px] ${categoriaSelecionada === chave ? "border-cyan-400 bg-cyan-500/15 text-cyan-100" : "border-white/10 bg-black/30 text-zinc-400 hover:border-white/20 hover:text-white"}`}
-              >
-                {rotuloChip(chave)}
-              </button>
-            ))}
-          </div>
+          <label className="mt-3 block text-xs font-bold text-zinc-300">Escolha a categoria
+            <select aria-label="Categoria do chaveamento" value={categoriasVisiveis.includes(categoriaSelecionada) ? categoriaSelecionada : ""} onChange={(e) => setCategoriaSelecionada(e.target.value)} className="mt-2 min-h-12 w-full min-w-0 rounded-xl border border-white/15 bg-[#050816] px-3 text-sm text-white">
+              {categoriasVisiveis.length === 0 && <option value="">Nenhuma chave encontrada neste filtro</option>}
+              {categoriasVisiveis.map((chave) => <option key={chave} value={chave}>{rotuloChip(chave)}</option>)}
+            </select>
+          </label>
+          <p role="status" className="mt-2 text-xs text-zinc-400">{categoriasVisiveis.length} categoria(s) encontrada(s). Busque pelo nome do atleta, equipe ou categoria e escolha a chave acima.</p>
         </div>
 
+        <div hidden={categoriasVisiveis.length === 0}>
         {categoriaSelecionada && (
           <section className="mx-4 mt-3 rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-3 py-2.5 md:mx-0 md:mt-5 md:rounded-2xl md:p-5">
             <p className="truncate text-[9px] font-black uppercase tracking-widest text-cyan-300 md:text-[10px]">{tituloCategoria}</p>
@@ -404,7 +394,7 @@ export default function ChavesPublicoPage() {
           {temCampeao && (
             <div className="mb-3 flex items-center gap-3 rounded-xl border border-yellow-500/30 bg-gradient-to-r from-yellow-600/20 to-[#0c1220] px-3 py-2.5 md:hidden">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-yellow-500 bg-black">
-                {campeaoData.foto ? <img src={campeaoData.foto} className="h-full w-full object-cover" alt="" /> : <span className="text-sm font-black text-yellow-500">{campeaoData.nome.charAt(0)}</span>}
+                {campeaoData.foto ? <img src={campeaoData.foto} className="h-full w-full object-contain" alt="" /> : <span className="text-sm font-black text-yellow-500">{campeaoData.nome.charAt(0)}</span>}
               </div>
               <div className="min-w-0">
                 <p className="text-[9px] font-black uppercase tracking-widest text-yellow-500">Campeão</p>
@@ -424,7 +414,7 @@ export default function ChavesPublicoPage() {
                   return (
                     <div key={item.chave} className="flex items-center gap-4 rounded-xl border border-cyan-500/25 bg-gradient-to-r from-cyan-500/10 to-[#0c1220] p-4 shadow-sm">
                       <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-cyan-400/60 bg-black md:h-14 md:w-14">
-                        {fotoAtl ? <img src={fotoAtl} className="h-full w-full object-cover" alt={item.nome} /> : <span className="text-sm font-black text-cyan-400">{item.nome.charAt(0)}</span>}
+                        {fotoAtl ? <img src={fotoAtl} className="h-full w-full object-contain" alt={item.nome} /> : <span className="text-sm font-black text-cyan-400">{item.nome.charAt(0)}</span>}
                       </div>
                       <div className="flex min-w-0 flex-1 flex-col">
                         <span className="block truncate text-sm font-black uppercase text-white">{item.nome}</span>
@@ -463,7 +453,10 @@ export default function ChavesPublicoPage() {
                   const avanco = resumoAvancoSemCombate(luta, lutas);
                   if (avanco) return <AvancoSemCombateCard key={luta.id} avanco={avanco} />;
                   const a1 = modeloCombates ? (nomeRealPrevisto(luta.atleta_1) || nomeOrigemPrevista(modeloCombates.origem(luta, 1))) : nomeSlot(luta, 1); const a2 = modeloCombates ? (nomeRealPrevisto(luta.atleta_2) || nomeOrigemPrevista(modeloCombates.origem(luta, 2))) : nomeSlot(luta, 2);
-                  const foto1 = buscarFotoPorId(luta.atleta_1_id); const foto2 = buscarFotoPorId(luta.atleta_2_id);
+                  const origem1 = modeloCombates?.origem(luta, 1)?.atleta;
+                  const origem2 = modeloCombates?.origem(luta, 2)?.atleta;
+                  const foto1 = buscarFotoPorId(luta.atleta_1_id || origem1?.id, nomeRealPrevisto(luta.atleta_1) || origem1?.nome);
+                  const foto2 = buscarFotoPorId(luta.atleta_2_id || origem2?.id, nomeRealPrevisto(luta.atleta_2) || origem2?.nome);
                   const vencedor = limparNome(luta.vencedor);
                   const venceu1 = Boolean(vencedor && isAtletaValido(luta.atleta_1) && vencedor.toUpperCase() === limparNome(luta.atleta_1).toUpperCase());
                   const venceu2 = Boolean(vencedor && isAtletaValido(luta.atleta_2) && vencedor.toUpperCase() === limparNome(luta.atleta_2).toUpperCase());
@@ -482,7 +475,7 @@ export default function ChavesPublicoPage() {
                         <div className={`flex min-w-0 items-center justify-between gap-2 rounded-lg border p-2 ${venceu1 ? "border-emerald-500/40 bg-emerald-500/10" : "border-white/5 bg-black/40"}`}>
                           <div className="flex min-w-0 flex-1 items-center gap-2.5">
                             <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-zinc-600 bg-zinc-800 text-xs font-black text-zinc-400">
-                              {foto1 ? <img src={foto1} className="h-full w-full object-cover" alt="" /> : a1 ? a1.charAt(0) : "?"}
+                              {foto1 ? <img src={foto1} className="h-full w-full object-contain" alt="" /> : a1 ? a1.charAt(0) : "?"}
                             </div>
                             <div className="flex min-w-0 flex-1 flex-col">
                               <span className={`truncate text-xs font-black uppercase tracking-tight ${venceu1 ? "text-emerald-300" : "text-white"}`}>{a1 || "A definir"}</span>
@@ -500,7 +493,7 @@ export default function ChavesPublicoPage() {
                         <div className={`flex min-w-0 items-center justify-between gap-2 rounded-lg border p-2 ${venceu2 ? "border-emerald-500/40 bg-emerald-500/10" : "border-white/5 bg-black/40"}`}>
                           <div className="flex min-w-0 flex-1 items-center gap-2.5">
                             <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-zinc-600 bg-zinc-800 text-xs font-black text-zinc-400">
-                              {foto2 ? <img src={foto2} className="h-full w-full object-cover" alt="" /> : a2 ? a2.charAt(0) : "?"}
+                              {foto2 ? <img src={foto2} className="h-full w-full object-contain" alt="" /> : a2 ? a2.charAt(0) : "?"}
                             </div>
                             <div className="flex min-w-0 flex-1 flex-col">
                               <span className={`truncate text-xs font-black uppercase tracking-tight ${venceu2 ? "text-emerald-300" : "text-white"}`}>{a2 || "A definir"}</span>
@@ -530,6 +523,7 @@ export default function ChavesPublicoPage() {
             </div>
           )}
 
+        </div>
         </div>
       </div>
     </main>

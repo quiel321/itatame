@@ -564,5 +564,7 @@ export function montarChaves(eventoId: string, preparados: ReturnType<typeof pre
       }
       
 
+// Novas chaves aguardam a distribuição escolhida pelo organizador.
+for (const luta of resultado) Object.assign(luta, { tatame: null, ordem_tatame: null, horario_estimado: null });
 return resultado;
 }

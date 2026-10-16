@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { chaveLocalidade, type Localidade } from "@/app/lib/localidades";
 
 let localidadesCache: Localidade[] | null = null;
@@ -13,7 +13,7 @@ function carregarLocalidades() {
       .then(async (resposta) => {
         if (!resposta.ok) throw new Error("Não foi possível carregar a lista de cidades.");
         const dados = await resposta.json() as Localidade[];
-        if (!Array.isArray(dados)) throw new Error("Lista de cidades inválida.");
+        if (!Array.isArray(dados) || dados.length < 5000 || dados.some((item) => !item.cidade || !item.estado)) throw new Error("Lista de cidades inválida.");
         localidadesCache = dados;
         return dados;
       })
@@ -34,35 +34,54 @@ export default function CidadeEstadoInput({ cidade, estado, onChange, className,
   const [localidades, setLocalidades] = useState<Localidade[]>(localidadesCache || []);
   const [aberto, setAberto] = useState(false);
   const [erro, setErro] = useState(false);
+  const [tentativa, setTentativa] = useState(0);
+  const [ativo, setAtivo] = useState(-1);
+  const listaId = useId();
 
   useEffect(() => {
     let ativo = true;
     void carregarLocalidades().then((dados) => { if (ativo) setLocalidades(dados); })
       .catch(() => { if (ativo) setErro(true); });
     return () => { ativo = false; };
-  }, []);
+  }, [tentativa]);
 
   const sugestoes = useMemo(() => {
     const termo = chaveLocalidade(cidade, "").split("|")[0];
-    if (termo.length < 2 || estado) return [];
+    if (termo.length < 1 || estado) return [];
     return localidades.filter((item) => chaveLocalidade(item.cidade, "").startsWith(termo)).slice(0, 8);
   }, [cidade, estado, localidades]);
 
   return <div className="relative">
     <input
       value={cidade}
-      onChange={(event) => { onChange({ cidade: event.target.value, estado: "" }); setAberto(true); }}
+      onChange={(event) => { onChange({ cidade: event.target.value, estado: "" }); setAberto(true); setAtivo(-1); }}
       onFocus={() => setAberto(true)}
       onBlur={() => window.setTimeout(() => setAberto(false), 150)}
+      role="combobox"
+      aria-label="Cidade"
+      aria-autocomplete="list"
+      aria-expanded={aberto && sugestoes.length > 0}
+      aria-controls={listaId}
+      aria-activedescendant={aberto && ativo >= 0 && sugestoes[ativo] ? `${listaId}-${ativo}` : undefined}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') { setAberto(false); setAtivo(-1); }
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+          event.preventDefault(); setAberto(true);
+          setAtivo((atual) => Math.max(0, Math.min(sugestoes.length - 1, atual + (event.key === 'ArrowDown' ? 1 : -1))));
+        }
+        if (event.key === 'Enter' && aberto && sugestoes[ativo]) {
+          event.preventDefault(); onChange(sugestoes[ativo]); setAberto(false); setAtivo(-1);
+        }
+      }}
       autoComplete="off"
       placeholder="Digite a cidade e selecione"
       className={className || "h-11 w-full rounded-xl border border-white/10 bg-black px-3 text-xs font-bold text-white outline-none focus:border-retratt"}
     />
     {estado && <span className={`pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-bold ${accentClassName}`}>{estado}</span>}
-    {aberto && sugestoes.length > 0 && <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-60 overflow-y-auto rounded-xl border border-white/15 bg-zinc-900 shadow-xl">
-      {sugestoes.map((item) => <button key={`${item.cidade}|${item.estado}`} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => { onChange(item); setAberto(false); }} className="flex w-full justify-between px-3 py-2 text-left text-xs text-white hover:bg-white/10"><span>{item.cidade}</span><span className={accentClassName}>{item.estado}</span></button>)}
+    {aberto && sugestoes.length > 0 && <div id={listaId} role="listbox" aria-label="Cidades do IBGE" className="absolute left-0 right-0 top-full z-50 mt-1 max-h-60 overflow-y-auto rounded-xl border border-white/15 bg-zinc-900 shadow-xl">
+      {sugestoes.map((item, indice) => <button id={`${listaId}-${indice}`} role="option" aria-selected={ativo === indice} key={`${item.cidade}|${item.estado}`} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => { onChange(item); setAberto(false); }} className={`flex w-full justify-between px-3 py-2 text-left text-xs text-white hover:bg-white/10 ${ativo === indice ? "bg-white/10" : ""}`}><span>{item.cidade}</span><span className={accentClassName}>{item.estado}</span></button>)}
     </div>}
-    {erro && <p className="mt-1 text-[10px] text-amber-300">Não foi possível carregar as cidades. Reabra a página para tentar novamente.</p>}
+    {erro && <p className="mt-1 text-[10px] text-amber-300">Não foi possível carregar as cidades. <button type="button" onClick={() => { setErro(false); setTentativa((valor) => valor + 1); }} className="underline">Tentar novamente</button></p>}
     {!estado && cidade.trim() && !erro && localidades.length > 0 && !aberto && <p className="mt-1 text-[10px] text-amber-300">Selecione uma cidade da lista.</p>}
   </div>;
 }

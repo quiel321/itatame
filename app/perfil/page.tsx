@@ -895,7 +895,7 @@ export default function PerfilPage() {
               {uploadingFoto ? (
                 <span className={`text-[8px] sm:text-[9px] font-bold uppercase tracking-widest animate-pulse ${role === 'professor' ? 'text-yellow-400' : 'text-cyan-400'}`}>Enviando</span>
               ) : fotoUrl ? (
-                <img src={fotoUrl} alt="Foto de Perfil" className="w-full h-full object-cover" />
+                <img src={fotoUrl} alt="Foto de Perfil" className="w-full h-full object-contain" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-zinc-500 text-xs font-black">{nome ? nome.charAt(0).toUpperCase() : "?"}</div>
               )}
@@ -1002,7 +1002,7 @@ export default function PerfilPage() {
                  {/* FOTO + IDENTIFICACAO */}
                  <div className="flex gap-3 p-3">
                     <div className={`h-[118px] w-[92px] shrink-0 overflow-hidden rounded-lg border bg-black ${role === 'professor' ? 'border-yellow-500/25' : 'border-cyan-500/25'}`}>
-                       {fotoUrl ? <img src={fotoUrl} alt={nome || "Foto do atleta"} className="h-full w-full object-cover" /> : <div className="flex h-full w-full items-center justify-center text-3xl font-black text-zinc-700">{nome?.charAt(0) || "?"}</div>}
+                       {fotoUrl ? <img src={fotoUrl} alt={nome || "Foto do atleta"} className="h-full w-full object-contain" /> : <div className="flex h-full w-full items-center justify-center text-3xl font-black text-zinc-700">{nome?.charAt(0) || "?"}</div>}
                     </div>
 
                     <div className="flex min-w-0 flex-1 flex-col">
@@ -1424,7 +1424,7 @@ export default function PerfilPage() {
                                 {uploadingFoto && fotoAlvoId === dep.user_id ? (
                                   <span className="text-[8px] text-cyan-400 font-bold uppercase">Enviando</span>
                                 ) : dep.foto_url ? (
-                                  <img src={dep.foto_url} alt={dep.nome} className="w-full h-full object-cover" />
+                                  <img src={dep.foto_url} alt={dep.nome} className="w-full h-full object-contain" />
                                 ) : (
                                   <span className="text-zinc-500 font-black text-lg">{dep.nome.charAt(0)}</span>
                                 )}
@@ -1468,7 +1468,7 @@ export default function PerfilPage() {
                       {uploadingFoto && fotoAlvoId === formDependente.user_id ? (
                         <span className="flex h-full w-full items-center justify-center text-[8px] font-bold uppercase text-cyan-400">Enviando</span>
                       ) : formDependente.foto_url ? (
-                        <img src={formDependente.foto_url} alt="" className="h-full w-full object-cover" />
+                        <img src={formDependente.foto_url} alt="" className="h-full w-full object-contain" />
                       ) : (
                         <span className="flex h-full w-full items-center justify-center text-2xl font-black text-zinc-500">{(formDependente.nome || "?").charAt(0)}</span>
                       )}
@@ -1698,7 +1698,7 @@ export default function PerfilPage() {
 
                       <div className="flex items-center gap-4">
                         <div className="w-12 h-12 bg-zinc-800 rounded-full overflow-hidden shrink-0 border-2 border-zinc-700 group-hover:border-yellow-500 transition-colors">
-                          {aluno.foto_url ? <img src={aluno.foto_url} className="w-full h-full object-cover pointer-events-none" /> : <div className="w-full h-full flex items-center justify-center text-zinc-500 text-xs font-black">{aluno.nome?.charAt(0) || "?"}</div>}
+                          {aluno.foto_url ? <img src={aluno.foto_url} className="w-full h-full object-contain pointer-events-none" /> : <div className="w-full h-full flex items-center justify-center text-zinc-500 text-xs font-black">{aluno.nome?.charAt(0) || "?"}</div>}
                         </div>
                         <div className="flex-1 overflow-hidden">
                           <h5 className="text-white font-black text-sm truncate">{aluno.nome}</h5>
