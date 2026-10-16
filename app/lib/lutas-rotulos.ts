@@ -32,7 +32,13 @@ export function rotuloLuta(luta: LutaComRotulo) {
   const fase = faseNormalizada(luta);
   if (fase === "Final") return "Final";
   if (/\d/.test(fase)) return fase;
-  const ordem = Number(luta.ordem || 0);
+  const ordemGravada = Number(luta.ordem || 0);
+  const codigoInterno = Number(luta.id_visual || 0);
+  // Algumas chaves antigas guardam 101/102 em ordem. A centena identifica
+  // a rodada internamente; o público deve ver a posição 1/2 naquela fase.
+  const ordem = ordemGravada >= 100 && ordemGravada < 999 && ordemGravada === codigoInterno
+    ? ordemGravada % 100
+    : ordemGravada;
   return ordem > 0 ? `${fase} ${ordem}` : fase;
 }
 

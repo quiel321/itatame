@@ -103,68 +103,58 @@ export function criarChavesImpressao({ eventoNome, eventoCidade, lutas }: { even
     doc.rect(0, 25.7, 297, 16.2, 'F');
     doc.setTextColor(255, 255, 255);
     doc.setFont('helvetica', 'bold');
-    texto(`${limpo(base.categoria) || 'Categoria'}  ·  Faixa ${limpo(base.faixa) || '—'}`, 10, 31.4, 200, 9, 1);
+    texto(`${limpo(base.categoria) || 'Categoria'}  ·  Faixa ${limpo(base.faixa) || '—'}`, 10, 31.4, 277, 9, 2);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.4);
     doc.setTextColor(212, 212, 216);
     doc.text(`${titulo}   ·   Chave Nº ${codigo}   ·   ${atletas} atleta(s)   ·   Tempo: ${tempo} min   ·   Área: ${area}   ·   Horário: ${horario}`, 10, 38.2);
 
     doc.setFillColor(247, 247, 248);
-    doc.roundedRect(221, 45, 66, 146, 2, 2, 'F');
+    doc.roundedRect(10, 169, 277, 23.5, 2, 2, 'F');
     doc.setDrawColor(220, 38, 38);
     doc.setLineWidth(0.7);
-    doc.line(221, 45, 221, 191);
+    doc.line(224, 172, 224, 190);
     doc.setTextColor(220, 38, 38);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(8);
-    doc.text('RESULTADO FINAL', 254, 52, { align: 'center' });
+    doc.text('RESULTADO FINAL', 13, 173.4);
     doc.setDrawColor(228, 228, 231);
     doc.setLineWidth(0.25);
-    doc.line(227, 55, 281, 55);
 
     const blocos = ['1º', '2º', '3º', '3º'];
     blocos.forEach((pos, i) => {
-      const y = 63 + i * 16.2;
+      const x = 13 + i * 52;
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(8);
       doc.setTextColor(24, 24, 27);
-      doc.text(pos, 227, y);
-      linhaCampo(236, y + 0.4, 45);
+      doc.text(pos, x, 179.2);
+      linhaCampo(x + 6, 179.6, 42);
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(6.4);
       doc.setTextColor(113, 113, 122);
-      doc.text('Equipe', 227, y + 6.4);
-      linhaCampo(238, y + 6.6, 43);
+      doc.text('Equipe', x, 187);
+      linhaCampo(x + 9, 187.4, 39);
     });
 
     doc.setDrawColor(228, 228, 231);
-    doc.line(227, 128, 281, 128);
-    const campos = [
-      ['Coordenador', 136],
-      ['Nº da área', 146],
-      ['Horário da entrega', 156],
-      ['Horário da devolução', 166],
-    ] as const;
-    campos.forEach(([label, y]) => {
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(6.4);
-      doc.setTextColor(82, 82, 91);
-      doc.text(label, 227, y);
-      linhaCampo(227, y + 3.4, 54);
-    });
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(6.5);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(5.9);
     doc.setTextColor(63, 63, 70);
-    doc.text('Pesagem realizada?  ______', 227, 176);
-    doc.text('Premiação realizada?  ______', 227, 182);
-    doc.text('Resultado registrado?  ______', 227, 188);
+    doc.text('CONTROLE DA ÁREA', 228, 173.4);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(5.5);
+    doc.setTextColor(63, 63, 70);
+    doc.text('Área: ____  Coordenador: __________', 228, 178);
+    doc.text('Entrega: ____:____  Devolução: ____:____', 228, 182.2);
+    doc.text('Pesagem: ___  Premiação: ___', 228, 186.4);
+    doc.text('Resultado registrado: ___', 228, 190.2);
 
     doc.setDrawColor(228, 228, 231);
     doc.line(10, 196, 287, 196);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(6.2);
     doc.setTextColor(113, 113, 122);
-    doc.text('LEGENDA: BYE = sem adversário  ·  TBD = aguarda o resultado da luta anterior  ·  Número à esquerda = posição na chave', 10, 201);
+    doc.text('Avanço sem adversário não é combate. Vagas futuras dependem dos resultados anteriores. Número = posição na chave.', 10, 201);
     doc.text(`itatame.com.br  ·  Página ${doc.getNumberOfPages()}`, 287, 201, { align: 'right' });
     doc.setTextColor(24, 24, 27);
     doc.setDrawColor(100, 100, 100);
@@ -180,28 +170,28 @@ export function criarChavesImpressao({ eventoNome, eventoCidade, lutas }: { even
       pagina(base, 'Chave de 3 atletas', atletas.size);
       const ordenadas = [...grupo].sort((a, b) => Number(a.id_visual) - Number(b.id_visual));
       ordenadas.forEach((l, i) => {
-        const x = 10 + i * 69;
+        const x = 10 + i * 93;
         doc.setFillColor(255, 255, 255);
         doc.setDrawColor(212, 212, 216);
-        doc.roundedRect(x, 48, 65, 88, 2, 2, 'FD');
+        doc.roundedRect(x, 48, 87, 88, 2, 2, 'FD');
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(220, 38, 38);
-        texto(rotuloLuta(l), x + 4, 56, 57, 9);
+        texto(rotuloLuta(l), x + 4, 56, 79, 9);
         doc.setTextColor(24, 24, 27);
         doc.setFont('helvetica', 'normal');
         const a1 = real(l.atleta_1) ? `${l.numero_1 ? `${l.numero_1}  ` : ''}${l.atleta_1}` : (i === 1 ? 'Perdedor da luta 1' : 'Vencedor da luta 1');
         const a2 = real(l.atleta_2) ? `${l.numero_2 ? `${l.numero_2}  ` : ''}${l.atleta_2}` : (i === 2 ? 'Vencedor da luta 2' : 'A definir');
-        texto(a1, x + 4, 70, 57, 8);
-        texto(real(l.atleta_1) ? (l.equipe_1 || '') : '', x + 4, 76, 57, 6.5);
-        texto(a2, x + 4, 92, 57, 8);
-        texto(real(l.atleta_2) ? (l.equipe_2 || '') : '', x + 4, 98, 57, 6.5);
-        linhaCampo(x + 4, 118, 57);
-        texto(`Vencedor: ${l.vencedor || ''}`, x + 4, 116, 57, 7.5);
+        texto(a1, x + 4, 70, 79, 8);
+        texto(real(l.atleta_1) ? (l.equipe_1 || '') : '', x + 4, 76, 79, 6.5);
+        texto(a2, x + 4, 92, 79, 8);
+        texto(real(l.atleta_2) ? (l.equipe_2 || '') : '', x + 4, 98, 79, 6.5);
+        linhaCampo(x + 4, 118, 79);
+        texto(`Vencedor: ${l.vencedor || ''}`, x + 4, 116, 79, 7.5);
       });
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(7.4);
       doc.setTextColor(82, 82, 91);
-      texto('Luta 1: o vencedor vai à final; o perdedor enfrenta o terceiro atleta na luta 2. O vencedor da luta 2 completa a final.', 10, 146, 205, 7.4, 2);
+      texto('Luta 1: o vencedor vai à final; o perdedor enfrenta o terceiro atleta na luta 2. O vencedor da luta 2 completa a final.', 10, 146, 277, 7.4, 2);
       continue;
     }
 
@@ -237,48 +227,87 @@ export function criarChavesImpressao({ eventoNome, eventoCidade, lutas }: { even
       }
       const p = pagina(base, n.luta?.proxima_luta ? `Seção até ${rotuloLuta(n.luta)}` : 'Chave / fase final', atletas.size);
       const niveis = profundidade(n);
-      const total = folhasNo(n);
-      let indice = 0;
-      const largura = 206 / (niveis + 1);
-
-      function desenhar(no: No): { x: number; y: number } {
-        const nivel = profundidade(no);
-        const x = 10 + nivel * largura;
-        if (!no.filhos) {
-          const y = 52 + (indice++ + 0.5) * 138 / total;
-          const compacto = total > 8;
-          const numero = no.numero || String(indice).padStart(2, '0');
-          doc.setFillColor(24, 24, 27);
-          doc.roundedRect(x, y - 4.6, 7.2, 6.2, 0.6, 0.6, 'F');
-          doc.setFont('helvetica', 'bold');
-          doc.setFontSize(6);
-          doc.setTextColor(255, 255, 255);
-          doc.text(numero, x + 3.6, y - 0.5, { align: 'center' });
-          doc.setTextColor(24, 24, 27);
-          doc.setFont('helvetica', 'bold');
-          texto(no.nome || 'TBD', x + 8.6, y - 1.6, largura - 12, compacto ? 6.6 : 8, 1);
-          doc.setFont('helvetica', 'normal');
-          doc.setTextColor(82, 82, 91);
-          texto(no.pagina ? `Origem: página ${no.pagina}` : (no.equipe || ''), x + 8.6, y + 1.8, largura - 12, 6, 1);
-          doc.setDrawColor(120, 120, 120);
-          doc.line(x, y + 3.4, x + largura - 4, y + 3.4);
-          return { x: x + largura - 4, y: y + 3.4 };
-        }
-        const filhos = no.filhos.map(desenhar);
-        const y = (filhos[0].y + filhos[1].y) / 2;
-        doc.setDrawColor(90, 90, 90);
-        doc.setLineWidth(0.35);
-        for (const f of filhos) {
-          doc.line(f.x, f.y, x - 1, f.y);
-          doc.line(x - 1, f.y, x - 1, y);
-        }
-        doc.line(x - 1, y, x + largura - 5, y);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(24, 24, 27);
-        texto(`${rotuloLuta(no.luta || {})}: ${no.luta?.vencedor || '________________'}`, x + 1, y - 2.2, largura - 6, 7, 2);
-        return { x: x + largura - 5, y };
+      const colunas = Math.max(0, niveis - 1);
+      const centroW = colunas ? 42 : 80;
+      const centroX = (297 - centroW) / 2;
+      const disponivel = centroX - 10;
+      const gap = colunas === 1 ? disponivel - Math.min(70, disponivel - 4) : 4;
+      const util = disponivel - colunas * gap;
+      const primeiraW = colunas === 1 ? util : Math.min(colunas >= 3 ? 48 : 55, util - (colunas - 1) * 28);
+      const larguras = Array.from({ length: colunas }, (_, i) => i ? (util - primeiraW) / (colunas - 1) : primeiraW);
+      const posicoes = larguras.map((_, i) => 10 + larguras.slice(0, i).reduce((soma, w) => soma + w + gap, 0));
+      const top = 60, bottom = 163, meio = (top + bottom) / 2;
+      const rotulos = new Map<number, string>();
+      function coletarRotulos(no: No) {
+        if (!no.filhos) return;
+        rotulos.set(profundidade(no) - 1, limpo(no.luta?.fase).replace(/\s+\d+.*$/, '') || 'Próxima fase');
+        no.filhos.forEach(coletarRotulos);
       }
-      desenhar(n);
+      coletarRotulos(n);
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(6.8); doc.setTextColor(90, 90, 100);
+      larguras.forEach((w, i) => {
+        doc.text((rotulos.get(i) || '').toUpperCase(), posicoes[i] + w / 2, 55.5, { align: 'center' });
+        doc.text((rotulos.get(i) || '').toUpperCase(), 297 - posicoes[i] - w / 2, 55.5, { align: 'center' });
+      });
+      function dadosSlot(no: No): No {
+        if (!no.luta) return no;
+        return { nome: limpo(no.luta.vencedor) || '________________', equipe: `Vencedor: ${rotuloLuta(no.luta)}` };
+      }
+      function cartao(no: No, x: number, y: number, w: number, h: number) {
+        const dados = dadosSlot(no), nome = limpo(dados.nome), vazio = !real(nome);
+        const nomeVisivel = nome.toUpperCase() === 'BYE' ? 'Sem adversário' : vazio ? 'A definir' : nome;
+        doc.setFillColor(vazio ? 248 : 255, vazio ? 248 : 255, vazio ? 250 : 255);
+        doc.setDrawColor(190, 190, 198); doc.setLineWidth(0.24);
+        doc.roundedRect(x, y - h / 2, w, h, 1.1, 1.1, 'FD');
+        const numerado = Boolean(dados.numero && !vazio);
+        if (numerado) {
+          doc.setFillColor(24, 24, 27);
+          doc.roundedRect(x + 1, y - 2.2, 4.8, 4.4, 0.6, 0.6, 'F');
+          doc.setFont('helvetica', 'bold'); doc.setFontSize(5.4); doc.setTextColor(255, 255, 255);
+          doc.text(dados.numero!, x + 3.4, y + 0.7, { align: 'center' });
+        }
+        const tx = x + (numerado ? 7 : 2), tw = w - (numerado ? 8.5 : 4);
+        doc.setFont('helvetica', 'bold'); doc.setTextColor(vazio ? 130 : 24, vazio ? 130 : 24, vazio ? 136 : 27);
+        texto(nomeVisivel, tx, y - h / 2 + 3.1, tw, w > 70 ? 8 : w < 35 ? 6.1 : 7, 2);
+        doc.setFont('helvetica', 'normal'); doc.setTextColor(110, 110, 120);
+        texto(dados.pagina ? `Continua da página ${dados.pagina}` : (dados.equipe || ''), tx, y + h / 2 - 1.2, tw, 5.2, 1);
+      }
+      function ramo(no: No, direita: boolean, total: number, contador: { valor: number }): { x: number; y: number } {
+        const nivel = profundidade(no), w = larguras[nivel];
+        const x = direita ? 297 - posicoes[nivel] - w : posicoes[nivel];
+        let y: number;
+        if (!no.filhos) y = top + (++contador.valor - 0.5) * (bottom - top) / total;
+        else {
+          const filhos = no.filhos.map(filho => ramo(filho, direita, total, contador));
+          y = (filhos[0].y + filhos[1].y) / 2;
+          const juncao = direita ? x + w + gap / 2 : x - gap / 2;
+          doc.setDrawColor(120, 120, 130); doc.setLineWidth(0.3);
+          filhos.forEach(f => doc.line(f.x, f.y, juncao, f.y));
+          doc.line(juncao, filhos[0].y, juncao, filhos[1].y);
+          doc.line(juncao, y, direita ? x + w : x, y);
+        }
+        cartao(no, x, y, w, Math.min(12, (bottom - top) / total - 1.5));
+        return { x: direita ? x : x + w, y };
+      }
+      n.filhos?.forEach((lado, indice) => {
+        if (!lado.filhos) return;
+        const direita = indice === 1, total = folhasNo(lado), contador = { valor: 0 };
+        const pontos = lado.filhos.map(filho => ramo(filho, direita, total, contador));
+        const x = direita ? centroX + centroW + gap / 2 : centroX - gap / 2;
+        doc.setDrawColor(120, 120, 130); doc.setLineWidth(0.3);
+        pontos.forEach(f => doc.line(f.x, f.y, x, f.y));
+        doc.line(x, pontos[0].y, x, pontos[1].y);
+        doc.line(x, meio, direita ? centroX + centroW : centroX, meio);
+      });
+      doc.setFont('helvetica', 'bold'); doc.setTextColor(220, 38, 38);
+      texto((rotulos.get(niveis - 1) || 'Final').toUpperCase(), 148.5, meio - 20, centroW, 7.4, 1, 'center');
+      doc.setFillColor(252, 252, 253); doc.setDrawColor(220, 38, 38); doc.setLineWidth(0.4);
+      doc.roundedRect(centroX, meio - 16, centroW, 32, 2, 2, 'FD');
+      n.filhos?.forEach((lado, i) => cartao(lado, centroX + 2, meio + (i ? 7 : -7), centroW - 4, 12));
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(6.5); doc.setTextColor(130, 100, 20);
+      doc.text(n.luta?.proxima_luta ? 'CLASSIFICADO' : 'CAMPEÃO', 148.5, 48, { align: 'center' });
+      doc.setTextColor(24, 24, 27);
+      texto(limpo(n.luta?.vencedor) || '________________________', 148.5, 52, Math.max(42, centroW), 7.3, 1, 'center');
       return p;
     }
     imprimir(raiz);
