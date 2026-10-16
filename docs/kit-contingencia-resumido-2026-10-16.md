@@ -8,4 +8,6 @@ A recepção utiliza todas as inscrições fornecidas pelo snapshot, inclusive a
 
 Nenhuma alteração em banco, atletas, resultados, regras de luta ou check-ins. A mudança é apenas no PDF; o PDF normal das chaves mantém seus campos de pódio. Backup dos dois geradores anteriores em tmp/kit-resumido-20261016/antes.
 
+Ordem das folhas: tanto a recepção e as árvores do kit quanto o PDF normal das chaves seguem tatame (ordenação numérica) e a primeira posição salva da categoria em ordem_tatame. Horários estimados não mudam a fila. Categoria com tatame e sem posição fica após as categorias ordenadas daquele tatame; categorias sem distribuição e inscrições sem chave ficam ao final. O agrupamento por categoria e as árvores existentes são preservados. Backup anterior a essa ordenação em tmp/pdf-sequencia-tatame-20261016/antes.
+
 Validação: amostra fictícia de 63 atletas em cinco categorias (3, 4, 8, 16 e 32), com resultado já salvo, caiu de 61 para 16 páginas. Inspeção de todas as páginas renderizadas, testes de preservação dos dados, paginação e campos únicos por luta, incluindo chaves de 1, 2, 3, 6, 13, 32 e 64 atletas.

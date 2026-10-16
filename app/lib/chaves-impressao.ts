@@ -2,6 +2,7 @@ import { jsPDF } from 'jspdf';
 import { obterTempoRegulamentar } from './cronograma';
 import type { LutaKitContingencia } from './kit-contingencia-pdf';
 import { rotuloLuta } from './lutas-rotulos';
+import { ordenarLutasImpressao } from './ordem-impressao-tatames';
 
 export type LutaImpressao = LutaKitContingencia & { numero_1?: string; numero_2?: string; atleta_1_id?: number | null; atleta_2_id?: number | null; tempo_minutos?: number | null };
 type No = { luta?: LutaImpressao; nome?: string; equipe?: string; numero?: string; filhos?: No[]; pagina?: number };
@@ -50,7 +51,7 @@ export function criarChavesImpressao({ eventoNome, eventoCidade, lutas, document
   const tituloEvento = tituloEventoImpressao(eventoNome, eventoCidade);
   const doc = documento || new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const grupos = new Map<string, LutaImpressao[]>();
-  for (const l of lutas) {
+  for (const l of ordenarLutasImpressao(lutas)) {
     const k = contingencia ? JSON.stringify([l.categoria_id || l.categoria || '', l.categoria || '']) : chaveGrupoPDF(l);
     grupos.set(k, [...(grupos.get(k) || []), l]);
   }

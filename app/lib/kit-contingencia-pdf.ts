@@ -2,6 +2,7 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { fusoHorarioEvento } from './evento-datas';
 import { criarChavesImpressao, desenharLogo } from './chaves-impressao';
+import { compararOrdemImpressao, ordenarLutasImpressao } from './ordem-impressao-tatames';
 
 export type LutaKitContingencia = {
   id?: string | number | null; categoria?: string | null; categoria_id?: string | null; faixa?: string | null; fase?: string | null;
@@ -37,7 +38,13 @@ export function criarKitContingenciaPDF(o: OpcoesKit) {
     const chave = JSON.stringify([i.categoria_id || i.categoria]);
     grupos.set(chave, [...(grupos.get(chave) || []), i]);
   }
-  const listas = [...grupos.values()].sort((a, b) => t(a[0].categoria).localeCompare(t(b[0].categoria), 'pt-BR'));
+  const porId = new Map<string, LutaKitContingencia>(), porNome = new Map<string, LutaKitContingencia>();
+  for (const luta of ordenarLutasImpressao(o.lutas)) {
+    if (luta.categoria_id && !porId.has(luta.categoria_id)) porId.set(luta.categoria_id, luta);
+    if (luta.categoria && !porNome.has(luta.categoria)) porNome.set(luta.categoria, luta);
+  }
+  const posicao = (i: InscricaoKit) => (i.categoria_id ? porId.get(i.categoria_id) : porNome.get(i.categoria || '')) || { categoria: i.categoria };
+  const listas = [...grupos.values()].sort((a, b) => compararOrdemImpressao(posicao(a[0]), posicao(b[0])));
   if (!listas.length) listas.push([]);
   let primeira = true;
   for (const lista of listas) {
