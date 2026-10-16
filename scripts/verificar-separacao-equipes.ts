@@ -85,7 +85,7 @@ for (let repeticao = 0; repeticao < 200; repeticao += 1) {
     { nome: 'Equipe A' }, { nome: 'Equipe A' }, { nome: 'Equipe A' },
     { nome: 'Equipe B' }, { nome: 'Equipe B' }, { nome: 'Equipe B' },
   ]), 'peso', [categoriaLeve]));
-  assert.equal(seis.filter(luta => String(luta.fase || '').includes('Chave de 3') || String(luta.fase || '').includes('Chave de 6')).length, 7);
+  assert.equal(seis.filter(luta => String(luta.fase || '').includes('Chave de 3') || String(luta.fase || '').includes('Chave de 6')).length, 0);
   const luta1 = seis.find(luta => String(luta.id_visual) === '1');
   const luta3 = seis.find(luta => String(luta.id_visual) === '3');
   assert.notEqual(luta1?.equipe_1, luta1?.equipe_2, 'Primeira luta da esquerda deve priorizar equipes diferentes.');

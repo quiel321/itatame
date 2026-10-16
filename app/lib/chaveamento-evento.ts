@@ -93,14 +93,12 @@ export function precisaAtualizarChaveTriangular(
 ) {
   for (const [chave, atletas] of Object.entries(preparados.grupos)) {
     const n = atletas.length;
-    if (n !== 3 && n !== 6) continue;
+    if (n !== 3) continue;
     const meta = preparados.metadados[chave];
     const lutas = existentes.filter(luta => luta.categoria === meta.categoria && luta.faixa === meta.faixa);
     if (!lutas.length) continue;
-    const ids = new Set(lutas.map(luta => String(luta.id_visual)));
     const triangular = lutas.some(luta => ehFaseChaveDeTres(luta.fase));
     if (n === 3 && !triangular) return true;
-    if (n === 6 && !(ids.has('101') && ids.has('102') && triangular)) return true;
   }
   return false;
 }
@@ -231,4 +229,3 @@ export async function gerarChavesAutomaticasEvento(db: ClienteSupabase, evento: 
   }
   return gerados;
 }
-

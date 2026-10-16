@@ -293,18 +293,18 @@ test("lado direito de 8 espelha Quartas no extremo e Semifinal no centro", () =>
   assert.deepEqual(rotulosLadoArvore(["Quartas", "Semifinal"], true), ["Semifinal", "Quartas"]);
 });
 
-test("seis atletas geram duas chaves de 3 e a final", () => {
+test("seis atletas geram eliminação simples com dois avanços sem adversário", () => {
   const preparados = prepararGrupos(atletas([
     { academia: "SPARTAN" }, { academia: "PORRADA" }, { academia: "SPARTAN" },
     { academia: "PORRADA" }, { academia: "SPARTAN" }, { academia: "PORRADA" },
   ]), "peso", [categoriaLeve]);
   const lutas = montarChaves("evento-teste", preparados);
   assert.equal(lutas.length, 7);
-  assert.equal(lutasFormamChaveDeSeis(lutas), true);
+  assert.equal(lutasFormamChaveDeSeis(lutas), false);
   assert.equal(lutas.filter(luta => luta.lado === "esquerda").length, 3);
   assert.equal(lutas.filter(luta => luta.lado === "direita").length, 3);
   const baiaEsquerda = lutas.find(luta => String(luta.id_visual) === "2");
   const baiaDireita = lutas.find(luta => String(luta.id_visual) === "4");
-  assert.equal(baiaEsquerda?.atleta_1, "TBD");
-  assert.equal(baiaDireita?.atleta_1, "TBD");
+  assert.equal(lutas.filter(l => l.atleta_1 === "BYE" || l.atleta_2 === "BYE").length, 2);
+  assert.equal(lutas.some(l => String(l.fase).includes("Chave de")), false);
 });

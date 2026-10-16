@@ -64,55 +64,6 @@ function ordenarTrio(atletas: Participante[]) {
   return melhor;
 }
 
-function combinacoes(tamanho: number, escolha: number) {
-  const resultado: number[][] = [];
-  const atual: number[] = [];
-  const recuar = (inicio: number) => {
-    if (atual.length === escolha) {
-      resultado.push([...atual]);
-      return;
-    }
-    for (let i = inicio; i < tamanho; i++) {
-      atual.push(i);
-      recuar(i + 1);
-      atual.pop();
-    }
-  };
-  recuar(0);
-  return resultado;
-}
-
-function dividirDoisTrios(atletas: Participante[]) {
-  const lista = atletas.slice(0, 6);
-  let melhor: { esquerda: Participante[]; direita: Participante[] } | null = null;
-  let melhorScore: (PontuacaoConfronto & { ladosCompartilhados: number }) | null = null;
-  for (const indices of combinacoes(lista.length, 3)) {
-    const esquerdaBruta = indices.map(indice => lista[indice]);
-    const direitaBruta = lista.filter((_, indice) => !indices.includes(indice));
-    const esquerda = ordenarTrio(esquerdaBruta);
-    const direita = ordenarTrio(direitaBruta);
-    const conflito = somarPontuacoes(conflitoPrimeiraLuta(esquerda[0], esquerda[1]), conflitoPrimeiraLuta(direita[0], direita[1]));
-    const equipesEsquerda = new Set(esquerda.map(atleta => atleta.equipe_chave));
-    const equipesDireita = new Set(direita.map(atleta => atleta.equipe_chave));
-    const academiasEsquerda = new Set(esquerda.map(chaveAcademia).filter(Boolean));
-    const academiasDireita = new Set(direita.map(chaveAcademia).filter(Boolean));
-    let ladosCompartilhados = 0;
-    equipesEsquerda.forEach(equipe => { if (equipesDireita.has(equipe)) ladosCompartilhados += 1; });
-    academiasEsquerda.forEach(academia => { if (academiasDireita.has(academia)) ladosCompartilhados += 1; });
-    const score = { ...conflito, ladosCompartilhados };
-    const comparacao = melhorScore
-      ? score.equipe - melhorScore.equipe || score.academia - melhorScore.academia
-        || melhorScore.ladosCompartilhados - score.ladosCompartilhados
-        || score.distanciaPeso - melhorScore.distanciaPeso
-      : -1;
-    if (comparacao < 0) {
-      melhorScore = score;
-      melhor = { esquerda, direita };
-    }
-  }
-  return melhor || { esquerda: ordenarTrio(lista.slice(0, 3)), direita: ordenarTrio(lista.slice(3, 6)) };
-}
-
 function dadosAtleta(atleta?: Participante) {
   return {
     nome: atleta?.atleta || atleta?.nome || 'BYE',
@@ -499,43 +450,6 @@ export function montarChaves(eventoId: string, preparados: ReturnType<typeof pre
               decisao: 'Final · Chave de 3',
             },
           ));
-          continue;
-        }
-
-        // Seis atletas: duas chaves de 3, uma em cada lado, e a final entre os vencedores.
-        if (atletasDoGrupo.length === 6) {
-          const { esquerda, direita } = dividirDoisTrios(atletasDoGrupo);
-          resultado.push(...montarTrio(
-            esquerda,
-            { luta1: 1, luta2: 2, decisao: 101 },
-            999,
-            'esquerda',
-            [1, 2, 3],
-            {
-              luta1: 'Luta 1 esquerda · Chave de 3',
-              luta2: 'Baia esquerda · Chave de 3',
-              decisao: 'Decisão esquerda · Chave de 3',
-            },
-          ));
-          resultado.push(...montarTrio(
-            direita,
-            { luta1: 3, luta2: 4, decisao: 102 },
-            999,
-            'direita',
-            [4, 5, 6],
-            {
-              luta1: 'Luta 1 direita · Chave de 3',
-              luta2: 'Baia direita · Chave de 3',
-              decisao: 'Decisão direita · Chave de 3',
-            },
-          ));
-          resultado.push({
-            ...baseLutaTriangular,
-            id_visual: '999',
-            atleta_1: 'TBD', equipe_1: '', numero_1: '', atleta_1_id: null,
-            atleta_2: 'TBD', equipe_2: '', numero_2: '', atleta_2_id: null,
-            fase: 'Final · Chave de 6', ordem: 999, lado: 'centro', proxima_luta: null,
-          });
           continue;
         }
 
