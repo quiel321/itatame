@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
+import { validarFaixasDesconto } from "@/app/lib/fotos-descontos";
 import { categoriaFotosValida } from "@/app/lib/fotos-categorias";
 
 function bearerToken(request: Request) {
@@ -33,7 +34,15 @@ export async function PATCH(request: Request) {
   if (![precoFotoCentavos, precoVideoCentavos].every((valor) => Number.isInteger(valor) && valor >= 0 && valor <= 1_000_000)) {
     return NextResponse.json({ error: "Informe preços válidos para foto e vídeo." }, { status: 400 });
   }
-  const { data, error } = await supabase.from("foto_eventos").update({ nome, categoria, status, capa_url: capaUrl, preco_padrao_centavos: precoFotoCentavos, preco_video_centavos: precoVideoCentavos, preco_bloqueado: precoBloqueado }).eq("id", galeriaId).eq("organizador_user_id", auth.user.id).select("id, nome, categoria, evento_id, status, capa_url, preco_padrao_centavos, preco_video_centavos, preco_bloqueado, desconto_combo_qtd, desconto_combo_percentual").maybeSingle();
+  const descontos = body.descontosProgressivos === undefined ? undefined : validarFaixasDesconto(body.descontosProgressivos);
+  if (descontos === null) return NextResponse.json({ error: "Revise as faixas de desconto." }, { status: 400 });
+  const publicacao = {
+    ...(typeof body.emBreve === "boolean" ? { em_breve: body.emBreve } : {}),
+    ...(typeof body.acessoPorLink === "boolean" ? { acesso_por_link: body.acessoPorLink } : {}),
+    ...(typeof body.downloadGratuito === "boolean" ? { permite_download_gratis: body.downloadGratuito } : {}),
+    ...(descontos ? { descontos_progressivos: descontos, desconto_combo_qtd: descontos[0]?.quantidade || 3, desconto_combo_percentual: descontos[0]?.percentual || 0 } : {}),
+  };
+  const { data, error } = await supabase.from("foto_eventos").update({ ...publicacao, nome, categoria, status, capa_url: capaUrl, preco_padrao_centavos: precoFotoCentavos, preco_video_centavos: precoVideoCentavos, preco_bloqueado: precoBloqueado }).eq("id", galeriaId).eq("organizador_user_id", auth.user.id).select("id, nome, categoria, evento_id, status, capa_url, preco_padrao_centavos, preco_video_centavos, preco_bloqueado, desconto_combo_qtd, desconto_combo_percentual, descontos_progressivos, em_breve, acesso_por_link, acesso_token, permite_download_gratis").maybeSingle();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!data) return NextResponse.json({ error: "Galeria não encontrada ou sem permissão." }, { status: 403 });
   return NextResponse.json({ galeria: data });

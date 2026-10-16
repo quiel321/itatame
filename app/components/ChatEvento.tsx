@@ -101,6 +101,7 @@ export function ChatEvento({
   atletaUserId,
   titulo = 'Falar com a organização',
   compacto = false,
+  discreto = false,
   inicialAberto,
   textoInicial = '',
   onFechar,
@@ -109,6 +110,7 @@ export function ChatEvento({
   atletaUserId?: string;
   titulo?: string;
   compacto?: boolean;
+  discreto?: boolean;
   inicialAberto?: boolean;
   textoInicial?: string;
   onFechar?: () => void;
@@ -200,8 +202,8 @@ export function ChatEvento({
 
   if (compacto && !aberto) {
     return (
-      <button onClick={() => setAberto(true)} className="relative bg-white/5 hover:bg-white/10 border border-white/10 text-white font-black uppercase tracking-widest text-[10px] md:text-xs px-3 py-2.5 md:px-6 md:py-3.5 rounded-lg transition-all text-center flex-1 md:flex-none">
-        Dúvidas com a organização
+      <button onClick={() => setAberto(true)} className={discreto ? 'relative inline-flex min-h-10 items-center gap-2 rounded-md px-2 py-2 text-xs font-medium text-zinc-400 transition-colors hover:bg-white/5 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-white/40' : 'relative bg-white/5 hover:bg-white/10 border border-white/10 text-white font-black uppercase tracking-widest text-[10px] md:text-xs px-3 py-2.5 md:px-6 md:py-3.5 rounded-lg transition-all text-center flex-1 md:flex-none'}>
+        {discreto ? <><span aria-hidden="true">💬</span> Falar com o Organizador</> : 'Dúvidas com a organização'}
         <SeloNaoLidas quantidade={naoLidas} discreto />
       </button>
     );

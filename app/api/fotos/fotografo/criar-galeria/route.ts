@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
 import { obterFotografoDoUsuario } from "@/app/lib/fotos-auth";
 import { validarFaixasDesconto } from "@/app/lib/fotos-descontos";
+import { precosGaleriaValidos } from "@/app/lib/fotos-criacao-galeria";
 import { categoriaFotosValida } from "@/app/lib/fotos-categorias";
 
 export const runtime = "nodejs";
@@ -34,11 +35,13 @@ export async function POST(request: Request) {
     const estado = String(body.estado || "").trim().toUpperCase().slice(0, 2);
     const dataEvento = String(body.dataEvento || "").trim() || null;
     const capaUrl = String(body.capaUrl || "").trim() || null;
-    const preco = Math.max(0, Math.round(Number(body.precoCentavos ?? 1500)));
+    const preco = Number(body.precoCentavos ?? 1500);
+    const precoVideo = Number(body.precoVideoCentavos ?? 2500);
     const descontos = validarFaixasDesconto(body.descontosProgressivos ?? []);
     if (!descontos) return NextResponse.json({ error: "Revise as faixas de desconto: até cinco faixas, com quantidades e percentuais crescentes." }, { status: 400 });
     if (!nome) return NextResponse.json({ error: "Informe o nome da galeria." }, { status: 400 });
-    if (!body.downloadGratuito && (!Number.isFinite(preco) || preco <= 0)) return NextResponse.json({ error: "Informe um preço por foto ou marque o álbum como gratuito." }, { status: 400 });
+    if (!cidade || !/^[A-Z]{2}$/.test(estado)) return NextResponse.json({ error: "Selecione a cidade do evento na lista." }, { status: 400 });
+    if (!precosGaleriaValidos(preco, precoVideo, body.downloadGratuito === true)) return NextResponse.json({ error: "Informe preços válidos para foto e vídeo, maiores que zero para venda e até R$ 10.000,00." }, { status: 400 });
 
     const { data: galeria, error } = await supabase.from("foto_eventos").insert({
       nome,
@@ -52,8 +55,9 @@ export async function POST(request: Request) {
       em_breve: Boolean(body.emBreve),
       acesso_por_link: Boolean(body.acessoPorLink),
       permite_download_gratis: Boolean(body.downloadGratuito),
-      descontos_progressivos: descontos,
-      preco_padrao_centavos: Number.isFinite(preco) ? preco : 1500,
+      descontos_progressivos: body.downloadGratuito === true ? [] : descontos,
+      preco_padrao_centavos: preco,
+      preco_video_centavos: precoVideo,
       created_by: auth.user.id,
       organizador_user_id: null,
     }).select("id, nome").single();

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -14,6 +14,9 @@ import ParceirosAlbum from "../_components/ParceirosAlbum";
 import { faixasDoEvento, validarFaixasDesconto, type FaixaDesconto } from "@/app/lib/fotos-descontos";
 import { CATEGORIAS_FOTOS, nomeCategoriaFotos } from "@/app/lib/fotos-categorias";
 import CidadeEstadoInput from "@/app/components/CidadeEstadoInput";
+import OpcoesPublicacaoGaleria from "../../_components/OpcoesPublicacaoGaleria";
+import CapaGaleriaInput from "../../_components/CapaGaleriaInput";
+import { precoGaleriaCentavos, precosGaleriaValidos } from "@/app/lib/fotos-criacao-galeria";
 
 type FotografoPerfil = { id: string; nome: string | null; email: string | null; foto_url?: string | null; telefone?: string | null; documento?: string | null; cep?: string | null; endereco?: string | null; cidade?: string | null; estado?: string | null; bio?: string | null; perfil_completo?: boolean | null; status: string | null; mp_connected_at?: string | null; mp_user_id?: string | null; };
 type Totais = { fotos: number; albuns: number; eventos: number; vendas: number };
@@ -42,7 +45,7 @@ export default function FotografoDashboardPage() {
 
   const [mostrarCriarGaleria, setMostrarCriarGaleria] = useState(false);
   const [mostrarDetalhesMp, setMostrarDetalhesMp] = useState(false);
-  const [galeriaForm, setGaleriaForm] = useState({ nome: "", categoria: "outros-eventos", cidade: "", estado: "", dataEvento: "", preco: "0,00", emBreve: false, acessoPorLink: false, downloadGratuito: false });
+  const [galeriaForm, setGaleriaForm] = useState({ nome: "", categoria: "outros-eventos", cidade: "", estado: "", dataEvento: "", preco: "15,00", precoVideo: "25,00", emBreve: false, acessoPorLink: false, downloadGratuito: false });
   const [faixasCriacao, setFaixasCriacao] = useState<FaixaDesconto[]>([]);
   const [faixasEdicao, setFaixasEdicao] = useState<FaixaDesconto[]>([]);
   const [capaGaleria, setCapaGaleria] = useState<File | null>(null);
@@ -240,33 +243,38 @@ export default function FotografoDashboardPage() {
   }
 
   async function criarGaleriaFreelancer() {
+    if (criandoGaleria) return;
     setMensagemGaleria("");
+    if (!galeriaForm.nome.trim()) { setMensagemGaleria("Informe o nome da galeria."); return; }
     if (!galeriaForm.cidade.trim() || !galeriaForm.estado) { setMensagemGaleria("Selecione a cidade do evento na lista."); return; }
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return;
-    const normalizado = Number(galeriaForm.preco.replace(/\./g, "").replace(",", "."));
-    const descontosProgressivos = validarFaixasDesconto(faixasCriacao);
+    const precoCentavos = galeriaForm.downloadGratuito ? 0 : precoGaleriaCentavos(galeriaForm.preco);
+    const precoVideoCentavos = galeriaForm.downloadGratuito ? 0 : precoGaleriaCentavos(galeriaForm.precoVideo);
+    if (!precosGaleriaValidos(precoCentavos, precoVideoCentavos, galeriaForm.downloadGratuito)) { setMensagemGaleria("Informe preços de foto e vídeo maiores que zero e até R$ 10.000,00, ou escolha download gratuito."); return; }
+    const descontosProgressivos = validarFaixasDesconto(galeriaForm.downloadGratuito ? [] : faixasCriacao);
     if (!descontosProgressivos) { setMensagemGaleria("As faixas precisam ter quantidades e descontos crescentes."); return; }
     setCriandoGaleria(true);
-    let capaUrl: string | null = null;
-    if (capaGaleria) {
-      const form = new FormData();
-      form.append("file", capaGaleria);
-      const uploadResponse = await fetch("/api/fotos/capa-upload", { method: "POST", headers: { Authorization: `Bearer ${session.access_token}` }, body: form });
-      const upload = await uploadResponse.json().catch(() => null);
-      if (!uploadResponse.ok || !upload?.publicUrl) { setCriandoGaleria(false); setMensagemGaleria(upload?.error || "Não foi possível enviar a foto de capa."); return; }
-      capaUrl = upload.publicUrl;
-    }
-    const response = await fetch("/api/fotos/fotografo/criar-galeria", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
-      body: JSON.stringify({ ...galeriaForm, descontosProgressivos, capaUrl, precoCentavos: Number.isFinite(normalizado) ? Math.max(0, Math.round(normalizado * 100)) : 0 }),
-    });
-    const resultado = await response.json().catch(() => null);
-    setCriandoGaleria(false);
-    if (!response.ok) { setMensagemGaleria(resultado?.error || "Não foi possível criar a galeria."); return; }
-
-    window.location.reload();
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Sessão expirada. Entre novamente.");
+      let capaUrl: string | null = null;
+      if (capaGaleria) {
+        const form = new FormData();
+        form.append("file", capaGaleria);
+        const response = await fetch("/api/fotos/capa-upload", { method: "POST", headers: { Authorization: `Bearer ${session.access_token}` }, body: form });
+        const upload = await response.json().catch(() => null);
+        if (!response.ok || !upload?.publicUrl) throw new Error(upload?.error || "Não foi possível enviar a capa.");
+        capaUrl = upload.publicUrl;
+      }
+      const response = await fetch("/api/fotos/fotografo/criar-galeria", {
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ ...galeriaForm, descontosProgressivos, capaUrl, precoCentavos, precoVideoCentavos }),
+      });
+      const resultado = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(resultado?.error || "Não foi possível criar a galeria.");
+      window.location.reload();
+    } catch (error) {
+      setMensagemGaleria(error instanceof Error ? error.message : "Falha de conexão. Tente novamente.");
+    } finally { setCriandoGaleria(false); }
   }
 
   async function desvincularMercadoPago() {
@@ -482,18 +490,20 @@ export default function FotografoDashboardPage() {
               <>
                 <div id="albuns" className="scroll-mt-24 flex items-center justify-between gap-3 pt-2">
                   <div><h2 className="text-lg font-black uppercase text-white">Álbuns</h2><p className="mt-1 text-xs text-zinc-400">Crie um álbum ou escolha um existente para adicionar fotos.</p></div>
-                  <button type="button" onClick={abrirCriacaoGaleria} className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-retratt px-4 py-3 text-[10px] font-black uppercase text-black hover:brightness-110"><Plus size={14} /> Novo álbum</button>
+                  <button type="button" onClick={abrirCriacaoGaleria} className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-retratt px-4 py-3 text-[10px] font-black uppercase text-black hover:brightness-110"><Plus size={14} /> Nova galeria</button>
                 </div>
 
                 {/* 🔥 CRIAR GALERIA */}
                 <div id="criar-galeria" ref={criarGaleriaRef} className="scroll-mt-24 rounded-3xl border border-retratt/20 bg-retratt/[0.02] overflow-hidden shadow-xl transition-all duration-300 mt-6">
                   <div
-                    onClick={() => mostrarCriarGaleria ? setMostrarCriarGaleria(false) : abrirCriacaoGaleria()}
+                    role="button" tabIndex={0} aria-expanded={mostrarCriarGaleria}
+                    onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && !criandoGaleria) { e.preventDefault(); if (mostrarCriarGaleria) setMostrarCriarGaleria(false); else abrirCriacaoGaleria(); } }}
+                    onClick={() => { if (!criandoGaleria) { if (mostrarCriarGaleria) setMostrarCriarGaleria(false); else abrirCriacaoGaleria(); } }}
                     className="flex items-center justify-between p-5 md:p-8 cursor-pointer hover:bg-retratt/[0.05] transition-colors gap-4"
                   >
                     <div className="min-w-0 flex-1">
                       <p className="text-[9px] font-black uppercase tracking-[0.2em] text-retratt truncate">Trabalho freelancer</p>
-                      <h2 className="mt-1 text-base sm:text-lg font-black uppercase tracking-tight text-white truncate">Novo álbum independente</h2>
+                      <h2 className="mt-1 text-base sm:text-lg font-black uppercase tracking-tight text-white truncate">Nova galeria independente</h2>
                     </div>
                     <div className={`w-10 h-10 shrink-0 rounded-full bg-retratt/10 border border-retratt/20 flex items-center justify-center text-retratt transition-transform duration-300 ${mostrarCriarGaleria ? "rotate-45" : ""}`}>
                        <Plus size={20} />
@@ -502,10 +512,11 @@ export default function FotografoDashboardPage() {
 
                   {mostrarCriarGaleria && (
                     <div className="px-5 pb-5 md:px-8 md:pb-8 border-t border-white/5 pt-5 sm:pt-6 animate-in slide-in-from-top-4 fade-in duration-300 bg-black/20">
-                       <p className="mb-2 text-[10px] leading-relaxed text-zinc-400">Para trabalhos sem organizador, crie seu álbum aqui. Depois use “Adicionar mídias” no cartão do álbum para publicar as fotos.</p>
+                       <p className="mb-2 text-[10px] leading-relaxed text-zinc-400">Crie a galeria do seu evento ou ensaio. Depois, adicione fotos e vídeos e organize-os em álbuns.</p>
                        <p className="mb-6 rounded-xl border border-retratt/20 bg-retratt/5 p-3 text-[9px] font-bold leading-relaxed text-orange-100">Em álbuns independentes não há comissão de organizador. Em cada venda, a Retratt retém 5%; você recebe 95% menos a tarifa do Mercado Pago, descontada da sua conta.</p>
 
-                       <div className="grid gap-3 sm:grid-cols-2">
+                       <fieldset disabled={criandoGaleria} className="grid gap-3 sm:grid-cols-2 disabled:opacity-60">
+                         <legend className="mb-4 text-sm font-bold text-white">1. Dados da galeria</legend>
                          <div className="sm:col-span-2">
                            <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Nome do evento ou ensaio</label>
                            <input value={galeriaForm.nome} onChange={(e) => setGaleriaForm({ ...galeriaForm, nome: e.target.value })} className="cursor-text h-11 w-full rounded-xl border border-white/10 bg-black px-3 text-xs font-bold text-white outline-none focus:border-retratt" />
@@ -526,43 +537,30 @@ export default function FotografoDashboardPage() {
                            <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Data do Evento</label>
                            <input type="date" value={galeriaForm.dataEvento} onChange={(e) => setGaleriaForm({ ...galeriaForm, dataEvento: e.target.value })} className="cursor-text h-11 w-full rounded-xl border border-white/10 bg-black px-3 text-xs font-bold text-white outline-none focus:border-retratt" />
                          </div>
-                         <div>
-                           <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Preço inicial por foto (R$)</label>
-                           <input value={galeriaForm.preco} onFocus={(e) => e.target.select()} onChange={(e) => setGaleriaForm({ ...galeriaForm, preco: e.target.value })} inputMode="decimal" className="cursor-text h-11 w-full rounded-xl border border-white/10 bg-black px-3 text-xs font-bold text-white outline-none focus:border-retratt" />
-                           <p className="mt-1 text-[10px] text-zinc-500">Começa em R$ 0,00. Defina o valor antes de publicar se desejar vender.</p>
-                         </div>
-                         <EditorFaixasDesconto faixas={faixasCriacao} onChange={setFaixasCriacao} />
-                         <label className="sm:col-span-2 flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-xs text-white">
-                           <input type="checkbox" checked={galeriaForm.emBreve} onChange={(e) => setGaleriaForm({ ...galeriaForm, emBreve: e.target.checked })} />
-                           Em breve: mostrar o aviso enquanto as fotos são preparadas. Desative para iniciar as vendas.
-                         </label>
-                         <label className="sm:col-span-2 flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-xs text-white">
-                           <input type="checkbox" checked={galeriaForm.acessoPorLink} onChange={(e) => setGaleriaForm({ ...galeriaForm, acessoPorLink: e.target.checked })} />
-                           Oculto: apenas quem receber o link de acesso poderá abrir este álbum.
-                         </label>
-                         <label className="sm:col-span-2 flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-xs text-white">
-                           <input type="checkbox" checked={galeriaForm.downloadGratuito} onChange={(e) => setGaleriaForm({ ...galeriaForm, downloadGratuito: e.target.checked })} />
-                           Download gratuito: liberar os arquivos originais sem pagamento. Quem tiver o link poderá baixá-los.
-                         </label>
-                         <div className="sm:col-span-2">
-                           <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Foto de Capa</label>
-                           <label className="flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-white/15 bg-black hover:border-retratt/50 hover:bg-retratt/5 transition-all text-[9px] font-black uppercase tracking-widest text-zinc-400 hover:text-retratt">
-                             <CloudUpload size={14} className="shrink-0" /> <span className="truncate max-w-[200px]">{capaGaleria ? `Selecionada: ${capaGaleria.name}` : "Adicionar Imagem de Capa"}</span>
-                             <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => setCapaGaleria(e.target.files?.[0] || null)} />
+                         <div className="sm:col-span-2"><OpcoesPublicacaoGaleria value={galeriaForm} onChange={(opcoes) => setGaleriaForm({ ...galeriaForm, ...opcoes })} /></div>
+                         {!galeriaForm.downloadGratuito && <>
+                           <h3 className="sm:col-span-2 text-sm font-bold text-white">2. Preços e descontos</h3>
+                           <label className="text-xs text-zinc-400">Preço por foto (R$)
+                             <input value={galeriaForm.preco} onFocus={(e) => e.target.select()} onChange={(e) => setGaleriaForm({ ...galeriaForm, preco: e.target.value })} inputMode="decimal" className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-black px-3 text-xs text-white" />
                            </label>
-                         </div>
-                       </div>
+                           <label className="text-xs text-zinc-400">Preço por vídeo (R$)
+                             <input value={galeriaForm.precoVideo} onFocus={(e) => e.target.select()} onChange={(e) => setGaleriaForm({ ...galeriaForm, precoVideo: e.target.value })} inputMode="decimal" className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-black px-3 text-xs text-white" />
+                           </label>
+                           <EditorFaixasDesconto faixas={faixasCriacao} onChange={setFaixasCriacao} />
+                         </>}
+                         <CapaGaleriaInput file={capaGaleria} onChange={setCapaGaleria} />
+                       </fieldset>
 
                        <div className="mt-6 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-3 pt-4 border-t border-white/5">
-                         <button type="button" onClick={() => setMostrarCriarGaleria(false)} className="h-11 w-full sm:w-auto cursor-pointer rounded-xl border border-white/10 bg-transparent px-6 text-[10px] font-black uppercase tracking-widest text-white hover:bg-white/5 transition-colors">
+                         <button type="button" disabled={criandoGaleria} onClick={() => setMostrarCriarGaleria(false)} className="h-11 w-full sm:w-auto cursor-pointer rounded-xl border border-white/10 bg-transparent px-6 text-[10px] font-black uppercase tracking-widest text-white hover:bg-white/5 transition-colors">
                             Cancelar
                          </button>
                          <button type="button" onClick={criarGaleriaFreelancer} disabled={criandoGaleria || !galeriaForm.nome.trim()} className="cursor-pointer h-11 w-full sm:w-auto flex items-center justify-center gap-2 rounded-xl bg-retratt px-8 text-[10px] font-black uppercase tracking-widest text-black hover:bg-retratt disabled:cursor-not-allowed disabled:opacity-50 transition-colors shadow-[0_0_15px_rgba(255,90,31,0.2)]">
                            {criandoGaleria ? <Loader2 size={14} className="animate-spin shrink-0" /> : <Plus size={14} className="shrink-0" />}
-                           {criandoGaleria ? "Criando..." : "Criar álbum"}
+                           {criandoGaleria ? "Criando..." : "Criar galeria"}
                          </button>
                        </div>
-                       {mensagemGaleria && <p className="mt-3 text-xs font-bold text-retratt text-center sm:text-right">{mensagemGaleria}</p>}
+                       {mensagemGaleria && <p role="alert" className="mt-3 text-xs font-bold text-retratt text-center sm:text-right">{mensagemGaleria}</p>}
                     </div>
                   )}
                 </div>

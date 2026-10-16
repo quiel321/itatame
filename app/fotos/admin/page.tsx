@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { useEffect, useState, useRef } from "react";
@@ -12,10 +12,16 @@ import { formatarDocumento } from '@/app/lib/formatar-documento';
 import { formatarTelefone } from '@/app/lib/formatar-telefone';
 import { CATEGORIAS_FOTOS } from "@/app/lib/fotos-categorias";
 import CidadeEstadoInput from "@/app/components/CidadeEstadoInput";
+import OpcoesPublicacaoGaleria from "../_components/OpcoesPublicacaoGaleria";
+import CapaGaleriaInput from "../_components/CapaGaleriaInput";
+import EditorFaixasDesconto from "../_components/EditorFaixasDesconto";
+import { faixasDoEvento, validarFaixasDesconto, type FaixaDesconto } from "@/app/lib/fotos-descontos";
+import { precoGaleriaCentavos, precosGaleriaValidos } from "@/app/lib/fotos-criacao-galeria";
 
 type Totais = { eventos: number; albuns: number; fotos: number; pedidos: number };
 type EventoBase = { id: string; nome: string; local?: string | null; cidade?: string | null; estado?: string | null; data_evento?: string | null; banner_url?: string | null };
 type FotoEventoAdmin = {
+  descontos_progressivos?: FaixaDesconto[] | null; em_breve?: boolean; acesso_por_link?: boolean; acesso_token?: string; permite_download_gratis?: boolean;
   id: string; nome: string; categoria?: string | null; evento_id?: string | null; status: string | null; capa_url?: string | null; preco_padrao_centavos: number | null; preco_video_centavos: number | null; preco_bloqueado: boolean; desconto_combo_qtd?: number | null; desconto_combo_percentual?: number | null;
 };
 type OrganizadorFinanceiro = {
@@ -64,14 +70,14 @@ export default function FotosAdminPage() {
   const [preco, setPreco] = useState("15,00");
   const [precoVideo, setPrecoVideo] = useState("25,00");
   const [precoBloqueado, setPrecoBloqueado] = useState(false);
-  const [comboQtd, setComboQtd] = useState("3");
-  const [comboPercentual, setComboPercentual] = useState("20");
+  const [opcoesPublicacao, setOpcoesPublicacao] = useState({ emBreve: false, acessoPorLink: false, downloadGratuito: false });
+  const [faixasCriacao, setFaixasCriacao] = useState<FaixaDesconto[]>([{ quantidade: 3, percentual: 20 }]);
 
-  const [regrasCombo, setRegrasCombo] = useState<Record<string, { qtd: string; percentual: string }>>({});
+  const [regrasCombo, setRegrasCombo] = useState<Record<string, FaixaDesconto[]>>({});
   const [emailFotografo, setEmailFotografo] = useState<Record<string, string>>({});
   const [credenciandoEvento, setCredenciandoEvento] = useState<string | null>(null);
   const [editandoGaleria, setEditandoGaleria] = useState<string | null>(null);
-  const [edicaoGaleria, setEdicaoGaleria] = useState({ nome: "", categoria: "outros-eventos", capa_url: "", status: "publicado", precoBloqueado: false, precoFoto: "15,00", precoVideo: "25,00" });
+  const [edicaoGaleria, setEdicaoGaleria] = useState({ nome: "", categoria: "outros-eventos", capa_url: "", status: "publicado", precoBloqueado: false, precoFoto: "15,00", precoVideo: "25,00", emBreve: false, acessoPorLink: false, downloadGratuito: false });
   const [salvandoGaleria, setSalvandoGaleria] = useState(false);
   const [vendasPorGaleria, setVendasPorGaleria] = useState<Record<string, number>>({});
   const [royaltiesPorGaleria, setRoyaltiesPorGaleria] = useState<Record<string, number>>({});
@@ -86,6 +92,9 @@ export default function FotosAdminPage() {
   const [removendoFotografo, setRemovendoFotografo] = useState<string | null>(null);
 
   const [mensagem, setMensagem] = useState("");
+  const [erroCriacao, setErroCriacao] = useState("");
+  const [linkCopiado, setLinkCopiado] = useState<string | null>(null);
+  const [salvandoDescontos, setSalvandoDescontos] = useState<string | null>(null);
   const [salvandoPerfil, setSalvandoPerfil] = useState(false);
   const [mostrarFormularioPerfil, setMostrarFormularioPerfil] = useState(false);
   const [carregando, setCarregando] = useState(true);
@@ -154,10 +163,10 @@ export default function FotosAdminPage() {
       });
 
       const base = await supabase.from("eventos").select("id, nome, local, cidade, estado, data_evento, banner_url").eq("organizador_id", user.id).order("data_evento", { ascending: false }).limit(50);
-      const fotoEvt = await supabase.from("foto_eventos").select("id, nome, categoria, evento_id, status, capa_url, preco_padrao_centavos, preco_video_centavos, preco_bloqueado, desconto_combo_qtd, desconto_combo_percentual").eq("organizador_user_id", user.id).order("created_at", { ascending: false });
+      const fotoEvt = await supabase.from("foto_eventos").select("id, nome, categoria, evento_id, status, capa_url, preco_padrao_centavos, preco_video_centavos, preco_bloqueado, desconto_combo_qtd, desconto_combo_percentual, descontos_progressivos, em_breve, acesso_por_link, acesso_token, permite_download_gratis").eq("organizador_user_id", user.id).order("created_at", { ascending: false });
       let galeriasDados: FotoEventoAdmin[] = (fotoEvt.data || []) as FotoEventoAdmin[];
       if (fotoEvt.error?.code === "42703") {
-        const fallback = await supabase.from("foto_eventos").select("id, nome, evento_id, status, capa_url, preco_padrao_centavos, preco_video_centavos, preco_bloqueado, desconto_combo_qtd, desconto_combo_percentual").eq("organizador_user_id", user.id).order("created_at", { ascending: false });
+        const fallback = await supabase.from("foto_eventos").select("id, nome, evento_id, status, capa_url, preco_padrao_centavos, preco_video_centavos, preco_bloqueado, desconto_combo_qtd, desconto_combo_percentual, descontos_progressivos, em_breve, acesso_por_link, acesso_token, permite_download_gratis").eq("organizador_user_id", user.id).order("created_at", { ascending: false });
         galeriasDados = (fallback.data || []) as FotoEventoAdmin[];
       }
 
@@ -171,10 +180,11 @@ export default function FotosAdminPage() {
       const listaBase = (base.data || []) as EventoBase[];
       const listaGalerias = galeriasDados;
       setEventosBase(listaBase);
+      if (!listaBase.some((evento) => !listaGalerias.some((galeria) => galeria.evento_id === evento.id))) setIsManual(true);
       setFotoEventos(listaGalerias);
       setRegrasCombo(Object.fromEntries(listaGalerias.map((evento) => [
         evento.id,
-        { qtd: String(evento.desconto_combo_qtd || 3), percentual: String(evento.desconto_combo_percentual ?? 20) },
+        faixasDoEvento(evento),
       ])));
       setTotais({ eventos: listaGalerias.length, albuns: albuns.count || 0, fotos: fotos.count || 0, pedidos: pedidos.count || 0 });
       const { data: { session } } = await supabase.auth.getSession();
@@ -204,7 +214,8 @@ export default function FotosAdminPage() {
             setTotais((atual) => ({ ...atual, pedidos: Number(resumo.vendasTotal || 0) }));
           }
       }
-      if (!eventoSelecionado && listaBase[0]?.id) setEventoSelecionado(String(listaBase[0].id));
+      const disponivel = listaBase.find((evento) => !listaGalerias.some((galeria) => galeria.evento_id === evento.id));
+      if (disponivel) setEventoSelecionado(String(disponivel.id));
 
       setCarregando(false);
     }
@@ -233,24 +244,10 @@ export default function FotosAdminPage() {
     window.location.reload();
   }
 
-  function precoCentavos() {
-    const normalizado = preco.replace(/\./g, "").replace(",", ".");
-    const valor = Number(normalizado);
-    return Number.isFinite(valor) ? Math.max(0, Math.round(valor * 100)) : 1500;
-  }
-
   function converterPrecoCentavos(valor: string) {
     const numero = Number(valor.replace(/\./g, "").replace(",", "."));
     return Number.isFinite(numero) && numero >= 0 ? Math.round(numero * 100) : NaN;
   }
-
-  function precoVideoCentavos() {
-    const valor = converterPrecoCentavos(precoVideo);
-    return Number.isFinite(valor) ? valor : 2500;
-  }
-
-  function comboQtdNumero() { return Number.isFinite(Number(comboQtd)) ? Math.max(2, Math.round(Number(comboQtd))) : 3; }
-  function comboPercentualNumero() { const valor = Number(comboPercentual.replace(",", ".")); return Number.isFinite(valor) ? Math.min(90, Math.max(0, valor)) : 20; }
 
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>, tipo: "avatar" | "capa") => {
     const file = event.target.files?.[0];
@@ -303,7 +300,7 @@ export default function FotosAdminPage() {
     setSalvandoGaleria(true);
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) { setSalvandoGaleria(false); setMensagem("Sessão expirada."); return; }
-    const response = await fetch("/api/fotos/admin/editar-galeria", { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` }, body: JSON.stringify({ galeriaId: editandoGaleria, nome: edicaoGaleria.nome, categoria: edicaoGaleria.categoria, capaUrl: edicaoGaleria.capa_url, status: edicaoGaleria.status, precoBloqueado: edicaoGaleria.precoBloqueado, precoFotoCentavos, precoVideoCentavos }) });
+    const response = await fetch("/api/fotos/admin/editar-galeria", { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` }, body: JSON.stringify({ galeriaId: editandoGaleria, nome: edicaoGaleria.nome, categoria: edicaoGaleria.categoria, capaUrl: edicaoGaleria.capa_url, status: edicaoGaleria.status, precoBloqueado: edicaoGaleria.precoBloqueado, precoFotoCentavos, precoVideoCentavos, emBreve: edicaoGaleria.emBreve, acessoPorLink: edicaoGaleria.acessoPorLink, downloadGratuito: edicaoGaleria.downloadGratuito }) });
     const resultado = await response.json().catch(() => null);
     setSalvandoGaleria(false);
     if (!response.ok || !resultado?.galeria) { setMensagem(resultado?.error || "Não foi possível editar esta galeria ou ela não pertence à sua conta."); return; }
@@ -314,90 +311,72 @@ export default function FotosAdminPage() {
   }
 
   // 🔥 PUBLICAR GALERIA (SISTEMA OU AVULSA)
+  async function copiarLinkGaleria(evento: FotoEventoAdmin) {
+    const prefixo = window.location.pathname.startsWith("/fotos") ? "/fotos" : "";
+    const acesso = evento.acesso_por_link && evento.acesso_token ? `?acesso=${encodeURIComponent(evento.acesso_token)}` : "";
+    const link = `${window.location.origin}${prefixo}/evento/${evento.id}${acesso}`;
+    try {
+      await navigator.clipboard.writeText(link);
+      setLinkCopiado(evento.id);
+      window.setTimeout(() => setLinkCopiado((atual) => atual === evento.id ? null : atual), 2000);
+    } catch { prompt("Copie o link da galeria:", link); }
+  }
+
   async function publicarGaleria() {
-    setMensagem("");
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user) { setMensagem("Sessão expirada. Faça login novamente."); return; }
-
+    if (criandoGaleria) return;
+    setErroCriacao("");
+    if (isManual && !manualForm.nome.trim()) { setErroCriacao("Informe o nome da galeria."); return; }
+    if (isManual && (!manualForm.cidade.trim() || !manualForm.estado)) { setErroCriacao("Selecione a cidade do evento na lista."); return; }
+    if (!isManual && !eventoSelecionado) { setErroCriacao("Selecione um evento da lista."); return; }
+    const precoCentavos = opcoesPublicacao.downloadGratuito ? 0 : precoGaleriaCentavos(preco);
+    const precoVideoCentavos = opcoesPublicacao.downloadGratuito ? 0 : precoGaleriaCentavos(precoVideo);
+    if (!precosGaleriaValidos(precoCentavos, precoVideoCentavos, opcoesPublicacao.downloadGratuito)) { setErroCriacao("Informe preços de foto e vídeo maiores que zero e até R$ 10.000,00, ou escolha download gratuito."); return; }
+    const descontosProgressivos = validarFaixasDesconto(opcoesPublicacao.downloadGratuito ? [] : faixasCriacao);
+    if (!descontosProgressivos) { setErroCriacao("As faixas precisam ter quantidades e descontos crescentes."); return; }
     setCriandoGaleria(true);
-
-    if (isManual) {
-      if (!manualForm.nome.trim()) { setMensagem("Digite o nome da galeria avulsa."); setCriandoGaleria(false); return; }
-      if (!manualForm.cidade.trim() || !manualForm.estado) { setMensagem("Selecione a cidade do evento na lista."); setCriandoGaleria(false); return; }
-
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Sessão expirada. Faça login novamente.");
       let capaUrl: string | null = null;
       if (manualCapa) {
-        const form = new FormData();
-        form.append("file", manualCapa);
-        const uploadResponse = await fetch("/api/fotos/capa-upload", { method: "POST", headers: { Authorization: `Bearer ${session.access_token}` }, body: form });
-        const upload = await uploadResponse.json().catch(() => null);
-        if (upload?.publicUrl) capaUrl = upload.publicUrl;
+        const form = new FormData(); form.append("file", manualCapa);
+        const response = await fetch("/api/fotos/capa-upload", { method: "POST", headers: { Authorization: `Bearer ${session.access_token}` }, body: form });
+        const upload = await response.json().catch(() => null);
+        if (!response.ok || !upload?.publicUrl) throw new Error(upload?.error || "Não foi possível enviar a capa.");
+        capaUrl = upload.publicUrl;
       }
-
-      const slugFormatado = manualForm.nome.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') + '-' + Math.floor(Math.random() * 1000);
-
-      const { error } = await supabase.from("foto_eventos").insert({
-        organizador_user_id: userId,
-        nome: manualForm.nome.trim(),
-        categoria: manualForm.categoria,
-        cidade: manualForm.cidade.trim() || null,
-        estado: manualForm.estado.trim().toUpperCase() || null,
-        data_evento: manualForm.dataEvento || null,
-        capa_url: capaUrl,
-        preco_padrao_centavos: precoCentavos(),
-        preco_video_centavos: precoVideoCentavos(),
-        preco_bloqueado: precoBloqueado,
-        desconto_combo_qtd: comboQtdNumero(),
-        desconto_combo_percentual: comboPercentualNumero(),
-        status: 'publicado',
-        slug: slugFormatado
+      const response = await fetch("/api/fotos/admin/criar-galeria", {
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ ...(isManual ? manualForm : { eventoId: eventoSelecionado, categoria: categoriaEvento }), ...opcoesPublicacao, capaUrl, precoCentavos, precoVideoCentavos, precoBloqueado, descontosProgressivos }),
       });
-
-      if (error) {
-        setMensagem("Erro ao criar galeria avulsa.");
-        setCriandoGaleria(false);
-        return;
-      }
-
+      const resultado = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(resultado?.error || "Não foi possível criar a galeria.");
       window.location.reload();
-      return;
-    }
-
-    // Fluxo normal (Evento Cadastrado)
-    const evento = eventosBase.find((item) => String(item.id) === eventoSelecionado);
-    if (!evento) { setMensagem("Selecione um evento da lista."); setCriandoGaleria(false); return; }
-
-    const jaExiste = fotoEventos.find((item) => String(item.evento_id) === String(evento.id));
-    if (jaExiste) { setMensagem("Este evento já possui uma galeria criada."); setCriandoGaleria(false); return; }
-
-    const response = await fetch("/api/fotos/admin/criar-galeria", {
-      method: "POST", headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session.access_token}` },
-      body: JSON.stringify({ eventoId: evento.id, categoria: categoriaEvento, precoCentavos: precoCentavos(), precoVideoCentavos: precoVideoCentavos(), precoBloqueado, descontoComboQtd: comboQtdNumero(), descontoComboPercentual: comboPercentualNumero(), }),
-    });
-
-    if (!response.ok) { setMensagem("Falha ao criar a galeria. Tente novamente."); setCriandoGaleria(false); return; }
-
-    window.location.reload();
+    } catch (error) {
+      setErroCriacao(error instanceof Error ? error.message : "Falha de conexão. Tente novamente.");
+    } finally { setCriandoGaleria(false); }
   }
 
   async function salvarRegraCombo(eventoId: string) {
-    if (!userId) return;
-    const regra = regrasCombo[eventoId] || { qtd: "3", percentual: "20" };
-    const qtd = Number.isFinite(Number(regra.qtd)) ? Math.max(2, Math.round(Number(regra.qtd))) : 3;
-    const percentual = Number.isFinite(Number(regra.percentual.replace(",", "."))) ? Math.min(90, Math.max(0, Number(regra.percentual.replace(",", ".")))) : 20;
-
-    const { data, error } = await supabase.from("foto_eventos")
-      .update({ desconto_combo_qtd: qtd, desconto_combo_percentual: percentual })
-      .eq("id", eventoId).eq("organizador_user_id", userId)
-      .select("id, desconto_combo_qtd, desconto_combo_percentual").maybeSingle();
-    if (error || !data) {
-      setMensagem(error?.message || "Não foi possível atualizar o combo desta galeria.");
-      return;
-    }
-    setFotoEventos((atuais) => atuais.map((item) => item.id === eventoId
-      ? { ...item, desconto_combo_qtd: data.desconto_combo_qtd, desconto_combo_percentual: data.desconto_combo_percentual }
-      : item));
-    setMensagem(`Combo atualizado: ${qtd} mídias com ${percentual}% de desconto.`);
+    if (salvandoDescontos) return;
+    const descontos = validarFaixasDesconto(regrasCombo[eventoId] || []);
+    if (!descontos) { setMensagem("Revise as faixas: quantidades e descontos devem crescer."); return; }
+    const evento = fotoEventos.find((item) => item.id === eventoId);
+    if (!evento) return;
+    setSalvandoDescontos(eventoId);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Sessão expirada. Faça login novamente.");
+      const response = await fetch("/api/fotos/admin/editar-galeria", {
+        method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ galeriaId: eventoId, nome: evento.nome, categoria: evento.categoria || "outros-eventos", status: evento.status, capaUrl: evento.capa_url, descontosProgressivos: descontos }),
+      });
+      const resultado = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(resultado?.error || "Não foi possível atualizar os descontos.");
+      setFotoEventos((atuais) => atuais.map((item) => item.id === eventoId ? { ...item, ...resultado.galeria } : item));
+      setMensagem("Descontos atualizados.");
+    } catch (error) { setMensagem(error instanceof Error ? error.message : "Falha de conexão."); }
+    finally { setSalvandoDescontos(null); }
   }
 
   async function credenciarFotografo(eventoId: string) {
@@ -638,7 +617,9 @@ export default function FotosAdminPage() {
             {/* 🔥 NOVO: PUBLICAR GALERIA EXPANSÍVEL E RESPONSIVO COM OPÇÃO MANUAL */}
             <div className="rounded-3xl border border-retratt/20 bg-retratt/[0.02] overflow-hidden shadow-xl transition-all duration-300">
               <div
-                onClick={() => setMostrarCriarGaleria(!mostrarCriarGaleria)}
+                role="button" tabIndex={0} aria-expanded={mostrarCriarGaleria}
+                onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && !criandoGaleria) { e.preventDefault(); setMostrarCriarGaleria(!mostrarCriarGaleria); } }}
+                onClick={() => { if (!criandoGaleria) setMostrarCriarGaleria(!mostrarCriarGaleria); }}
                 className="flex items-center justify-between p-5 md:p-8 cursor-pointer hover:bg-retratt/[0.05] transition-colors gap-4"
               >
                 <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
@@ -646,7 +627,7 @@ export default function FotosAdminPage() {
                       <FolderPlus size={20} />
                    </div>
                    <div className="min-w-0 flex-1">
-                      <h2 className="text-base sm:text-lg font-black uppercase tracking-tight text-white truncate">Publicar Galeria</h2>
+                      <h2 className="text-base sm:text-lg font-black uppercase tracking-tight text-white truncate">Nova galeria</h2>
                       <p className="text-[9px] sm:text-[10px] font-bold text-zinc-500 uppercase tracking-widest mt-0.5 truncate">Ative a loja de fotos do seu evento</p>
                    </div>
                 </div>
@@ -659,24 +640,26 @@ export default function FotosAdminPage() {
                 <div className="px-5 pb-5 md:px-8 md:pb-8 border-t border-white/5 pt-5 sm:pt-6 animate-in slide-in-from-top-4 fade-in duration-300 bg-black/20">
 
                   {/* Toggle: Evento do Sistema vs Evento Manual */}
-                  <div className="flex gap-2 mb-6 bg-black/50 p-1.5 rounded-xl border border-white/5 w-fit">
+                  <div className="flex flex-wrap gap-2 mb-6 bg-black/50 p-1.5 rounded-xl border border-white/5 w-fit">
                     <button
                       type="button"
-                      onClick={() => setIsManual(false)}
+                      disabled={criandoGaleria} aria-pressed={!isManual} onClick={() => setIsManual(false)}
                       className={`px-4 py-2.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${!isManual ? 'bg-retratt text-black shadow-md' : 'text-zinc-500 hover:text-white'}`}
                     >
-                      Vincular Evento Oficial
+                      Usar evento do iTatame
                     </button>
                     <button
                       type="button"
-                      onClick={() => setIsManual(true)}
+                      disabled={criandoGaleria} aria-pressed={isManual} onClick={() => setIsManual(true)}
                       className={`px-4 py-2.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${isManual ? 'bg-retratt text-black shadow-md' : 'text-zinc-500 hover:text-white'}`}
                     >
-                      Criar Galeria Avulsa
+                      Criar do zero
                     </button>
                   </div>
 
-                  <div className="space-y-5">
+                  <fieldset disabled={criandoGaleria} className="space-y-5 disabled:opacity-60">
+                    <legend className="mb-4 text-sm font-bold text-white">1. Dados da galeria</legend>
+                    <p className="text-xs leading-relaxed text-zinc-400">Use os dados de um evento do iTatame ou crie uma galeria para qualquer evento. Depois, credencie os fotógrafos e defina o acordo de cada um.</p>
                     <div>
                       <label className="ml-1 mb-1.5 block text-[8px] font-black uppercase tracking-[0.2em] text-zinc-500">Categoria da galeria</label>
                       <select value={isManual ? manualForm.categoria : categoriaEvento} onChange={(e) => isManual ? setManualForm({ ...manualForm, categoria: e.target.value }) : setCategoriaEvento(e.target.value)} className="h-12 w-full rounded-xl border border-white/10 bg-[#050505] px-4 text-xs text-white">{CATEGORIAS_FOTOS.map((categoria) => <option key={categoria.id} value={categoria.id}>{categoria.nome}</option>)}</select>
@@ -686,8 +669,10 @@ export default function FotosAdminPage() {
                         <label className="ml-1 mb-1.5 block text-[8px] font-black uppercase tracking-[0.2em] text-zinc-500">Evento Cadastrado</label>
                         <select value={eventoSelecionado} onChange={(e) => setEventoSelecionado(e.target.value)} className="h-12 sm:h-14 w-full cursor-pointer rounded-2xl border border-white/5 bg-[#050505] px-4 text-xs font-bold text-white outline-none focus:border-retratt/50 focus:ring-1 focus:ring-retratt/50">
                           <option value="">Escolha um evento do sistema...</option>
-                          {eventosBase.map((evento) => <option key={evento.id} value={evento.id}>{evento.nome}</option>)}
+                          {eventosBase.map((evento) => <option key={evento.id} value={evento.id} disabled={fotoEventos.some((galeria) => galeria.evento_id === evento.id)}>{evento.nome}{fotoEventos.some((galeria) => galeria.evento_id === evento.id) ? " — galeria já criada" : ""}</option>)}
                         </select>
+                        {!eventosBase.length && <p className="mt-2 text-xs text-zinc-400">Você ainda não tem eventos no iTatame. Escolha “Criar do zero” para continuar.</p>}
+                        {eventoSelecionado && <p className="mt-2 text-xs text-zinc-400">Nome, cidade, data e capa serão importados do evento selecionado. Você pode escolher outra capa abaixo.</p>}
                       </div>
                     ) : (
                       <div className="grid gap-3 sm:grid-cols-2">
@@ -707,50 +692,27 @@ export default function FotosAdminPage() {
                            <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Data do Evento</label>
                            <input type="date" value={manualForm.dataEvento} onChange={(e) => setManualForm({ ...manualForm, dataEvento: e.target.value })} className="h-12 w-full rounded-xl border border-white/10 bg-[#050505] px-4 text-xs font-bold text-white outline-none focus:border-retratt/50" />
                          </div>
-                         <div>
-                           <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Foto de Capa</label>
-                           <label className="flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-white/15 bg-[#050505] hover:border-retratt/50 transition-all text-[9px] font-black uppercase tracking-widest text-zinc-400 hover:text-retratt">
-                             <UploadCloud size={14} className="shrink-0" /> <span className="truncate max-w-[150px]">{manualCapa ? manualCapa.name : "Adicionar Capa"}</span>
-                             <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => setManualCapa(e.target.files?.[0] || null)} />
-                           </label>
-                         </div>
+
                       </div>
                     )}
 
-                    <div>
-                      <label className="ml-1 mb-1.5 block text-[8px] font-black uppercase tracking-[0.2em] text-zinc-500">Preço Padrão (Por Foto)</label>
-                      <div className="relative">
-                         <span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 font-black text-xs">R$</span>
-                         <input value={preco} onChange={(e) => setPreco(e.target.value)} className="h-12 sm:h-14 w-full rounded-2xl border border-white/5 bg-[#050505] pl-10 pr-4 text-xs font-bold text-white outline-none focus:border-retratt/50 focus:ring-1 focus:ring-retratt/50" />
+                    <OpcoesPublicacaoGaleria value={opcoesPublicacao} onChange={setOpcoesPublicacao} />
+                    {!opcoesPublicacao.downloadGratuito && <>
+                      <h3 className="text-sm font-bold text-white">2. Preços e descontos</h3>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <label className="text-xs text-zinc-400">Preço padrão por foto (R$)<input value={preco} onChange={(e) => setPreco(e.target.value)} inputMode="decimal" className="mt-2 h-12 w-full rounded-xl border border-white/10 bg-black px-3 text-xs text-white" /></label>
+                        <label className="text-xs text-zinc-400">Preço padrão por vídeo (R$)<input value={precoVideo} onChange={(e) => setPrecoVideo(e.target.value)} inputMode="decimal" className="mt-2 h-12 w-full rounded-xl border border-white/10 bg-black px-3 text-xs text-white" /></label>
                       </div>
-                    </div>
-
-                    <div>
-                      <label className="ml-1 mb-1.5 block text-[8px] font-black uppercase tracking-[0.2em] text-zinc-500">Preço Padrão (Por Vídeo)</label>
-                      <div className="relative">
-                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 font-black text-xs">R$</span>
-                        <input value={precoVideo} onChange={(e) => setPrecoVideo(e.target.value)} inputMode="decimal" className="h-12 sm:h-14 w-full rounded-2xl border border-white/5 bg-[#050505] pl-10 pr-4 text-xs font-bold text-white outline-none focus:border-retratt/50" />
-                      </div>
-                    </div>
-
-                    <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-white/10 bg-black/40 p-3 text-[10px] font-bold text-zinc-300">
-                      <input type="checkbox" checked={precoBloqueado} onChange={(e) => setPrecoBloqueado(e.target.checked)} className="accent-orange-500" />
-                      Bloquear preço das fotos e vídeos para os fotógrafos
-                    </label>
-
-                    <div className="grid gap-4 sm:grid-cols-2 bg-white/5 p-4 rounded-2xl border border-white/5">
-                      <div>
-                        <label className="mb-1.5 block text-[9px] font-black uppercase tracking-[0.2em] text-zinc-400">Combo a partir de</label>
-                        <input value={comboQtd} onChange={(e) => setComboQtd(e.target.value)} inputMode="numeric" className="h-11 sm:h-12 w-full rounded-xl border border-white/5 bg-[#050505] px-3 text-xs font-bold text-white outline-none focus:border-retratt/50" placeholder="3 fotos" />
-                      </div>
-                      <div>
-                        <label className="mb-1.5 block text-[9px] font-black uppercase tracking-[0.2em] text-zinc-400">Desconto do Combo (%)</label>
-                        <input value={comboPercentual} onChange={(e) => setComboPercentual(e.target.value)} inputMode="decimal" className="h-11 sm:h-12 w-full rounded-xl border border-white/5 bg-[#050505] px-3 text-xs font-bold text-white outline-none focus:border-retratt/50" placeholder="20" />
-                      </div>
-                    </div>
-
+                      <label className="flex items-start gap-3 rounded-xl border border-white/10 p-3 text-xs text-zinc-300">
+                        <input type="checkbox" checked={precoBloqueado} onChange={(e) => setPrecoBloqueado(e.target.checked)} className="mt-0.5 accent-orange-500" />
+                        <span>Fixar esses preços para todos os fotógrafos<span className="mt-1 block text-zinc-500">Desmarcado, cada fotógrafo pode definir os preços das próprias mídias.</span></span>
+                      </label>
+                      <EditorFaixasDesconto faixas={faixasCriacao} onChange={setFaixasCriacao} />
+                    </>}
+                    <CapaGaleriaInput file={manualCapa} onChange={setManualCapa} fallbackUrl={!isManual ? eventosBase.find((evento) => evento.id === eventoSelecionado)?.banner_url : null} />
+                    <p className="rounded-xl border border-white/10 p-3 text-xs leading-relaxed text-zinc-400">Após criar, credencie os fotógrafos pelo e-mail e escolha o modelo de recebimento: royalty por venda ou contratação por diária.</p>
                     <div className="mt-6 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-3 pt-4 border-t border-white/5">
-                      <button type="button" onClick={() => setMostrarCriarGaleria(false)} className="h-11 w-full sm:w-auto cursor-pointer rounded-xl border border-white/10 bg-transparent px-6 text-[10px] font-black uppercase tracking-widest text-white hover:bg-white/5 transition-colors">
+                      <button type="button" disabled={criandoGaleria} onClick={() => setMostrarCriarGaleria(false)} className="h-11 w-full sm:w-auto cursor-pointer rounded-xl border border-white/10 bg-transparent px-6 text-[10px] font-black uppercase tracking-widest text-white hover:bg-white/5 transition-colors">
                          Cancelar
                       </button>
                       <button onClick={publicarGaleria} disabled={criandoGaleria} className="h-11 w-full sm:w-auto cursor-pointer flex items-center justify-center gap-2 rounded-xl bg-retratt px-8 text-[10px] font-black uppercase tracking-widest text-black hover:bg-retratt disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-[0_0_15px_rgba(255,90,31,0.2)]">
@@ -759,16 +721,13 @@ export default function FotosAdminPage() {
                       </button>
                     </div>
 
-                    {mensagem && (
-                       <div className="mt-4 text-[11px] font-bold text-emerald-400 text-center sm:text-right flex items-center justify-center sm:justify-end gap-1.5">
-                         <CheckCircle2 size={14}/> {mensagem}
-                       </div>
-                    )}
-                  </div>
+                    {erroCriacao && <p role="alert" className="mt-4 text-xs font-bold text-red-400">{erroCriacao}</p>}
+                  </fieldset>
                 </div>
               )}
             </div>
 
+            {mensagem && <p role="status" className="rounded-xl border border-retratt/20 p-4 text-xs text-retratt">{mensagem}</p>}
             <div className="rounded-3xl border border-white/5 bg-[#0a0a0e] p-5 sm:p-6 md:p-8 shadow-xl">
               <div className="flex items-center gap-3 mb-6 border-b border-white/5 pb-4">
                  <BarChart3 size={20} className="text-retratt" />
@@ -788,6 +747,9 @@ export default function FotosAdminPage() {
                        <div className="flex-1 min-w-0">
                           <h3 className="text-sm sm:text-base font-black uppercase text-white truncate mb-2">{evento.nome}</h3>
                           <div className="flex flex-wrap gap-2">
+                             {evento.em_breve && <span className="rounded bg-sky-400/10 px-2 py-1 text-[10px] text-sky-300">Em breve</span>}
+                             {evento.acesso_por_link && <span className="rounded bg-white/10 px-2 py-1 text-[10px] text-zinc-300">Por link</span>}
+                             {evento.permite_download_gratis && <span className="rounded bg-emerald-400/10 px-2 py-1 text-[10px] text-emerald-300">Gratuita</span>}
                              <span className="inline-flex items-center gap-1 bg-white/5 text-zinc-400 border border-white/10 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest shrink-0">{formatarMoeda(evento.preco_padrao_centavos)} / foto</span>
                              <span className="inline-flex items-center gap-1 bg-white/5 text-zinc-400 border border-white/10 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest shrink-0">{formatarMoeda(evento.preco_video_centavos)} / vídeo</span>
                              <span className="inline-flex items-center gap-1 bg-white/5 text-zinc-400 border border-white/10 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest shrink-0">Preço {evento.preco_bloqueado ? "bloqueado" : "livre"}</span>
@@ -797,11 +759,12 @@ export default function FotosAdminPage() {
                        </div>
 
                        {/* Botões Responsivos */}
-                       <div className="flex flex-row items-center gap-2 shrink-0 mt-1 sm:mt-0">
-                          <button type="button" onClick={() => { setEditandoGaleria(evento.id); setEdicaoGaleria({ nome: evento.nome, categoria: evento.categoria || "outros-eventos", capa_url: evento.capa_url || "", status: evento.status || "publicado", precoBloqueado: evento.preco_bloqueado, precoFoto: ((evento.preco_padrao_centavos || 0) / 100).toFixed(2).replace(".", ","), precoVideo: ((evento.preco_video_centavos || 0) / 100).toFixed(2).replace(".", ",") }); }} className="cursor-pointer flex-1 sm:flex-none inline-flex h-9 sm:h-9 items-center justify-center gap-1.5 rounded-xl border border-retratt/30 bg-retratt/10 px-3 sm:px-4 text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-retratt hover:bg-retratt hover:text-black transition-colors">
+                       <div className="flex flex-wrap items-center gap-2 shrink-0 mt-1 sm:mt-0">
+                          <button type="button" onClick={() => { setEditandoGaleria(evento.id); setEdicaoGaleria({ nome: evento.nome, categoria: evento.categoria || "outros-eventos", capa_url: evento.capa_url || "", status: evento.status || "publicado", precoBloqueado: evento.preco_bloqueado, precoFoto: ((evento.preco_padrao_centavos || 0) / 100).toFixed(2).replace(".", ","), precoVideo: ((evento.preco_video_centavos || 0) / 100).toFixed(2).replace(".", ","), emBreve: Boolean(evento.em_breve), acessoPorLink: Boolean(evento.acesso_por_link), downloadGratuito: Boolean(evento.permite_download_gratis) }); }} className="cursor-pointer flex-1 sm:flex-none inline-flex h-9 sm:h-9 items-center justify-center gap-1.5 rounded-xl border border-retratt/30 bg-retratt/10 px-3 sm:px-4 text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-retratt hover:bg-retratt hover:text-black transition-colors">
                             <Pencil size={12} className="shrink-0"/> Editar
                           </button>
-                          <Link href={`/fotos/evento/${evento.id}`} className="cursor-pointer flex-1 sm:flex-none inline-flex h-9 sm:h-9 items-center justify-center gap-1.5 rounded-xl bg-white/10 px-3 sm:px-4 text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-white hover:bg-white hover:text-black transition-colors">
+                          <button type="button" onClick={() => void copiarLinkGaleria(evento)} className="inline-flex h-9 items-center justify-center rounded-xl border border-white/10 px-3 text-[10px] font-bold text-zinc-300 hover:bg-white/10">{linkCopiado === evento.id ? "Link copiado" : "Copiar link"}</button>
+                          <Link href={`/fotos/evento/${evento.id}${evento.acesso_por_link && evento.acesso_token ? `?acesso=${evento.acesso_token}` : ""}`} className="cursor-pointer flex-1 sm:flex-none inline-flex h-9 sm:h-9 items-center justify-center gap-1.5 rounded-xl bg-white/10 px-3 sm:px-4 text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-white hover:bg-white hover:text-black transition-colors">
                             Ver Loja
                           </Link>
                        </div>
@@ -846,6 +809,7 @@ export default function FotosAdminPage() {
                               </select>
                            </div>
 
+                           <div className="sm:col-span-2"><OpcoesPublicacaoGaleria value={edicaoGaleria} onChange={(opcoes) => setEdicaoGaleria({ ...edicaoGaleria, ...opcoes })} /></div>
                            <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-white/10 bg-black p-3 text-[10px] font-bold text-zinc-300 sm:col-span-2">
                              <input type="checkbox" checked={edicaoGaleria.precoBloqueado} onChange={(e) => setEdicaoGaleria({ ...edicaoGaleria, precoBloqueado: e.target.checked })} className="accent-orange-500" />
                              Bloquear preço das fotos e vídeos para os fotógrafos
@@ -915,19 +879,10 @@ export default function FotosAdminPage() {
                       </div>
                     )}
 
-                    <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto] bg-white/[0.02] p-3 rounded-xl border border-white/5 items-end">
-                      <div>
-                         <label className="text-[8px] font-black uppercase tracking-widest text-zinc-500 ml-1 mb-1 block">Fotos p/ Combo</label>
-                         <input value={regrasCombo[evento.id]?.qtd || "3"} onChange={(e) => setRegrasCombo((atual) => ({ ...atual, [evento.id]: { ...(atual[evento.id] || { percentual: "20" }), qtd: e.target.value } }))} inputMode="numeric" className="h-10 w-full rounded-lg border border-white/5 bg-black px-3 text-[11px] font-bold text-white outline-none focus:border-retratt/50" />
-                      </div>
-                      <div>
-                         <label className="text-[8px] font-black uppercase tracking-widest text-zinc-500 ml-1 mb-1 block">% Desconto</label>
-                         <input value={regrasCombo[evento.id]?.percentual || "20"} onChange={(e) => setRegrasCombo((atual) => ({ ...atual, [evento.id]: { ...(atual[evento.id] || { qtd: "3" }), percentual: e.target.value } }))} inputMode="decimal" className="h-10 w-full rounded-lg border border-white/5 bg-black px-3 text-[11px] font-bold text-white outline-none focus:border-retratt/50" />
-                      </div>
-                      <button type="button" onClick={() => salvarRegraCombo(evento.id)} className="h-10 cursor-pointer rounded-lg bg-retratt/10 border border-retratt/30 px-5 text-[9px] font-black uppercase tracking-widest text-retratt hover:bg-retratt hover:text-black transition-colors">
-                        Atualizar
-                      </button>
-                    </div>
+                    <fieldset disabled={salvandoDescontos === evento.id} className="space-y-2">
+                      <EditorFaixasDesconto faixas={regrasCombo[evento.id] || []} onChange={(faixas) => setRegrasCombo((atual) => ({ ...atual, [evento.id]: faixas }))} />
+                      <button type="button" onClick={() => void salvarRegraCombo(evento.id)} className="rounded-xl border border-retratt/30 px-4 py-3 text-xs font-bold text-retratt disabled:opacity-50">{salvandoDescontos === evento.id ? "Salvando..." : "Salvar descontos"}</button>
+                    </fieldset>
                     <div className="mt-2 grid gap-2 rounded-xl border border-white/5 bg-white/[0.02] p-3 sm:grid-cols-[1fr_auto] sm:items-end">
                       <div className="sm:col-span-2">
                         <p className="mb-2 text-[8px] font-black uppercase tracking-widest text-zinc-500">Fotógrafos credenciados ({fotografosPorGaleria[evento.id]?.length || 0})</p>

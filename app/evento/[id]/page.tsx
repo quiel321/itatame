@@ -281,7 +281,6 @@ export default function EventoDetalhesPage() {
                   ) : (
                     <button type="button" disabled title="Tabela de peso ainda não cadastrada" className="bg-zinc-800 text-zinc-500 font-black uppercase tracking-widest text-[10px] md:text-xs px-3 py-2.5 md:px-6 md:py-3.5 rounded-lg text-center flex-1 md:flex-none cursor-not-allowed">Tabela de Peso (PDF)</button>
                   )}
-                  <ChatEvento eventoId={evento.id} compacto />
                 </>
               ) : (
                 <>
@@ -328,7 +327,6 @@ export default function EventoDetalhesPage() {
                 <button type="button" disabled title="Tabela de peso ainda não cadastrada" className="bg-zinc-800 text-zinc-500 font-bold uppercase tracking-widest text-[10px] md:text-xs px-3 py-2.5 md:px-6 md:py-3.5 rounded-lg text-center flex-1 md:flex-none cursor-not-allowed">Tabela de Peso (PDF)</button>
               )}
 
-              <ChatEvento eventoId={evento.id} compacto />
               
               {evento.regulamento_url && (
                 <a href={evento.regulamento_url} target="_blank" rel="noopener noreferrer" className="min-h-11 rounded-xl border border-amber-400/60 bg-amber-400/15 text-amber-200 hover:bg-amber-400 hover:text-black font-bold uppercase tracking-widest text-[10px] md:text-xs px-3 py-2.5 md:px-4 md:py-3.5 shadow-[0_0_14px_rgba(251,191,36,0.12)] transition-all flex items-center justify-center gap-1.5 w-full md:w-auto">
@@ -338,6 +336,9 @@ export default function EventoDetalhesPage() {
               )}
                 </>
               )}
+            </div>
+            <div className="mt-3 flex justify-end border-t border-white/5 pt-2">
+              <ChatEvento eventoId={evento.id} compacto discreto titulo="Falar com o Organizador" />
             </div>
           </div>
         </div>
