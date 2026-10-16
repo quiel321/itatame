@@ -1,5 +1,6 @@
 "use client";
 
+import { inscricaoAtiva } from '@/app/lib/inscricao-ativa';
 import RecepcaoOrganizador from '@/app/components/staff/RecepcaoOrganizador';
 
 import { obterEventoOrganizador, guardarEventoOrganizador } from '@/app/lib/evento-organizador';
@@ -276,7 +277,7 @@ export default function AdminPage() {
       }
 
       const { data, error } = await query;
-      if (!error) setInscricoes(data || []);
+      if (!error) setInscricoes((data || []).filter(inscricaoAtiva));
       setLoading(false);
     }
     
@@ -979,7 +980,7 @@ export default function AdminPage() {
                             Peso: {pacote === 'absoluto' ? 'Sem categoria de peso' : (insc.categoria || '—')}
                           </span>
                           <span className={`text-[10px] font-bold px-2 py-1 rounded-md border ${pacote === 'peso' ? 'text-zinc-500 bg-white/5 border-white/5' : 'text-purple-200 bg-purple-500/10 border-purple-500/20'}`}>
-                            Absoluto: {pacote === 'peso' ? 'Não inscrito' : 'Inscrito na chave'}
+                            Absoluto: {pacote === 'peso' ? 'Não inscrito' : 'Inscrição ativa'}
                           </span>
                           <p className="text-[10px] text-zinc-500">{chavesDoPacote(pacote).join(' + ')} · {formatarValorInscricao(Number(insc.valor_total || insc.valor_inscricao || 0))}</p>
                         </div>
@@ -1428,4 +1429,3 @@ function ConferenciaVinculo({
     </section>
   );
 }
-
