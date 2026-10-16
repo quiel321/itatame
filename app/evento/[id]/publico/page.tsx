@@ -394,7 +394,7 @@ export default function ChavesPublicoPage() {
           {temCampeao && (
             <div className="mb-3 flex items-center gap-3 rounded-xl border border-yellow-500/30 bg-gradient-to-r from-yellow-600/20 to-[#0c1220] px-3 py-2.5 md:hidden">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-yellow-500 bg-black">
-                {campeaoData.foto ? <img src={campeaoData.foto} className="h-full w-full object-contain" alt="" /> : <span className="text-sm font-black text-yellow-500">{campeaoData.nome.charAt(0)}</span>}
+                {campeaoData.foto ? <img src={campeaoData.foto} className="h-full w-full object-cover object-[50%_20%]" alt="" /> : <span className="text-sm font-black text-yellow-500">{campeaoData.nome.charAt(0)}</span>}
               </div>
               <div className="min-w-0">
                 <p className="text-[9px] font-black uppercase tracking-widest text-yellow-500">Campeão</p>
@@ -414,7 +414,7 @@ export default function ChavesPublicoPage() {
                   return (
                     <div key={item.chave} className="flex items-center gap-4 rounded-xl border border-cyan-500/25 bg-gradient-to-r from-cyan-500/10 to-[#0c1220] p-4 shadow-sm">
                       <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-cyan-400/60 bg-black md:h-14 md:w-14">
-                        {fotoAtl ? <img src={fotoAtl} className="h-full w-full object-contain" alt={item.nome} /> : <span className="text-sm font-black text-cyan-400">{item.nome.charAt(0)}</span>}
+                        {fotoAtl ? <img src={fotoAtl} className="h-full w-full object-cover object-[50%_20%]" alt={item.nome} /> : <span className="text-sm font-black text-cyan-400">{item.nome.charAt(0)}</span>}
                       </div>
                       <div className="flex min-w-0 flex-1 flex-col">
                         <span className="block truncate text-sm font-black uppercase text-white">{item.nome}</span>
@@ -475,7 +475,7 @@ export default function ChavesPublicoPage() {
                         <div className={`flex min-w-0 items-center justify-between gap-2 rounded-lg border p-2 ${venceu1 ? "border-emerald-500/40 bg-emerald-500/10" : "border-white/5 bg-black/40"}`}>
                           <div className="flex min-w-0 flex-1 items-center gap-2.5">
                             <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-zinc-600 bg-zinc-800 text-xs font-black text-zinc-400">
-                              {foto1 ? <img src={foto1} className="h-full w-full object-contain" alt="" /> : a1 ? a1.charAt(0) : "?"}
+                              {foto1 ? <img src={foto1} className="h-full w-full object-cover object-[50%_20%]" alt="" /> : a1 ? a1.charAt(0) : "?"}
                             </div>
                             <div className="flex min-w-0 flex-1 flex-col">
                               <span className={`truncate text-xs font-black uppercase tracking-tight ${venceu1 ? "text-emerald-300" : "text-white"}`}>{a1 || "A definir"}</span>
@@ -493,7 +493,7 @@ export default function ChavesPublicoPage() {
                         <div className={`flex min-w-0 items-center justify-between gap-2 rounded-lg border p-2 ${venceu2 ? "border-emerald-500/40 bg-emerald-500/10" : "border-white/5 bg-black/40"}`}>
                           <div className="flex min-w-0 flex-1 items-center gap-2.5">
                             <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-zinc-600 bg-zinc-800 text-xs font-black text-zinc-400">
-                              {foto2 ? <img src={foto2} className="h-full w-full object-contain" alt="" /> : a2 ? a2.charAt(0) : "?"}
+                              {foto2 ? <img src={foto2} className="h-full w-full object-cover object-[50%_20%]" alt="" /> : a2 ? a2.charAt(0) : "?"}
                             </div>
                             <div className="flex min-w-0 flex-1 flex-col">
                               <span className={`truncate text-xs font-black uppercase tracking-tight ${venceu2 ? "text-emerald-300" : "text-white"}`}>{a2 || "A definir"}</span>

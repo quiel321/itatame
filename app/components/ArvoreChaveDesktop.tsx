@@ -123,7 +123,7 @@ function Atleta({
         className={`flex w-full flex-col items-center justify-center gap-1.5 py-1 ${podeClicar ? 'cursor-pointer hover:scale-105' : ''}`}
       >
         <div className={`flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border-[3px] border-yellow-500 bg-black shadow-[0_0_20px_rgba(234,179,8,0.45)] ${destaque ? 'ring-2 ring-yellow-300' : ''}`}>
-          {foto && !placeholder ? <img src={foto} alt={nome} className="h-full w-full object-contain" /> : (
+          {foto && !placeholder ? <img src={foto} alt={nome} className="h-full w-full object-cover object-[50%_20%]" /> : (
             <svg className="h-8 w-8 text-yellow-600" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" /></svg>
           )}
         </div>
@@ -148,7 +148,7 @@ function Atleta({
         <div className={`flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full border ${
           venceu ? 'border-green-400' : placeholder ? 'border-cyan-500/40' : vazio ? 'border-white/10' : 'border-zinc-600'
         } bg-black`}>
-          {foto && !placeholder ? <img src={foto} alt="" className="h-full w-full object-contain" /> : (
+          {foto && !placeholder ? <img src={foto} alt="" className="h-full w-full object-cover object-[50%_20%]" /> : (
             <svg className={`h-4 w-4 ${placeholder ? 'text-cyan-500' : 'text-zinc-600'}`} fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" /></svg>
           )}
         </div>

@@ -29,7 +29,7 @@ export default function ArvoreCombatesReais({ lutas, buscarFoto }: { lutas: Luta
       const venceu = definido && !impedimento && luta.vencedor?.trim().toUpperCase() === nome.trim().toUpperCase();
       const foto = buscarFoto(id, definido ? nome : origem?.atleta?.nome);
       return <div key={lado} className={`mt-2 flex min-h-12 items-center gap-2 rounded-lg border px-2 py-2 ${venceu ? 'border-green-500/40 bg-green-500/10' : 'border-white/10 bg-black/30'}`}>
-        <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-zinc-800 text-xs text-zinc-400">{foto ? <img src={foto} alt="" className="h-full w-full object-contain" /> : '●'}</div>
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-zinc-800 text-xs text-zinc-400">{foto ? <img src={foto} alt="" className="h-full w-full object-cover object-[50%_20%]" /> : '●'}</div>
         <div className="min-w-0"><p className={`break-words text-[10px] font-bold uppercase leading-snug ${venceu ? 'text-green-300' : !definido && origem?.luta ? 'text-cyan-200' : 'text-white'}`}>{texto}</p>{equipe && <p className="truncate text-[9px] text-zinc-500">{equipe}</p>}{impedimento && <p className="text-[9px] text-red-300">{impedimento}</p>}</div>
       </div>;
     })}

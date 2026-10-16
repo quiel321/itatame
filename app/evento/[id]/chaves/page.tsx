@@ -191,7 +191,7 @@ export default function ChavesPage() {
             <div className="mb-3 flex items-center gap-3 rounded-xl border border-yellow-500/30 bg-gradient-to-r from-yellow-600/20 to-[#0c1220] px-3 py-2.5">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-yellow-500 bg-black">
                 {campeaoData.foto ? (
-                  <img src={campeaoData.foto} className="h-full w-full object-contain" />
+                  <img src={campeaoData.foto} className="h-full w-full object-cover object-[50%_20%]" />
                 ) : (
                   <span className="text-sm font-black text-yellow-500">{campeaoData.nome.charAt(0)}</span>
                 )}
@@ -231,7 +231,7 @@ export default function ChavesPage() {
                       <div className={`flex justify-between items-center p-2 rounded-lg border ${luta.vencedor && luta.vencedor === a1 ? 'bg-green-500/10 border-green-500/40' : 'bg-black/40 border-white/5'}`}>
                         <div className="flex items-center gap-2.5">
                           <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center text-xs font-black text-zinc-400 border border-zinc-600 overflow-hidden shrink-0">
-                            {foto1 ? <img src={foto1} className="w-full h-full object-contain"/> : a1 ? a1.charAt(0) : "?"}
+                            {foto1 ? <img src={foto1} className="w-full h-full object-cover object-[50%_20%]"/> : a1 ? a1.charAt(0) : "?"}
                           </div>
                           <div className="flex flex-col overflow-hidden">
                             <span className={`text-xs font-black uppercase tracking-tight truncate ${luta.vencedor === a1 ? 'text-green-400' : 'text-white'}`}>{a1 || "A DEFINIR"}</span>
@@ -250,7 +250,7 @@ export default function ChavesPage() {
                       <div className={`flex justify-between items-center p-2 rounded-lg border ${luta.vencedor && luta.vencedor === a2 ? 'bg-green-500/10 border-green-500/40' : 'bg-black/40 border-white/5'}`}>
                         <div className="flex items-center gap-2.5">
                           <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center text-xs font-black text-zinc-400 border border-zinc-600 overflow-hidden shrink-0">
-                            {foto2 ? <img src={foto2} className="w-full h-full object-contain"/> : a2 ? a2.charAt(0) : "?"}
+                            {foto2 ? <img src={foto2} className="w-full h-full object-cover object-[50%_20%]"/> : a2 ? a2.charAt(0) : "?"}
                           </div>
                           <div className="flex flex-col overflow-hidden">
                             <span className={`text-xs font-black uppercase tracking-tight truncate ${luta.vencedor === a2 ? 'text-green-400' : 'text-white'}`}>{a2 || "A DEFINIR"}</span>
