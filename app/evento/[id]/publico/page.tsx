@@ -10,7 +10,6 @@ import { rotuloCategoriaAoVivo } from "@/app/lib/categorias-competicao"
 import { lutasFormamChaveDeTres, placeholderSlotChaveDeTres, resumoHumanoChave, textoAguardandoChaveDeTres, textoOuroAposChecagem } from "@/app/lib/chave-de-tres"
 import { resumoAvancoSemCombate, faseVisivelNoGrid } from '@/app/lib/avanco-sem-combate';
 import AvancoSemCombateCard from '@/app/components/AvancoSemCombateCard';
-import ArvoreCombatesReais from '@/app/components/ArvoreCombatesReais';
 import { combatesPrevistos, nomeOrigemPrevista, nomeRealPrevisto } from '@/app/lib/combates-previstos';
 import ArvoreChaveDesktop from "@/app/components/ArvoreChaveDesktop"
 import AvisoChaves from "@/app/components/AvisoChaves"
@@ -391,13 +390,13 @@ export default function ChavesPublicoPage() {
         )}
 
         <div className="mt-5 hidden px-4 md:mt-5 md:block md:px-0">
-          {modeloCombates && modeloCombates.lutas.length < lutas.length ? <ArvoreCombatesReais lutas={lutas} buscarFoto={buscarFotoPorId} /> : (<ArvoreChaveDesktop
+          <ArvoreChaveDesktop
             lutas={lutas}
             abaAtual={abaAtual}
             totalAbas={totalAbas}
             buscarFoto={buscarFotoPorId}
             destaque={busca}
-          />)}
+          />
         </div>
 
         <div className="mb-16 mt-3 flex w-full flex-col px-4 md:mt-12 md:px-0">

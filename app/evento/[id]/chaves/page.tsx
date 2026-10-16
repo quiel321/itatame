@@ -6,7 +6,6 @@ import { supabase } from "@/app/lib/supabase"
 import { rotuloLuta } from "@/app/lib/lutas-rotulos"
 import { resumoAvancoSemCombate, faseVisivelNoGrid } from '@/app/lib/avanco-sem-combate';
 import AvancoSemCombateCard from '@/app/components/AvancoSemCombateCard';
-import ArvoreCombatesReais from '@/app/components/ArvoreCombatesReais';
 import { combatesPrevistos, nomeOrigemPrevista } from '@/app/lib/combates-previstos';
 import ArvoreChaveDesktop from "@/app/components/ArvoreChaveDesktop"
 import AvisoChaves from "@/app/components/AvisoChaves"
@@ -189,12 +188,12 @@ export default function ChavesPage() {
 
         <div className="hidden px-4 md:block md:px-0">
           {erroSituacoes && <p role="status" className="mb-3 text-xs text-amber-200">{erroSituacoes}</p>}
-          {modeloCombates && modeloCombates.lutas.length < lutas.length ? <ArvoreCombatesReais lutas={lutas} buscarFoto={buscarFoto} /> : (<ArvoreChaveDesktop
+          <ArvoreChaveDesktop
             lutas={lutas}
             abaAtual={abaAtual}
             totalAbas={totalAbas}
             buscarFoto={(id) => buscarFoto(id, "")}
-          />)}
+          />
         </div>
 
         <div className="mb-16 mt-3 flex w-full flex-col px-4 md:hidden">
