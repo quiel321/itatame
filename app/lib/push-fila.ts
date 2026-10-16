@@ -38,7 +38,7 @@ export async function processarFilaPush(db:DB,evento:string,enviar:typeof webpus
    let enviadas=(recibos||[]).filter((r:any)=>r.estado==='enviado').length;let falhas=0;
    for(const assinatura of assinaturas){const hash=hashPush(assinatura.endpoint);if(anteriores.has(hash))continue;
     if(Date.now()>=new Date(a.expira_em).getTime())break;
-    let estado='enviado';try{await enviar(assinatura,JSON.stringify({title:a.titulo,body:a.mensagem,icon:'/logo.svg',badge:'/logo.svg',url:a.url,tag:`itatame-${a.id}`}),{TTL:Math.max(1,Math.min(86400,Math.floor((new Date(a.expira_em).getTime()-Date.now())/1000))),timeout:5000,topic:hashPush(a.id).slice(0,32)});}
+    let estado='enviado';try{await enviar(assinatura,JSON.stringify({title:a.titulo,body:a.mensagem,icon:'/apple-icon',url:a.url,tag:`itatame-${a.id}`}),{TTL:Math.max(1,Math.min(86400,Math.floor((new Date(a.expira_em).getTime()-Date.now())/1000))),urgency:'high',timeout:5000,topic:hashPush(a.id).slice(0,32)});}
     catch(e){const status=Number((e as any)?.statusCode);if(status===404||status===410)estado='invalido';else{falhas++;continue;}}
     const {error:re}=await db.from('push_entregas').upsert({aviso_id:a.id,endpoint_hash:hash,estado},{onConflict:'aviso_id,endpoint_hash'});if(re)throw Error('Não foi possível confirmar o envio.');if(estado==='enviado')enviadas++;
    }
