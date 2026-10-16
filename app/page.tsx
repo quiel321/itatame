@@ -68,6 +68,9 @@ function proximoResumo(
 
 export default function Home() {
   const [eventos, setEventos] = useState<any[]>([]);
+  const [carregandoEventos, setCarregandoEventos] = useState(true);
+  const [erroEventos, setErroEventos] = useState('');
+  const carregandoEventosRef = useRef(false);
   const [resumosLutas, setResumosLutas] = useState<Record<string, ResumoLutasEvento>>({});
   const publicacoes = usePublicacaoChaves(eventos.map(e => String(e.id)));
   const [busca, setBusca] = useState("");
@@ -97,11 +100,20 @@ export default function Home() {
   }
 
   async function carregarEventos() {
-    const { data, error } = await supabase.from("eventos").select("*").order("data_evento", { ascending: true });
-    if (!error) {
+    if (carregandoEventosRef.current) return;
+    carregandoEventosRef.current = true;
+    try {
+      const { data, error } = await supabase.from("eventos").select("*").order("data_evento", { ascending: true });
+      if (error) throw error;
+      setErroEventos('');
       const proximosEventos = data || [];
       setEventos(proximosEventos);
       await carregarResumoLutas(proximosEventos.map((evento) => String(evento.id)));
+    } catch {
+      setErroEventos('Não foi possível atualizar os campeonatos. Confira a conexão. Tentaremos novamente automaticamente.');
+    } finally {
+      carregandoEventosRef.current = false;
+      setCarregandoEventos(false);
     }
   }
 
@@ -115,9 +127,18 @@ export default function Home() {
       .on("postgres_changes", { event: "*", schema: "public", table: "eventos" }, atualizar)
       .subscribe();
     const intervalo = window.setInterval(atualizar, 15_000);
+    const aoVoltar = () => { if (document.visibilityState === 'visible') atualizar(); };
+    window.addEventListener('online', aoVoltar);
+    window.addEventListener('focus', aoVoltar);
+    window.addEventListener('pageshow', aoVoltar);
+    document.addEventListener('visibilitychange', aoVoltar);
 
     return () => {
       window.clearInterval(intervalo);
+      window.removeEventListener('online', aoVoltar);
+      window.removeEventListener('focus', aoVoltar);
+      window.removeEventListener('pageshow', aoVoltar);
+      document.removeEventListener('visibilitychange', aoVoltar);
       supabase.removeChannel(canal);
     };
   }, []);
@@ -249,7 +270,12 @@ export default function Home() {
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {eventosFiltrados.length === 0 && (
+          {erroEventos && <div role="alert" className="col-span-full rounded-2xl border border-amber-400/40 bg-amber-950/40 p-4 text-sm text-amber-100">
+            <p>{erroEventos}</p>
+            <button type="button" onClick={() => void carregarEventos()} className="mt-3 min-h-11 rounded-lg border border-amber-300/40 px-4 font-bold">Tentar novamente</button>
+          </div>}
+          {carregandoEventos && <p role="status" className="col-span-full py-10 text-center text-zinc-400">Carregando campeonatos…</p>}
+          {!carregandoEventos && !erroEventos && eventosFiltrados.length === 0 && (
             <div className="col-span-full rounded-3xl border border-dashed border-white/10 bg-white/[0.02] py-20 text-center flex flex-col items-center justify-center">
               <CalendarDays size={32} className="text-zinc-700 mb-4" />
               <p className="text-sm font-bold text-zinc-500 uppercase tracking-widest">Nenhum evento encontrado.</p>

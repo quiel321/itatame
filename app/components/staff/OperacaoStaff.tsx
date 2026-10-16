@@ -7,6 +7,7 @@ import { supabase } from '@/app/lib/supabase';
 import { lerSessaoStaff, type SessaoStaff } from '@/app/lib/staff-sessao';
 import RecepcaoOperacao from './RecepcaoOperacao';
 import ChamadorOperacao from './ChamadorOperacao';
+import ConexaoOperacao from './ConexaoOperacao';
 
 type Aba = 'recepcao' | 'chamada';
 export default function OperacaoStaff({ inicial = 'recepcao' }: { inicial?: Aba }) {
@@ -17,22 +18,30 @@ export default function OperacaoStaff({ inicial = 'recepcao' }: { inicial?: Aba 
   const conteudo = useRef<HTMLDivElement>(null);
   useEffect(() => {
     let cancelado = false;
+    let validando = false;
     document.body.classList.add('hide-global-nav');
     async function validar() {
+      if (validando || cancelado) return;
+      validando = true;
+      try {
       const salva = lerSessaoStaff();
       if (!salva?.pin) { router.replace('/staff/login'); return; }
       const { data, error } = await supabase.rpc('vincular_sessao_staff', { p_pin: salva.pin });
       if (cancelado) return;
       if (error || !data || !['checkin', 'chamador', 'operacao'].includes(data.funcao)) {
-        setErro('Acesso não autorizado. Entre novamente com o PIN do seu posto.'); return;
+        setErro('Não foi possível validar o posto. Confira a conexão. Se o PIN foi revogado, entre novamente.'); return;
       }
       const validada = { ...salva, id: data.staff_id, evento_id: data.evento_id, funcao: data.funcao, identificacao: data.identificacao, evento_nome: data.evento_nome };
       localStorage.setItem('itatame_staff_session', JSON.stringify(validada));
-      setAba(data.funcao === 'checkin' ? 'recepcao' : data.funcao === 'chamador' ? 'chamada' : inicial);
+      setAba(atual => data.funcao === 'checkin' ? 'recepcao' : data.funcao === 'chamador' ? 'chamada' : atual);
       setSessao(validada);
+      setErro('');
+      } finally { validando = false; }
     }
-    void validar().catch(() => { if (!cancelado) setErro('Não foi possível validar o posto. Confira a conexão e entre novamente.'); });
-    return () => { cancelado = true; document.body.classList.remove('hide-global-nav'); };
+    const tentarValidar = () => { void validar().catch(() => { if (!cancelado) setErro('Não foi possível validar o posto. Aguardando reconexão.'); }); };
+    tentarValidar();
+    window.addEventListener('itatame:conexao-restabelecida', tentarValidar);
+    return () => { cancelado = true; window.removeEventListener('itatame:conexao-restabelecida', tentarValidar); document.body.classList.remove('hide-global-nav'); };
   }, [router, inicial]);
   const recepcao = sessao?.funcao === 'checkin' || sessao?.funcao === 'operacao';
   const chamada = sessao?.funcao === 'chamador' || sessao?.funcao === 'operacao';
@@ -42,6 +51,7 @@ export default function OperacaoStaff({ inicial = 'recepcao' }: { inicial?: Aba 
     await supabase.auth.signOut(); router.replace('/staff/login');
   }
   return <div className="fixed inset-x-0 bottom-0 top-0 z-[100] flex flex-col overflow-hidden bg-[#050505] text-white">
+    <ConexaoOperacao />
     <style>{`.hide-global-nav .nav-global-mobile, .hide-global-nav > header, .hide-global-nav > nav, .hide-global-nav footer { display:none!important; }`}</style>
     <header className="shrink-0 border-b border-white/10 bg-black px-3 py-2 sm:px-5">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
@@ -62,4 +72,3 @@ export default function OperacaoStaff({ inicial = 'recepcao' }: { inicial?: Aba 
     </div>
   </div>;
 }
-

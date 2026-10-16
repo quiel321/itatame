@@ -6,6 +6,7 @@ import { supabase } from "../../../lib/supabase";
 import { processarAvancosAutomaticosChaves, propagarResultadoChave } from "../../../lib/chaves-auto-avanco";
 import { idBaiaDaPrimeiraChaveDeTres } from "@/app/lib/chave-de-tres";
 import { garantirVinculoStaff } from "../../../lib/staff-sessao";
+import ConexaoOperacao from '@/app/components/staff/ConexaoOperacao';
 import { obterTempoRegulamentar } from "../../../lib/cronograma";
 
 export default function PlacarMesarioDB() {
@@ -32,6 +33,11 @@ export default function PlacarMesarioDB() {
   const [salvandoResultado, setSalvandoResultado] = useState(false);
   const resultadoGravandoRef = useRef(false);
   const [avisoResultado, setAvisoResultado] = useState('');
+  const [avisoPontuacao, setAvisoPontuacao] = useState('');
+  const [reenviandoPontuacao, setReenviandoPontuacao] = useState(false);
+  const versaoPontuacaoRef = useRef({ azul: 0, vermelho: 0 });
+  const pontuacoesPendentesRef = useRef(new Set<'azul' | 'vermelho'>());
+  const filasPontuacaoRef = useRef({ azul: Promise.resolve(), vermelho: Promise.resolve() });
 
   // ESTADOS DO PLACAR
   const [tempoRestante, setTempoRestante] = useState(0);
@@ -197,11 +203,38 @@ export default function PlacarMesarioDB() {
     if (!lutaAtual) return;
     const campo = lado === "azul" ? "pontuacao_atleta_1" : "pontuacao_atleta_2";
     const payload = { pontos: pts, vantagens: vts, punicoes: pun };
+    const versao = ++versaoPontuacaoRef.current[lado];
+    pontuacoesPendentesRef.current.add(lado);
+    // Mantém a ordem de cliques do mesmo lado mesmo em uma rede lenta.
+    const gravar = async () => {
+      try {
+        const { data, error } = await supabase.from("chaves").update({ [campo]: payload })
+          .eq("id", matchId).eq("evento_id",lutaAtual.evento_id).eq("tatame",lutaAtual.tatame)
+          .neq('status_luta', 'concluida').select('id');
+        if (error || !data?.length) throw error || new Error('Luta encerrada ou transferida.');
+        if (versao === versaoPontuacaoRef.current[lado]) pontuacoesPendentesRef.current.delete(lado);
+        if (!pontuacoesPendentesRef.current.size) setAvisoPontuacao('');
+      } catch {
+        setAvisoPontuacao('A pontuação deste aparelho ainda não foi confirmada no servidor. Mantenha a tela aberta e salve novamente quando a conexão voltar.');
+      }
+    };
+    filasPontuacaoRef.current[lado] = filasPontuacaoRef.current[lado].then(gravar, gravar);
+    await filasPontuacaoRef.current[lado];
+  };
 
-    await supabase.from("chaves").update({ [campo]: payload }).eq("id", matchId).eq("evento_id",lutaAtual.evento_id).eq("tatame",lutaAtual.tatame);
+  const reenviarPontuacao = async () => {
+    if (reenviandoPontuacao) return;
+    setReenviandoPontuacao(true);
+    try {
+      await Promise.all([
+        salvarPontuacaoDB('azul', pontosAzul, vantagensAzul, punicoesAzul),
+        salvarPontuacaoDB('vermelho', pontosVermelho, vantagensVermelho, punicoesVermelho),
+      ]);
+    } finally { setReenviandoPontuacao(false); }
   };
 
   const updatePontos = (lado: "azul" | "vermelho", tipo: "pontos" | "vantagens" | "punicoes", valor: number, acao: "quedas" | "passagens" | "montadas" | null = null) => {
+    if (resultadoGravandoRef.current || vencedor || modoCorrecao) return;
     if (lado === "azul") {
       let nP = pontosAzul, nV = vantagensAzul, nPun = punicoesAzul;
       if (tipo === "pontos") { nP = Math.max(0, nP + valor); setPontosAzul(nP); if (acao && valor > 0) setStats(s => ({ ...s, azul: { ...s.azul, [acao]: s.azul[acao] + 1 } })); }
@@ -243,6 +276,7 @@ export default function PlacarMesarioDB() {
 
     // Renova o vínculo antes de gravar: as medalhas só entram para atletas inscritos neste evento.
     try {
+    await Promise.all(Object.values(filasPontuacaoRef.current));
     const vinculo = await garantirVinculoStaff();
     if (!vinculo.ok) {
       resultadoGravandoRef.current = false;
@@ -287,6 +321,8 @@ export default function PlacarMesarioDB() {
         metodo_vitoria: metodo,
         finalizada_em: finalizadaEm,
       } : atual);
+      pontuacoesPendentesRef.current.clear();
+      setAvisoPontuacao('');
 
       const ganhouPorWO = metodo === "wo" || metodo === "ausencia";
       const perdedorEhReal = Boolean(limparNome(nomePerdedor));
@@ -727,6 +763,13 @@ export default function PlacarMesarioDB() {
       `}} />
 
       <div ref={placarRef} className="placar-wrapper bg-black h-screen w-screen flex flex-row font-sans select-none text-white relative overflow-hidden">
+        <div className="absolute inset-x-0 top-0 z-[200]">
+          <ConexaoOperacao />
+          {avisoPontuacao && <div role="alert" className="border-b border-red-400/50 bg-red-950 px-3 py-2 text-sm text-red-100">
+            <p>{avisoPontuacao}</p>
+            <button type="button" disabled={reenviandoPontuacao} onClick={() => void reenviarPontuacao()} className="mt-2 min-h-11 rounded-lg border border-red-300/50 px-3 text-xs font-bold disabled:opacity-50">{reenviandoPontuacao ? 'Salvando pontuação…' : 'Salvar pontuação deste aparelho'}</button>
+          </div>}
+        </div>
 
         {!configOpen && !modoCorrecao && !vencedor && <button disabled={timerAtivo || salvandoTempo} onClick={abrirAjusteTempo} className="absolute bottom-2 left-2 z-[80] rounded-lg border border-white/20 bg-black/80 px-3 py-2 text-xs font-bold disabled:opacity-40">Ajustar tempo</button>}
         {editarTempo && <div role="dialog" aria-modal="true" aria-label="Ajustar tempo restante" className="fixed inset-0 z-[110] flex items-center justify-center bg-black/90 p-4">

@@ -107,11 +107,14 @@ export default function RecepcaoOperacao({ ativa = true }: { ativa?: boolean }) 
       .on('postgres_changes', { event: '*', schema: 'public', table: 'chaves', filter: `evento_id=eq.${sessaoParse.evento_id}` }, () => { void carregarLista(sessaoParse.evento_id); }).subscribe();
     canalOperacaoRef.current = canal;
     const intervalo = window.setInterval(() => void carregarLista(sessaoParse.evento_id), 10000);
+    const aoReconectar = () => { void carregarLista(sessaoParse.evento_id); };
+    window.addEventListener('itatame:conexao-restabelecida', aoReconectar);
 
     return () => {
       document.body.classList.remove('hide-global-nav');
       canalOperacaoRef.current = null;
       window.clearInterval(intervalo);
+      window.removeEventListener('itatame:conexao-restabelecida', aoReconectar);
       void supabase.removeChannel(canal);
     };
   }, [router]);

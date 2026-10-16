@@ -238,6 +238,7 @@ export default function ChamadorOperacao() {
     const intervalo = window.setInterval(() => { void carregar(true); }, 10000);
     const aoVoltar = () => { if (document.visibilityState === 'visible') void carregar(true); };
     document.addEventListener('visibilitychange', aoVoltar);
+    window.addEventListener('itatame:conexao-restabelecida', aoVoltar);
     const aoDespachar = (event: Event) => {
       if ((event as CustomEvent<{ eventoId: string }>).detail?.eventoId === String(sessao.evento_id)) void carregar(true);
     };
@@ -246,6 +247,7 @@ export default function ChamadorOperacao() {
     return () => {
       window.clearInterval(intervalo);
       document.removeEventListener('visibilitychange', aoVoltar);
+      window.removeEventListener('itatame:conexao-restabelecida', aoVoltar);
       window.removeEventListener('itatame:recepcao-atualizada', aoDespachar);
       canalOperacaoRef.current = null;
       void supabase.removeChannel(canal);

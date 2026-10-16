@@ -1,9 +1,11 @@
 import { createClient } from "@supabase/supabase-js";
+import { criarFetchComPrazo } from './fetch-com-prazo';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 export const supabase = createClient(
   supabaseUrl,
-  supabaseAnonKey
+  supabaseAnonKey,
+  { global: { fetch: criarFetchComPrazo((...args) => fetch(...args)) } }
 );

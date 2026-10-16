@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AlertCircle, ArrowRightLeft, CheckCircle, Clock, Filter, LogOut, Play, RefreshCw, Search, Trophy, X, Edit3, XCircle, LayoutGrid, Radio, Wifi, Megaphone, Pause } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import ConexaoOperacao from '@/app/components/staff/ConexaoOperacao';
 import { obterTempoRegulamentar } from '../../lib/cronograma';
 import { processarAvancosAutomaticosChaves } from '../../lib/chaves-auto-avanco';
 import { rotuloLuta } from '../../lib/lutas-rotulos';
@@ -261,7 +262,12 @@ export default function PainelMesario() {
       void carregarPainel();
     });
     const interval = window.setInterval(() => carregarPainel(true), 15000);
-    return () => window.clearInterval(interval);
+    const aoReconectar = () => { void buscarTatames(); void carregarPainel(true); };
+    window.addEventListener('itatame:conexao-restabelecida', aoReconectar);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('itatame:conexao-restabelecida', aoReconectar);
+    };
   }, [buscarTatames, carregarPainel, sessao]);
 
   useEffect(() => {
@@ -717,6 +723,7 @@ export default function PainelMesario() {
 
   return (
     <main className="min-h-screen max-w-full overflow-x-hidden bg-[#050505] pb-28 text-white selection:bg-red-500/30 md:pb-8">
+      <ConexaoOperacao />
       <style dangerouslySetInnerHTML={{ __html: `body.hide-global-nav header:not(.header-mesario), body.hide-global-nav nav:not(.nav-mesario), body.hide-global-nav .nav-global-mobile { display: none !important; } body.hide-global-nav > main, body.hide-global-nav > div > main { padding-top: 0 !important; margin-top: 0 !important; }` }} />
 
       <header className="header-mesario sticky top-0 z-50 border-b border-white/10 bg-black/95 backdrop-blur-md">

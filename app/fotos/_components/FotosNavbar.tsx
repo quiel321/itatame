@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -32,8 +32,12 @@ export default function FotosNavbar({ area = "publico" }: FotosNavbarProps) {
   const [itensCarrinho, setItensCarrinho] = useState(0);
 
   useEffect(() => {
+    let cancelado = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let unsubscribe: (() => void) | undefined;
     async function carregar() {
       const { data } = await supabase.auth.getUser();
+      if (cancelado) return;
       if (!data.user) {
         setNome(null);
         setFotoPerfil(null);
@@ -62,14 +66,21 @@ export default function FotosNavbar({ area = "publico" }: FotosNavbarProps) {
         nomeEncontrado = resAtleta.data.nome;
       }
 
+      if (cancelado) return;
       setNome(nomeEncontrado?.split(" ")?.[0] || data.user.email?.split("@")[0] || "Conta");
       setFotoPerfil(resFotografo.data?.foto_url || null);
       setPerfil(perfilAtual);
     }
 
-    carregar();
-    const { data: listener } = supabase.auth.onAuthStateChange(() => void carregar());
-    return () => listener.subscription.unsubscribe();
+    void carregar().finally(() => {
+      if (cancelado) return;
+      const { data } = supabase.auth.onAuthStateChange(() => {
+        clearTimeout(timer);
+        timer = setTimeout(() => { if (!cancelado) void carregar().catch(() => {}); }, 0);
+      });
+      unsubscribe = () => data.subscription.unsubscribe();
+    }).catch(() => {});
+    return () => { cancelado = true; clearTimeout(timer); unsubscribe?.(); };
   }, []);
 
   useEffect(() => {

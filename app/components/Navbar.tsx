@@ -17,8 +17,13 @@ export default function Navbar() {
   }, [pathname]);
 
   useEffect(() => {
+    let cancelado = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let unsubscribe: (() => void) | undefined;
     async function checkAuth() {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session }, error } = await supabase.auth.getSession();
+      if (cancelado) return;
+      if (error) { setLoading(false); return; }
 
       if (!session?.user || session.user.is_anonymous) {
         setUserName(null);
@@ -32,16 +37,23 @@ export default function Navbar() {
         .eq("user_id", session.user.id)
         .maybeSingle();
 
-      setUserName(data?.nome ? data.nome.split(" ")[0] : null);
-      setLoading(false);
+      if (!cancelado) {
+        setUserName(data?.nome ? data.nome.split(" ")[0] : null);
+        setLoading(false);
+      }
     }
 
-    checkAuth();
-    const { data: listener } = supabase.auth.onAuthStateChange(() => {
-      void checkAuth();
-    });
-
-    return () => listener.subscription.unsubscribe();
+    // Espera a inicialização da sessão e deixa a notificação terminar antes
+    // de consultar Auth outra vez, sem enfileirar operações dentro do lock.
+    void checkAuth().finally(() => {
+      if (cancelado) return;
+      const { data } = supabase.auth.onAuthStateChange(() => {
+        clearTimeout(timer);
+        timer = setTimeout(() => { if (!cancelado) void checkAuth().catch(() => {}); }, 0);
+      });
+      unsubscribe = () => data.subscription.unsubscribe();
+    }).catch(() => { if (!cancelado) setLoading(false); });
+    return () => { cancelado = true; clearTimeout(timer); unsubscribe?.(); };
   }, []);
 
   const linkConta = userName ? "/perfil" : "/login";
