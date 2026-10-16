@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { processarAvisosPendentes } from '@/app/lib/avisos-operacao-cliente';
 import { supabase } from '@/app/lib/supabase';
 
 export default function ConexaoOperacao() {
@@ -18,6 +19,7 @@ export default function ConexaoOperacao() {
         const { error } = await supabase.from('eventos').select('id').limit(1);
         if (encerrado) return;
         setEstado(error ? 'falha' : 'ok');
+        if(!error)void processarAvisosPendentes().catch(()=>{});
         if (error) precisaAtualizar = true;
         else if (precisaAtualizar) {
           precisaAtualizar = false;

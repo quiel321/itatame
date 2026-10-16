@@ -1,3 +1,4 @@
+import { assinaturasUnicas } from './push-regras';
 import { Resend } from "resend";
 import webpush from "web-push";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
@@ -103,7 +104,8 @@ export async function avisarAtletaPrimeiraMensagem(eventoId: string, atletaUserI
       url: `/evento/${eventoId}`,
     });
     for (const userId of destinosPush) {
-      const { data: assinaturas } = await supabase.from("assinaturas_push").select("subscription").eq("user_id", userId);
+      const [legadas,aparelhos] = await Promise.all([supabase.from("assinaturas_push").select("subscription").eq("user_id",userId),supabase.from("push_dispositivos").select("subscription").eq("user_id",userId)]);
+      const assinaturas=assinaturasUnicas([...(legadas.data||[]),...(aparelhos.data||[])]).map(subscription=>({subscription}));
       for (const item of assinaturas || []) {
         const subscription = assinaturaPush(item.subscription as PushSubscriptionJSON | string | null);
         if (!subscription) continue;
@@ -112,7 +114,7 @@ export async function avisarAtletaPrimeiraMensagem(eventoId: string, atletaUserI
           push += 1;
         } catch (erro) {
           const status = typeof erro === "object" && erro && "statusCode" in erro ? Number((erro as { statusCode?: unknown }).statusCode) : 0;
-          if (status === 404 || status === 410) await supabase.from("assinaturas_push").delete().eq("user_id", userId);
+          if (status === 404 || status === 410) { /* Preserva a assinatura original para auditoria e reativação. */ }
         }
       }
     }

@@ -1,4 +1,5 @@
 'use client';
+import { solicitarAvisos } from '@/app/lib/avisos-operacao-cliente';
 import { executarOperacao, baseLuta, notificarSemBloquear } from '@/app/lib/operacao-segura';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -298,17 +299,8 @@ export default function ChamadorOperacao() {
           if (!atleta.id) continue;
           const chave = `itatame_aviso_${sessao.evento_id}_${luta.id}_${marco}_${atleta.id}`;
           if (localStorage.getItem(chave)) continue;
-          const resposta = await fetch('/api/notificar', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              atleta_id: atleta.id,
-              titulo: marco === 5 ? 'Sua luta está muito próxima' : 'Prepare-se para sua luta',
-              mensagem: `${texto(atleta.nome)}, faltam aproximadamente ${minutos} minutos e ${posicao} luta(s) para enfrentar ${texto(atleta.oponente)} no ${luta.tatame || 'tatame'}.${previsaoHorario}`,
-              url: `/evento/${sessao.evento_id}/ao-vivo`,
-            }),
-          }).catch(() => null);
-          if (resposta?.ok) localStorage.setItem(chave, new Date().toISOString());
+          const resposta = await solicitarAvisos(String(sessao.evento_id),{acao:'preparar',luta_id:luta.id,marco}).catch(()=>null);
+          if (resposta?.success) localStorage.setItem(chave, new Date().toISOString());
         }
       }
     };

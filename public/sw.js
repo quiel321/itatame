@@ -1,6 +1,8 @@
 self.addEventListener("push", function(event) {
   const data = event.data ? event.data.json() : {};
   const options = {
+    tag: data.tag || undefined,
+    renotify: false,
     body: data.body || "Voce tem uma atualizacao no iTatame.",
     icon: data.icon || "/logo.svg",
     badge: data.badge || "/logo.svg",

@@ -1,148 +1,41 @@
-import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-import webpush from "web-push";
-
-export const runtime = "nodejs";
-
-type PushSubscriptionJSON = {
-  endpoint: string;
-  expirationTime?: number | null;
-  keys: {
-    p256dh: string;
-    auth: string;
-  };
-};
-
-type AssinaturaPush = {
-  user_id: string;
-  subscription: PushSubscriptionJSON | string | null;
-};
-
-type NotificarBody = {
-  atleta_id?: number | string;
-  user_id?: string;
-  titulo?: string;
-  title?: string;
-  mensagem?: string;
-  body?: string;
-  url?: string;
-};
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-const supabaseServer =
-  supabaseUrl && supabaseKey
-    ? createClient(supabaseUrl, supabaseKey, {
-        auth: { persistSession: false, autoRefreshToken: false },
-      })
-    : null;
-
-function normalizarAssinatura(raw: AssinaturaPush["subscription"]): PushSubscriptionJSON | null {
-  if (!raw) return null;
-  const subscription = typeof raw === "string" ? JSON.parse(raw) : raw;
-
-  if (!subscription?.endpoint || !subscription?.keys?.p256dh || !subscription?.keys?.auth) {
-    return null;
+import { after,NextResponse } from 'next/server';
+import { createSupabaseServerClient } from '@/app/lib/supabase-server';
+import { processarAvisosDisponiveis } from '@/app/lib/push-fila';
+import { previaProgramacaoPush } from '@/app/lib/push-programacao';
+import { hashPush } from '@/app/lib/push-regras';
+export const runtime='nodejs';
+export const maxDuration=60;
+export async function POST(request:Request) {
+ try {
+  const token=request.headers.get('authorization')?.replace(/^Bearer /i,'');if(!token)return NextResponse.json({error:'Sessão ausente.'},{status:401});
+  const raw=await request.text();if(raw.length>3000)return NextResponse.json({error:'Pedido inválido.'},{status:400});const body=JSON.parse(raw);
+  const ev=String(body.evento_id||'');if(!/^[a-f0-9-]{36}$/i.test(ev))return NextResponse.json({error:'Evento inválido.'},{status:400});
+  const db=createSupabaseServerClient();const {data:auth,error:ae}=await db.auth.getUser(token);if(ae||!auth.user)return NextResponse.json({error:'Sessão inválida.'},{status:401});
+  const {data:e,error:ee}=await db.from('eventos').select('id,organizador_id,status').eq('id',ev).maybeSingle();if(ee)throw Error('Consulta indisponível.');const dono=e?.organizador_id===auth.user.id&&!auth.user.is_anonymous;
+  const {data:posto,error:pe}=await db.from('staff_sessoes').select('staff_evento_id,funcao,expira_em').eq('auth_user_id',auth.user.id).eq('evento_id',ev).gt('expira_em',new Date().toISOString()).maybeSingle();if(pe)throw Error('Consulta do posto indisponível.');
+  if(!e||(!dono&&!posto))return NextResponse.json({error:'Evento não autorizado.'},{status:403});
+  if(body.acao==='previa_programacao'||body.acao==='programacao'){
+   if(!dono)return NextResponse.json({error:'Somente o organizador pode divulgar a programação.'},{status:403});
+   const p=await previaProgramacaoPush(db,ev);const {filas,chavesAtuais,...publica}=p;
+   if(body.acao==='previa_programacao')return NextResponse.json({success:true,...publica});
+   if(body.confirmado!==true||body.versao!==p.versao)return NextResponse.json({error:'A programação mudou ou não foi confirmada. Confira a prévia novamente.'},{status:409});
+   // Não atualiza avisos antigos, nem reenvia a mesma programação.
+   if(filas.length){const {error}=await db.from('push_fila').upsert(filas,{onConflict:'chave',ignoreDuplicates:true});if(error)throw Error('Não foi possível guardar os avisos.');}
+   after(async()=>{await processarAvisosDisponiveis(db,ev).catch(()=>{});});return NextResponse.json({success:true,registrados:filas.length,...publica});
   }
-
-  return subscription;
-}
-
-async function buscarUserId(atletaId?: number | string, userId?: string) {
-  if (userId) return userId;
-  if (!atletaId || !supabaseServer) return null;
-
-  const { data, error } = await supabaseServer
-    .from("atletas")
-    .select("user_id")
-    .eq("id", atletaId)
-    .maybeSingle();
-
-  if (error) throw error;
-  return data?.user_id || null;
-}
-
-function getStatusCode(error: unknown) {
-  return typeof error === "object" && error !== null && "statusCode" in error
-    ? Number((error as { statusCode?: unknown }).statusCode)
-    : null;
-}
-
-function getErrorMessage(error: unknown) {
-  return error instanceof Error ? error.message : "Erro ao enviar notificacao.";
-}
-
-export async function POST(request: Request) {
-  try {
-    if (!supabaseServer) {
-      return NextResponse.json({ success: false, error: "Supabase nao configurado." }, { status: 500 });
-    }
-
-    const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-    const privateKey = process.env.VAPID_PRIVATE_KEY;
-
-    if (!publicKey || !privateKey) {
-      return NextResponse.json({ success: false, error: "Chaves VAPID nao configuradas." }, { status: 500 });
-    }
-
-    webpush.setVapidDetails("mailto:suporte@itatame.com.br", publicKey, privateKey);
-
-    const body = (await request.json()) as NotificarBody;
-    const destinoUserId = await buscarUserId(body.atleta_id, body.user_id);
-
-    if (!destinoUserId) {
-      return NextResponse.json({ success: false, error: "Atleta sem user_id encontrado." }, { status: 404 });
-    }
-
-    const { data: assinaturas, error } = await supabaseServer
-      .from("assinaturas_push")
-      .select("user_id, subscription")
-      .eq("user_id", destinoUserId);
-
-    if (error) throw error;
-
-    const payload = JSON.stringify({
-      title: body.titulo || body.title || "iTatame",
-      body: body.mensagem || body.body || "Voce tem uma atualizacao no evento.",
-      icon: "/logo.svg",
-      badge: "/logo.svg",
-      url: body.url || "/perfil",
-    });
-
-    let enviadas = 0;
-    let removidas = 0;
-
-    for (const assinatura of (assinaturas || []) as AssinaturaPush[]) {
-      const subscription = normalizarAssinatura(assinatura.subscription);
-      if (!subscription) continue;
-
-      try {
-        await webpush.sendNotification(subscription, payload);
-        enviadas += 1;
-      } catch (err: unknown) {
-        const statusCode = getStatusCode(err);
-
-        if (statusCode === 404 || statusCode === 410) {
-          await supabaseServer.from("assinaturas_push").delete().eq("user_id", destinoUserId);
-          removidas += 1;
-          continue;
-        }
-
-        throw err;
-      }
-    }
-
-    return NextResponse.json({
-      success: true,
-      sent: enviadas,
-      removed: removidas,
-      subscribed: (assinaturas || []).length,
-    });
-  } catch (error: unknown) {
-    return NextResponse.json(
-      { success: false, error: getErrorMessage(error) },
-      { status: 500 }
-    );
-  }
+  if(e.status==='ENCERRADO')return NextResponse.json({success:true,processados:0});
+  if(body.acao==='preparar'){
+   if(!dono&&!['chamador','mesario','operacao'].includes(posto?.funcao||''))return NextResponse.json({error:'Posto não autorizado.'},{status:403});
+   if(![5,15].includes(body.marco))return NextResponse.json({error:'Etapa inválida.'},{status:400});
+   const {data:l,error:le}=await db.from('chaves').select('*').eq('id',body.luta_id).eq('evento_id',ev).single();if(le)throw Error('Luta indisponível.');
+   const {data:c,error:ce}=await db.from('recepcao_categorias').select('fechada').eq('categoria_id',l.categoria_id).maybeSingle();if(ce)throw Error('Categoria indisponível.');
+   const diferenca=(Date.parse(l.horario_estimado)-Date.now())/60000;
+   if(!c?.fechada||l.status_luta!=='agendada'||l.iniciada_em||!l.tatame||!Number.isFinite(diferenca)||diferenca<0||diferenca>body.marco)return NextResponse.json({success:true,registrados:0});
+   const {data:ins,error:ie}=await db.from('inscricoes').select('atleta_id,atleta,status_checkin,pagamento_ok,pesagem_ok,kimono_aprovado,estorno_status').eq('evento_id',ev).eq('categoria_id',l.categoria_id).in('atleta_id',[l.atleta_1_id,l.atleta_2_id].filter(Boolean));if(ie)throw Error('Pesagem indisponível.');
+   if((ins||[]).filter(i=>i.status_checkin==='aprovado'&&i.pagamento_ok&&i.pesagem_ok&&i.kimono_aprovado&&i.estorno_status!=='estornado').length!==2)return NextResponse.json({success:true,registrados:0});
+   const itens=ins!.map(i=>({evento_id:ev,atleta_id:i.atleta_id,luta_id:l.id,chave:'preparo:'+hashPush(JSON.stringify([ev,l.id,i.atleta_id,body.marco,l.horario_estimado])),tipo:'preparo',titulo:body.marco===5?'Sua luta está próxima':'Prepare-se para sua luta',mensagem:`${i.atleta}: sua luta está prevista para os próximos ${body.marco} minutos no ${l.tatame}. É uma estimativa; acompanhe a chamada.`,url:`/evento/${ev}/ao-vivo`,expira_em:new Date(Math.min(Date.parse(l.horario_estimado)+5*60000,Date.now()+body.marco*60000)).toISOString()}));
+   const {error}=await db.from('push_fila').upsert(itens,{onConflict:'chave',ignoreDuplicates:true});if(error)throw Error('Não foi possível proteger os avisos.');
+  }else if(body.acao!=='processar')return NextResponse.json({error:'Ação inválida.'},{status:400});
+  after(async()=>{await processarAvisosDisponiveis(db,ev).catch(()=>{});});return NextResponse.json({success:true,aceito:true});
+ }catch {return NextResponse.json({error:'Não foi possível confirmar os avisos agora. As pendências salvas continuam protegidas.'},{status:503});}
 }

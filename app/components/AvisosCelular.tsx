@@ -24,9 +24,9 @@ export default function AvisosCelular({ userId, role, ref }: { userId: string; r
         const assinatura = await registro?.pushManager.getSubscription();
         let assinaturaNaConta = false;
         if (assinatura && Notification.permission === 'granted') {
-          const { data, error } = await supabase.from('assinaturas_push').select('subscription').eq('user_id', userId);
-          if (error) return;
-          assinaturaNaConta = (data || []).some(item => assinaturaCorresponde(item.subscription, assinatura.endpoint));
+          const [antigas,novas] = await Promise.all([supabase.from('assinaturas_push').select('subscription').eq('user_id', userId),supabase.from('push_dispositivos').select('subscription').eq('user_id',userId)]);
+          if (antigas.error||novas.error) return;
+          assinaturaNaConta = [...(antigas.data||[]),...(novas.data||[])].some(item => assinaturaCorresponde(item.subscription, assinatura.endpoint));
         }
         if (ativo && deveConvidarAvisos({ role, suportado: true, permissao: Notification.permission, assinaturaNoNavegador: Boolean(assinatura), assinaturaNaConta, adiadoAte })) {
           if (aposEspera) setVisivel(true);
@@ -60,11 +60,7 @@ export default function AvisosCelular({ userId, role, ref }: { userId: string; r
         const base64 = (vapid + '='.repeat((4 - vapid.length % 4) % 4)).replace(/-/g, '+').replace(/_/g, '/');
         assinatura = await registro.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: Uint8Array.from(atob(base64), char => char.charCodeAt(0)) });
       }
-      const { data: existentes, error: erroBusca } = await supabase.from('assinaturas_push').select('id').eq('user_id', userId);
-      if (erroBusca) throw erroBusca;
-      const { error } = existentes?.length
-        ? await supabase.from('assinaturas_push').update({ subscription: assinatura.toJSON() }).eq('user_id', userId)
-        : await supabase.from('assinaturas_push').insert({ user_id: userId, subscription: assinatura.toJSON() });
+      const { error } = await supabase.from('push_dispositivos').upsert({user_id:userId,endpoint:assinatura.endpoint,subscription:assinatura.toJSON(),atualizada_em:new Date().toISOString()},{onConflict:'user_id,endpoint'});
       if (error) throw error;
       setAtivado(true); setVisivel(false);
     } catch (error) { setErro(error instanceof Error ? error.message : 'Não foi possível ativar os avisos. Tente novamente.'); }

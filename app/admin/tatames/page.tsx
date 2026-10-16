@@ -3,6 +3,7 @@
 import { obterEventoOrganizador, guardarEventoOrganizador } from '@/app/lib/evento-organizador';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import AvisosProgramacao from '@/app/components/AvisosProgramacao';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { AlertCircle, ArrowDown, ArrowUp, CheckCircle, Clock, Play, RefreshCw, Search, X } from 'lucide-react';
@@ -493,6 +494,8 @@ export default function GestaoTatames() {
           </label>
           <button onClick={() => carregarLutas()} disabled={temAlteracoesPendentes || Boolean(salvando)} className="self-end rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-zinc-400 hover:text-white disabled:opacity-40" title="Atualizar"><RefreshCw size={16} /></button>
         </section>
+
+        <AvisosProgramacao eventoId={String(eventoSelecionado||'')} bloqueado={temAlteracoesPendentes||Boolean(salvando)} />
 
         <ol className="mb-6 grid gap-3 md:grid-cols-2">
           <li className={`rounded-2xl border p-4 ${passoAtual === 1 ? 'border-yellow-500/40 bg-yellow-500/10' : 'border-white/10 bg-[#0b0b10]'}`}>

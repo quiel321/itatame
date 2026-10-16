@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { lutaComAtletaImpedido } from '@/app/lib/situacao-atleta-luta';
+import { processarAvisosPendentes } from '@/app/lib/avisos-operacao-cliente';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AlertCircle, ArrowRightLeft, CheckCircle, Clock, Filter, LogOut, Play, RefreshCw, Search, Trophy, X, Edit3, XCircle, LayoutGrid, Radio, Wifi, Megaphone, Pause } from 'lucide-react';
@@ -428,24 +429,8 @@ export default function PainelMesario() {
     return "Avanço Direto / Aguardando Definição";
   };
 
-  const enviarPushAtleta = async (atletaId: number | null | undefined, titulo: string, mensagem: string) => {
-    if (!atletaId || !sessao) return;
-
-    const response = await fetch('/api/notificar', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        atleta_id: atletaId,
-        titulo,
-        mensagem,
-        url: `/evento/${sessao.evento_id}/ao-vivo`,
-      }),
-    });
-
-    if (!response.ok) {
-      const data = await response.json().catch(() => null);
-      throw new Error(data?.error || 'Erro ao enviar push.');
-    }
+  const enviarPushAtleta = async (_atletaId: number | null | undefined, _titulo: string, _mensagem: string) => {
+    if(sessao)await processarAvisosPendentes(String(sessao.evento_id),true);
   };
 
   const atletasDaLuta = (luta: Luta) => [

@@ -1,3 +1,4 @@
+import { assinaturasUnicas } from './push-regras';
 import { Resend } from "resend";
 import webpush from "web-push";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
@@ -132,7 +133,8 @@ export async function avisarProfessorDaInscricao(inscricaoId: string | number) {
   const privateKey = process.env.VAPID_PRIVATE_KEY;
   if (publicKey && privateKey) {
     webpush.setVapidDetails("mailto:suporte@itatame.com.br", publicKey, privateKey);
-    const { data: assinaturas } = await supabase.from("assinaturas_push").select("subscription").eq("user_id", professor.user_id);
+    const [legadas,aparelhos] = await Promise.all([supabase.from("assinaturas_push").select("subscription").eq("user_id",professor.user_id),supabase.from("push_dispositivos").select("subscription").eq("user_id",professor.user_id)]);
+      const assinaturas=assinaturasUnicas([...(legadas.data||[]),...(aparelhos.data||[])]).map(subscription=>({subscription}));
     const payload = JSON.stringify({
       title: texto.tituloPush,
       body: texto.corpoPush,
@@ -149,7 +151,7 @@ export async function avisarProfessorDaInscricao(inscricaoId: string | number) {
       } catch (erro) {
         const status = typeof erro === "object" && erro && "statusCode" in erro ? Number((erro as { statusCode?: unknown }).statusCode) : 0;
         if (status === 404 || status === 410) {
-          await supabase.from("assinaturas_push").delete().eq("user_id", professor.user_id);
+          { /* Preserva a assinatura original para auditoria e reativação. */ }
         }
       }
     }

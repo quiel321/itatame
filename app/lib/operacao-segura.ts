@@ -1,3 +1,4 @@
+import { processarAvisosPendentes } from './avisos-operacao-cliente';
 import { supabase } from './supabase';
 import { garantirVinculoStaff, lerSessaoStaff } from './staff-sessao';
 import { enviarOperacao, prepararOperacao, type ContextoOperacao, type PedidoOperacao, type TipoOperacao } from './operacao-persistente';
@@ -32,9 +33,7 @@ export function baseLuta(l: any) { return { atleta_1_id: l.atleta_1_id ?? null, 
 export function baseRelogio(l: any) { return { ...baseLuta(l), status_luta: l.status_luta, iniciada_em: l.iniciada_em ?? null, duracao_segundos: l.duracao_segundos ?? null }; }
 
 // Notificação é auxiliar. A confirmação da pesagem/chamada não depende dela.
-export function notificarSemBloquear(body: unknown) {
-  const controller = new AbortController();
-  const limite = setTimeout(() => controller.abort(), 8000);
-  void fetch('/api/notificar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: controller.signal })
-    .catch(() => {}).finally(() => clearTimeout(limite));
+export function notificarSemBloquear(_body: unknown) {
+  // O recibo já guardou o aviso no banco. A resposta perdida não cria uma nova mensagem.
+  void processarAvisosPendentes(undefined,true).catch(()=>{});
 }
