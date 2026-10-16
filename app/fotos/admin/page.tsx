@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import LinkGaleria from "@/app/fotos/_components/LinkGaleria";
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
@@ -14,6 +15,8 @@ import { CATEGORIAS_FOTOS } from "@/app/lib/fotos-categorias";
 import CidadeEstadoInput from "@/app/components/CidadeEstadoInput";
 import OpcoesPublicacaoGaleria from "../_components/OpcoesPublicacaoGaleria";
 import { ACCEPT_FOTOS_RETRATT } from "@/app/lib/fotos-formatos";
+import DataGaleriaInput from "@/app/fotos/_components/DataGaleriaInput";
+import { dataGaleriaValida } from "@/app/lib/fotos-data";
 import CapaGaleriaInput from "../_components/CapaGaleriaInput";
 import EditorFaixasDesconto from "../_components/EditorFaixasDesconto";
 import { faixasDoEvento, validarFaixasDesconto, type FaixaDesconto } from "@/app/lib/fotos-descontos";
@@ -331,6 +334,7 @@ export default function FotosAdminPage() {
   async function publicarGaleria() {
     if (criandoGaleria || preparandoCapa) return;
     setErroCriacao("");
+    if (isManual && !dataGaleriaValida(manualForm.dataEvento)) { setErroCriacao("Informe uma data válida no formato DD/MM/AAAA."); return; }
     if (isManual && !manualForm.nome.trim()) { setErroCriacao("Informe o nome da galeria."); return; }
     if (isManual && (!manualForm.cidade.trim() || !manualForm.estado)) { setErroCriacao("Selecione a cidade do evento na lista."); return; }
     if (!isManual && !eventoSelecionado) { setErroCriacao("Selecione um evento da lista."); return; }
@@ -696,7 +700,7 @@ export default function FotosAdminPage() {
                          </div>
                          <div>
                            <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Data do Evento</label>
-                           <input type="date" value={manualForm.dataEvento} onChange={(e) => setManualForm({ ...manualForm, dataEvento: e.target.value })} className="h-12 w-full rounded-xl border border-white/10 bg-[#050505] px-4 text-xs font-bold text-white outline-none focus:border-retratt/50" />
+                           <DataGaleriaInput value={manualForm.dataEvento} onChange={(dataEvento) => setManualForm({ ...manualForm, dataEvento })} />
                          </div>
 
                       </div>
@@ -770,9 +774,9 @@ export default function FotosAdminPage() {
                             <Pencil size={12} className="shrink-0"/> Editar
                           </button>
                           <button type="button" onClick={() => void copiarLinkGaleria(evento)} className="inline-flex h-9 items-center justify-center rounded-xl border border-white/10 px-3 text-[10px] font-bold text-zinc-300 hover:bg-white/10">{linkCopiado === evento.id ? "Link copiado" : "Copiar link"}</button>
-                          <Link href={`/fotos/evento/${evento.id}${evento.acesso_por_link && evento.acesso_token ? `?acesso=${evento.acesso_token}` : ""}`} className="cursor-pointer flex-1 sm:flex-none inline-flex h-9 sm:h-9 items-center justify-center gap-1.5 rounded-xl bg-white/10 px-3 sm:px-4 text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-white hover:bg-white hover:text-black transition-colors">
+                          <LinkGaleria href={`/fotos/evento/${evento.id}${evento.acesso_por_link && evento.acesso_token ? `?acesso=${evento.acesso_token}` : ""}`} className="cursor-pointer flex-1 sm:flex-none inline-flex h-9 sm:h-9 items-center justify-center gap-1.5 rounded-xl bg-white/10 px-3 sm:px-4 text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-white hover:bg-white hover:text-black transition-colors">
                             Ver Loja
-                          </Link>
+                          </LinkGaleria>
                        </div>
                     </div>
 

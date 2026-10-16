@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import LinkGaleria from "@/app/fotos/_components/LinkGaleria";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
@@ -16,6 +17,8 @@ import { CATEGORIAS_FOTOS, nomeCategoriaFotos } from "@/app/lib/fotos-categorias
 import CidadeEstadoInput from "@/app/components/CidadeEstadoInput";
 import OpcoesPublicacaoGaleria from "../../_components/OpcoesPublicacaoGaleria";
 import { ACCEPT_FOTOS_RETRATT } from "@/app/lib/fotos-formatos";
+import DataGaleriaInput from "@/app/fotos/_components/DataGaleriaInput";
+import { dataGaleriaValida } from "@/app/lib/fotos-data";
 import CapaGaleriaInput from "../../_components/CapaGaleriaInput";
 import { precoGaleriaCentavos, precosGaleriaValidos } from "@/app/lib/fotos-criacao-galeria";
 
@@ -247,6 +250,7 @@ export default function FotografoDashboardPage() {
   async function criarGaleriaFreelancer() {
     if (criandoGaleria || preparandoCapa) return;
     setMensagemGaleria("");
+    if (!dataGaleriaValida(galeriaForm.dataEvento)) { setMensagemGaleria("Informe uma data válida no formato DD/MM/AAAA."); return; }
     if (!galeriaForm.nome.trim()) { setMensagemGaleria("Informe o nome da galeria."); return; }
     if (!galeriaForm.cidade.trim() || !galeriaForm.estado) { setMensagemGaleria("Selecione a cidade do evento na lista."); return; }
     const precoCentavos = galeriaForm.downloadGratuito ? 0 : precoGaleriaCentavos(galeriaForm.preco);
@@ -310,6 +314,7 @@ export default function FotografoDashboardPage() {
   async function salvarEdicaoGaleria() {
     if(preparandoCapa)return;
     if (!editandoGaleria) return;
+    if (!dataGaleriaValida(editGaleriaForm.dataEvento)) { alert("Informe uma data válida no formato DD/MM/AAAA."); return; }
     if (!editGaleriaForm.cidade.trim() || !editGaleriaForm.estado) { alert("Selecione a cidade do evento na lista."); return; }
     setSalvandoEdicao(true);
     let novaCapaUrl = editandoGaleria.capa_url;
@@ -538,7 +543,7 @@ export default function FotografoDashboardPage() {
                          </div>
                          <div>
                            <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Data do Evento</label>
-                           <input type="date" value={galeriaForm.dataEvento} onChange={(e) => setGaleriaForm({ ...galeriaForm, dataEvento: e.target.value })} className="cursor-text h-11 w-full rounded-xl border border-white/10 bg-black px-3 text-xs font-bold text-white outline-none focus:border-retratt" />
+                           <DataGaleriaInput value={galeriaForm.dataEvento} onChange={(dataEvento) => setGaleriaForm({ ...galeriaForm, dataEvento })} />
                          </div>
                          <div className="sm:col-span-2"><OpcoesPublicacaoGaleria value={galeriaForm} onChange={(opcoes) => setGaleriaForm({ ...galeriaForm, ...opcoes })} /></div>
                          {!galeriaForm.downloadGratuito && <>
@@ -610,9 +615,9 @@ export default function FotografoDashboardPage() {
                                   <button onClick={() => void copiarLinkGaleria(galeria.id)} className="cursor-pointer inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 text-[9px] font-black uppercase tracking-wider text-zinc-300 transition-colors hover:bg-white hover:text-black">
                                     {linkCopiado === galeria.id ? <><Check size={12} className="shrink-0"/> Copiado</> : <><Link2 size={12} className="shrink-0"/> Copiar link</>}
                                   </button>
-                                  <Link href={`/fotos/evento/${galeria.id}`} className="cursor-pointer inline-flex h-10 items-center justify-center gap-1.5 rounded-xl bg-white/10 px-3 text-[9px] font-black uppercase tracking-wider text-white transition-colors hover:bg-white hover:text-black">
+                                  <LinkGaleria href={`/fotos/evento/${galeria.id}`} className="cursor-pointer inline-flex h-10 items-center justify-center gap-1.5 rounded-xl bg-white/10 px-3 text-[9px] font-black uppercase tracking-wider text-white transition-colors hover:bg-white hover:text-black">
                                     Loja Oficial
-                                  </Link>
+                                  </LinkGaleria>
                                </div>
 
                             {renderizarGerenciador(galeria.id)}
@@ -666,9 +671,9 @@ export default function FotografoDashboardPage() {
                                   <button onClick={() => void copiarLinkGaleria(galeria.id)} className="cursor-pointer inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-2 text-[8px] font-black uppercase tracking-wider text-zinc-300 transition-colors hover:bg-white hover:text-black sm:text-[9px]">
                                     {linkCopiado === galeria.id ? <><Check size={12} className="shrink-0"/> Copiado</> : <><Link2 size={12} className="shrink-0"/> Link</>}
                                   </button>
-                                  <Link href={`/fotos/evento/${galeria.id}`} className="cursor-pointer inline-flex h-10 items-center justify-center gap-1.5 rounded-xl bg-white/10 px-2 text-[8px] font-black uppercase tracking-wider text-white transition-colors hover:bg-white hover:text-black sm:text-[9px]">
+                                  <LinkGaleria href={`/fotos/evento/${galeria.id}`} className="cursor-pointer inline-flex h-10 items-center justify-center gap-1.5 rounded-xl bg-white/10 px-2 text-[8px] font-black uppercase tracking-wider text-white transition-colors hover:bg-white hover:text-black sm:text-[9px]">
                                     Loja
-                                  </Link>
+                                  </LinkGaleria>
                                </div>
 
                             <div className="mt-3 flex flex-wrap gap-2 border-t border-white/5 pt-3 text-xs text-zinc-300">
@@ -718,12 +723,7 @@ export default function FotografoDashboardPage() {
 
                                    <div>
                                       <label className="mb-1.5 ml-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Data do Evento</label>
-                                      <input
-                                        type="date"
-                                        value={editGaleriaForm.dataEvento}
-                                        onChange={(e) => setEditGaleriaForm({ ...editGaleriaForm, dataEvento: e.target.value })}
-                                        className="h-11 sm:h-12 w-full rounded-xl border border-white/10 bg-black px-4 text-xs font-bold text-white outline-none focus:border-retratt focus:ring-1 focus:ring-retratt/50 transition-all"
-                                      />
+                                      <DataGaleriaInput value={editGaleriaForm.dataEvento} onChange={(dataEvento) => setEditGaleriaForm({ ...editGaleriaForm, dataEvento })} />
                                    </div>
 
                                    <div>

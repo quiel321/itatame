@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import LinkGaleria from "@/app/fotos/_components/LinkGaleria";
 import { notFound } from "next/navigation";
 import { Camera, CalendarDays, MapPin, Phone } from "lucide-react";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
@@ -60,10 +61,10 @@ export default async function PerfilFotografoPublico({ params }: Props) {
       <section className="py-7">
         <h2 className="mb-4 text-lg font-black">Galerias de {fotografo.nome || "fotógrafo"}</h2>
         {(galerias || []).length ? <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {(galerias || []).map((galeria) => <Link key={galeria.id} href={`/fotos/evento/${galeria.id}`} className="overflow-hidden rounded-xl border border-white/10 bg-[#111] hover:border-retratt/50">
+          {(galerias || []).map((galeria) => <LinkGaleria key={galeria.id} href={`/fotos/evento/${galeria.id}`} className="overflow-hidden rounded-xl border border-white/10 bg-[#111] hover:border-retratt/50">
             <div className="h-40 bg-zinc-900">{galeria.capa_url && <img src={galeria.capa_url} alt="" className="h-full w-full object-cover" />}</div>
             <div className="space-y-1 p-4"><p className="text-xs font-bold text-retratt">{nomeCategoriaFotos(galeria.categoria)}</p><h3 className="font-bold">{galeria.nome}</h3><p className="flex items-center gap-1 text-xs text-zinc-400"><CalendarDays size={13} />{galeria.data_evento || "Data a informar"} · {galeria.cidade || "Local a informar"}</p></div>
-          </Link>)}
+          </LinkGaleria>)}
         </div> : <p className="text-sm text-zinc-400">Nenhuma galeria pública no momento.</p>}
       </section>
       <footer className="border-t border-white/10 py-6 text-sm text-zinc-300">

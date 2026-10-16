@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { carregarEventoFotos } from "./fotos-evento-servidor";
 import { cache } from "react";
 import { acessoAlbumPermitido } from './fotos-acesso-album';
 import { versaoDaCapa } from './fotos-compartilhamento';
@@ -45,11 +46,7 @@ export const carregarDadosOgFotos = cache(async (alvo: AlvoOgFotos): Promise<Dad
   }
 
   if (!UUID.test(alvo.eventoId)) return null;
-  const { data: evento } = await supabase
-    .from("foto_eventos")
-    .select("id, nome, local, cidade, estado, data_evento, capa_url, status, acesso_por_link, acesso_token")
-    .eq("id", alvo.eventoId)
-    .maybeSingle();
+  const { data: evento } = await carregarEventoFotos(alvo.eventoId);
   if (!evento || !acessoAlbumPermitido(evento, alvo.acesso)) return null;
 
   const album = alvo.albumId && UUID.test(alvo.albumId)

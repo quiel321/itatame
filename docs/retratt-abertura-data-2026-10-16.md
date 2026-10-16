@@ -1,0 +1,13 @@
+# Abertura de galerias e entrada de datas
+
+Links de galeria no catálogo, painel do organizador, painel do fotógrafo e perfis usam o caminho canônico `/evento/...` quando estão no domínio Retratt. Isso evita a ida a `/fotos/evento/...` seguida de redirecionamento. Em desenvolvimento e nos demais domínios, o caminho interno permanece válido. Tokens de acesso e parâmetros de álbum são preservados. O Link nativo mantém sua navegação e inicia prefetch completo ao detectar ponteiro, toque ou foco; sem intenção, antecipa somente o necessário conforme o padrão do Next.
+
+A rota da galeria ganhou uma tela leve de abertura com streaming. Metadata e página compartilham a consulta do evento via React `cache`, limitado à requisição, sem cache global de galerias privadas. Autor e mídias passam a ser consultados em paralelo após validar o acesso. A lista inicial mantém o limite de 1.000 registros e a paginação anterior, preservando o funcionamento dos filtros. A resposta inicial envia indicadores booleanos de prévia/miniatura em vez dos caminhos internos de armazenamento e não consulta a chave do original nem URLs que essa tela não usa. Os endpoints de prévia e download continuam responsáveis pela autorização e entrega das imagens.
+
+O campo de data da criação manual e da criação/edição pelo fotógrafo passa a ter entrada de texto DD/MM/AAAA com teclado numérico e um seletor nativo de calendário separado. O ícone é laranja e tem área de aproximadamente 44 pixels, visível sobre fundo escuro. A digitação e a colagem de datas completas geram o mesmo ISO YYYY-MM-DD usado pelo banco, sem conversão de fuso. Datas impossíveis ou incompletas impedem salvar; campo vazio continua opcional. As APIs de criação também validam a data antes de gravar.
+
+Validação: 12 testes de conversão/validade de datas, links, galeria privada, preços e compartilhamento. No navegador, entrada 18/10/2026 refletiu 2026-10-18 no estado, teclado `numeric`, calendário com 43 x 44 pixels e ícone rgb(255,90,31). Testes locais não criaram galerias nem alteraram registros reais. Arquivos temporários de validação e tipos gerados foram guardados em backup antes da limpeza.
+
+Medição anterior em três acessos à galeria pública CORRIDA SICOOB SAÚDE: primeira resposta 1.154–1.502 ms; conclusão 1.385–1.734 ms; HTML com 924.223 bytes. Medições após publicação são guardadas em `tmp/retratt-abertura-data-20261016/depois.json`. Tempo de rede e carregamento final das fotos podem variar; a tela de abertura não promete conclusão instantânea das consultas.
+
+Backups dos arquivos substituídos: `tmp/retratt-abertura-data-20261016/antes`. Nenhuma migração ou alteração dos dados reais foi necessária.

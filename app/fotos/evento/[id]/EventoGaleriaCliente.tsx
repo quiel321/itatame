@@ -1,13 +1,14 @@
-﻿"use client";
+"use client";
 import { linkCompartilhamentoGaleria } from '@/app/lib/fotos-compartilhamento';
 
 import Link from "next/link";
+import { resumirFotoGaleria, type FotoGaleria } from "@/app/lib/fotos-galeria";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
 import { FOTO_IA_NUMERO_TAG_PREFIX } from "@/app/lib/fotos-ai";
 import { eventoPermiteBuscaPorNumero } from "@/app/lib/fotos-busca-numero";
-import { arquivoFotoEhVideo, FotoAlbum, FotoArquivo, FotoEvento, formatarPrecoFotos } from "@/app/lib/fotos";
+import { arquivoFotoEhVideo, FotoAlbum, FotoEvento, formatarPrecoFotos } from "@/app/lib/fotos";
 import FotosShell from "../../_components/FotosShell";
 import BuscaFacial from "../../_components/BuscaFacial";
 import BuscaPorNumero from "../../_components/BuscaPorNumero";
@@ -18,15 +19,15 @@ import { Camera, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Filter, 
 
 const CARRINHO_FOTOS_KEY = "carrinho_fotos";
 
-function fotoPreviewSrc(foto: FotoArquivo, acesso?: string | null) {
+function fotoPreviewSrc(foto: FotoGaleria, acesso?: string | null) {
   return `/api/fotos/arquivo/${foto.id}?tipo=preview${acesso ? `&acesso=${encodeURIComponent(acesso)}` : ""}`;
 }
 
-function fotoThumbSrc(foto: FotoArquivo, acesso?: string | null) {
+function fotoThumbSrc(foto: FotoGaleria, acesso?: string | null) {
   return `/api/fotos/arquivo/${foto.id}?tipo=thumb${acesso ? `&acesso=${encodeURIComponent(acesso)}` : ""}`;
 }
 
-function videoPreviewSrc(foto: FotoArquivo, acesso?: string | null) {
+function videoPreviewSrc(foto: FotoGaleria, acesso?: string | null) {
   return `/api/fotos/arquivo/${foto.id}?tipo=video-preview${acesso ? `&acesso=${encodeURIComponent(acesso)}` : ""}`;
 }
 
@@ -44,13 +45,13 @@ type EventoGaleria = FotoEvento & {
 export type GaleriaInicial = {
   evento: EventoGaleria;
   albuns: FotoAlbum[];
-  fotos: FotoArquivo[];
+  fotos: FotoGaleria[];
   totalMidias: number | null;
   totalVideos: number | null;
 };
 
-function dadosFotografo(foto: FotoArquivo) {
-  const dados = (foto as FotoArquivo & { fotografo_dados?: DadosFotografo | DadosFotografo[] | null }).fotografo_dados;
+function dadosFotografo(foto: FotoGaleria) {
+  const dados = (foto as FotoGaleria & { fotografo_dados?: DadosFotografo | DadosFotografo[] | null }).fotografo_dados;
   return Array.isArray(dados) ? dados[0] : dados;
 }
 
@@ -59,7 +60,7 @@ export default function EventoGaleriaCliente({ initialData, acesso }: { initialD
   const eventoId = params.id;
   const [evento, setEvento] = useState<EventoGaleria | null>(initialData?.evento || null);
   const [albuns, setAlbuns] = useState<FotoAlbum[]>(initialData?.albuns || []);
-  const [fotos, setFotos] = useState<FotoArquivo[]>(initialData?.fotos || []);
+  const [fotos, setFotos] = useState<FotoGaleria[]>(initialData?.fotos || []);
   const [albumAtivo, setAlbumAtivo] = useState("todos");
   const [tipoAtivo, setTipoAtivo] = useState<"fotos" | "videos">(initialData?.totalMidias && initialData.totalMidias === initialData.totalVideos ? "videos" : "fotos");
   const [busca, setBusca] = useState("");
@@ -72,7 +73,7 @@ export default function EventoGaleriaCliente({ initialData, acesso }: { initialD
 
   const [carrinho, setCarrinho] = useState<string[]>([]);
   const [carrinhoCarregado, setCarrinhoCarregado] = useState(false);
-  const [fotoSelecionada, setFotoSelecionada] = useState<FotoArquivo | null>(null);
+  const [fotoSelecionada, setFotoSelecionada] = useState<FotoGaleria | null>(null);
   const [fotoOrigemBusca, setFotoOrigemBusca] = useState<"ia" | "numero" | null>(null);
   const [linkCompartilhado, setLinkCompartilhado] = useState(false);
   const temporizadorProtecaoRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -185,7 +186,7 @@ export default function EventoGaleriaCliente({ initialData, acesso }: { initialD
       const [{ data: eventoData }, { data: albunsData }, { data: fotosData }, { count: totalBanco }, { count: videosBanco }] = await Promise.all([
         supabase.from("foto_eventos").select("id, nome, slug, descricao, local, cidade, estado, data_evento, capa_url, status, vendas_ate, desconto_combo_qtd, desconto_combo_percentual, descontos_progressivos, em_breve, organizador_user_id, created_by, permite_download_gratis, acesso_por_link").eq("id", eventoId).maybeSingle(),
         supabase.from("foto_albuns").select("id, evento_id, fotografo_id, titulo, descricao, capa_url, status").eq("evento_id", eventoId).eq("status", "publicado").order("ordem", { ascending: true }),
-        supabase.from("foto_arquivos").select("id, evento_id, album_id, fotografo_id, titulo, mime_type, r2_original_key, r2_preview_key, r2_thumb_key, preview_url, thumb_url, preco_centavos, status, tags, fotografo_dados:fotografos!fotografo_id(nome, foto_url)").eq("evento_id", eventoId).eq("status", "publicada").order("created_at", { ascending: false }).order("id", { ascending: false }).range(0, 999),
+        supabase.from("foto_arquivos").select("id, evento_id, album_id, fotografo_id, titulo, mime_type, r2_preview_key, r2_thumb_key, preco_centavos, status, tags, fotografo_dados:fotografos!fotografo_id(nome, foto_url)").eq("evento_id", eventoId).eq("status", "publicada").order("created_at", { ascending: false }).order("id", { ascending: false }).range(0, 999),
         supabase.from("foto_arquivos").select("id", { count: "exact", head: true }).eq("evento_id", eventoId).eq("status", "publicada"),
         supabase.from("foto_arquivos").select("id", { count: "exact", head: true }).eq("evento_id", eventoId).eq("status", "publicada").like("mime_type", "video/%"),
       ]);
@@ -235,7 +236,7 @@ export default function EventoGaleriaCliente({ initialData, acesso }: { initialD
 
       setEvento(eventoCompleto);
       setAlbuns((albunsData || []) as FotoAlbum[]);
-      const midias = (fotosData || []) as FotoArquivo[];
+      const midias = (fotosData || []).map(resumirFotoGaleria);
       setHaMaisNoBanco(midias.length === 1000);
       setTotalMidiasBanco(totalBanco);
       setTotalVideosBanco(videosBanco);
@@ -265,16 +266,16 @@ export default function EventoGaleriaCliente({ initialData, acesso }: { initialD
           .then((resposta) => resposta.ok ? resposta.json() : null)
           .then((resultado) => {
             const foto = resultado?.fotos?.[0];
-            if (foto) setFotoSelecionada(foto as FotoArquivo);
+            if (foto) setFotoSelecionada(resumirFotoGaleria(foto));
           });
         return;
       }
       void supabase.from("foto_arquivos")
-        .select("id, evento_id, album_id, fotografo_id, titulo, mime_type, r2_original_key, r2_preview_key, r2_thumb_key, preview_url, thumb_url, preco_centavos, status, tags, fotografo_dados:fotografos!fotografo_id(nome, foto_url)")
+        .select("id, evento_id, album_id, fotografo_id, titulo, mime_type, r2_preview_key, r2_thumb_key, preco_centavos, status, tags, fotografo_dados:fotografos!fotografo_id(nome, foto_url)")
         .eq("id", fotoId).eq("evento_id", eventoId).eq("status", "publicada").maybeSingle()
         .then(({ data }) => {
           if (!data) return;
-          setFotoSelecionada(data as FotoArquivo);
+          setFotoSelecionada(resumirFotoGaleria(data));
           const origem = parametros.get("origem");
           setFotoOrigemBusca(origem === "ia" || origem === "numero" ? origem : null);
         });
@@ -372,7 +373,7 @@ export default function EventoGaleriaCliente({ initialData, acesso }: { initialD
 
   useEffect(() => {
     if (indiceFotoSelecionada < 0) return;
-    const proximas = [-2, -1, 1, 2].map((deslocamento) => fotosFiltradas[indiceFotoSelecionada + deslocamento]).filter((foto): foto is FotoArquivo => Boolean(foto && !arquivoFotoEhVideo(foto)));
+    const proximas = [-2, -1, 1, 2].map((deslocamento) => fotosFiltradas[indiceFotoSelecionada + deslocamento]).filter((foto): foto is FotoGaleria => Boolean(foto && !arquivoFotoEhVideo(foto)));
     for (const foto of proximas) {
       const chave = String(foto.id);
       if (previewsEmCache.current.has(chave)) continue;
@@ -419,12 +420,12 @@ export default function EventoGaleriaCliente({ initialData, acesso }: { initialD
       ? await fetch(`/api/fotos/evento/${eventoId}/midias-privadas?offset=${fotos.length}&acesso=${encodeURIComponent(acesso)}`, { cache: "no-store" })
         .then(async (resposta) => resposta.ok ? { data: (await resposta.json()).fotos, error: null } : { data: null, error: true })
       : await supabase.from("foto_arquivos")
-        .select("id, evento_id, album_id, fotografo_id, titulo, mime_type, r2_original_key, r2_preview_key, r2_thumb_key, preview_url, thumb_url, preco_centavos, status, tags, fotografo_dados:fotografos!fotografo_id(nome, foto_url)")
+        .select("id, evento_id, album_id, fotografo_id, titulo, mime_type, r2_preview_key, r2_thumb_key, preco_centavos, status, tags, fotografo_dados:fotografos!fotografo_id(nome, foto_url)")
         .eq("evento_id", eventoId).eq("status", "publicada")
         .order("created_at", { ascending: false }).order("id", { ascending: false }).range(fotos.length, fotos.length + 999);
     setBuscandoMais(false);
     if (error) return;
-    const recebidas = (data || []) as FotoArquivo[];
+    const recebidas = (data || []).map(resumirFotoGaleria);
     setFotos((atuais) => [...atuais, ...recebidas]);
     setHaMaisNoBanco(recebidas.length === 1000);
     setLimiteVisivel((atual) => atual + 48);
@@ -706,7 +707,7 @@ export default function EventoGaleriaCliente({ initialData, acesso }: { initialD
                     className="group relative aspect-[4/5] rounded-2xl overflow-hidden bg-[#111] border border-white/5 shadow-md cursor-pointer transition-all duration-300 hover:shadow-orange-950/20 hover:border-retratt/30"
                   >
 
-                    {foto.r2_thumb_key || foto.r2_preview_key ? (
+                    {foto.tem_miniatura || foto.tem_previa ? (
                       <img
                         data-foto-protegida-imagem
                         src={fotoThumbSrc(foto, acesso)}
@@ -806,7 +807,7 @@ export default function EventoGaleriaCliente({ initialData, acesso }: { initialD
               <div className="relative flex-1 min-h-0 md:h-full w-full flex items-center justify-center overflow-hidden bg-[#050505] md:rounded-3xl md:border md:border-white/5 md:shadow-2xl">
                 {indiceFotoSelecionada > 0 && <button type="button" onClick={() => navegarFoto(-1)} aria-label="Foto anterior" className="absolute left-2 top-1/2 z-40 -translate-y-1/2 rounded-full bg-black/75 p-3 text-white hover:bg-retratt"><ChevronLeft size={22} /></button>}
                 {indiceFotoSelecionada >= 0 && indiceFotoSelecionada < fotosFiltradas.length - 1 && <button type="button" onClick={() => navegarFoto(1)} aria-label="Próxima foto" className="absolute right-2 top-1/2 z-40 -translate-y-1/2 rounded-full bg-black/75 p-3 text-white hover:bg-retratt"><ChevronRight size={22} /></button>}
-                {arquivoFotoEhVideo(fotoSelecionada) && fotoSelecionada.r2_thumb_key ? (
+                {arquivoFotoEhVideo(fotoSelecionada) && fotoSelecionada.tem_miniatura ? (
                   <video
                     data-foto-protegida-imagem
                     key={fotoSelecionada.id}
@@ -835,7 +836,7 @@ export default function EventoGaleriaCliente({ initialData, acesso }: { initialD
 
                 <PreviewProtectionOverlay />
 
-                {arquivoFotoEhVideo(fotoSelecionada) && !fotoSelecionada.r2_thumb_key && (
+                {arquivoFotoEhVideo(fotoSelecionada) && !fotoSelecionada.tem_miniatura && (
                   <div className="absolute inset-0 z-20 flex items-center justify-center">
                     <div className="max-w-xs rounded-2xl border border-white/20 bg-black/75 px-5 py-4 text-center text-white shadow-2xl backdrop-blur-sm">
                       <Play size={26} className="mx-auto fill-white" />
@@ -866,7 +867,7 @@ export default function EventoGaleriaCliente({ initialData, acesso }: { initialD
                 <div className="flex items-center gap-3.5">
                     <div className="relative w-12 h-12 rounded-2xl bg-zinc-900 flex items-center justify-center text-zinc-500 border border-retratt/30 shrink-0 overflow-hidden shadow-inner">
                         {arquivoFotoEhVideo(fotoSelecionada) ? <Video size={20}/> : <ImageIcon size={20}/>}
-                        {(fotoSelecionada.r2_preview_key || fotoSelecionada.r2_thumb_key) && (
+                        {(fotoSelecionada.tem_previa || fotoSelecionada.tem_miniatura) && (
                           <img
                             data-foto-protegida-imagem
                             src={fotoPreviewSrc(fotoSelecionada, acesso)}

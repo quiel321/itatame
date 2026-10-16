@@ -1,3 +1,4 @@
+import { dataGaleriaValida } from "@/app/lib/fotos-data";
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
 import { obterFotografoDoUsuario } from "@/app/lib/fotos-auth";
@@ -28,6 +29,7 @@ export async function POST(request: Request) {
     if (!fotografo || fotografo.status !== "ativo") return NextResponse.json({ error: "Perfil de fotógrafo inativo." }, { status: 403 });
 
     const body = await request.json();
+    if (!dataGaleriaValida(String(body.dataEvento || ""))) return NextResponse.json({ error: "Informe uma data válida no formato DD/MM/AAAA." }, { status: 400 });
     const nome = String(body.nome || "").trim();
     const categoria = body.categoria;
     if (!categoriaFotosValida(categoria)) return NextResponse.json({ error: "Selecione a categoria do evento." }, { status: 400 });

@@ -1,3 +1,4 @@
+import { dataGaleriaValida } from "@/app/lib/fotos-data";
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
 import { categoriaFotosValida } from "@/app/lib/fotos-categorias";
@@ -15,6 +16,7 @@ export async function POST(request: Request) {
     const { data: auth, error: authError } = await supabase.auth.getUser(token);
     if (authError || !auth.user) return NextResponse.json({ error: "Sessão inválida." }, { status: 401 });
     const body = await request.json();
+    if (!dataGaleriaValida(String(body.dataEvento || ""))) return NextResponse.json({ error: "Informe uma data válida no formato DD/MM/AAAA." }, { status: 400 });
     const { eventoId, categoria } = body;
     if (!categoriaFotosValida(categoria)) return NextResponse.json({ error: "Selecione a categoria do evento." }, { status: 400 });
     const [org, fotoOrg] = await Promise.all([

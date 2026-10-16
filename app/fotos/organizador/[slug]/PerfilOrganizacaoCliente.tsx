@@ -1,6 +1,7 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
+import LinkGaleria from "@/app/fotos/_components/LinkGaleria";
 import { useState, useMemo, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
@@ -217,7 +218,7 @@ export default function PerfilOrganizacaoCliente() {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
               {eventosFiltrados.map((evt) => (
-                <Link
+                <LinkGaleria
                   href={`/fotos/evento/${evt.id}`}
                   key={evt.id}
                   className="group flex flex-col bg-[#0a0a0e] border border-white/5 rounded-3xl overflow-hidden hover:border-retratt/30 transition-all duration-500 cursor-pointer shadow-lg hover:shadow-[0_10px_40px_rgba(255,90,31,0.08)]"
@@ -258,7 +259,7 @@ export default function PerfilOrganizacaoCliente() {
                       </div>
                     </div>
                   </div>
-                </Link>
+                </LinkGaleria>
               ))}
             </div>
           )}

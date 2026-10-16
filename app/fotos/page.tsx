@@ -1,6 +1,7 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
+import LinkGaleria from "@/app/fotos/_components/LinkGaleria";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/app/lib/supabase";
 import { FotoEvento } from "@/app/lib/fotos";
@@ -196,7 +197,7 @@ export default function FotosHomePage() {
           ) : (
             <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4">
               {eventosFiltrados.map((evento) => (
-                <Link key={evento.id} href={`/fotos/evento/${evento.id}`} className="group relative flex flex-col h-[180px] md:h-[220px] rounded-2xl overflow-hidden bg-[#111] border border-white/5 hover:border-retratt/40 transition-all duration-300 shadow-lg hover:shadow-orange-950/10">
+                <LinkGaleria key={evento.id} href={`/fotos/evento/${evento.id}`} className="group relative flex flex-col h-[180px] md:h-[220px] rounded-2xl overflow-hidden bg-[#111] border border-white/5 hover:border-retratt/40 transition-all duration-300 shadow-lg hover:shadow-orange-950/10">
 
                   <div className="absolute inset-0 bg-black z-0">
                     <img
@@ -225,7 +226,7 @@ export default function FotosHomePage() {
                       </div>
                     </div>
                   </div>
-                </Link>
+                </LinkGaleria>
               ))}
             </div>
           )}
