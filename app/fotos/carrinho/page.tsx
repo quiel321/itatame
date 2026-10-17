@@ -135,10 +135,14 @@ export default function FotosCarrinhoPage() {
   const fotosDoCheckout = useRef<string[]>([]);
 
   useEffect(() => {
-    const atualizar = () => { const ids = new Set(lerCarrinhoFotos()); setFotos(atuais => atuais.filter(foto => ids.has(foto.id))); };
+    const atualizar = () => {
+      // O recibo mantém o resumo da compra; o carrinho e seu contador já são atualizados no armazenamento.
+      if (etapa === 'checkout' || etapa === 'pago') return;
+      const ids = new Set(lerCarrinhoFotos()); setFotos(atuais => atuais.filter(foto => ids.has(foto.id)));
+    };
     window.addEventListener('carrinho-fotos-atualizado', atualizar);
     return () => window.removeEventListener('carrinho-fotos-atualizado', atualizar);
-  }, []);
+  }, [etapa]);
 
   const subtotal = fotos.reduce((acc, foto) => acc + foto.precoCentavos, 0);
   const faixas = faixasDoEvento({ descontos_progressivos: fotos[0]?.descontosProgressivos, desconto_combo_qtd: fotos[0]?.comboQtd ?? COMBO_QTD_PADRAO, desconto_combo_percentual: fotos[0]?.comboPercentual ?? COMBO_PERCENTUAL_PADRAO });
@@ -446,10 +450,10 @@ export default function FotosCarrinhoPage() {
         <section className="relative z-10 mx-auto mt-8 max-w-7xl px-4 md:mt-12 md:px-8">
           <div className="mb-8 flex items-end justify-between">
             <div>
-              <h1 className="text-2xl font-black uppercase tracking-tight text-white md:text-4xl">Carrinho</h1>
+              <h1 className="text-2xl font-black uppercase tracking-tight text-white md:text-4xl">{etapa === 'pago' ? 'Compra confirmada' : 'Carrinho'}</h1>
               {!carregandoCart && (
                 <p className="mt-2 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">
-                  Você selecionou {fotos.length} {fotos.length === 1 ? "item" : "itens"}
+                  {etapa === 'pago' ? 'Seu pedido contém' : 'Você selecionou'} {fotos.length} {fotos.length === 1 ? "item" : "itens"}
                 </p>
               )}
             </div>
@@ -550,7 +554,7 @@ export default function FotosCarrinhoPage() {
                   </div>
 
                   <div className="mb-8 flex items-end justify-between border-t border-white/10 pt-6">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Total a pagar</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">{etapa === 'pago' ? 'Total pago' : 'Total a pagar'}</span>
                     <div className="text-right">
                       {temDesconto && <p className="mb-1 text-[10px] text-zinc-500 line-through">De {formatarPrecoFotos(subtotal)}</p>}
                       <span className="bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-3xl font-black text-transparent md:text-4xl">
