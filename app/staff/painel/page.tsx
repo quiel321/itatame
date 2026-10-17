@@ -134,6 +134,9 @@ export default function PainelMesario() {
   const [lutas, setLutas] = useState<Luta[]>([]);
   const [todasLutasEvento, setTodasLutasEvento] = useState<Luta[]>([]); // 🔥 Para buscar os oponentes da Baia
   const [tatamesDisponiveis, setTatamesDisponiveis] = useState<string[]>([]);
+  const [carregandoTatames, setCarregandoTatames] = useState(true);
+  const [erroTatames, setErroTatames] = useState('');
+  const consultaTatamesRef = useRef(false);
   const [modalTransferencia, setModalTransferencia] = useState<ModalTransferencia>({ visivel: false, luta: null });
   const [modalCorrecao, setModalCorrecao] = useState<{ luta: Luta; lado: 1 | 2 | null; metodo: MetodoResultado } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -167,20 +170,28 @@ export default function PainelMesario() {
   }, [router]);
 
   const buscarTatames = useCallback(async () => {
-    if (!sessao) return;
-
-    // staff_eventos só é legível para o posto vinculado ao evento.
-    await garantirVinculoStaff();
-
-    const { data } = await supabase
-      .from('staff_eventos')
-      .select('funcao, identificacao')
-      .eq('evento_id', sessao.evento_id)
-      .in('funcao', ['mesario', 'chamador']);
-
-    if (data) {
-      const nomes = Array.from(new Set(data.filter((item) => item.funcao === 'mesario').map((item) => normalizar(item.identificacao)).filter(Boolean)));
+    if (!sessao || consultaTatamesRef.current) return;
+    consultaTatamesRef.current = true;
+    setCarregandoTatames(true);
+    setErroTatames('');
+    try {
+      // A lista só é legível depois de confirmar o vínculo do posto.
+      const vinculo = await garantirVinculoStaff();
+      if (!vinculo.ok) throw new Error(vinculo.erro || 'Não foi possível conferir o posto.');
+      const { data, error } = await supabase
+        .from('staff_eventos')
+        .select('identificacao')
+        .eq('evento_id', sessao.evento_id)
+        .eq('funcao', 'mesario');
+      if (error || !data) throw new Error('Não foi possível consultar as áreas agora. Confira a conexão e tente novamente.');
+      const nomes = Array.from(new Set(data.map((item) => normalizar(item.identificacao)).filter(Boolean)));
+      if (!nomes.length) throw new Error('Não foi possível confirmar as áreas deste campeonato. Confira o acesso do posto e tente novamente.');
       setTatamesDisponiveis(nomes.sort((a, b) => a.localeCompare(b)));
+    } catch (error) {
+      setErroTatames(error instanceof Error ? error.message : 'Não foi possível consultar as áreas agora. Tente novamente.');
+    } finally {
+      consultaTatamesRef.current = false;
+      setCarregandoTatames(false);
     }
   }, [sessao]);
 
@@ -674,7 +685,7 @@ export default function PainelMesario() {
             </>
           ) : (
             <>
-              <button onClick={() => setModalTransferencia({ visivel: true, luta })} disabled={luta.status_luta !== 'agendada' || Boolean(acaoId)} aria-label="Transferir tatame" title="Transferir luta ainda não iniciada" className="h-10 rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 text-zinc-400 disabled:opacity-30"><ArrowRightLeft size={14} /></button>
+              <button onClick={() => { setModalTransferencia({ visivel: true, luta }); void buscarTatames(); }} disabled={luta.status_luta !== 'agendada' || Boolean(acaoId)} aria-label="Transferir tatame" title="Transferir luta ainda não iniciada" className="h-10 rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 text-zinc-400 disabled:opacity-30"><ArrowRightLeft size={14} /></button>
               {(
                 <button onClick={() => chamarLuta(luta)} disabled={lutaBloqueada || acaoId === luta.id} className={`h-10 min-w-0 flex-1 rounded-lg px-3 text-[9px] font-black uppercase md:w-36 md:flex-none ${lutaBloqueada ? 'cursor-not-allowed border border-zinc-700 bg-zinc-800 text-zinc-500' : destaque === 'agora' ? 'bg-red-500 text-white' : 'bg-white text-black'}`}>
                   {acaoId === luta.id ? <RefreshCw size={12} className="mr-1 inline animate-spin" /> : luta.status_luta === 'em_andamento' ? <Pause size={12} className="mr-1 inline" /> : <Play size={12} className="mr-1 inline" fill="currentColor" />}
@@ -721,7 +732,7 @@ export default function PainelMesario() {
               <span className="hidden sm:inline">Ao Vivo</span>
             </Link>
 
-            <button onClick={() => carregarPainel()} className="rounded-xl border border-white/10 bg-white/5 p-3 text-white hover:bg-white/10" title="Atualizar">
+            <button onClick={() => { void buscarTatames(); void carregarPainel(); }} className="rounded-xl border border-white/10 bg-white/5 p-3 text-white hover:bg-white/10" title="Atualizar">
               <RefreshCw size={16} className={refreshing ? 'animate-spin text-red-400' : ''} />
             </button>
             <button onClick={fazerLogout} className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-red-300 hover:bg-red-500/20" title="Sair">
@@ -926,7 +937,7 @@ export default function PainelMesario() {
 
       {modalTransferencia.visivel && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-3xl border border-white/10 bg-[#0b0b10] p-5 shadow-2xl">
+          <div role="dialog" aria-modal="true" aria-label="Transferir luta" className="w-full max-w-sm rounded-3xl border border-white/10 bg-[#0b0b10] p-5 shadow-2xl">
             <div className="mb-5 flex items-start justify-between gap-3">
               <div>
                 <h2 className="text-lg font-black uppercase text-white">Transferir luta</h2>
@@ -937,19 +948,24 @@ export default function PainelMesario() {
 
             <p className="mb-3 text-xs text-cyan-200">A luta e sua baia serão transferidas juntas. Encaminhe os atletas ao destino; presenças, chamadas, check-in e pesagem serão mantidos.</p>
             <div className="space-y-2">
-              {tatamesDisponiveis.filter((tatame) => nomeUpper(tatame) !== nomeUpper(sessao.identificacao)).length === 0 ? (
+              {carregandoTatames ? (
+                <p role="status" className="p-4 text-center text-xs text-zinc-400">Consultando áreas de tatame…</p>
+              ) : erroTatames ? (
+                <p role="alert" className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-100">{erroTatames}</p>
+              ) : tatamesDisponiveis.filter((tatame) => nomeUpper(tatame) !== nomeUpper(sessao.identificacao)).length === 0 ? (
                 <div className="rounded-xl border border-dashed border-white/10 p-4 text-center text-xs text-zinc-500">Nenhum outro tatame configurado.</div>
               ) : (
                 tatamesDisponiveis
                   .filter((tatame) => nomeUpper(tatame) !== nomeUpper(sessao.identificacao))
                   .sort((a, b) => Number(!tatamesLivres[nomeUpper(a)]) - Number(!tatamesLivres[nomeUpper(b)]) || a.localeCompare(b))
                   .map((tatame) => (
-                    <button key={tatame} onClick={() => executarTransferenciaTatame(tatame)} className={`flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left text-xs font-black uppercase tracking-widest text-white ${tatamesLivres[nomeUpper(tatame)] ? 'border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-600' : 'border-white/10 bg-white/5 hover:bg-red-600'}`}>
+                    <button key={tatame} disabled={Boolean(acaoId)} onClick={() => executarTransferenciaTatame(tatame)} className={`flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left text-xs font-black uppercase tracking-widest text-white disabled:opacity-40 ${tatamesLivres[nomeUpper(tatame)] ? 'border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-600' : 'border-white/10 bg-white/5 hover:bg-red-600'}`}>
                       <span>Enviar para {tatame}{tatamesLivres[nomeUpper(tatame)] && <small className="mt-1 block text-[8px] text-emerald-300">Livre agora</small>}</span>
                       <ArrowRightLeft size={14} />
                     </button>
                   ))
               )}
+              <button type="button" disabled={carregandoTatames || Boolean(acaoId)} onClick={() => void buscarTatames()} className="min-h-11 w-full rounded-xl border border-white/10 px-3 text-xs font-bold text-zinc-300 disabled:opacity-40">{erroTatames ? 'Tentar novamente' : 'Atualizar áreas'}</button>
             </div>
           </div>
         </div>
