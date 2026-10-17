@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import VendasDiariaFotografos from '../../_components/VendasDiariaFotografos';
 import LinkGaleria from "@/app/fotos/_components/LinkGaleria";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -132,7 +133,7 @@ export default function FotografoDashboardPage() {
         const [fotos, albuns, vendas, galeriasDb, credenciais] = await Promise.all([
           supabase.from("foto_arquivos").select("id", { count: "exact", head: true }).eq("fotografo_id", perfilAtual.id),
           supabase.from("foto_albuns").select("id", { count: "exact", head: true }).eq("fotografo_id", perfilAtual.id),
-          supabase.from("foto_pedidos").select("id", { count: "exact", head: true }).eq("fotografo_id", perfilAtual.id).eq("status", "pago"),
+          supabase.from("foto_pedidos").select("id", { count: "exact", head: true }).eq("fotografo_id", perfilAtual.id).eq("modelo_recebimento", "royalty").eq("status", "pago"),
           supabase.from("foto_eventos").select("id, nome, categoria, cidade, estado, data_evento, preco_padrao_centavos, preco_bloqueado, capa_url, desconto_combo_qtd, desconto_combo_percentual, descontos_progressivos, em_breve, acesso_por_link, acesso_token, permite_download_gratis").eq("created_by", user.id).neq("status", "arquivado").order("created_at", { ascending: false }),
            supabase.from("foto_evento_fotografos").select("evento_id, comissao_organizador_percentual, modelo_recebimento").eq("fotografo_id", perfilAtual.id).eq("status", "ativo")
         ]);
@@ -479,7 +480,7 @@ export default function FotografoDashboardPage() {
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-              {[[ImagePlus, "Mídias Publicadas", totais.fotos, "text-retratt"], [FolderOpen, "Pastas de fotos", totais.albuns, "text-white"], [Store, "Eventos", totais.eventos, "text-retratt"], [Wallet, "Vendas", totais.vendas, "text-emerald-400"]].map(([Icon, label, valor, cor], index) => {
+              {[[ImagePlus, "Mídias Publicadas", totais.fotos, "text-retratt"], [FolderOpen, "Pastas de fotos", totais.albuns, "text-white"], [Store, "Eventos", totais.eventos, "text-retratt"], [Wallet, "Vendas diretas", totais.vendas, "text-emerald-400"]].map(([Icon, label, valor, cor], index) => {
                 const IconComponent = Icon as typeof Camera;
                 return (
                   <div key={index} className="relative overflow-hidden rounded-2xl border border-white/5 bg-[#0a0a0e]/80 backdrop-blur-md p-4 sm:p-5 shadow-lg group hover:border-white/10 transition-colors">
@@ -491,6 +492,8 @@ export default function FotografoDashboardPage() {
             </div>
           </div>
         </section>
+
+        {perfil?.id && <div className="mx-auto w-full max-w-7xl px-4 pt-6 md:px-8"><VendasDiariaFotografos perfil="fotografo" resumido /></div>}
 
         <section className="mx-auto grid w-full max-w-7xl gap-6 px-4 py-8 md:px-8 xl:grid-cols-[300px_minmax(0,1fr)]">
           <div className="space-y-6 w-full min-w-0">

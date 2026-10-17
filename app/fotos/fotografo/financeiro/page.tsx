@@ -1,10 +1,11 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Camera, CheckCircle2, CircleDollarSign, Image as ImageIcon, Loader2, ReceiptText, RefreshCw, Store, WalletCards } from "lucide-react";
 import FotosShell from "../../_components/FotosShell";
+import VendasDiariaFotografos from '../../_components/VendasDiariaFotografos';
 import { supabase } from "@/app/lib/supabase";
 
 type Venda = {
@@ -83,8 +84,8 @@ export default function FinanceiroFotografoPage() {
             <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <p className="inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-[9px] font-black uppercase tracking-[0.22em] text-emerald-300"><CircleDollarSign size={13} /> Financeiro do fotógrafo</p>
-                <h1 className="mt-4 text-3xl font-black uppercase tracking-tight sm:text-4xl md:text-5xl">Seus ganhos, sem estimativas.</h1>
-                <p className="mt-3 max-w-2xl text-xs leading-5 text-zinc-400 md:text-sm">O líquido usa o valor efetivamente recebido informado pelo Mercado Pago, depois da comissão Retratt, do royalty do organizador e da tarifa do pagamento.</p>
+                <h1 className="mt-4 text-3xl font-black uppercase tracking-tight sm:text-4xl md:text-5xl">Suas vendas e recebimentos.</h1>
+                <p className="mt-3 max-w-2xl text-xs leading-5 text-zinc-400 md:text-sm">Nas vendas diretas, o líquido é informado pelo Mercado Pago. As vendas por diária aparecem separadas abaixo: o organizador recebe e combina o repasse com você.</p>
               </div>
               <div className="flex gap-2">
                 <Link href="/fotos/fotografo/dashboard" className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 text-[9px] font-black uppercase tracking-widest hover:bg-white/10 sm:flex-none"><ArrowLeft size={14} /> Dashboard</Link>
@@ -95,6 +96,7 @@ export default function FinanceiroFotografoPage() {
         </section>
 
         <section className="mx-auto max-w-7xl space-y-8 px-4 py-8 md:px-8">
+          <h2 className="text-lg font-bold text-white">Vendas recebidas diretamente por você</h2>
           {carregando && !dados ? (
             <div className="flex min-h-[360px] flex-col items-center justify-center rounded-3xl border border-white/5 bg-[#0a0a0e] text-center">
               <Loader2 size={38} className="animate-spin text-emerald-400" />
@@ -149,6 +151,7 @@ export default function FinanceiroFotografoPage() {
               {dados.reembolsos.quantidade > 0 && <p className="rounded-2xl border border-white/5 bg-white/[0.02] p-4 text-[10px] leading-5 text-zinc-500">Reembolsos excluídos dos ganhos: {dados.reembolsos.quantidade} pedido(s), total de {moeda(dados.reembolsos.valorCentavos)}.</p>}
             </>
           )}
+          <div id="vendas-diaria" className="scroll-mt-24"><VendasDiariaFotografos perfil="fotografo" /></div>
         </section>
       </main>
     </FotosShell>
