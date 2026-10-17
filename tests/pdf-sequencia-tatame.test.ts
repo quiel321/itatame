@@ -25,20 +25,22 @@ test('kit e PDF das chaves seguem a mesma sequência salva, por tatame e posiç�
   const o = exemploSequencia(), antes = structuredClone(o);
   const kit = criarKitContingenciaPDF(o);
   const chaves = criarChavesImpressao({ eventoNome: o.eventoNome, lutas: o.lutas });
+  const folhasKit = kit.internal.pages as unknown as string[][];
+  const folhasChaves = chaves.internal.pages as unknown as string[][];
   assert.equal(kit.getNumberOfPages(), 10);
   assert.equal(chaves.getNumberOfPages(), 5);
   esperada.forEach((nome, n) => {
-    assert.ok(kit.internal.pages[n + 1].join('\n').includes(nome), `recepção: ${nome}`);
-    assert.ok(kit.internal.pages[n + 6].join('\n').includes(nome), `árvore do kit: ${nome}`);
-    assert.ok(chaves.internal.pages[n + 1].join('\n').includes(nome), `chaves: ${nome}`);
+    assert.ok(folhasKit[n + 1].join('\n').includes(nome), `recepção: ${nome}`);
+    assert.ok(folhasKit[n + 6].join('\n').includes(nome), `árvore do kit: ${nome}`);
+    assert.ok(folhasChaves[n + 1].join('\n').includes(nome), `chaves: ${nome}`);
   });
   const areas = ['Tatame 1', 'Tatame 1', 'Tatame 2', 'Tatame 10'];
   areas.forEach((area, n) => {
-    const folha = kit.internal.pages[n + 1].join('\n');
+    const folha = folhasKit[n + 1].join('\n');
     assert.ok(folha.includes(`ÁREA: ${area}`));
     assert.ok(folha.includes(`Tatame: ${area}  Envio:`));
   });
-  assert.ok(kit.internal.pages[5].join('\n').includes('ÁREA: Não definida'));
+  assert.ok(folhasKit[5].join('\n').includes('ÁREA: Não definida'));
   assert.deepEqual(o, antes);
 });
 
@@ -46,10 +48,11 @@ test('área da recepção se repete nas continuações e não presume um tatame 
   const o = exemploKit([16]);
   for (const l of o.lutas) l.tatame = 'Tatame 2';
   const kit = criarKitContingenciaPDF(o);
-  assert.ok(kit.internal.pages[1].join('\n').includes('ÁREA: Tatame 2'));
-  assert.ok(kit.internal.pages[2].join('\n').includes('ÁREA: Tatame 2'));
+  const folhas = kit.internal.pages as unknown as string[][];
+  assert.ok(folhas[1].join('\n').includes('ÁREA: Tatame 2'));
+  assert.ok(folhas[2].join('\n').includes('ÁREA: Tatame 2'));
   o.lutas[0].tatame = 'Tatame 1';
-  const dividido = criarKitContingenciaPDF(o).internal.pages[1].join('\n');
+  const dividido = (criarKitContingenciaPDF(o).internal.pages as unknown as string[][])[1].join('\n');
   assert.ok(dividido.includes('ÁREA: Tatame 1 / Tatame 2'));
   assert.ok(dividido.includes('Tatame: ______  Envio:'));
 });

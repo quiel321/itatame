@@ -9,7 +9,6 @@ import { AlertCircle, ArrowRightLeft, CheckCircle, Clock, Filter, LogOut, Play, 
 import { supabase } from '../../lib/supabase';
 import ConexaoOperacao from '@/app/components/staff/ConexaoOperacao';
 import PendenciasOperacao from '@/app/components/staff/PendenciasOperacao';
-import { executarOperacao, baseRelogio } from '@/app/lib/operacao-segura';
 import { obterTempoRegulamentar } from '../../lib/cronograma';
 import { processarAvancosAutomaticosChaves } from '../../lib/chaves-auto-avanco';
 import { rotuloLuta } from '../../lib/lutas-rotulos';
@@ -19,6 +18,7 @@ import { semFaixaDuplicada } from '@/app/lib/categorias-competicao';
 import { sugestoesCategoriaPorTatame } from '@/app/lib/sugestao-categoria-tatame';
 import { alertaProximaLuta, corrigirResultadoLuta, METODOS_RESULTADO, rotuloMetodo, type MetodoResultado } from '@/app/lib/corrigir-resultado';
 import { resultadoOperacional } from '@/app/lib/operacao-campeonato';
+import { liberadaParaMesario } from '@/app/lib/placar-operacao';
 
 type StaffSession = {
   evento_id: string | number;
@@ -144,7 +144,6 @@ export default function PainelMesario() {
   const [filtroTipo, setFiltroTipo] = useState<'todos' | 'peso' | 'absoluto'>('todos');
   const [filtroCategoria, setFiltroCategoria] = useState('');
   const [aviso, setAviso] = useState('');
-  const [temChamador, setTemChamador] = useState(false);
   const [disponivelParaReceber, setDisponivelParaReceber] = useState(false);
   const [tatamesLivres, setTatamesLivres] = useState<Record<string, TatameLivre>>({});
   const canalOperacaoRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
@@ -182,7 +181,6 @@ export default function PainelMesario() {
     if (data) {
       const nomes = Array.from(new Set(data.filter((item) => item.funcao === 'mesario').map((item) => normalizar(item.identificacao)).filter(Boolean)));
       setTatamesDisponiveis(nomes.sort((a, b) => a.localeCompare(b)));
-      setTemChamador(data.some((item) => item.funcao === 'chamador'));
     }
   }, [sessao]);
 
@@ -494,7 +492,7 @@ export default function PainelMesario() {
       setAviso('Este tatame já tem uma luta em andamento. Conclua ou retome o combate atual antes de iniciar outro.');
       return;
     }
-    if (temChamador && !luta.iniciada_em && luta.status_luta !== 'em_andamento') {
+    if (!liberadaParaMesario(luta)) {
       setAviso('Esta luta ainda precisa ser liberada pelo Chamador.');
       return;
     }
@@ -527,15 +525,9 @@ export default function PainelMesario() {
       }
     }
     setAcaoId(luta.id);
-    setAviso(luta.iniciada_em ? 'Iniciando luta chamada...' : 'Chamando luta e enviando avisos aos atletas...');
+    setAviso('Abrindo o placar da luta liberada pelo chamador...');
 
     try {
-      const jaAvisadaPeloChamador = Boolean(luta.iniciada_em);
-      if (luta.status_luta !== 'em_andamento') {
-        await executarOperacao('iniciar',luta.id,{tatame:luta.tatame||sessao.identificacao},baseRelogio(luta));
-      }
-
-      if (!jaAvisadaPeloChamador) void enviarAvisosDeFila(luta).catch(()=>{});
       router.push(`/staff/placar/${luta.id}`);
     } catch (error) {
       console.error(error);
@@ -646,7 +638,7 @@ export default function PainelMesario() {
     const temTbd = nomeUpper(luta.atleta_1) === 'TBD' || nomeUpper(luta.atleta_2) === 'TBD';
     const temCheckinPendente = luta.checkin_1 === 'pendente' || luta.checkin_2 === 'pendente';
     const temReprovado = String(luta.checkin_1 || '').includes('desclassificado') || String(luta.checkin_2 || '').includes('desclassificado');
-    const aguardandoChamador = temChamador && !luta.iniciada_em && luta.status_luta !== 'em_andamento';
+    const aguardandoChamador = !liberadaParaMesario(luta);
     const lutaBloqueada = temTbd || temCheckinPendente || temReprovado || lutaComAtletaImpedido(luta) || aguardandoChamador;
     const venceu1 = luta.vencedor === luta.atleta_1;
     const venceu2 = luta.vencedor === luta.atleta_2;
@@ -686,7 +678,7 @@ export default function PainelMesario() {
               {(
                 <button onClick={() => chamarLuta(luta)} disabled={lutaBloqueada || acaoId === luta.id} className={`h-10 min-w-0 flex-1 rounded-lg px-3 text-[9px] font-black uppercase md:w-36 md:flex-none ${lutaBloqueada ? 'cursor-not-allowed border border-zinc-700 bg-zinc-800 text-zinc-500' : destaque === 'agora' ? 'bg-red-500 text-white' : 'bg-white text-black'}`}>
                   {acaoId === luta.id ? <RefreshCw size={12} className="mr-1 inline animate-spin" /> : luta.status_luta === 'em_andamento' ? <Pause size={12} className="mr-1 inline" /> : <Play size={12} className="mr-1 inline" fill="currentColor" />}
-                  {aguardandoChamador ? 'Aguardando chamador' : lutaBloqueada ? (temTbd ? 'Aguardando' : 'Bloqueado') : luta.status_luta === 'em_andamento' ? 'Retomar placar' : luta.iniciada_em ? 'Iniciar luta' : 'Chamar'}
+                  {aguardandoChamador ? 'Aguardando chamador' : lutaBloqueada ? (temTbd ? 'Aguardando' : 'Bloqueado') : luta.status_luta === 'em_andamento' ? 'Retomar placar' : 'Abrir placar'}
                 </button>
               )}
             </>

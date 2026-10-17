@@ -37,7 +37,7 @@ test('cada luta possui um único campo de resultado, inclusive em chaves reparti
     const opcoes = exemploKit([total]);
     const doc = criarKitContingenciaPDF(opcoes);
     const texto = doc.internal.pages.flat().join('\n');
-    const resultados = doc.internal.pages.flatMap(pagina => {
+    const resultados = (doc.internal.pages as unknown as string[][]).flatMap(pagina => {
       const inicio = pagina.findIndex(comando => comando.includes('RESULTADOS NO PAPEL'));
       return inicio < 0 ? [] : pagina.slice(inicio + 1);
     }).join('\n');
@@ -57,7 +57,7 @@ test('inscrição legada de absoluto usa a categoria e área da chave sem altera
   opcoes.inscricoes!.forEach(i => { i.categoria = 'Absoluto'; i.categoria_id = null; });
   const antes = structuredClone(opcoes);
   const doc = criarKitContingenciaPDF(opcoes);
-  const recepcao = doc.internal.pages[1].join('\n');
+  const recepcao = (doc.internal.pages as unknown as string[][])[1].join('\n');
   assert.equal(doc.getNumberOfPages(), 2);
   assert.ok(recepcao.includes('Absoluto GP'));
   assert.ok(recepcao.includes('ÁREA: Área 1'));
@@ -69,7 +69,7 @@ test('cadastro sem participação em chave não recebe uma área por suposição
   const opcoes = exemploKit([2]);
   opcoes.lutas.forEach(l => { l.categoria = 'Absoluto GP'; l.tatame = 'Área 1'; });
   opcoes.inscricoes = [{ id: 9999, atleta_id: 9999, atleta: 'SEM CHAVE', categoria: 'Absoluto' }];
-  const recepcao = criarKitContingenciaPDF(opcoes).internal.pages[1].join('\n');
+  const recepcao = (criarKitContingenciaPDF(opcoes).internal.pages as unknown as string[][])[1].join('\n');
   assert.ok(recepcao.includes('ÁREA: Não definida'));
   assert.ok(recepcao.includes('SEM CHAVE'));
 });
@@ -88,7 +88,7 @@ test('uma categoria com atletas de faixas diferentes gera uma lista e uma árvor
   const antes = structuredClone(opcoes);
   const doc = criarKitContingenciaPDF(opcoes);
   assert.equal(doc.getNumberOfPages(), 2);
-  const recepcao = doc.internal.pages[1].join('\n');
+  const recepcao = (doc.internal.pages as unknown as string[][])[1].join('\n');
   for (const inscricao of opcoes.inscricoes!) assert.ok(recepcao.includes(inscricao.atleta));
   assert.ok(recepcao.includes('Faixa Azul'));
   assert.ok(recepcao.includes('Faixa Branca'));

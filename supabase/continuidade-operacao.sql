@@ -98,12 +98,19 @@ begin
   if p_base ? 'atleta_1_id' and (p_base->'atleta_1_id' is distinct from to_jsonb(l)->'atleta_1_id' or p_base->'atleta_2_id' is distinct from to_jsonb(l)->'atleta_2_id') then raise exception 'Conflito: participantes alterados. Confira a luta.'; end if;
   if p_tipo<>'corrigir' and l.status_luta='concluida' then raise exception 'Conflito: esta luta já foi concluída. Confira o resultado.'; end if;
   if not exists(select 1 from public.recepcao_categorias where categoria_id=cid and fechada) then raise exception 'Categoria ainda não despachada.'; end if;
+  -- Liberação pelo chamador obrigatória, mesmo sem chamador cadastrado no navegador.
+  if p_tipo in ('iniciar','pontuacao','relogio','finalizar') and l.status_luta<>'em_andamento'
+   and not exists(select 1 from public.operacao_confirmacoes ok
+    where ok.evento_id=p_evento and ok.alvo=l.id::text and ok.tipo='chamar'
+     and ok.pedido->'base'->>'atleta_1_id'=l.atleta_1_id::text
+     and ok.pedido->'base'->>'atleta_2_id'=l.atleta_2_id::text)
+  then raise exception 'Conflito: aguarde a liberação desta luta pelo chamador.'; end if;
   if p_tipo in ('chamar','iniciar') or (p_tipo='relogio' and (p_dados->>'rodando')::boolean)
    or (p_tipo='controle' and p_dados->>'acao'='presenca' and (p_dados->>'presente')::boolean) then
    if exists(select 1 from public.chaves c where c.evento_id=p_evento and c.id<>l.id and c.status_luta<>'concluida'
     and (c.status_luta='em_andamento' or c.iniciada_em is not null or coalesce((c.pontuacao_atleta_1->>'chamador_presente')::boolean,false) or coalesce((c.pontuacao_atleta_2->>'chamador_presente')::boolean,false))
     and (c.atleta_1_id in(l.atleta_1_id,l.atleta_2_id) or c.atleta_2_id in(l.atleta_1_id,l.atleta_2_id))) then raise exception 'Atleta já reservado em outro confronto. Confira a chamada.'; end if;
-   if p_tipo<>'controle' and exists(select 1 from public.chaves c where c.evento_id=p_evento and c.id<>l.id and c.tatame=l.tatame and c.status_luta<>'concluida' and (c.status_luta='em_andamento' or c.iniciada_em is not null)) then raise exception 'Tatame já ocupado por outro confronto.'; end if;
+   if p_tipo<>'controle' and exists(select 1 from public.chaves c where c.evento_id=p_evento and c.id<>l.id and c.tatame=l.tatame and c.status_luta<>'concluida' and (c.status_luta='em_andamento' or c.iniciada_em is not null)) then raise exception 'Conflito: tatame já ocupado por outro confronto.'; end if;
   end if;
 
   if p_tipo in ('pontuacao','controle') then
@@ -135,9 +142,10 @@ begin
     update public.chaves set status_luta='em_andamento',iniciada_em=now() where id=l.id;
    else
     if p_dados->>'segundos' is null or p_dados->>'rodando' is null or (p_dados->>'segundos')::integer not between 0 and 86400 then raise exception 'Tempo inválido.'; end if;
+    if (p_dados->>'rodando')::boolean and (p_dados->>'segundos')::integer=0 then raise exception 'Tempo esgotado. Confira e registre o resultado.'; end if;
     update public.chaves set duracao_segundos=(p_dados->>'segundos')::integer,
      status_luta=case when (p_dados->>'rodando')::boolean then 'em_andamento'::public.status_luta_tipo else status_luta end,
-     iniciada_em=case when (p_dados->>'rodando')::boolean then now() else null end where id=l.id;
+     iniciada_em=case when (p_dados->>'rodando')::boolean then now() when l.status_luta='em_andamento' then null else iniciada_em end where id=l.id;
    end if;
 
   else
@@ -152,7 +160,7 @@ begin
     if metodo not in ('pontos','vantagens','finalizacao','decisao','desclassificacao','wo') or metodo is null then raise exception 'Método da súmula inválido.'; end if;
     metodo:=case when metodo='decisao' then 'decisao_arbitro' when metodo in ('vantagens','desclassificacao') then 'pontos' else metodo end;
    end if;
-   if v_lado is null or v_lado not in (1,2) or metodo is null or metodo not in ('pontos','finalizacao','wo','decisao_arbitro') then raise exception 'Resultado inválido.'; end if;
+   if v_lado is null or v_lado not in (1,2) or metodo is null or metodo not in ('pontos','finalizacao','wo','decisao_arbitro','desclassificacao') then raise exception 'Resultado inválido.'; end if;
    vencedor_id_n:=case v_lado when 1 then l.atleta_1_id else l.atleta_2_id end;
    perdedor_id_n:=case v_lado when 1 then l.atleta_2_id else l.atleta_1_id end;
    vencedor_n:=case v_lado when 1 then l.atleta_1 else l.atleta_2 end;

@@ -10,6 +10,7 @@ export const METODOS_RESULTADO = [
   { id: 'pontos', label: 'Pontos' },
   { id: 'finalizacao', label: 'Finalização' },
   { id: 'decisao_arbitro', label: 'Decisão do árbitro' },
+  { id: 'desclassificacao', label: 'Desclassificação' },
   { id: 'wo', label: 'W.O. / Ausência' },
 ] as const;
 

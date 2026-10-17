@@ -10,7 +10,8 @@ import ConexaoOperacao from '@/app/components/staff/ConexaoOperacao';
 import PendenciasOperacao from '@/app/components/staff/PendenciasOperacao';
 import { executarOperacao, contextoOperacao, baseLuta, baseRelogio, recuperarOperacao } from '@/app/lib/operacao-segura';
 import { guardarRascunho, lerRascunho, pendenciasOperacao } from '@/app/lib/operacao-persistente';
-import { corrigirResultadoLuta, type MetodoResultado } from '@/app/lib/corrigir-resultado';
+import { corrigirResultadoLuta, METODOS_RESULTADO, type MetodoResultado } from '@/app/lib/corrigir-resultado';
+import { liberadaParaMesario, vencedorPorPlacar, type LadoPlacar } from '@/app/lib/placar-operacao';
 import { obterTempoRegulamentar } from "../../../lib/cronograma";
 
 export default function PlacarMesarioDB() {
@@ -33,6 +34,9 @@ export default function PlacarMesarioDB() {
   const [erroTempo, setErroTempo] = useState('');
   const [salvandoTempo, setSalvandoTempo] = useState(false);
   const [showResumo, setShowResumo] = useState(false);
+  const [ladosInvertidos, setLadosInvertidos] = useState(false);
+  const [encerrarAberto, setEncerrarAberto] = useState(false);
+  const [metodoEncerramento, setMetodoEncerramento] = useState<MetodoResultado>('pontos');
   const [tempoMinutos, setTempoMinutos] = useState(5);
   const [modoCorrecao, setModoCorrecao] = useState(false);
   const [metodoCorrecao, setMetodoCorrecao] = useState('pontos');
@@ -53,7 +57,7 @@ export default function PlacarMesarioDB() {
         setLutaAtual(resposta.luta);
         if(pedido.tipo==='relogio') {
           const l=resposta.luta;
-          const fim=l.iniciada_em?new Date(l.iniciada_em).getTime()+Number(l.duracao_segundos)*1000:null;
+          const fim=l.status_luta==='em_andamento'&&l.iniciada_em?new Date(l.iniciada_em).getTime()+Number(l.duracao_segundos)*1000:null;
           timerFimRef.current=fim;setTimerAtivo(Boolean(fim&&fim>Date.now()));setTempoRestante(fim?Math.max(0,Math.ceil((fim-Date.now())/1000)):Number(l.duracao_segundos));
         }
         if (resposta.luta.status_luta === 'concluida') {
@@ -164,6 +168,10 @@ export default function PlacarMesarioDB() {
       }
 
       if (luta.status_luta !== 'concluida') {
+        if (!liberadaParaMesario(luta)) {
+          setErroCarregamento('Aguardando liberação do chamador. O mesário só pode abrir a luta depois do envio ao tatame.');
+          setLoadingDB(false);return;
+        }
         const {data: inscritos, error: erroCheckin} = await supabase.from('inscricoes')
           .select('atleta_id,status_checkin,pesagem_ok,kimono_aprovado,pagamento_ok,estorno_status')
           .eq('evento_id',luta.evento_id).eq('categoria_id',luta.categoria_id).in('atleta_id',[luta.atleta_1_id,luta.atleta_2_id].filter(Boolean));
@@ -174,6 +182,10 @@ export default function PlacarMesarioDB() {
       }
       setLutaAtual(luta);
       estadoOperacaoRef.current = luta;
+      try {
+        const lados = lerRascunho<any>(localStorage,contextoOperacao(),'lados-placar',matchId);
+        setLadosInvertidos(Boolean(lados&&lados.atleta1===luta.atleta_1_id&&lados.atleta2===luta.atleta_2_id&&lados.invertidos));
+      } catch(e) { setAvisoPontuacao((e as Error).message); }
       let tempoCategoria = Number(luta.tempo_minutos);
       if ((!Number.isFinite(tempoCategoria) || tempoCategoria <= 0) && luta.categoria_id) {
         const { data: categoriaTempo, error: erroTempo } = await supabase.from('categorias_evento')
@@ -187,7 +199,7 @@ export default function PlacarMesarioDB() {
       }
       if (!Number.isFinite(tempoCategoria) || tempoCategoria <= 0) tempoCategoria = obterTempoRegulamentar(luta.categoria, luta.faixa);
       setTempoMinutos(tempoCategoria);
-      if (luta.status_luta === 'em_andamento' && !luta.iniciada_em && Number(luta.duracao_segundos) > 0) {
+      if (luta.status_luta === 'em_andamento' && !luta.iniciada_em && Number(luta.duracao_segundos) >= 0) {
         setConfigOpen(false);
         setTempoRestante(Number(luta.duracao_segundos));
         setTimerAtivo(false);
@@ -492,35 +504,32 @@ export default function PlacarMesarioDB() {
     return () => window.clearInterval(intervalo);
   }, [timerAtivo]);
 
+  const salvarRelogio = async (segundos: number, rodando: boolean) => {
+    await Promise.all(Object.values(filasPontuacaoRef.current));
+    const atual = estadoOperacaoRef.current;
+    const resposta = await executarOperacao('relogio',matchId,{tatame:atual.tatame,segundos,rodando},baseRelogio(atual));
+    estadoOperacaoRef.current = resposta.luta;
+    if (!pontuacoesPendentesRef.current.size) setAvisoPontuacao('');
+    return resposta.luta;
+  };
+
   useEffect(() => {
-    const finalizarPorPontos = async () => {
+    const pararNoTempoEsgotado = async () => {
       if (tempoRestante === 0 && timerAtivo && timerFimRef.current !== null && Date.now() >= timerFimRef.current) {
         tocarSom('fim');
         setTimerAtivo(false);
         timerFimRef.current = null;
 
-        let calcVencedor: "azul" | "vermelho" | "empate" = "empate";
-        if (pontosAzul > pontosVermelho) calcVencedor = "azul";
-        else if (pontosVermelho > pontosAzul) calcVencedor = "vermelho";
-        else if (vantagensAzul > vantagensVermelho) calcVencedor = "azul";
-        else if (vantagensVermelho > vantagensAzul) calcVencedor = "vermelho";
-        else if (punicoesAzul < punicoesVermelho) calcVencedor = "azul";
-        else if (punicoesVermelho < punicoesAzul) calcVencedor = "vermelho";
-
-        if (calcVencedor === "empate") {
-          // O sistema não inventa um critério de desempate. A luta permanece
-          // aberta até o árbitro indicar, visualmente, quem venceu a decisão.
-          setVencedor('empate');
-          setShowResumo(true);
-        } else {
-          if (await processarFimDeLuta(calcVencedor, "pontos")) {
-            setVencedor(calcVencedor);
-            setTimeout(() => setShowResumo(true), 3500);
-          }
-        }
+        // Zerar o relógio não declara vencedor nem bloqueia pontos/punições.
+        // O mesário encerra depois da conferência e da decisão do árbitro.
+        try {
+          protegerPlacar({tempoRestante:0,fimEm:null,confirmada:false});
+          await salvarRelogio(0,false);
+          protegerPlacar({tempoRestante:0,fimEm:null,confirmada:!pontuacoesPendentesRef.current.size});
+        } catch(e) { setAvisoPontuacao((e as Error).message); }
       }
     };
-    finalizarPorPontos();
+    void pararNoTempoEsgotado();
   }, [tempoRestante, timerAtivo]);
 
   const toggleTimer = async () => {
@@ -528,12 +537,10 @@ export default function PlacarMesarioDB() {
     timerSalvandoRef.current = true;
     try {
     if (!timerAtivo && tempoRestante > 0) {
-      const atual=estadoOperacaoRef.current;
-      const resposta=await executarOperacao('relogio',matchId,{tatame:atual.tatame,segundos:tempoRestante,rodando:true},baseRelogio(atual));
-      estadoOperacaoRef.current=resposta.luta;
-      timerFimRef.current = Date.now() + tempoRestante * 1000;
+      const luta = await salvarRelogio(tempoRestante,true);
+      timerFimRef.current = new Date(luta.iniciada_em).getTime() + Number(luta.duracao_segundos)*1000;
       setTimerAtivo(true);
-      protegerPlacar({tempoRestante,fimEm:timerFimRef.current,confirmada:true});
+      protegerPlacar({tempoRestante,fimEm:timerFimRef.current,confirmada:!pontuacoesPendentesRef.current.size});
       tocarSom('inicio');
     } else if (timerAtivo) {
       const restante = Math.max(0, Math.ceil(((timerFimRef.current || Date.now()) - Date.now()) / 1000));
@@ -543,9 +550,8 @@ export default function PlacarMesarioDB() {
       setTempoRestante(restante);
       tocarSom('pause');
       protegerPlacar({tempoRestante:restante,fimEm:null,confirmada:false});
-      const atual=estadoOperacaoRef.current;
-      const resposta=await executarOperacao('relogio',matchId,{tatame:atual.tatame,segundos:restante,rodando:false},baseRelogio(atual));
-      estadoOperacaoRef.current=resposta.luta;
+      await salvarRelogio(restante,false);
+      protegerPlacar({tempoRestante:restante,fimEm:null,confirmada:!pontuacoesPendentesRef.current.size});
 
     }
     } catch(e) { setAvisoPontuacao((e as Error).message); } finally {
@@ -566,6 +572,26 @@ export default function PlacarMesarioDB() {
     setConfigOpen(false);
     setShowResumo(false);
     tocarSom('pause');
+  };
+
+  const trocarLados = () => {
+    if (timerAtivo || resultadoGravandoRef.current) return;
+    try {
+      guardarRascunho(localStorage,contextoOperacao(),'lados-placar',matchId,{atleta1:lutaAtual.atleta_1_id,atleta2:lutaAtual.atleta_2_id,invertidos:!ladosInvertidos});
+      setLadosInvertidos(!ladosInvertidos);
+    } catch(e) { setAvisoPontuacao((e as Error).message); }
+  };
+
+  const encerrarResultado = async (lado: LadoPlacar) => {
+    if (timerAtivo || salvandoResultado) return;
+    const nome = lado === 'azul' ? atletaAzul : atletaVermelho;
+    if (!window.confirm(`Confirmar ${nome} como vencedor por ${METODOS_RESULTADO.find(m=>m.id===metodoEncerramento)?.label}?`)) return;
+    setSalvandoResultado(true);
+    try {
+      if (await processarFimDeLuta(lado,metodoEncerramento)) {
+        setEncerrarAberto(false);setVencedor(lado);setShowResumo(true);
+      }
+    } finally { setSalvandoResultado(false); }
   };
 
   const salvarCorrecaoResultado = async (lado: 'azul' | 'vermelho') => {
@@ -660,6 +686,7 @@ export default function PlacarMesarioDB() {
 
         @media screen and (max-height: 500px) and (orientation: landscape) {
           .placar-side { padding: 0.5rem 1rem !important; }
+          .placar-com-acoes .placar-side > button { top: 32% !important; }
           .nome-container { padding-right: 5% !important; padding-left: 5% !important; }
           .atleta-nome { font-size: 1.8rem !important; }
           .pontos-gigantes { font-size: 6.5rem !important; }
@@ -674,18 +701,36 @@ export default function PlacarMesarioDB() {
           .vencedor-overlay { transform: scale(0.5) !important; }
           .resumo-modal { transform: scale(0.65) !important; }
         }
+        .placar-com-acoes .placar-side { padding-bottom: 3.5rem !important; }
       `}} />
 
-      <div ref={placarRef} className="placar-wrapper bg-black h-screen w-screen flex flex-row font-sans select-none text-white relative overflow-hidden">
+      <div ref={placarRef} className={`placar-wrapper ${!configOpen&&!modoCorrecao&&!vencedor?'placar-com-acoes':''} bg-black h-screen w-screen flex flex-row font-sans select-none text-white relative overflow-hidden`}>
         <div className="absolute inset-x-0 top-0 z-[200]">
-          <ConexaoOperacao /><PendenciasOperacao />
-          {avisoPontuacao && <div role="alert" className="border-b border-red-400/50 bg-red-950 px-3 py-2 text-sm text-red-100">
+          <ConexaoOperacao /><PendenciasOperacao compacto />
+          {avisoPontuacao && <details className="absolute right-2 top-12 max-w-[min(36rem,calc(100vw-1rem))] rounded-lg border border-red-400/50 bg-red-950 px-3 py-2 text-sm text-red-100">
+            <summary className="cursor-pointer text-xs font-bold">Conferir sincronização do placar</summary>
             <p>{avisoPontuacao}</p>
             <button type="button" disabled={reenviandoPontuacao} onClick={() => void reenviarPontuacao()} className="mt-2 min-h-11 rounded-lg border border-red-300/50 px-3 text-xs font-bold disabled:opacity-50">{reenviandoPontuacao ? 'Salvando pontuação…' : 'Salvar pontuação deste aparelho'}</button>
-          </div>}
+          </details>}
         </div>
 
-        {!configOpen && !modoCorrecao && !vencedor && <button disabled={timerAtivo || salvandoTempo} onClick={abrirAjusteTempo} className="absolute bottom-2 left-2 z-[80] rounded-lg border border-white/20 bg-black/80 px-3 py-2 text-xs font-bold disabled:opacity-40">Ajustar tempo</button>}
+        {!configOpen && !modoCorrecao && !vencedor && <div className="absolute bottom-2 left-2 z-[80] flex flex-wrap gap-2">
+          <button disabled={timerAtivo || salvandoTempo} onClick={abrirAjusteTempo} className="rounded-lg border border-white/20 bg-black/80 px-3 py-2 text-xs font-bold disabled:opacity-40">Ajustar tempo</button>
+          <button disabled={timerAtivo} onClick={trocarLados} aria-pressed={ladosInvertidos} className="rounded-lg border border-white/20 bg-black/80 px-3 py-2 text-xs font-bold disabled:opacity-40">Trocar lados</button>
+          <button disabled={timerAtivo || salvandoResultado} onClick={()=>{setMetodoEncerramento(vencedorPorPlacar({pontos:pontosAzul,vantagens:vantagensAzul,punicoes:punicoesAzul},{pontos:pontosVermelho,vantagens:vantagensVermelho,punicoes:punicoesVermelho})?'pontos':'decisao_arbitro');setEncerrarAberto(true);}} className="rounded-lg border border-yellow-400/50 bg-black/80 px-3 py-2 text-xs font-bold text-yellow-200 disabled:opacity-40">Encerrar luta</button>
+        </div>}
+        {encerrarAberto&&<div role="dialog" aria-modal="true" aria-label="Confirmar resultado da luta" className="absolute inset-0 z-[120] flex items-center justify-center bg-black/90 p-4">
+          <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-white/20 bg-zinc-950 p-5">
+            <h2 className="text-xl font-bold">Confirmar resultado</h2>
+            <p className="mt-2 text-sm text-zinc-400">Confira os pontos e a decisão do árbitro antes de encerrar. Em desclassificação, escolha o atleta que venceu.</p>
+            <label className="my-4 block text-sm">Método<select value={metodoEncerramento} onChange={e=>setMetodoEncerramento(e.target.value as MetodoResultado)} className="mt-2 w-full rounded-lg border border-white/20 bg-black p-3">{METODOS_RESULTADO.map(m=><option key={m.id} value={m.id}>{m.label}</option>)}</select></label>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <button disabled={salvandoResultado} onClick={()=>void encerrarResultado('azul')} className="min-h-16 rounded-lg bg-blue-700 p-3 font-bold">Venceu: {atletaAzul}</button>
+              <button disabled={salvandoResultado} onClick={()=>void encerrarResultado('vermelho')} className="min-h-16 rounded-lg bg-red-700 p-3 font-bold">Venceu: {atletaVermelho}</button>
+            </div>
+            <button disabled={salvandoResultado} onClick={()=>setEncerrarAberto(false)} className="mt-4 min-h-11 w-full rounded-lg border border-white/20 p-3">Voltar ao placar e ajustar</button>
+          </div>
+        </div>}
         {editarTempo && <div role="dialog" aria-modal="true" aria-label="Ajustar tempo restante" className="fixed inset-0 z-[110] flex items-center justify-center bg-black/90 p-4">
           <div className="max-h-[calc(100dvh-3rem)] w-full max-w-sm overflow-y-auto rounded-2xl border border-white/20 bg-zinc-950 p-5">
             <h2 className="text-lg font-bold">Tempo restante</h2>
@@ -723,7 +768,7 @@ export default function PlacarMesarioDB() {
                   </div>
                 </div>
                 <button onClick={iniciarLuta} className="cursor-pointer w-full bg-white hover:bg-zinc-200 text-black font-black uppercase tracking-widest py-3.5 rounded-lg transition-colors mt-4 shadow-xl">
-                  Iniciar Combate
+                  Abrir placar
                 </button>
                 <button onClick={() => router.push('/staff/painel')} className="cursor-pointer w-full bg-transparent text-zinc-500 py-2 text-xs font-bold uppercase tracking-widest hover:text-white transition-colors">
                   Cancelar e Voltar
@@ -744,6 +789,7 @@ export default function PlacarMesarioDB() {
                 <option value="pontos">Pontos</option>
                 <option value="finalizacao">Finalização</option>
                 <option value="decisao_arbitro">Decisão do árbitro</option>
+                <option value="desclassificacao">Desclassificação</option>
                 <option value="wo">W.O.</option>
               </select>
               <div className="grid grid-cols-2 gap-2">
@@ -760,8 +806,8 @@ export default function PlacarMesarioDB() {
               {formatarTempo(tempoRestante)}
             </span>
             <div className="flex gap-2 md:gap-4 mt-2 md:mt-4 w-full justify-center">
-              <button onClick={toggleTimer} className={`cursor-pointer flex-1 py-2.5 md:py-3 rounded-xl flex items-center justify-center font-black text-sm md:text-lg uppercase tracking-widest transition-transform active:scale-95 shadow-lg ${timerAtivo ? 'bg-yellow-500 text-black hover:bg-yellow-400' : 'bg-green-500 text-black hover:bg-green-400'}`}>
-                {timerAtivo ? 'PAUSAR' : 'INICIAR'}
+              <button disabled={!timerAtivo&&tempoRestante===0} onClick={toggleTimer} className={`cursor-pointer flex-1 py-2.5 md:py-3 rounded-xl flex items-center justify-center font-black text-sm md:text-lg uppercase tracking-widest transition-transform active:scale-95 shadow-lg disabled:opacity-50 ${timerAtivo ? 'bg-yellow-500 text-black hover:bg-yellow-400' : 'bg-green-500 text-black hover:bg-green-400'}`}>
+                {timerAtivo ? 'PAUSAR' : tempoRestante===0 ? 'TEMPO ESGOTADO' : 'INICIAR'}
               </button>
               <button onClick={toggleFullscreen} className="cursor-pointer w-12 h-12 md:w-14 md:h-14 rounded-xl bg-white/5 hover:bg-white/10 text-white flex items-center justify-center transition-transform active:scale-95 border border-white/5">
                 <svg className="w-5 h-5 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">{isFullscreen ? (<path strokeLinecap="round" strokeLinejoin="round" d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25" />) : (<path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />)}</svg>
@@ -771,12 +817,12 @@ export default function PlacarMesarioDB() {
         </div>
 
         {/* LADO AZUL */}
-        <div className={`placar-side placar-side-azul w-1/2 h-full bg-[#05142b] border-r-[2px] border-black flex flex-col pt-5 md:pt-8 px-3 md:px-5 pb-5 relative z-10 transition-all duration-1000 ${vencedor === 'vermelho' ? 'opacity-20 grayscale' : vencedor === 'azul' ? 'brightness-125' : ''}`}>
+        <div style={{order:ladosInvertidos?2:0}} data-atleta-id={lutaAtual?.atleta_1_id} className={`placar-side placar-side-azul w-1/2 h-full bg-[#05142b] border-r-[2px] border-black flex flex-col pt-5 md:pt-8 px-3 md:px-5 pb-5 relative z-10 transition-all duration-1000 ${vencedor === 'vermelho' ? 'opacity-20 grayscale' : vencedor === 'azul' ? 'brightness-125' : ''}`}>
 
           {/* BOTÃO DE FINALIZAR - CLIQUE TRIPLO (AZUL) */}
           <button
             onClick={() => handleFinalizarClick("azul")}
-            className={`absolute top-1/2 -translate-y-1/2 left-2 md:left-6 z-50 flex flex-col items-center justify-center text-center font-bold uppercase transition-all duration-300 cursor-pointer shadow-[0_0_15px_rgba(0,0,0,0.5)] px-2
+            className={`absolute top-1/2 -translate-y-1/2 ${ladosInvertidos?'right-2 md:right-6':'left-2 md:left-6'} z-50 flex flex-col items-center justify-center text-center font-bold uppercase transition-all duration-300 cursor-pointer shadow-[0_0_15px_rgba(0,0,0,0.5)] px-2
               ${clicksFinalizarAzul === 0 ? 'bg-black/60 border border-white/30 text-white w-16 h-16 md:w-20 md:h-20 rounded-full opacity-40 hover:opacity-100 hover:border-blue-500 hover:scale-110' : ''}
               ${clicksFinalizarAzul === 1 ? 'bg-orange-600 border-2 border-orange-400 text-white w-32 md:w-40 h-16 md:h-20 rounded-2xl opacity-100 scale-110' : ''}
               ${clicksFinalizarAzul === 2 ? 'bg-red-700 border-2 border-red-500 text-white w-32 md:w-40 h-16 md:h-20 rounded-2xl opacity-100 scale-110 animate-pulse shadow-[0_0_20px_rgba(220,38,38,0.8)]' : ''}
@@ -801,12 +847,12 @@ export default function PlacarMesarioDB() {
             </div>
           )}
 
-          <div className="nome-container w-full text-center px-4 md:pl-8 md:pr-[20%] shrink-0 pt-2 flex flex-col items-center">
+          <div className={`nome-container w-full text-center px-4 ${ladosInvertidos?'md:pr-8 md:pl-[20%]':'md:pl-8 md:pr-[20%]'} shrink-0 pt-2 flex flex-col items-center`}>
             <h2 title={atletaAzul} className="atleta-nome text-2xl md:text-3xl lg:text-[2.45rem] xl:text-[2.8rem] leading-none pb-1 font-black uppercase text-white truncate drop-shadow-md w-full block">{atletaAzul}</h2>
             <span className="text-blue-400 text-[10px] md:text-xs font-bold uppercase tracking-widest truncate max-w-full">{lutaAtual?.equipe_1}</span>
           </div>
 
-          <div className="pontos-container flex-1 flex items-center justify-center w-full min-h-[0] md:pr-12 lg:pr-20">
+          <div className={`pontos-container flex-1 flex items-center justify-center w-full min-h-[0] ${ladosInvertidos?'md:pl-12 lg:pl-20':'md:pr-12 lg:pr-20'}`}>
             <span className="pontos-gigantes text-[9rem] md:text-[12rem] lg:text-[13rem] font-black text-white leading-none tracking-tighter drop-shadow-lg">{pontosAzul}</span>
           </div>
 
@@ -851,12 +897,12 @@ export default function PlacarMesarioDB() {
         </div>
 
         {/* LADO VERMELHO */}
-        <div className={`placar-side placar-side-verm w-1/2 h-full bg-[#2f0404] border-l border-black flex flex-col pt-5 md:pt-8 px-3 md:px-5 pb-5 relative z-10 transition-all duration-1000 ${vencedor === 'azul' ? 'opacity-20 grayscale' : vencedor === 'vermelho' ? 'brightness-125' : ''}`}>
+        <div style={{order:ladosInvertidos?0:2}} data-atleta-id={lutaAtual?.atleta_2_id} className={`placar-side placar-side-verm w-1/2 h-full bg-[#2f0404] border-l border-black flex flex-col pt-5 md:pt-8 px-3 md:px-5 pb-5 relative z-10 transition-all duration-1000 ${vencedor === 'azul' ? 'opacity-20 grayscale' : vencedor === 'vermelho' ? 'brightness-125' : ''}`}>
 
           {/* BOTÃO DE FINALIZAR - CLIQUE TRIPLO (VERMELHO) */}
           <button
             onClick={() => handleFinalizarClick("vermelho")}
-            className={`absolute top-1/2 -translate-y-1/2 right-2 md:right-6 z-50 flex flex-col items-center justify-center text-center font-bold uppercase transition-all duration-300 cursor-pointer shadow-[0_0_15px_rgba(0,0,0,0.5)] px-2
+            className={`absolute top-1/2 -translate-y-1/2 ${ladosInvertidos?'left-2 md:left-6':'right-2 md:right-6'} z-50 flex flex-col items-center justify-center text-center font-bold uppercase transition-all duration-300 cursor-pointer shadow-[0_0_15px_rgba(0,0,0,0.5)] px-2
               ${clicksFinalizarVermelho === 0 ? 'bg-black/60 border border-white/30 text-white w-16 h-16 md:w-20 md:h-20 rounded-full opacity-40 hover:opacity-100 hover:border-red-500 hover:scale-110' : ''}
               ${clicksFinalizarVermelho === 1 ? 'bg-orange-600 border-2 border-orange-400 text-white w-32 md:w-40 h-16 md:h-20 rounded-2xl opacity-100 scale-110' : ''}
               ${clicksFinalizarVermelho === 2 ? 'bg-red-700 border-2 border-red-500 text-white w-32 md:w-40 h-16 md:h-20 rounded-2xl opacity-100 scale-110 animate-pulse shadow-[0_0_20px_rgba(220,38,38,0.8)]' : ''}
@@ -881,12 +927,12 @@ export default function PlacarMesarioDB() {
             </div>
           )}
 
-          <div className="nome-container w-full text-center px-4 md:pr-8 md:pl-[20%] shrink-0 pt-2 flex flex-col items-center">
+          <div className={`nome-container w-full text-center px-4 ${ladosInvertidos?'md:pl-8 md:pr-[20%]':'md:pr-8 md:pl-[20%]'} shrink-0 pt-2 flex flex-col items-center`}>
             <h2 title={atletaVermelho} className="atleta-nome text-2xl md:text-3xl lg:text-[2.45rem] xl:text-[2.8rem] leading-none pb-1 font-black uppercase text-white truncate drop-shadow-md w-full block">{atletaVermelho}</h2>
             <span className="text-red-400 text-[10px] md:text-xs font-bold uppercase tracking-widest truncate max-w-full">{lutaAtual?.equipe_2}</span>
           </div>
 
-          <div className="pontos-container flex-1 flex items-center justify-center w-full min-h-[0] md:pl-12 lg:pl-20">
+          <div className={`pontos-container flex-1 flex items-center justify-center w-full min-h-[0] ${ladosInvertidos?'md:pr-12 lg:pr-20':'md:pl-12 lg:pl-20'}`}>
             <span className="pontos-gigantes text-[9rem] md:text-[12rem] lg:text-[13rem] font-black text-white leading-none tracking-tighter drop-shadow-lg">{pontosVermelho}</span>
           </div>
 
