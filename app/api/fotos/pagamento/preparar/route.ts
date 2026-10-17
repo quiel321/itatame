@@ -15,6 +15,7 @@ import { consumirLimiteAuth, ipDaRequisicao } from "@/app/lib/limite-auth";
 import { modeloRecebimentoFotos, obterRecebedorFotos } from "@/app/lib/fotos-recebedor";
 import { calcularDescontoFotos, faixasDoEvento } from "@/app/lib/fotos-descontos";
 import { acessoAlbumPermitido } from "@/app/lib/fotos-acesso-album";
+import { modeloCheckoutAutores, registrarVendasFotografos } from "@/app/lib/fotos-vendas-diaria";
 
 export const runtime = "nodejs";
 
@@ -83,13 +84,13 @@ export async function POST(request: Request) {
     }
 
     const eventoId = String(fotos[0].evento_id);
-    const fotografoId = String(fotos[0].fotografo_id);
-    if (fotos.some((foto) => String(foto.evento_id) !== eventoId || String(foto.fotografo_id) !== fotografoId)) {
-      return NextResponse.json({ error: "Finalize separadamente os itens de cada fotógrafo e evento." }, { status: 409 });
+    const autoresIds = [...new Set(fotos.map(foto => String(foto.fotografo_id || '')))];
+    const fotografoId = autoresIds.length === 1 ? autoresIds[0] : null;
+    if (fotos.some((foto) => String(foto.evento_id) !== eventoId)) {
+      return NextResponse.json({ error: "Finalize separadamente os itens de cada galeria." }, { status: 409 });
     }
 
     const evento = primeiraRelacao(fotos[0].foto_eventos);
-    const fotografo = primeiraRelacao(fotos[0].fotografos);
     if (!evento || evento.status !== "publicado" || evento.em_breve) {
       return NextResponse.json({ error: "A galeria não está disponível para vendas." }, { status: 409 });
     }
@@ -103,8 +104,8 @@ export async function POST(request: Request) {
     if (evento.vendas_ate && new Date(evento.vendas_ate) < new Date()) {
       return NextResponse.json({ error: "O prazo de compra desta galeria terminou." }, { status: 409 });
     }
-    if (fotografo?.status !== "ativo") {
-      return NextResponse.json({ error: "O fotógrafo desta galeria não está ativo." }, { status: 409 });
+    if (fotos.some(foto => primeiraRelacao(foto.fotografos)?.status !== "ativo")) {
+      return NextResponse.json({ error: "Um dos fotógrafos desta galeria não está ativo." }, { status: 409 });
     }
 
     const subtotalCentavos = fotos.reduce((total, foto) => total + Math.max(0, Number(foto.preco_centavos || 0)), 0);
@@ -115,18 +116,24 @@ export async function POST(request: Request) {
     let percentualOrganizador = 0;
     let modeloRecebimento = modeloRecebimentoFotos(null);
     const organizadorUserId = evento.organizador_user_id ? String(evento.organizador_user_id) : null;
+    let vinculos: { fotografo_id: string; status: string; modelo_recebimento: string; comissao_organizador_percentual: number }[] = [];
     if (organizadorUserId) {
-      const { data: vinculo, error: vinculoError } = await supabase
+      const { data, error: vinculoError } = await supabase
         .from("foto_evento_fotografos")
-        .select("comissao_organizador_percentual, modelo_recebimento")
+        .select("fotografo_id, status, comissao_organizador_percentual, modelo_recebimento")
         .eq("evento_id", eventoId)
-        .eq("fotografo_id", fotografoId)
-        .maybeSingle();
+        .in("fotografo_id", autoresIds);
       if (vinculoError) throw new Error(vinculoError.message);
-      if (!vinculo) return NextResponse.json({ error: "Fotógrafo sem regra de recebimento nesta galeria." }, { status: 409 });
-      percentualOrganizador = Number(vinculo?.comissao_organizador_percentual || 0);
-      modeloRecebimento = modeloRecebimentoFotos(vinculo?.modelo_recebimento);
+      vinculos = data || [];
+      percentualOrganizador = Number(vinculos[0]?.comissao_organizador_percentual || 0);
     }
+    try { modeloRecebimento = modeloCheckoutAutores(organizadorUserId, autoresIds, vinculos); }
+    catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : 'Recebimento incompatível.' }, { status: 409 }); }
+
+    const vendasFotografos = modeloRecebimento === 'diaria_organizador' ? registrarVendasFotografos(fotos.map(foto => ({
+      fotografoId: String(foto.fotografo_id), nome: primeiraRelacao(foto.fotografos)?.nome || 'Fotógrafo',
+      precoCentavos: Number(foto.preco_centavos || 0), mimeType: foto.mime_type,
+    })), descontoCentavos, calcularDistribuicaoDiariaFotos(totalCentavos).comissaoItatameCentavos) : null;
 
     const recebedor = await obterRecebedorFotos(supabase, request, {
       modelo_recebimento: modeloRecebimento,
@@ -161,6 +168,7 @@ export async function POST(request: Request) {
         comprador_nome: compradorNome,
         evento_id: eventoId,
         fotografo_id: fotografoId,
+        vendas_fotografos: vendasFotografos,
         status: "pendente",
         subtotal_centavos: subtotalCentavos,
         desconto_centavos: descontoCentavos,
@@ -251,6 +259,8 @@ export async function POST(request: Request) {
       eventoNome: evento.nome || "Evento Retratt",
       total: totalCentavos / 100,
       compradorEmail,
+      quantidadeFotografos: autoresIds.length,
+      recebimentoOrganizador: modeloRecebimento === 'diaria_organizador',
       acesso: convidado ? tokenAcessoPedido(pedido.id) : null,
       distribuicao: {
         comissaoItatameCentavos: distribuicao.comissaoItatameCentavos,

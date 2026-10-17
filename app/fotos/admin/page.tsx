@@ -19,6 +19,7 @@ import DataGaleriaInput from "@/app/fotos/_components/DataGaleriaInput";
 import { dataGaleriaValida } from "@/app/lib/fotos-data";
 import CapaGaleriaInput from "../_components/CapaGaleriaInput";
 import EditorFaixasDesconto from "../_components/EditorFaixasDesconto";
+import VendasDiariaFotografos from "../_components/VendasDiariaFotografos";
 import { faixasDoEvento, validarFaixasDesconto, type FaixaDesconto } from "@/app/lib/fotos-descontos";
 import { precoGaleriaCentavos, precosGaleriaValidos } from "@/app/lib/fotos-criacao-galeria";
 
@@ -929,6 +930,7 @@ export default function FotosAdminPage() {
                                       <option value="royalty">Royalty: fotógrafo recebe a venda</option>
                                       <option value="diaria_organizador">Diária: organizador recebe a venda</option>
                                     </select>
+                                    {(modeloForm[chave] ?? fotografo.modelo_recebimento) === 'diaria_organizador' && <p className="mb-3 text-[10px] leading-relaxed text-zinc-400">Você recebe as vendas e paga o fotógrafo por fora, conforme o acordo entre vocês. Para o cliente comprar fotos de vários fotógrafos em um único pagamento, configure todos os envolvidos como diária nesta galeria e salve cada alteração. Confira os valores em “Vendas por fotógrafo · Diária”.</p>}
                                     {(modeloForm[chave] ?? fotografo.modelo_recebimento ?? "royalty") === "royalty" && <label className="mb-1.5 block text-[8px] font-black uppercase tracking-widest text-retratt">Seu royalty nas próximas vendas (0% a 50%)</label>}
                                     <div className="flex gap-2">
                                       {(modeloForm[chave] ?? fotografo.modelo_recebimento ?? "royalty") === "royalty" && <div className="relative min-w-0 flex-1">
@@ -1136,6 +1138,8 @@ export default function FotosAdminPage() {
                   )}
                    <p className="mt-3 text-[8px] leading-relaxed text-zinc-600">A alteração do modelo ou percentual vale para as próximas compras. Os pedidos anteriores mantêm a distribuição registrada.</p>
                 </div>
+
+                <VendasDiariaFotografos />
 
                 <div className="flex items-center justify-center gap-2 text-[9px] font-black uppercase tracking-widest text-zinc-600 mt-6 pt-4 border-t border-white/5">
                     <ShieldCheck size={14} className="shrink-0" /> <span className="truncate">Recebedor definido por fotógrafo e por galeria</span>

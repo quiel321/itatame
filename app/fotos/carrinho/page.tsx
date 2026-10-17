@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
@@ -44,6 +44,8 @@ type CheckoutData = {
   total: number;
   compradorEmail: string;
   acesso: string | null;
+  quantidadeFotografos?: number;
+  recebimentoOrganizador?: boolean;
 };
 
 type ItemPedidoConvidado = {
@@ -597,6 +599,7 @@ export default function FotosCarrinhoPage() {
 
                   {etapa === "checkout" && (
                     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                      {checkoutData?.recebimentoOrganizador && (checkoutData.quantidadeFotografos || 0) > 1 && <p className="mb-4 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-xs leading-relaxed text-emerald-200">Um único pagamento de <strong>{formatarPrecoFotos(Math.round(checkoutData.total * 100))}</strong> inclui os arquivos dos {checkoutData.quantidadeFotografos} fotógrafos. Após a aprovação, todos os arquivos deste pedido serão liberados juntos.</p>}
                       <div id="fotosPaymentBrick" className={resultadoPagamento?.id ? "hidden" : ""} />
                       {resultadoPagamento?.qr_code_base64 && (
                         <div className="mb-4 flex justify-center rounded-xl bg-white p-4">
