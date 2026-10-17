@@ -8,6 +8,7 @@ import { supabase } from "@/app/lib/supabase";
 import { comprimirAvatarRetratt as comprimirAvatar, comprimirCapaRetratt as comprimirCapa } from "@/app/lib/fotos-preparar";
 import FotosShell from "../_components/FotosShell";
 import MercadoPagoConnectButton from "@/app/admin/_components/MercadoPagoConnectButton";
+import ConexaoMercadoPagoObrigatoria, { type EstadoConexaoMP } from '../_components/ConexaoMercadoPagoObrigatoria';
 import { ArrowRight, BarChart3, Camera, CheckCircle2, FolderPlus, ImagePlus, Pencil, Store, Trophy, Wallet, LogOut, Check, AlertCircle, ShieldCheck, UploadCloud, Loader2, X, Trash2, Plus } from "lucide-react";
 import { formatarDocumento } from '@/app/lib/formatar-documento';
 import { formatarTelefone } from '@/app/lib/formatar-telefone';
@@ -92,6 +93,8 @@ export default function FotosAdminPage() {
   const [receitaDiretaTotalCentavos, setReceitaDiretaTotalCentavos] = useState(0);
   const [receitaDiretaPorGaleria, setReceitaDiretaPorGaleria] = useState<Record<string, number>>({});
   const [mercadoPagoOrganizadorConectado, setMercadoPagoOrganizadorConectado] = useState(false);
+  const [estadoConexaoMP, setEstadoConexaoMP] = useState<EstadoConexaoMP>('verificando');
+  const [avisosRoyalty, setAvisosRoyalty] = useState<Record<string, { erro: boolean; texto: string }>>({});
   const [fotografosPorGaleria, setFotografosPorGaleria] = useState<Record<string, FotografoCredenciado[]>>({});
   const [royaltyForm, setRoyaltyForm] = useState<Record<string, string>>({});
   const [modeloForm, setModeloForm] = useState<Record<string, "royalty" | "diaria_organizador">>({});
@@ -196,7 +199,8 @@ export default function FotosAdminPage() {
       setTotais({ eventos: listaGalerias.length, albuns: albuns.count || 0, fotos: fotos.count || 0, pedidos: pedidos.count || 0 });
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
-        const resumoResponse = await fetch("/api/fotos/admin/resumo-galerias", { headers: { Authorization: `Bearer ${session.access_token}` } });
+        try {
+        const resumoResponse = await fetch("/api/fotos/admin/resumo-galerias", { headers: { Authorization: `Bearer ${session.access_token}` }, cache: 'no-store', signal: AbortSignal.timeout(20000) });
           if (resumoResponse.ok) {
             const resumo = await resumoResponse.json();
             setVendasPorGaleria(resumo.vendasPorGaleria || {});
@@ -205,6 +209,7 @@ export default function FotosAdminPage() {
              setReceitaDiretaTotalCentavos(Number(resumo.receitaDiretaTotalCentavos || 0));
              setReceitaDiretaPorGaleria(resumo.receitaDiretaPorGaleria || {});
              setMercadoPagoOrganizadorConectado(Boolean(resumo.mercadoPagoOrganizadorConectado));
+             setEstadoConexaoMP(typeof resumo.mercadoPagoOrganizadorConectado !== 'boolean' ? 'erro' : resumo.mercadoPagoOrganizadorConectado ? 'conectado' : 'pendente');
             const fotografosResumo = (resumo.fotografosPorGaleria || {}) as Record<string, FotografoCredenciado[]>;
              setFotografosPorGaleria(fotografosResumo);
              setModeloForm(Object.fromEntries(Object.entries(fotografosResumo).flatMap(([eventoId, fotografos]) =>
@@ -219,8 +224,9 @@ export default function FotosAdminPage() {
               ),
             ));
             setTotais((atual) => ({ ...atual, pedidos: Number(resumo.vendasTotal || 0) }));
-          }
-      }
+          } else { setEstadoConexaoMP('erro'); }
+        } catch { setEstadoConexaoMP('erro'); }
+      } else { setEstadoConexaoMP('erro'); }
       const disponivel = listaBase.find((evento) => !listaGalerias.some((galeria) => galeria.evento_id === evento.id));
       if (disponivel) setEventoSelecionado(String(disponivel.id));
 
@@ -233,6 +239,19 @@ export default function FotosAdminPage() {
   async function deslogar() {
     await supabase.auth.signOut();
     router.push("/fotos/login?perfil=organizador");
+  }
+
+  async function conferirConexaoMercadoPago() {
+    setEstadoConexaoMP('verificando');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw Error('Sessão expirada');
+      const response = await fetch('/api/fotos/admin/resumo-galerias', { headers: { Authorization: `Bearer ${session.access_token}` }, cache: 'no-store', signal: AbortSignal.timeout(20000) });
+      const resumo = await response.json();
+      if (!response.ok || typeof resumo.mercadoPagoOrganizadorConectado !== 'boolean') throw Error('Conexão não confirmada');
+      setMercadoPagoOrganizadorConectado(resumo.mercadoPagoOrganizadorConectado);
+      setEstadoConexaoMP(resumo.mercadoPagoOrganizadorConectado ? 'conectado' : 'pendente');
+    } catch { setEstadoConexaoMP('erro'); }
   }
 
   async function criarContaOrganizador() {
@@ -451,18 +470,24 @@ export default function FotosAdminPage() {
 
     setSalvandoRoyalty(chave);
     setMensagem("");
+    setAvisosRoyalty(atual => { const proximo = { ...atual }; delete proximo[chave]; return proximo; });
+    try {
     const response = await fetch("/api/fotos/admin/royalty-fotografo", {
       method: "POST",
+      signal: AbortSignal.timeout(20000),
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
       body: JSON.stringify({ eventoId, fotografoId, percentual, modeloRecebimento }),
     });
-    const resultado = await response.json();
-    setSalvandoRoyalty(null);
+    const resultado = await response.json().catch(() => null);
 
     if (!response.ok) {
-      setMensagem(resultado.error || "Não foi possível salvar o royalty.");
-      return;
+      if (resultado?.code === 'MP_CONEXAO_NECESSARIA') {
+        setMercadoPagoOrganizadorConectado(false);
+        setEstadoConexaoMP('pendente');
+      }
+      throw Error(resultado?.error || 'Não foi possível confirmar o salvamento. Confira a configuração antes de tentar novamente.');
     }
+    if (!resultado?.vinculo) throw Error('Não foi possível confirmar a configuração salva.');
 
     const salvo = Number(resultado.vinculo.comissao_organizador_percentual || 0);
     const modeloSalvo = resultado.vinculo.modelo_recebimento === "diaria_organizador" ? "diaria_organizador" : "royalty";
@@ -476,7 +501,14 @@ export default function FotosAdminPage() {
           : fotografo,
       ),
     }));
-    setMensagem(modeloSalvo === "diaria_organizador" ? "Modelo de diária salvo. As próximas vendas entrarão na sua conta Mercado Pago da Retratt." : `Royalty de ${salvo}% salvo. A nova taxa vale somente para as próximas vendas.`);
+    const texto = modeloSalvo === "diaria_organizador" ? "Diária salva para este fotógrafo. As próximas vendas entrarão na sua conta Mercado Pago da Retratt." : `Royalty de ${salvo}% salvo. A nova taxa vale somente para as próximas vendas.`;
+    setMensagem(texto);
+    setAvisosRoyalty(atual => ({ ...atual, [chave]: { erro: false, texto } }));
+    } catch (error) {
+      const texto = error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError') ? 'Não foi possível confirmar o salvamento. Confira a configuração antes de tentar novamente.' : error instanceof Error ? error.message : 'Não foi possível confirmar a configuração.';
+      setMensagem(texto);
+      setAvisosRoyalty(atual => ({ ...atual, [chave]: { erro: true, texto } }));
+    } finally { setSalvandoRoyalty(null); }
   }
 
   async function salvarPerfilOrganizador() {
@@ -570,6 +602,7 @@ export default function FotosAdminPage() {
 
   return (
     <FotosShell>
+      {userId && <ConexaoMercadoPagoObrigatoria estado={estadoConexaoMP} onVerificar={() => void conferirConexaoMercadoPago()} onSair={() => void deslogar()} />}
       <main className="min-h-screen bg-[#050505] text-white font-sans relative overflow-x-hidden w-full">
 
         <section className="border-b border-white/5 bg-[radial-gradient(circle_at_85%_0%,rgba(255,90,31,0.15),transparent_40%),linear-gradient(180deg,#0a0a0e,#050505)] w-full">
@@ -907,6 +940,8 @@ export default function FotosAdminPage() {
                           <div className="grid gap-2">
                             {fotografosPorGaleria[evento.id].map((fotografo) => {
                               const chave = chaveRoyalty(evento.id, fotografo.id);
+                              const modeloAtual = modeloForm[chave] ?? fotografo.modelo_recebimento ?? 'royalty';
+                              const alterado = modeloAtual !== (fotografo.modelo_recebimento || 'royalty') || (modeloAtual === 'royalty' && Number(String(royaltyForm[chave] ?? fotografo.comissao_organizador_percentual ?? 0).replace(',', '.')) !== Number(fotografo.comissao_organizador_percentual || 0));
                               return (
                                 <div key={fotografo.id} className="grid min-h-[104px] gap-4 rounded-2xl border border-retratt/20 bg-retratt/[0.06] p-4 sm:grid-cols-[minmax(0,1fr)_240px] sm:items-center sm:p-5">
                                   <div className="flex min-w-0 items-center gap-3">
@@ -963,6 +998,8 @@ export default function FotosAdminPage() {
                                       </button>
                                     </div>
                                     <p className="mt-1.5 text-[8px] leading-relaxed text-zinc-400">{(modeloForm[chave] ?? fotografo.modelo_recebimento ?? "royalty") === "royalty" ? "A Retratt retém 5%, o fotógrafo recebe o restante menos seu royalty e a tarifa do Mercado Pago." : "O organizador recebe 95% antes da tarifa do Mercado Pago. A diária do fotógrafo é combinada e paga fora da Retratt."}</p>
+                                    {alterado && <p className="mt-3 text-xs font-bold text-amber-300">Alterações não salvas. Clique em Salvar para confirmar.</p>}
+                                    {avisosRoyalty[chave] && (avisosRoyalty[chave].erro || !alterado) && <p role={avisosRoyalty[chave].erro ? 'alert' : 'status'} className={`mt-3 text-xs leading-relaxed ${avisosRoyalty[chave].erro ? 'text-orange-200' : 'text-emerald-300'}`}>{avisosRoyalty[chave].texto}</p>}
                                   </div>
                                 </div>
                               );
@@ -1106,7 +1143,7 @@ export default function FotosAdminPage() {
                <div className="space-y-4">
                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/40 p-4">
                    <div><p className="text-xs font-black text-white">Receber vendas de fotógrafos por diária</p><p className="mt-1 text-[10px] text-zinc-400">Conecte sua conta Mercado Pago à Retratt para ativar essa opção.</p></div>
-                   <MercadoPagoConnectButton conectado={mercadoPagoOrganizadorConectado} perfil="organizador_fotos" returnTo="/fotos/admin" className="rounded-lg bg-retratt px-4 py-2.5 text-[9px] font-black uppercase text-black" />
+                   {estadoConexaoMP === 'conectado' && <MercadoPagoConnectButton conectado={mercadoPagoOrganizadorConectado} perfil="organizador_fotos" returnTo="/fotos/admin" className="rounded-lg bg-retratt px-4 py-2.5 text-[9px] font-black uppercase text-black" />}
                  </div>
                  <div className="rounded-2xl border border-retratt/20 bg-retratt/5 p-4 sm:p-5">
                   <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Royalties gerados nas vendas pagas</p>

@@ -55,7 +55,7 @@ export async function POST(request: Request) {
         organizador_user_id: auth.user.id,
       });
       if (!recebedor?.publicKey) {
-        return NextResponse.json({ error: "Conecte a conta Mercado Pago da Retratt para receber as vendas da opção de diária." }, { status: 409 });
+        return NextResponse.json({ code: 'MP_CONEXAO_NECESSARIA', error: 'Diária não salva. Conecte sua conta Mercado Pago à Retratt. Depois, selecione Diária e salve novamente para este fotógrafo.' }, { status: 409 });
       }
     }
 

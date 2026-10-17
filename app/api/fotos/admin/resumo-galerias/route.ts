@@ -15,14 +15,16 @@ export async function GET(request: Request) {
 
   const { data: galerias, error } = await supabase.from("foto_eventos").select("id").eq("organizador_user_id", auth.user.id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  const { data: contaOrganizador } = await supabase.from("foto_mp_organizadores")
-    .select("mp_connected_at").eq("user_id", auth.user.id).maybeSingle();
+  const { data: contaOrganizador, error: contaError } = await supabase.from("foto_mp_organizadores")
+    .select("mp_connected_at, mp_access_token, mp_public_key").eq("user_id", auth.user.id).maybeSingle();
+  if (contaError) return NextResponse.json({ error: 'Não foi possível conferir a conexão Mercado Pago. Tente novamente.' }, { status: 503 });
+  const conectado = Boolean(contaOrganizador?.mp_connected_at && contaOrganizador.mp_access_token && contaOrganizador.mp_public_key);
   const ids = (galerias || []).map((item) => item.id);
   if (!ids.length) return NextResponse.json({
     vendasTotal: 0,
     vendasPorGaleria: {},
     fotografosPorGaleria: {},
-    mercadoPagoOrganizadorConectado: Boolean(contaOrganizador?.mp_connected_at),
+    mercadoPagoOrganizadorConectado: conectado,
     royaltiesTotalCentavos: 0,
     royaltiesPorGaleria: {},
     receitaDiretaTotalCentavos: 0,
@@ -68,7 +70,7 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.json({
-    mercadoPagoOrganizadorConectado: Boolean(contaOrganizador?.mp_connected_at),
+    mercadoPagoOrganizadorConectado: conectado,
     vendasTotal: Object.values(vendasPorGaleria).reduce((total, quantidade) => total + quantidade, 0),
     vendasPorGaleria,
     fotografosPorGaleria,
