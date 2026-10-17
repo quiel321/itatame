@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { useEffect, useState, useMemo } from "react";
@@ -7,6 +7,7 @@ import { supabase } from "@/app/lib/supabase";
 import { formatarPrecoFotos } from "@/app/lib/fotos";
 import { podeAcessarPerfilFotos, rotaLoginFotos } from "@/app/lib/fotos-acesso";
 import FotosShell from "../_components/FotosShell";
+import { lerCarrinhoFotos, retirarFotosCompradas } from '@/app/lib/fotos-carrinho-pagamentos';
 import { ArrowRight, Download, Image as ImageIcon, Pencil, ShoppingCart, UserRound, LogOut, CheckCircle2, AlertCircle, History, PackageOpen, Video } from "lucide-react";
 
 type MidiaPedido = { id: string; titulo: string | null; mime_type: string | null };
@@ -83,13 +84,26 @@ export default function FotosMinhasComprasPage() {
         }
       }
 
-      setPedidos((data || []) as Pedido[]);
+      const listaPedidos = (data || []) as Pedido[];
+      const fotosPagas = listaPedidos.filter(p => p.status === 'pago').flatMap(p => (p.foto_pedido_itens || []).flatMap(item => {
+        if (!item.download_liberado || (item.download_expires_at && Date.parse(item.download_expires_at) <= Date.now())) return [];
+        const foto = Array.isArray(item.foto_arquivos) ? item.foto_arquivos[0] : item.foto_arquivos;
+        return foto?.id ? [foto.id] : [];
+      }));
+      setItensCarrinho(retirarFotosCompradas(fotosPagas).length);
+      setPedidos(listaPedidos);
       const pedidoDoLink = new URLSearchParams(window.location.search).get("pedido");
       if (pedidoDoLink && (data || []).some((pedido) => pedido.id === pedidoDoLink)) setPedidoAberto(pedidoDoLink);
       setCarregando(false);
     }
     void carregar();
   }, [router]);
+
+  useEffect(() => {
+    const atualizar = () => setItensCarrinho(lerCarrinhoFotos().length);
+    window.addEventListener('carrinho-fotos-atualizado', atualizar);
+    return () => window.removeEventListener('carrinho-fotos-atualizado', atualizar);
+  }, []);
 
   async function deslogar() {
     await supabase.auth.signOut();

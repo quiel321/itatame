@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { WebhookSignatureValidator } from "mercadopago";
+import { validarAssinaturaWebhookFotos } from '@/app/lib/fotos-webhook-assinatura';
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
 import { sincronizarPagamentoFotos } from "@/app/lib/fotos-mercado-pago";
 
@@ -28,13 +28,10 @@ export async function POST(request: Request) {
       if (!xSignature || !xRequestId) {
         return NextResponse.json({ success: false }, { status: 401 });
       }
-      WebhookSignatureValidator.validate({
-        xSignature,
-        xRequestId,
-        dataId: url.searchParams.get("data.id") || body?.data?.id || body?.id,
-        secret,
-        toleranceSeconds: 300,
-      });
+      if (String(url.searchParams.get('data.id') || body?.data?.id || body?.id || '') !== paymentId) return NextResponse.json({ success: false }, { status: 401 });
+      try {
+        validarAssinaturaWebhookFotos({ assinatura: xSignature, requestId: xRequestId, dataId: String(url.searchParams.get('data.id') || body?.data?.id || body?.id || ''), secret });
+      } catch { return NextResponse.json({ success: false }, { status: 401 }); }
     }
 
     const supabase = createSupabaseServerClient();
@@ -44,9 +41,10 @@ export async function POST(request: Request) {
     }, request);
 
     if (!resultado) return NextResponse.json({ success: true, message: "Pedido não localizado." });
+    if (!resultado.sincronizado || resultado.emailPendente) return NextResponse.json({ success: false, message: 'Confirmação pendente de conclusão.' }, { status: 503 });
     return NextResponse.json({ success: true, status: resultado.status });
   } catch (error) {
     console.error("Webhook Retratt:", error);
-    return NextResponse.json({ success: false }, { status: 401 });
+    return NextResponse.json({ success: false }, { status: 500 });
   }
 }

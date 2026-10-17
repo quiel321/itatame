@@ -1,7 +1,8 @@
-﻿import "server-only";
+import "server-only";
 import { Resend } from "resend";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { gerarAcessoPorEmail } from "@/app/lib/fotos-convidado";
+import { remetenteEmailRetratt } from './fotos-email-remetente';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -40,6 +41,7 @@ export async function enviarEmailPedidoFotosConfirmado(supabase: SupabaseClient,
     .from("foto_pedidos")
     .update({ email_confirmacao_enviado_em: reservadoEm, email_confirmacao_erro: null })
     .eq("id", pedidoId)
+    .eq('status', 'pago')
     .is("email_confirmacao_enviado_em", null)
     .select(`
       id, comprador_user_id, comprador_email, comprador_nome, total_centavos, provedor_payment_id,
@@ -81,7 +83,7 @@ export async function enviarEmailPedidoFotosConfirmado(supabase: SupabaseClient,
   } catch (error) {
     console.error("Link de acesso direto do Retratt não gerado:", error);
   }
-  const remetente = process.env.FOTOS_EMAIL_FROM || "Retratt <suporte@itatame.com.br>";
+  const remetente = remetenteEmailRetratt(process.env.FOTOS_EMAIL_FROM);
 
   const { data, error } = await resend.emails.send({
     from: remetente,
@@ -111,7 +113,7 @@ export async function enviarEmailPedidoFotosConfirmado(supabase: SupabaseClient,
         </div>
       </div>
     `,
-  });
+  }).catch((falha: unknown) => ({ data: null, error: { message: falha instanceof Error ? falha.message : 'Falha de comunicação com o serviço de e-mail.' } }));
 
   if (error) {
     console.error("Erro ao enviar e-mail do Retratt:", error);
@@ -127,7 +129,7 @@ export async function enviarEmailPedidoFotosConfirmado(supabase: SupabaseClient,
 
 export async function enviarEmailAcessoRetratt({ email, codigo, link }: { email: string; codigo: string; link: string }) {
   if (!process.env.RESEND_API_KEY) throw new Error("Serviço de e-mail indisponível.");
-  const remetente = process.env.FOTOS_EMAIL_FROM || "Retratt <suporte@itatame.com.br>";
+  const remetente = remetenteEmailRetratt(process.env.FOTOS_EMAIL_FROM);
   const { error } = await resend.emails.send({
     from: remetente,
     to: [email],

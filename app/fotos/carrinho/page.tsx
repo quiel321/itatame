@@ -7,6 +7,7 @@ import { supabase } from "@/app/lib/supabase";
 import { formatarPrecoFotos } from "@/app/lib/fotos";
 import { calcularDescontoFotos, faixasDoEvento, type FaixaDesconto } from "@/app/lib/fotos-descontos";
 import FotosShell from "../_components/FotosShell";
+import { lerCarrinhoFotos, registrarPagamentoFotos, retirarFotosCompradas, retirarPagamentoFotos } from '@/app/lib/fotos-carrinho-pagamentos';
 import PreviewProtectionOverlay from "../_components/PreviewProtectionOverlay";
 import {
   AlertCircle,
@@ -131,6 +132,13 @@ export default function FotosCarrinhoPage() {
   const [mensagemPagamento, setMensagemPagamento] = useState("");
   const [comprador, setComprador] = useState({ nome: "", email: "" });
   const [itensLiberados, setItensLiberados] = useState<ItemPedidoConvidado[]>([]);
+  const fotosDoCheckout = useRef<string[]>([]);
+
+  useEffect(() => {
+    const atualizar = () => { const ids = new Set(lerCarrinhoFotos()); setFotos(atuais => atuais.filter(foto => ids.has(foto.id))); };
+    window.addEventListener('carrinho-fotos-atualizado', atualizar);
+    return () => window.removeEventListener('carrinho-fotos-atualizado', atualizar);
+  }, []);
 
   const subtotal = fotos.reduce((acc, foto) => acc + foto.precoCentavos, 0);
   const faixas = faixasDoEvento({ descontos_progressivos: fotos[0]?.descontosProgressivos, desconto_combo_qtd: fotos[0]?.comboQtd ?? COMBO_QTD_PADRAO, desconto_combo_percentual: fotos[0]?.comboPercentual ?? COMBO_PERCENTUAL_PADRAO });
@@ -254,10 +262,9 @@ export default function FotosCarrinhoPage() {
             };
           });
 
-        setFotos(fotosReais);
-        const idsValidos = fotosReais.map((foto: FotoCarrinho) => foto.id);
-        localStorage.setItem(CARRINHO_FOTOS_KEY, JSON.stringify(idsValidos));
-        notificarCarrinhoAtualizado(idsValidos);
+        const encontrados = new Set(fotosReais.map((foto: FotoCarrinho) => foto.id));
+        const idsValidos = retirarFotosCompradas(idsSalvos.filter((id: string) => !encontrados.has(id)));
+        setFotos(fotosReais.filter((foto: FotoCarrinho) => idsValidos.includes(foto.id)));
       } catch (err) {
         console.error("Erro ao carregar carrinho:", err);
       } finally {
@@ -313,6 +320,7 @@ export default function FotosCarrinhoPage() {
       setEtapa("carrinho");
       return;
     }
+    fotosDoCheckout.current = fotos.map(foto => foto.id);
     setCheckoutData(data);
     setEtapa("checkout");
   }
@@ -365,23 +373,27 @@ export default function FotosCarrinhoPage() {
                 if (!session) throw new Error("Sessão expirada.");
                 headers.Authorization = `Bearer ${session.access_token}`;
               }
+              registrarPagamentoFotos({ pedidoId: checkoutData!.pedidoId, acesso, fotoIds: fotosDoCheckout.current });
               const response = await fetch("/api/fotos/pagamento/processar", {
                 method: "POST",
                 headers,
                 body: JSON.stringify({ pedidoId: checkoutData!.pedidoId, formData, acesso }),
               });
               const resultado = await response.json();
-              if (!response.ok) throw new Error(resultado.error || "Pagamento recusado.");
+              if (!response.ok) { if (response.status < 500) retirarPagamentoFotos(checkoutData!.pedidoId); throw new Error(resultado.error || "Pagamento recusado."); }
               setResultadoPagamento(resultado);
               if (resultado.status === "approved") {
-                localStorage.removeItem(CARRINHO_FOTOS_KEY);
-                notificarCarrinhoAtualizado([]);
+                retirarFotosCompradas(fotosDoCheckout.current);
+                retirarPagamentoFotos(checkoutData!.pedidoId);
                 setEtapa("pago");
                 setMensagemPagamento("Pagamento aprovado. Seus arquivos foram liberados.");
                 if (acesso) setItensLiberados(await carregarItensConvidado(checkoutData!.pedidoId, acesso));
                 else window.setTimeout(() => router.push("/fotos/minhas-compras"), 1200);
-              } else {
+              } else if (resultado.status === 'pending' || resultado.status === 'in_process') {
                 setMensagemPagamento("Pagamento gerado. Aguardando confirmação.");
+              } else {
+                retirarPagamentoFotos(checkoutData!.pedidoId);
+                setMensagemPagamento('Pagamento não aprovado. Confira a forma de pagamento antes de tentar novamente.');
               }
             },
             onError: () => setMensagemPagamento("Não foi possível carregar o checkout."),
@@ -401,32 +413,19 @@ export default function FotosCarrinhoPage() {
   }, [checkoutData, etapa, router]);
 
   useEffect(() => {
-    if (!checkoutData?.pedidoId || !resultadoPagamento?.id || resultadoPagamento.status === "approved") return;
+    if (!checkoutData?.pedidoId) return;
     const { pedidoId, acesso } = checkoutData;
-    const intervalo = window.setInterval(async () => {
-      const params = new URLSearchParams({ pedido_id: pedidoId });
-      const headers: Record<string, string> = {};
-      if (acesso) {
-        params.set("acesso", acesso);
-      } else {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) return;
-        headers.Authorization = `Bearer ${session.access_token}`;
-      }
-      const response = await fetch(`/api/fotos/pagamento/status?${params.toString()}`, { headers });
-      const status = await response.json();
-      if (status.status === "pago") {
-        window.clearInterval(intervalo);
-        localStorage.removeItem(CARRINHO_FOTOS_KEY);
-        notificarCarrinhoAtualizado([]);
+    const aoConfirmar = (event: Event) => {
+      if ((event as CustomEvent).detail?.pedidoId === pedidoId) {
         setEtapa("pago");
         setMensagemPagamento("Pagamento confirmado. Seus arquivos foram liberados.");
-        if (acesso) setItensLiberados(await carregarItensConvidado(pedidoId, acesso));
+        if (acesso) void carregarItensConvidado(pedidoId, acesso).then(setItensLiberados).catch(() => {});
         else window.setTimeout(() => router.push("/fotos/minhas-compras"), 1200);
       }
-    }, 5000);
-    return () => window.clearInterval(intervalo);
-  }, [checkoutData, resultadoPagamento?.id, resultadoPagamento?.status, router]);
+    };
+    window.addEventListener('retratt-pagamento-confirmado', aoConfirmar);
+    return () => window.removeEventListener('retratt-pagamento-confirmado', aoConfirmar);
+  }, [checkoutData, router]);
 
   return (
     <FotosShell>
@@ -461,7 +460,7 @@ export default function FotosCarrinhoPage() {
               <Loader2 size={40} className="mb-4 animate-spin text-retratt" />
               <p className="text-sm font-black uppercase tracking-widest text-zinc-400">Buscando seus itens...</p>
             </div>
-          ) : fotos.length === 0 ? (
+          ) : fotos.length === 0 && etapa !== 'pago' && etapa !== 'checkout' ? (
             <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-white/5 bg-[#0a0a0e]/50 py-24 backdrop-blur-sm">
               <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-white/5 text-zinc-600 shadow-inner">
                 <ImageIcon size={32} />

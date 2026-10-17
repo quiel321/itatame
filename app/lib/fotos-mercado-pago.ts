@@ -1,7 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
-  confirmarRoyaltyOrganizador,
   estornarRoyaltyOrganizador,
   liberarPedidoFotos,
 } from "@/app/lib/fotos-pedidos";
@@ -28,7 +27,8 @@ export async function sincronizarPagamentoFotos(
   if (compradorUserId) consulta = consulta.eq("comprador_user_id", compradorUserId);
 
   const { data: pedido, error: pedidoError } = await consulta.maybeSingle();
-  if (pedidoError || !pedido) return null;
+  if (pedidoError) throw new Error(pedidoError.message);
+  if (!pedido) return null;
 
   const idPagamento = String(paymentId || pedido.provedor_payment_id || "");
   const recebedor = await obterRecebedorFotos(supabase, request, pedido);
@@ -43,7 +43,7 @@ export async function sincronizarPagamentoFotos(
   const payment = await response.json();
   if (!response.ok) throw new Error(payment?.message || "Não foi possível consultar o pagamento no Mercado Pago.");
 
-  const referenciaCorreta = payment.external_reference === `foto_pedido:${pedido.id}`;
+  const referenciaCorreta = String(payment.id) === idPagamento && payment.external_reference === `foto_pedido:${pedido.id}`;
   const valorCorreto = Math.round(Number(payment.transaction_amount || 0) * 100) === Number(pedido.total_centavos);
   if (!referenciaCorreta || !valorCorreto) throw new Error("Os dados do pagamento divergem do pedido.");
 
@@ -52,10 +52,10 @@ export async function sincronizarPagamentoFotos(
     provedor_status_detail: payment.status_detail || null,
   }).eq("id", pedido.id);
 
-  if (payment.status === "approved" && pedido.status !== "pago") {
-    await liberarPedidoFotos(supabase, pedido.id, idPagamento, payment.status_detail);
-  } else if (payment.status === "approved") {
-    await confirmarRoyaltyOrganizador(supabase, pedido.id, idPagamento);
+  let emailPendente = false;
+  if (payment.status === "approved") {
+    const liberacao = await liberarPedidoFotos(supabase, pedido.id, idPagamento, payment.status_detail);
+    emailPendente = liberacao.emailPendente;
   } else if (["cancelled", "rejected", "refunded", "charged_back"].includes(String(payment.status))) {
     const statusPedido = payment.status === "cancelled" || payment.status === "rejected" ? "cancelado" : "reembolsado";
     const { error: atualizarError } = await supabase.from("foto_pedidos").update({ status: statusPedido }).eq("id", pedido.id);
@@ -71,5 +71,6 @@ export async function sincronizarPagamentoFotos(
     provedor_status: payment.status,
     provedor_status_detail: payment.status_detail || null,
     sincronizado: true,
+    emailPendente,
   };
 }

@@ -1,9 +1,11 @@
-﻿"use client";
+"use client";
 
 import type { ReactNode } from "react";
 import { useEffect } from "react";
 import Link from "next/link";
 import FotosNavbar from "./FotosNavbar";
+import AcompanharPagamentosFotos from './AcompanharPagamentosFotos';
+import WhatsAppSuporteRetratt from './WhatsAppSuporteRetratt';
 
 export default function FotosShell({ children, area = "publico" }: { children: ReactNode; area?: "publico" | "fotografo" }) {
   const sitePrincipal = process.env.NEXT_PUBLIC_BASE_URL || "https://www.itatame.com.br";
@@ -15,6 +17,8 @@ export default function FotosShell({ children, area = "publico" }: { children: R
   return (
     <div data-fotos-shell className="min-h-screen bg-black text-white flex flex-col font-sans">
       <FotosNavbar area={area} />
+      <AcompanharPagamentosFotos />
+      <WhatsAppSuporteRetratt />
 
       {/* O conteúdo da página (Home, Eventos, etc) entra aqui e expande para preencher o ecrã */}
       <div className="flex-1">

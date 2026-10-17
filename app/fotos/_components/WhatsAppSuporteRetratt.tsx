@@ -1,0 +1,8 @@
+export default function WhatsAppSuporteRetratt() {
+  return <a href="https://wa.me/5565993059729?text=Ol%C3%A1%2C%20preciso%20de%20suporte%20na%20Retratt."
+    target="_blank" rel="noopener noreferrer" aria-label="Falar com o suporte da Retratt pelo WhatsApp" title="Suporte pelo WhatsApp"
+    className="fixed right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full border border-white/20 bg-[#25D366] text-white shadow-xl transition-transform hover:scale-105 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white sm:right-6"
+    style={{ bottom: 'calc(1rem + env(safe-area-inset-bottom))', backgroundColor: '#25D366' }}>
+    <svg aria-hidden="true" viewBox="0 0 24 24" className="h-8 w-8" fill="currentColor"><path d="M20.52 3.48A11.91 11.91 0 0 0 12.04 0C5.43 0 .05 5.38.05 12c0 2.12.55 4.19 1.6 6.02L0 24l6.13-1.61A11.94 11.94 0 0 0 12.03 24C18.65 24 24 18.62 24 12c0-3.2-1.23-6.21-3.48-8.52zM12.03 21.98a9.93 9.93 0 0 1-5.07-1.39l-.36-.21-3.64.95.97-3.55-.24-.37A9.93 9.93 0 0 1 2.07 12c0-5.5 4.48-9.98 9.98-9.98A9.9 9.9 0 0 1 19.1 4.94 9.91 9.91 0 0 1 22 12c0 5.51-4.47 9.98-9.97 9.98zm5.47-7.47c-.3-.15-1.77-.87-2.04-.97-.28-.1-.48-.15-.68.15-.2.3-.77.97-.94 1.17-.17.2-.35.22-.65.07-.3-.15-1.26-.46-2.4-1.48-.89-.8-1.49-1.78-1.67-2.08-.17-.3-.02-.46.13-.61.14-.13.3-.35.45-.52.15-.18.2-.3.3-.5.1-.2.05-.38-.02-.53-.08-.15-.68-1.63-.93-2.23-.24-.58-.49-.5-.68-.51h-.58c-.2 0-.53.07-.8.37-.28.3-1.05 1.03-1.05 2.5s1.07 2.9 1.22 3.1c.15.2 2.1 3.2 5.1 4.49.71.3 1.27.48 1.7.61.71.23 1.35.2 1.86.12.57-.09 1.77-.72 2.02-1.42.25-.7.25-1.3.17-1.42-.07-.13-.27-.2-.57-.35z" /></svg>
+  </a>;
+}

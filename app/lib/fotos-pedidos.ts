@@ -68,21 +68,23 @@ export async function liberarPedidoFotos(
       provedor_status_detail: statusDetail || null,
       pago_em: agora.toISOString(),
     })
-    .eq("id", pedidoId);
+    .eq("id", pedidoId).neq('status', 'pago');
   if (pedidoError) throw new Error(pedidoError.message);
 
   const { error: itensError } = await supabase
     .from("foto_pedido_itens")
     .update({ download_liberado: true, download_expires_at: expiraEm })
-    .eq("pedido_id", pedidoId);
+    .eq("pedido_id", pedidoId).eq('download_liberado', false);
   if (itensError) throw new Error(itensError.message);
 
   await confirmarRoyaltyOrganizador(supabase, pedidoId, paymentId);
 
   // O e-mail é complementar: uma falha no provedor não pode reverter a liberação já confirmada.
   try {
-    await enviarEmailPedidoFotosConfirmado(supabase, pedidoId);
+    const email = await enviarEmailPedidoFotosConfirmado(supabase, pedidoId);
+    return { emailPendente: 'skipped' in email && email.reason !== 'email_ja_enviado' };
   } catch (error) {
     console.error("Falha inesperada ao enviar a confirmação do pedido de fotos:", error);
+    return { emailPendente: true };
   }
 }

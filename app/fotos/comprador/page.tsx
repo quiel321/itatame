@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { useEffect, useState, useMemo } from "react";
@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
 import { podeAcessarPerfilFotos, rotaLoginFotos } from "@/app/lib/fotos-acesso";
 import FotosShell from "../_components/FotosShell";
+import { lerCarrinhoFotos } from '@/app/lib/fotos-carrinho-pagamentos';
 import { ArrowRight, Download, Images, ShoppingCart, UserRound, LogOut, History, AlertCircle } from "lucide-react";
 
 type ResumoComprador = {
@@ -23,6 +24,12 @@ export default function FotosCompradorPage() {
   const [itensCarrinho, setItensCarrinho] = useState(0);
 
   const primeiroNome = useMemo(() => resumo.nome.split(" ")[0], [resumo.nome]);
+
+  useEffect(() => {
+    const atualizar = () => setItensCarrinho(lerCarrinhoFotos().length);
+    window.addEventListener('carrinho-fotos-atualizado', atualizar);
+    return () => window.removeEventListener('carrinho-fotos-atualizado', atualizar);
+  }, []);
 
   useEffect(() => {
     async function carregar() {
