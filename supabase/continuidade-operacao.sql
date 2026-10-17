@@ -110,7 +110,11 @@ begin
    if exists(select 1 from public.chaves c where c.evento_id=p_evento and c.id<>l.id and c.status_luta<>'concluida'
     and (c.status_luta='em_andamento' or c.iniciada_em is not null or coalesce((c.pontuacao_atleta_1->>'chamador_presente')::boolean,false) or coalesce((c.pontuacao_atleta_2->>'chamador_presente')::boolean,false))
     and (c.atleta_1_id in(l.atleta_1_id,l.atleta_2_id) or c.atleta_2_id in(l.atleta_1_id,l.atleta_2_id))) then raise exception 'Atleta já reservado em outro confronto. Confira a chamada.'; end if;
-   if p_tipo<>'controle' and exists(select 1 from public.chaves c where c.evento_id=p_evento and c.id<>l.id and c.tatame=l.tatame and c.status_luta<>'concluida' and (c.status_luta='em_andamento' or c.iniciada_em is not null)) then raise exception 'Conflito: tatame já ocupado por outro confronto.'; end if;
+   -- A liberação entra na fila, mesmo com outro combate no tatame.
+   -- Somente iniciar/retomar ocupa a área; agendadas liberadas continuam na fila.
+   if (p_tipo='iniciar' or (p_tipo='relogio' and (p_dados->>'rodando')::boolean))
+    and exists(select 1 from public.chaves c where c.evento_id=p_evento and c.id<>l.id and c.tatame=l.tatame and c.status_luta='em_andamento')
+   then raise exception 'Conflito: tatame já ocupado por outro confronto.'; end if;
   end if;
 
   if p_tipo in ('pontuacao','controle') then
