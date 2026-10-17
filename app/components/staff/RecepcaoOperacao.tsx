@@ -65,6 +65,15 @@ export default function RecepcaoOperacao({ ativa = true }: { ativa?: boolean }) 
   const [busca, setBusca] = useState('');
   const [categoriaLista, setCategoriaLista] = useState('');
   const [situacaoLista, setSituacaoLista] = useState<'pendentes' | 'aprovados' | 'desclassificados' | 'todos'>('pendentes');
+  const categoriasDoFiltro = categoriasRecepcaoOrdenadas(
+    lista.filter(i => !i.categoria_id || !categoriasFechadas.includes(i.categoria_id) || i.categoria_id === avancoPendente),
+    planejamento,
+  );
+  useEffect(() => {
+    if (controlePronto && !acaoRecepcao && categoriaLista && !categoriasDoFiltro.some(c => c.nome === categoriaLista)) {
+      setCategoriaLista('');
+    }
+  }, [controlePronto, acaoRecepcao, categoriaLista, categoriasDoFiltro]);
   const selecao = filtrarCheckin(lista, busca, categoriaLista);
   const categoriaInteira = filtrarCheckin(lista, '', categoriaLista);
   const visiveis = selecao.filter(i => situacaoLista === 'todos' || (situacaoLista === 'desclassificados' ? i.status_checkin?.startsWith('desclassificado_') : situacaoLista === 'aprovados' ? i.status_checkin === 'aprovado' && !controleRecepcao[i.id]?.ausente : (!i.status_checkin || i.status_checkin === 'pendente') && !controleRecepcao[i.id]?.ausente));
@@ -532,7 +541,7 @@ export default function RecepcaoOperacao({ ativa = true }: { ativa?: boolean }) 
             <p className="text-xs text-zinc-400">Chame a categoria para o aquecimento. Sem celular? Encontre o atleta, confira o documento e faça a mesma pesagem do QR.</p>
             <ProgramacaoLutas eventoId={eventoStaff} categoriaId={categoriaSelecionadaId} ativa={ativa} />
             <input aria-label="Buscar atleta ou número de inscrição" value={busca} onChange={e => setBusca(e.target.value)} placeholder="Nome ou nº da inscrição" className="min-h-12 w-full rounded-xl border border-white/15 bg-black px-3 text-sm" />
-            <select aria-label="Categoria do check-in" value={categoriaLista} onChange={e => setCategoriaLista(e.target.value)} className="min-h-12 w-full rounded-xl border border-white/15 bg-black px-3 text-sm"><option value="">Todas as categorias</option>{categoriasRecepcaoOrdenadas(lista, planejamento).map(c => <option key={c.nome} value={c.nome}>{c.tatame ? `${c.tatame} · ` : 'Sem distribuição · '}{c.nome}</option>)}</select>
+            <select aria-label="Categoria do check-in" value={categoriaLista} onChange={e => setCategoriaLista(e.target.value)} className="min-h-12 w-full rounded-xl border border-white/15 bg-black px-3 text-sm"><option value="">Todas as categorias</option>{categoriasDoFiltro.map(c => <option key={c.nome} value={c.nome}>{c.tatame ? `${c.tatame} · ` : 'Sem distribuição · '}{c.nome}</option>)}</select>
             {categoriaSelecionadaId && <section className="rounded-xl border border-cyan-500/20 bg-cyan-950/20 p-3"><div className="grid grid-cols-3 gap-2 text-center text-xs"><div><strong className="block text-lg text-green-300">{aprovadosRecepcao}</strong>Aprovados</div><div><strong className="block text-lg text-yellow-300">{pendentesRecepcao}</strong>Pendentes</div><div><strong className="block text-lg text-red-300">{ausentesRecepcao}</strong>Ausentes</div></div><button disabled={!controlePronto || !categoriaTatamePronto || categoriaFechada || pendentesRecepcao > 0 || Boolean(acaoRecepcao)} onClick={() => void operarRecepcao('fechar')} className="mt-3 min-h-12 w-full rounded-xl bg-cyan-400 px-2 text-sm font-bold text-black disabled:opacity-40">{categoriaFechada ? 'Categoria despachada para os tatames' : 'Fechar check-in e despachar'}</button><p className="mt-2 text-xs text-zinc-400">{!categoriaTatamePronto ? AVISO_TATAMES : categoriaFechada ? 'Os aprovados estão liberados em Chamada / Tatames.' : pendentesRecepcao > 0 ? 'Resolva os pendentes: confira quem chegou ou confirme ausência após três chamadas.' : 'Confira o resumo antes de liberar a categoria. Reprovados e ausentes não entram na fila do tatame.'}</p></section>}
             <div role="group" aria-label="Situação do check-in" className="grid grid-cols-2 gap-1 sm:grid-cols-4">{(['pendentes','aprovados','todos','desclassificados'] as const).map(status => <button key={status} aria-pressed={situacaoLista === status} onClick={() => setSituacaoLista(status)} className={`min-h-11 rounded-lg px-1 text-xs font-bold ${situacaoLista === status ? 'bg-white text-black' : 'bg-white/5 text-zinc-300'}`}>{status === 'pendentes' ? 'Pendentes' : status === 'aprovados' ? 'Aprovados' : status === 'desclassificados' ? 'Desclassificados' : 'Todos'}</button>)}</div>
             {visiveis.length === 0 && <p role="status" className="rounded-lg bg-white/5 p-3 text-xs text-zinc-400">{situacaoLista === 'pendentes' ? 'Nenhum check-in pendente nesta seleção. Consulte os outros filtros.' : situacaoLista === 'desclassificados' ? 'Nenhum atleta desclassificado nesta seleção.' : 'Nenhuma inscrição nesta seleção.'}</p>}
