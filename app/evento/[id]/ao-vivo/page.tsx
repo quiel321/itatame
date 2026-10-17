@@ -324,24 +324,24 @@ function LutaTvActiveCard({
   const renderAtleta = (a: string, e: string | null | undefined, p: Pontuacao, isAzul: boolean, id?: number | null) => {
     const foto = getAtletaPerfil(atletas, id)?.foto_url;
     return (
-      <div className={`relative grid min-h-0 min-w-0 grid-cols-[clamp(2.75rem,4.5vw,4rem)_minmax(0,1fr)_auto] items-center rounded-xl border shadow-sm ${compacto ? 'gap-1.5 p-2' : 'gap-2.5 p-2.5 lg:gap-3 lg:p-3'} ${isAzul ? 'bg-[#0f172a] border-blue-900/50' : 'bg-[#450a0a] border-red-900/50'}`}>
-        <div className={`aspect-square w-full max-w-[72px] rounded-full overflow-hidden border-2 shrink-0 bg-black ${isAzul ? 'border-blue-500' : 'border-red-500'}`}>
+      <div className={`telao-atleta relative grid min-h-0 min-w-0 items-center rounded-xl border shadow-sm ${isAzul ? 'bg-[#0f172a] border-blue-900/50' : 'bg-[#450a0a] border-red-900/50'}`}>
+        <div className={`telao-foto aspect-square w-full rounded-full overflow-hidden border-2 shrink-0 bg-black ${isAzul ? 'border-blue-500' : 'border-red-500'}`}>
           {foto ? <img src={foto} alt={a} className="w-full h-full object-cover" /> :
-            <div className="w-full h-full flex items-center justify-center text-2xl font-black text-white/50">{a.charAt(0)}</div>
+            <div className="telao-inicial w-full h-full flex items-center justify-center font-black text-white/50">{a.charAt(0)}</div>
           }
         </div>
         <div className="min-w-0 self-center">
-          <h4 className={`${compacto ? 'text-sm xl:text-lg' : 'text-base xl:text-xl'} line-clamp-2 font-black uppercase leading-[1.05] text-white`}>{a}</h4>
-          <span className={`mt-1 block truncate text-[9px] font-bold uppercase tracking-wide xl:text-xs ${isAzul ? 'text-blue-300' : 'text-red-300'}`}>{e || "Sem Equipe"}</span>
+          <h4 className={`telao-nome ${a.length > 65 ? 'telao-nome-extenso' : a.length > 40 ? 'telao-nome-longo' : ''} font-black uppercase text-white`}>{a}</h4>
+          <span className={`telao-equipe mt-1 block truncate font-bold uppercase tracking-wide ${isAzul ? 'text-blue-300' : 'text-red-300'}`}>{e || "Sem Equipe"}</span>
         </div>
-        <div className={`grid shrink-0 grid-cols-[auto_auto] items-center border-l border-white/10 ${compacto ? 'gap-1.5 pl-2' : 'gap-2 pl-3'}`}>
-          <div className="grid grid-cols-2 gap-1.5 text-center">
-            <div><span className="block text-[7px] font-bold uppercase text-zinc-500 xl:text-[9px]">PUN</span><strong className="block text-sm font-black text-pink-500 xl:text-lg">{p.punicoes}</strong></div>
-            <div><span className="block text-[7px] font-bold uppercase text-zinc-500 xl:text-[9px]">VAN</span><strong className="block text-sm font-black text-yellow-500 xl:text-lg">{p.vantagens}</strong></div>
+        <div className="telao-placar grid shrink-0 items-center text-center">
+          <div className={`telao-pontos rounded-xl text-center ${isAzul ? 'bg-blue-600' : 'bg-red-600'}`}>
+            <span className="telao-legenda block font-black uppercase tracking-wider text-white/80">PTS</span>
+            <strong className={`telao-pontos-valor ${p.pontos >= 100 ? 'telao-tres-digitos' : ''} block font-black leading-none tabular-nums text-white`}>{p.pontos}</strong>
           </div>
-          <div className={`min-w-[58px] rounded-lg px-2 py-1.5 text-center xl:min-w-[72px] ${isAzul ? 'bg-blue-600' : 'bg-red-600'}`}>
-            <span className="block text-[7px] font-black uppercase tracking-wider text-white/70 xl:text-[9px]">PTS</span>
-            <strong className={`${compacto ? 'text-3xl xl:text-4xl' : 'text-4xl xl:text-5xl'} block font-black leading-none tabular-nums text-white`}>{p.pontos}</strong>
+          <div className="telao-secundarios grid grid-cols-2 gap-2 text-center">
+            <div><span className="telao-legenda block font-bold uppercase text-pink-200">PUN</span><strong className="telao-secundario-valor block font-black tabular-nums text-pink-400">{p.punicoes}</strong></div>
+            <div><span className="telao-legenda block font-bold uppercase text-yellow-100">VAN</span><strong className="telao-secundario-valor block font-black tabular-nums text-yellow-400">{p.vantagens}</strong></div>
           </div>
         </div>
       </div>
@@ -349,18 +349,18 @@ function LutaTvActiveCard({
   };
 
   return (
-    <article className={`flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border border-white/5 bg-[#0a0a0e] shadow-2xl ${compacto ? 'p-2.5' : 'p-3 lg:p-4'}`}>
+    <article className={`telao-luta flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border border-white/5 bg-[#0a0a0e] shadow-2xl ${compacto ? 'p-2.5' : 'p-3 lg:p-4'}`}>
       <header className={`flex items-start justify-between ${compacto ? 'mb-2 gap-2' : 'mb-3 gap-3'}`}>
         <div className="min-w-0 flex-1">
           <div className="mb-1 flex items-center gap-2">
             <span className="flex h-2.5 w-2.5 shrink-0 animate-pulse items-center justify-center rounded-full bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.8)]"></span>
-            <h2 className={`${compacto ? 'text-base xl:text-xl' : 'text-lg xl:text-2xl'} line-clamp-2 font-black uppercase leading-tight tracking-tight text-white`}>{luta.tatame || "Tatame"} · {rotuloLutaCurto(luta)}</h2>
+            <h2 className="telao-titulo line-clamp-2 font-black uppercase leading-tight tracking-tight text-white">{luta.tatame || "Tatame"} · {rotuloLutaCurto(luta)}</h2>
           </div>
-          <p className={`${compacto ? 'text-[9px]' : 'text-[10px] xl:text-xs'} line-clamp-2 font-bold uppercase leading-tight tracking-wider text-zinc-400`}>{subtituloLuta(luta)}</p>
+          <p className="telao-categoria line-clamp-2 font-bold uppercase leading-tight tracking-wider text-zinc-400">{subtituloLuta(luta)}</p>
         </div>
-        <div className={`shrink-0 rounded-xl border border-white/10 bg-zinc-900 text-center ${compacto ? 'min-w-[96px] px-3 py-2' : 'min-w-[112px] px-4 py-2.5'}`}>
-          <span className="mb-0.5 block text-[8px] font-black uppercase tracking-widest text-zinc-500 xl:text-[10px]">Tempo</span>
-          <span className={`${compacto ? 'text-3xl xl:text-4xl' : 'text-4xl xl:text-5xl'} block font-black leading-none tabular-nums text-white`}>{formatarTempo(tempoLuta)}</span>
+        <div className="telao-relogio shrink-0 rounded-xl border border-white/10 bg-zinc-900 text-center">
+          <span className="telao-legenda mb-0.5 block font-black uppercase tracking-widest text-zinc-400">Tempo</span>
+          <span className="telao-tempo block font-black leading-none tabular-nums text-white">{formatarTempo(tempoLuta)}</span>
         </div>
       </header>
       <div className={`grid min-h-0 flex-1 grid-rows-2 ${compacto ? 'gap-2' : 'gap-3'}`}>
@@ -369,6 +369,38 @@ function LutaTvActiveCard({
       </div>
     </article>
   );
+}
+
+// Mede apenas o espaço visual disponível. Não altera a seleção ou a ordem das lutas.
+function GradeLutasTv({ lutas, agora, atletas }: { lutas: LutaAoVivo[]; agora: number; atletas: Record<number, AtletaPerfil> }) {
+  const gradeRef = useRef<HTMLDivElement>(null);
+  const [colunas, setColunas] = useState(1);
+  useEffect(() => {
+    const grade = gradeRef.current;
+    if (!grade) return;
+    const ajustar = () => {
+      const { width, height } = grade.getBoundingClientRect();
+      if (!width || !height) return;
+      let melhor = 1, maior = -1;
+      const alturaReferencia = width < height ? 620 : 430;
+      for (let n = 1; n <= lutas.length; n++) {
+        const linhas = Math.ceil(lutas.length / n);
+        const larguraCartao = (width - (n - 1) * 12) / n;
+        const alturaCartao = (height - (linhas - 1) * 12) / linhas;
+        const aproveitamento = lutas.length / (n * linhas);
+        const escala = Math.min(larguraCartao / 560, alturaCartao / alturaReferencia) * aproveitamento;
+        if (escala > maior) { maior = escala; melhor = n; }
+      }
+      setColunas(melhor);
+    };
+    ajustar();
+    const observador = new ResizeObserver(ajustar);
+    observador.observe(grade);
+    return () => observador.disconnect();
+  }, [lutas.length]);
+  return <div ref={gradeRef} className="telao-grade grid h-full min-h-0 w-full gap-3" style={{gridTemplateColumns:`repeat(${colunas},minmax(0,1fr))`,gridTemplateRows:`repeat(${Math.ceil(lutas.length/colunas)},minmax(0,1fr))`}}>
+    {lutas.map(luta=><LutaTvActiveCard key={luta.id} luta={luta} agora={agora} atletas={atletas} compacto={lutas.length>=3}/>)}
+  </div>;
 }
 
 function FilaTvLine({ luta, index, agora }: { luta: LutaAoVivo; index: number; agora: number }) {
@@ -815,17 +847,71 @@ export default function AoVivoPage() {
           body.itatame-telao-ativo > nav,
           body.itatame-telao-ativo > footer { display: none !important; }
           body.itatame-telao-ativo > main { padding-top: 0 !important; }
+          .telao-luta { container-type: size; }
+          .telao-atleta {
+            --tv-foto: clamp(28px, min(20cqw, 28cqh), 192px);
+            --tv-caixa: clamp(42px, min(25cqw, 28cqh), 192px);
+            --tv-nome: clamp(12px, min(5.8cqw, 7cqh), 72px);
+            --tv-pontos: clamp(24px, min(20cqw, 22cqh), 160px);
+            grid-template-columns: var(--tv-foto) minmax(0, 1fr) auto;
+            gap: clamp(5px, 1.5cqw, 18px);
+            padding: clamp(5px, 1cqh, 10px) clamp(6px, 2cqw, 20px);
+          }
+          .telao-foto { width: var(--tv-foto); border-width: clamp(2px, .5cqw, 5px); }
+          .telao-inicial { font-size: calc(var(--tv-foto) * .5); }
+          .telao-nome { font-size: var(--tv-nome); line-height: 1.04; overflow-wrap: anywhere; }
+          .telao-nome-longo { font-size: calc(var(--tv-nome) * .85); }
+          .telao-nome-extenso { font-size: calc(var(--tv-nome) * .7); }
+          .telao-equipe { font-size: clamp(9px, min(2.3cqw, 3cqh), 24px); }
+          .telao-placar { gap: clamp(3px, 1cqh, 10px); }
+          .telao-pontos { width: var(--tv-caixa); padding: clamp(4px, .7cqh, 8px) clamp(4px, 1.3cqw, 12px); }
+          .telao-pontos-valor { font-size: var(--tv-pontos); }
+          .telao-tres-digitos { font-size: calc(var(--tv-pontos) * .65); }
+          .telao-legenda { font-size: clamp(8px, min(2cqw, 2.6cqh), 18px); line-height: 1.1; }
+          .telao-secundario-valor { font-size: clamp(12px, min(4cqw, 6cqh), 38px); line-height: 1.05; }
+          .telao-titulo { font-size: clamp(12px, min(4cqw, 5cqh), 36px); }
+          .telao-categoria { font-size: clamp(8px, min(2cqw, 2.6cqh), 18px); }
+          .telao-relogio { padding: clamp(4px, 1cqh, 12px) clamp(8px, 2cqw, 20px); }
+          .telao-tempo { font-size: clamp(22px, min(8cqw, 10cqh), 72px); }
+          @container (max-height: 380px) {
+            .telao-placar { grid-template-columns: auto var(--tv-caixa); gap: clamp(4px, 1cqw, 10px); }
+            .telao-pontos { order: 2; }
+            .telao-secundarios { order: 1; gap: clamp(3px, 1cqw, 8px); }
+          }
+          @container (max-width: 380px) and (min-height: 240px) {
+            .telao-placar { grid-template-columns: var(--tv-caixa); }
+            .telao-pontos { order: 0; }
+            .telao-secundarios { order: 1; }
+            .telao-pontos-valor { font-size: calc(var(--tv-pontos) * .8); }
+            .telao-tres-digitos { font-size: calc(var(--tv-pontos) * .52); }
+          }
+          @container (max-height: 220px) {
+            .telao-atleta {
+              --tv-foto: clamp(18px, min(16cqw, 18cqh), 40px);
+              --tv-caixa: clamp(30px, min(18cqw, 22cqh), 50px);
+              --tv-nome: clamp(10px, min(4.8cqw, 6cqh), 18px);
+              --tv-pontos: clamp(18px, min(14cqw, 16cqh), 36px);
+              gap: 5px; padding: 3px 6px;
+            }
+            .telao-equipe { margin-top: 2px; font-size: 8px; }
+            .telao-categoria { -webkit-line-clamp: 1; }
+            .telao-relogio { padding: 3px 6px; }
+            .telao-tempo { font-size: 20px; }
+            .telao-legenda { font-size: 7px; }
+            .telao-secundario-valor { font-size: 10px; }
+            .telao-pontos { padding: 3px; }
+          }
         ` }} />
 
         {/* CABEÇALHO TV MINIMALISTA */}
         <header className="mb-3 flex items-center justify-between border-b border-white/5 pb-3">
-          <div className="flex items-center gap-6">
+          <div className="flex min-w-0 flex-1 items-center gap-3 lg:gap-6">
             <span className="bg-red-600 text-white font-black text-sm px-4 py-2 rounded-lg uppercase tracking-widest flex items-center gap-2 shadow-[0_0_15px_rgba(220,38,38,0.5)]">
               <Radio size={18} className={evento?.status?.toUpperCase() === 'ENCERRADO' ? '' : 'animate-pulse'} /> {evento?.status?.toUpperCase() === 'ENCERRADO' ? 'ENCERRADO' : 'AO VIVO'}
             </span>
-            <h1 className="text-4xl lg:text-5xl font-black uppercase text-white tracking-tighter truncate max-w-3xl">{evento?.nome || "Spartan Open Jiu-Jitsu"}</h1>
+            <h1 className="min-w-0 text-2xl lg:text-4xl font-black uppercase text-white tracking-tighter truncate">{evento?.nome || "Spartan Open Jiu-Jitsu"}</h1>
           </div>
-          <div className="text-right flex flex-col items-end">
+          <div className="ml-4 shrink-0 text-right flex flex-col items-end">
             <span className="text-4xl lg:text-5xl font-black text-zinc-500 tabular-nums leading-none">
               {new Date(agora).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
             </span>
@@ -856,27 +942,7 @@ export default function AoVivoPage() {
           {lutasAtivas.length === 0 ? (
             <TelaoOcioso eventoId={eventoId} fila={filaLutas} resultados={lutasFinalizadas} />
           ) : (
-            <div className={`grid h-full min-h-0 gap-3 ${
-              lutasAtivas.length === 1
-                ? 'mx-auto w-full max-w-5xl grid-cols-1'
-                : lutasAtivas.length === 2
-                  ? 'grid-cols-1 md:grid-cols-2'
-                  : lutasAtivas.length === 3
-                    ? 'grid-cols-1 md:grid-cols-3'
-                    : lutasAtivas.length === 4
-                      ? 'grid-cols-2 grid-rows-2'
-                      : 'grid-cols-2 md:grid-cols-3 grid-rows-2'
-            }`}>
-              {lutasAtivas.map((luta) => (
-                <LutaTvActiveCard
-                  key={luta.id}
-                  luta={luta}
-                  agora={agora}
-                  atletas={atletas}
-                  compacto={lutasAtivas.length >= 3}
-                />
-              ))}
-            </div>
+            <GradeLutasTv lutas={lutasAtivas} agora={agora} atletas={atletas}/>
           )}
         </section>
 
