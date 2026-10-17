@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import VendasDiariaFotografos from '../../_components/VendasDiariaFotografos';
+import ControleEmBreveGaleria from '../../_components/ControleEmBreveGaleria';
+import { edicaoGaleriaConfirmada } from '@/app/lib/fotos-confirmar-edicao';
 import LinkGaleria from "@/app/fotos/_components/LinkGaleria";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -64,6 +66,7 @@ export default function FotografoDashboardPage() {
   const [editGaleriaForm, setEditGaleriaForm] = useState({ nome: "", categoria: "outros-eventos", cidade: "", estado: "", dataEvento: "", preco: "15,00", emBreve: false });
   const [editCapaGaleria, setEditCapaGaleria] = useState<File | null>(null);
   const [salvandoEdicao, setSalvandoEdicao] = useState(false);
+  const [avisoEdicao, setAvisoEdicao] = useState<{ id: string; erro: boolean; texto: string } | null>(null);
   const [excluindoGaleria, setExcluindoGaleria] = useState(false);
   const [excluindoConta, setExcluindoConta] = useState(false);
   const [linkCopiado, setLinkCopiado] = useState<string | null>(null);
@@ -299,6 +302,7 @@ export default function FotografoDashboardPage() {
   function abrirEdicaoGaleria(galeria: GaleriaFreelancer) {
     setGerenciandoGaleria(null);
     setEditandoGaleria(galeria);
+    setAvisoEdicao(null);
     setEditGaleriaForm({
       nome: galeria.nome || "",
       categoria: galeria.categoria || "outros-eventos",
@@ -317,40 +321,42 @@ export default function FotografoDashboardPage() {
     if (!editandoGaleria) return;
     if (!dataGaleriaValida(editGaleriaForm.dataEvento)) { alert("Informe uma data válida no formato DD/MM/AAAA."); return; }
     if (!editGaleriaForm.cidade.trim() || !editGaleriaForm.estado) { alert("Selecione a cidade do evento na lista."); return; }
+    const id = editandoGaleria.id;
     setSalvandoEdicao(true);
-    let novaCapaUrl = editandoGaleria.capa_url;
-    const { data: { session } } = await supabase.auth.getSession();
-
-    if (editCapaGaleria && session) {
-      const form = new FormData();
-      form.append("file", editCapaGaleria);
-      const uploadResponse = await fetch("/api/fotos/capa-upload", { method: "POST", headers: { Authorization: `Bearer ${session.access_token}` }, body: form });
-      const upload = await uploadResponse.json().catch(() => null);
-      if (upload?.publicUrl) novaCapaUrl = upload.publicUrl;
-    }
-
-    const precoCentavos = Math.max(0, Math.round(Number(editGaleriaForm.preco.replace(/\./g, "").replace(",", ".")) * 100));
-    const descontosProgressivos = validarFaixasDesconto(faixasEdicao);
-    if (!descontosProgressivos) { setSalvandoEdicao(false); alert("As faixas precisam ter quantidades e descontos crescentes."); return; }
-
-    const { error } = await supabase.from("foto_eventos").update({
-      nome: editGaleriaForm.nome.trim(),
-      categoria: editGaleriaForm.categoria,
-      cidade: editGaleriaForm.cidade.trim(),
-      estado: editGaleriaForm.estado.trim().toUpperCase(),
-      data_evento: editGaleriaForm.dataEvento || null,
-      preco_padrao_centavos: precoCentavos,
-      descontos_progressivos: descontosProgressivos,
-      em_breve: editGaleriaForm.emBreve,
-      capa_url: novaCapaUrl
-    }).eq("id", editandoGaleria.id);
-
-    setSalvandoEdicao(false);
-    if (error) {
-      alert("Erro ao salvar alterações. Verifique sua conexão.");
-    } else {
-      window.location.reload();
-    }
+    setAvisoEdicao(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw Error('Sessão expirada. Entre novamente.');
+      const precoCentavos = Math.round(Number(editGaleriaForm.preco.replace(/\./g, '').replace(',', '.')) * 100);
+      if (!Number.isInteger(precoCentavos) || precoCentavos < 0 || precoCentavos > 1_000_000) throw Error('Informe um preço válido para a foto.');
+      const descontosProgressivos = validarFaixasDesconto(faixasEdicao);
+      if (!descontosProgressivos) throw Error('As faixas precisam ter quantidades e descontos crescentes.');
+      let novaCapaUrl = editandoGaleria.capa_url || null;
+      if (editCapaGaleria) {
+        const form = new FormData(); form.append('file', editCapaGaleria);
+        const response = await fetch('/api/fotos/capa-upload', { method: 'POST', headers: { Authorization: `Bearer ${session.access_token}` }, body: form });
+        const upload = await response.json().catch(() => null);
+        if (!response.ok || !upload?.publicUrl) throw Error(upload?.error || 'Não foi possível enviar a nova capa.');
+        novaCapaUrl = upload.publicUrl;
+      }
+      const alteracao = { nome: editGaleriaForm.nome.trim(), categoria: editGaleriaForm.categoria,
+        cidade: editGaleriaForm.cidade.trim(), estado: editGaleriaForm.estado.trim().toUpperCase(), data_evento: editGaleriaForm.dataEvento || null,
+        preco_padrao_centavos: precoCentavos, descontos_progressivos: descontosProgressivos, em_breve: editGaleriaForm.emBreve, capa_url: novaCapaUrl };
+      const campos = 'id, nome, categoria, cidade, estado, data_evento, preco_padrao_centavos, descontos_progressivos, em_breve, capa_url';
+      // Pede representação JSON da linha salva e não repete uma gravação sem resposta.
+      const resultado = await supabase.from('foto_eventos').update(alteracao).eq('id', id).eq('created_by', session.user.id).select(campos).maybeSingle();
+      let salvo = resultado.data;
+      if (resultado.error || !edicaoGaleriaConfirmada(salvo, alteracao)) {
+        const conferencia = await supabase.from('foto_eventos').select(campos).eq('id', id).eq('created_by', session.user.id).maybeSingle();
+        salvo = conferencia.data;
+      }
+      if (!edicaoGaleriaConfirmada(salvo, alteracao)) throw Error('Não foi possível confirmar todas as alterações. Confira a galeria antes de tentar novamente.');
+      setMinhasGalerias(atuais => atuais.map(g => g.id === id ? { ...g, ...salvo } : g));
+      setEditandoGaleria(null);
+      setAvisoEdicao({ id, erro: false, texto: 'Galeria atualizada com sucesso.' });
+    } catch (e) {
+      setAvisoEdicao({ id, erro: true, texto: e instanceof Error ? e.message : 'Não foi possível confirmar a atualização da galeria.' });
+    } finally { setSalvandoEdicao(false); }
   }
 
   async function excluirGaleria(galeriaId: string) {
@@ -683,6 +689,11 @@ export default function FotografoDashboardPage() {
                               <button type="button" disabled={configurandoAlbumId === galeria.id} onClick={() => void configurarAlbum(galeria, { acessoPorLink: !galeria.acesso_por_link })} className="rounded-lg border border-white/15 px-3 py-2 hover:border-retratt disabled:opacity-50">{galeria.acesso_por_link ? "Tornar público" : "Ocultar e liberar por link"}</button>
                               <button type="button" disabled={configurandoAlbumId === galeria.id} onClick={() => void configurarAlbum(galeria, { downloadGratuito: !galeria.permite_download_gratis })} className="rounded-lg border border-white/15 px-3 py-2 hover:border-retratt disabled:opacity-50">{galeria.permite_download_gratis ? "Vender por foto" : "Liberar download gratuito"}</button>
                             </div>
+                            <ControleEmBreveGaleria galeriaId={galeria.id} ativo={Boolean(galeria.em_breve)} onConfirmado={(ativo) => {
+                              setMinhasGalerias(atuais => atuais.map(item => item.id === galeria.id ? { ...item, em_breve: ativo } : item));
+                              if (editandoGaleria?.id === galeria.id) setEditGaleriaForm(atual => ({ ...atual, emBreve: ativo }));
+                            }} />
+                            {avisoEdicao?.id === galeria.id && !avisoEdicao.erro && <p role="status" className="mt-3 text-xs text-emerald-300">{avisoEdicao.texto}</p>}
                             <ParceirosAlbum eventoId={galeria.id} />
 
                             {renderizarGerenciador(galeria.id)}
@@ -765,6 +776,7 @@ export default function FotografoDashboardPage() {
                                       </div>
                                    )}
 
+                                   {avisoEdicao?.id === galeria.id && avisoEdicao.erro && <p role="alert" className="sm:col-span-2 text-xs text-orange-200">{avisoEdicao.texto}</p>}
                                    <div className="sm:col-span-2 flex flex-col sm:flex-row items-stretch sm:items-center justify-between mt-3 sm:mt-4 pt-4 sm:pt-5 border-t border-white/5 gap-3 sm:gap-4">
                                       <button
                                         type="button"

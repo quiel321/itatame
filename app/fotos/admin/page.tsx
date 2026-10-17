@@ -20,6 +20,7 @@ import { dataGaleriaValida } from "@/app/lib/fotos-data";
 import CapaGaleriaInput from "../_components/CapaGaleriaInput";
 import EditorFaixasDesconto from "../_components/EditorFaixasDesconto";
 import VendasDiariaFotografos from "../_components/VendasDiariaFotografos";
+import ControleEmBreveGaleria from '../_components/ControleEmBreveGaleria';
 import { faixasDoEvento, validarFaixasDesconto, type FaixaDesconto } from "@/app/lib/fotos-descontos";
 import { precoGaleriaCentavos, precosGaleriaValidos } from "@/app/lib/fotos-criacao-galeria";
 
@@ -780,6 +781,11 @@ export default function FotosAdminPage() {
                           </LinkGaleria>
                        </div>
                     </div>
+
+                      <ControleEmBreveGaleria galeriaId={evento.id} ativo={Boolean(evento.em_breve)} onConfirmado={(ativo) => {
+                        setFotoEventos(atuais => atuais.map(item => item.id === evento.id ? { ...item, em_breve: ativo } : item));
+                        if (editandoGaleria === evento.id) setEdicaoGaleria(atual => ({ ...atual, emBreve: ativo }));
+                      }} />
 
                       {editandoGaleria === evento.id && (
                       <div className="mt-4 sm:mt-6 mb-2 rounded-2xl border border-retratt/30 bg-[#050505] overflow-hidden shadow-[0_0_30px_rgba(255,90,31,0.05)] animate-in slide-in-from-top-2 fade-in duration-200">

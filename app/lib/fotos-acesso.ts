@@ -2,23 +2,17 @@ import type { SupabaseClient, User } from "@supabase/supabase-js";
 
 export type PerfilFotos = "comprador" | "fotografo" | "organizador";
 
-function perfilDosMetadados(user: User): PerfilFotos | null {
-  const perfil = user.user_metadata?.foto_perfil;
-  return perfil === "comprador" || perfil === "fotografo" || perfil === "organizador" ? perfil : null;
-}
-
 export async function resolverPerfilFotos(supabase: SupabaseClient, user: User): Promise<PerfilFotos | null> {
-  const perfilMetadata = perfilDosMetadados(user);
-  if (perfilMetadata) return perfilMetadata;
-
-  const [fotografo, organizador, comprador] = await Promise.all([
+  // O acesso vem dos cadastros vinculados ao usuário, não de metadados editáveis.
+  const [fotografo, organizador, organizadorFotos, comprador] = await Promise.all([
     supabase.from("fotografos").select("id").eq("user_id", user.id).maybeSingle(),
     supabase.from("organizadores").select("user_id").eq("user_id", user.id).maybeSingle(),
+    supabase.from("foto_organizadores").select("id").eq("id", user.id).maybeSingle(),
     supabase.from("foto_compradores").select("user_id").eq("user_id", user.id).maybeSingle(),
   ]);
 
   if (fotografo.data) return "fotografo";
-  if (organizador.data) return "organizador";
+  if (organizador.data || organizadorFotos.data) return "organizador";
   if (comprador.data) return "comprador";
   return null;
 }

@@ -33,13 +33,13 @@ export function modeloCheckoutAutores(organizadorId: string | null, autores: str
   const ids = [...new Set(autores)];
   if (!ids.length || ids.some(id => !id || id === 'null' || id === 'undefined')) throw new Error('Autoria de um ou mais arquivos indisponível.');
   if (!organizadorId) {
-    if (ids.length > 1) throw new Error('Compre separadamente as fotos de cada fotógrafo. A compra conjunta exige recebimento pelo organizador na mesma galeria.');
+    if (ids.length > 1) throw new Error('Estas fotos precisam ser compradas separadamente por fotógrafo. Finalize as fotos de um fotógrafo e depois as do outro.');
     return 'royalty' as const;
   }
   const regras = ids.map(id => vinculos.find(v => v.fotografo_id === id));
   if (regras.some(v => !v || v.status !== 'ativo')) throw new Error('Um dos fotógrafos não está credenciado para vender nesta galeria.');
   if (ids.length > 1 && regras.some(v => v!.modelo_recebimento !== 'diaria_organizador')) {
-    throw new Error('Para comprar fotos de vários fotógrafos juntas, todos devem estar no modelo diária desta galeria. Por enquanto, compre separadamente as fotos de cada fotógrafo.');
+    throw new Error('Estas fotos precisam ser compradas separadamente por fotógrafo. Finalize as fotos de um fotógrafo e depois as do outro.');
   }
   return regras[0]!.modelo_recebimento === 'diaria_organizador' ? 'diaria_organizador' as const : 'royalty' as const;
 }
