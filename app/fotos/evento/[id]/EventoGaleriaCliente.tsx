@@ -629,30 +629,30 @@ export default function EventoGaleriaCliente({ initialData, acesso }: { initialD
           {evento?.em_breve && <div className="mb-4 rounded-2xl border border-sky-400/20 bg-sky-400/[0.08] px-4 py-4 text-center"><p className="text-sm font-black uppercase tracking-wider text-sky-300">Em breve</p><p className="mt-1 text-xs text-zinc-300">Esta galeria ainda vai receber fotos. Volte em breve para encontrar as suas.</p></div>}
           {evento?.permite_download_gratis && !evento.em_breve && <div className="mb-5 rounded-2xl border border-emerald-400/30 bg-emerald-400/10 px-5 py-4"><p className="text-sm font-black uppercase text-emerald-300">Downloads gratuitos</p><p className="mt-1 text-xs text-zinc-300">Abra uma foto ou vídeo e baixe o arquivo original sem pagamento.</p></div>}
           {evento && faixasDesconto.length > 0 && !evento.em_breve && !evento.permite_download_gratis && (
-            <section className="mx-auto mb-6 max-w-5xl" aria-label="Descontos progressivos nas fotos">
-              <div className="grid min-w-0 gap-3">
-                <div className="relative overflow-hidden rounded-2xl border border-sky-400/20 bg-gradient-to-r from-sky-950/80 to-[#071720] px-5 py-4 sm:px-6">
+            <section className="mx-auto mb-4 max-w-5xl sm:mb-6" aria-label="Descontos progressivos nas fotos">
+              <div className="grid min-w-0 gap-2 sm:gap-3">
+                <div className="relative overflow-hidden rounded-xl border border-sky-400/20 bg-gradient-to-r from-sky-950/80 to-[#071720] px-3 py-2.5 sm:rounded-2xl sm:px-6 sm:py-4">
                   <span aria-hidden="true" className="pointer-events-none absolute -right-1 -top-9 select-none text-[150px] font-black leading-none text-sky-300/[0.06]">%</span>
-                  <div className="relative flex items-start gap-3">
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sky-400/15 text-sky-300"><Percent size={26} /></span>
+                  <div className="relative flex items-start gap-2 sm:gap-3">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-400/15 text-sky-300 sm:h-11 sm:w-11 sm:rounded-xl"><Percent size={26} className="h-5 w-5 sm:h-[26px] sm:w-[26px]" /></span>
                     <div className="min-w-0">
-                      <p className="text-base font-black uppercase leading-tight text-sky-300 sm:text-xl">Ganhe até {faixasDesconto.at(-1)?.percentual}% de desconto</p>
-                      <p className="mt-1 text-xs text-zinc-300">{proximaFaixaGaleria ? quantidadeDescontoGaleria > 0 ? `Mais ${proximaFaixaGaleria.quantidade - quantidadeDescontoGaleria} ${proximaFaixaGaleria.quantidade - quantidadeDescontoGaleria === 1 ? "foto" : "fotos"} para liberar ${proximaFaixaGaleria.percentual}%` : "Escolha suas fotos e acompanhe as faixas de desconto abaixo." : `Meta máxima alcançada com ${quantidadeDescontoGaleria} fotos!`}</p>
+                      <p className="text-sm font-black uppercase leading-tight text-sky-300 sm:text-xl">Ganhe até {faixasDesconto.at(-1)?.percentual}% de desconto</p>
+                      <p className="mt-0.5 text-[10px] leading-snug text-zinc-300 sm:mt-1 sm:text-xs">{proximaFaixaGaleria ? quantidadeDescontoGaleria > 0 ? `Mais ${proximaFaixaGaleria.quantidade - quantidadeDescontoGaleria} ${proximaFaixaGaleria.quantidade - quantidadeDescontoGaleria === 1 ? "foto" : "fotos"} para liberar ${proximaFaixaGaleria.percentual}%` : "Escolha suas fotos e acompanhe as faixas de desconto abaixo." : `Meta máxima alcançada com ${quantidadeDescontoGaleria} fotos!`}</p>
                     </div>
                   </div>
-                  <div className="relative mt-4 h-1.5 overflow-hidden rounded-full bg-sky-400/15" role="progressbar" aria-label="Progresso para o desconto máximo" aria-valuenow={Math.min(quantidadeDescontoGaleria, metaDescontoGaleria)} aria-valuemin={0} aria-valuemax={metaDescontoGaleria}>
+                  <div className="relative mt-2 h-1 overflow-hidden rounded-full bg-sky-400/15 sm:mt-4 sm:h-1.5" role="progressbar" aria-label="Progresso para o desconto máximo" aria-valuenow={Math.min(quantidadeDescontoGaleria, metaDescontoGaleria)} aria-valuemin={0} aria-valuemax={metaDescontoGaleria}>
                     <div className="h-full rounded-full bg-sky-400 transition-[width] duration-300" style={{ width: `${progressoDescontoGaleria}%` }} />
                   </div>
-                  <p className="relative mt-2 text-[10px] text-zinc-400">Desconto automático em fotos da mesma galeria e fotógrafo.</p>
+                  <p className="relative mt-1.5 text-[9px] leading-snug text-zinc-400 sm:mt-2 sm:text-[10px]">Desconto automático em fotos da mesma galeria e fotógrafo.</p>
                 </div>
-                <div className="grid min-w-0 gap-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 130px), 1fr))' }}>
+                <div className="grid min-w-0 gap-1.5 [--desconto-coluna:64px] sm:gap-2 sm:[--desconto-coluna:130px]" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, var(--desconto-coluna)), 1fr))' }}>
                   {faixasDesconto.map((faixa) => {
                     const alcançada = quantidadeDescontoGaleria >= faixa.quantidade;
                     const próxima = proximaFaixaGaleria?.quantidade === faixa.quantidade;
-                    return <div key={faixa.quantidade} className={`flex min-h-28 min-w-0 flex-col items-center justify-center rounded-xl border px-3 py-4 text-center transition-colors ${alcançada ? "border-sky-300 bg-sky-400 text-slate-950" : próxima ? "border-sky-400/60 bg-sky-400/20 text-sky-200" : "border-sky-400/15 bg-sky-400/[0.08] text-sky-300"}`}>
-                      <span className="text-[9px] font-bold uppercase tracking-widest">{alcançada ? "Liberado" : próxima ? "Próxima meta" : "Ganhe"}</span>
-                      <strong className="mt-1 text-2xl font-black leading-none sm:text-3xl">{faixa.percentual}%</strong>
-                      <span className="mt-2 text-[10px] font-medium">com {faixa.quantidade} fotos</span>
+                    return <div key={faixa.quantidade} className={`flex min-h-[72px] min-w-0 flex-col items-center justify-center rounded-lg border px-1 py-2 text-center transition-colors sm:min-h-28 sm:rounded-xl sm:px-3 sm:py-4 ${alcançada ? "border-sky-300 bg-sky-400 text-slate-950" : próxima ? "border-sky-400/60 bg-sky-400/20 text-sky-200" : "border-sky-400/15 bg-sky-400/[0.08] text-sky-300"}`}>
+                      <span className="text-[8px] font-bold uppercase leading-tight tracking-normal sm:text-[9px] sm:tracking-widest">{alcançada ? "Liberado" : próxima ? "Próxima meta" : "Ganhe"}</span>
+                      <strong className="mt-1 text-xl font-black leading-none sm:text-3xl">{faixa.percentual}%</strong>
+                      <span className="mt-1 text-[9px] font-medium sm:mt-2 sm:text-[10px]">com {faixa.quantidade} fotos</span>
                     </div>;
                   })}
                 </div>
