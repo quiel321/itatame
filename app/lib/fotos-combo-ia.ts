@@ -3,7 +3,7 @@ import { ratearCentavos } from './fotos-vendas-diaria';
 
 export const COMBOS_IA_STORAGE_KEY = 'retratt_combos_ia_v1';
 export const MAX_ITENS_COMBO_IA = 500;
-export const FAIXAS_COMBO_IA = [{ quantidade: 10, percentual: 40 }, { quantidade: 15, percentual: 60 }, { quantidade: 25, percentual: 70 }, { quantidade: 35, percentual: 80 }] as const;
+export const FAIXAS_COMBO_IA = [{ quantidade: 10, percentual: 50 }, { quantidade: 15, percentual: 60 }, { quantidade: 25, percentual: 70 }, { quantidade: 35, percentual: 80 }] as const;
 export type ComboIaAssinado = { versao: 1; eventoId: string; fotoIds: string[]; percentual: number; expira: number };
 export type OfertaComboIa = { token: string; eventoId: string; eventoNome: string; fotoIds: string[]; quantidade: number; percentual: number; subtotalCentavos: number; descontoCentavos: number; totalCentavos: number; expira: number };
 export type ItemComboIa = { id: string; precoCentavos: number; mimeType?: string | null };
