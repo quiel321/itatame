@@ -21,6 +21,7 @@ import { dataGaleriaValida } from "@/app/lib/fotos-data";
 import CapaGaleriaInput from "../_components/CapaGaleriaInput";
 import EditorFaixasDesconto from "../_components/EditorFaixasDesconto";
 import VendasDiariaFotografos from "../_components/VendasDiariaFotografos";
+import SecaoOrganizador from '../_components/SecaoOrganizador';
 import ControleEmBreveGaleria from '../_components/ControleEmBreveGaleria';
 import { faixasDoEvento, validarFaixasDesconto, type FaixaDesconto } from "@/app/lib/fotos-descontos";
 import { precoGaleriaCentavos, precosGaleriaValidos } from "@/app/lib/fotos-criacao-galeria";
@@ -63,6 +64,7 @@ export default function FotosAdminPage() {
 
   const [organizador, setOrganizador] = useState<OrganizadorFinanceiro | null>(null);
   const [temOrganizadorItatame, setTemOrganizadorItatame] = useState(false);
+  const [avatarOrganizador, setAvatarOrganizador] = useState<string | null>(null);
   const [slugPublico, setSlugPublico] = useState<string | null>(null);
   const [orgForm, setOrgForm] = useState({ nome: "", email: "", telefone: "", documento: "", tipo_entidade: "empresa", academia: "", cidade: "", estado: "" });
 
@@ -161,6 +163,7 @@ export default function FotosAdminPage() {
 
       setOrganizador(orgData);
       setSlugPublico(fotoOrg.data?.slug || null);
+      setAvatarOrganizador(fotoOrg.data?.avatar_url || null);
       setOrgForm({
         nome: orgData?.nome || user.user_metadata?.nome_completo || user.user_metadata?.nome || "",
         email: orgData?.email || user.email || "",
@@ -293,6 +296,7 @@ export default function FotosAdminPage() {
       });
       const resultado = await response.json().catch(() => null);
       if (!response.ok || !resultado?.publicUrl) throw new Error(resultado?.error || "Não foi possível salvar a imagem.");
+      if (tipo === 'avatar') setAvatarOrganizador(resultado.publicUrl);
       setMensagem(tipo === "avatar" ? "Foto de perfil atualizada." : "Capa pública atualizada.");
     } catch (error) {
       console.error("Upload do perfil do organizador:", error);
@@ -606,57 +610,22 @@ export default function FotosAdminPage() {
       <main className="min-h-screen bg-[#050505] text-white font-sans relative overflow-x-hidden w-full">
 
         <section className="border-b border-white/5 bg-[radial-gradient(circle_at_85%_0%,rgba(255,90,31,0.15),transparent_40%),linear-gradient(180deg,#0a0a0e,#050505)] w-full">
-          <div className="mx-auto max-w-7xl px-4 py-8 md:px-8 md:py-12">
+          <div className="mx-auto max-w-7xl px-4 py-5 md:px-8 md:py-6">
 
-            <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between mb-10">
-              <div className="min-w-0">
-                <p className="inline-flex items-center gap-1.5 rounded-full border border-retratt/20 bg-retratt/10 px-3 py-1 text-[9px] font-black uppercase tracking-[0.24em] text-retratt mb-4 shadow-[0_0_15px_rgba(255,90,31,0.1)]">
-                  <Trophy size={12} /> Painel Administrativo
-                </p>
-                <h1 className="text-3xl sm:text-4xl md:text-5xl font-black uppercase tracking-tight leading-none drop-shadow-md break-words">
-                  Bem-vindo(a), {primeiroNome}!
-                </h1>
-                <p className="mt-3 max-w-xl text-xs md:text-sm leading-relaxed text-zinc-400 font-medium">
-                  Ative as suas galerias, defina os royalties dos fotógrafos credenciados e acompanhe cada venda.
-                </p>
-              </div>
-
-              <div className="flex flex-col sm:flex-row w-full sm:w-auto items-stretch sm:items-center gap-3">
-                {slugPublico && (
-                  <Link href={`/fotos/organizador/${slugPublico}`} className="inline-flex h-11 w-full sm:w-auto cursor-pointer items-center justify-center gap-2 rounded-xl border border-retratt/30 bg-retratt/10 px-5 text-[10px] font-black uppercase tracking-widest text-retratt transition-colors hover:bg-retratt hover:text-black">
-                    Minha página pública <ArrowRight size={14} className="shrink-0" />
-                  </Link>
-                )}
-                {userId && (
-                   <button onClick={deslogar} className="inline-flex h-11 w-full sm:w-auto cursor-pointer items-center justify-center gap-2 rounded-xl border border-retratt/20 bg-retratt/10 px-6 text-[10px] font-black uppercase tracking-widest text-retratt hover:bg-retratt hover:text-white transition-all shadow-sm">
-                     Sair <LogOut size={14} className="shrink-0" />
-                   </button>
-                )}
-              </div>
+            <div className="mb-5 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+              <div className="flex min-w-0 items-center gap-3"><span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/15 bg-white/5">{avatarOrganizador ? <img src={avatarOrganizador} alt={`Perfil de ${orgForm.nome || primeiroNome}`} className="h-full w-full object-cover" /> : <Trophy size={21} className="text-retratt" />}</span><div className="min-w-0"><p className="text-[9px] font-bold uppercase tracking-widest text-zinc-500">Painel do organizador</p><h1 className="mt-1 break-words text-xl font-bold tracking-tight sm:text-2xl">Olá, {primeiroNome}.</h1></div></div>
+              <div className="flex flex-wrap gap-2"><Link href="/fotos/admin/vendas" className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-retratt px-4 text-[10px] font-bold text-black">Vendas e pedidos <BarChart3 size={14} /></Link>{slugPublico && <Link href={`/fotos/organizador/${slugPublico}`} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-white/15 px-3 text-[10px] font-bold text-zinc-300">Meu site público <ArrowRight size={13} /></Link>}{userId && <button type="button" onClick={deslogar} className="inline-flex min-h-10 items-center gap-2 rounded-xl px-3 text-[10px] font-bold text-zinc-500 hover:text-white">Sair <LogOut size={13} /></button>}</div>
             </div>
-
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-              {[
-                [Store, "Galerias", totais.eventos, "text-retratt"],
-                [FolderPlus, "Álbuns", totais.albuns, "text-white"],
-                [ImagePlus, "Fotos", totais.fotos, "text-retratt"],
-                [Wallet, "Vendas", totais.pedidos, "text-emerald-400"],
-              ].map(([Icon, label, valor, cor]) => {
-                const IconComponent = Icon as typeof Camera;
-                return (
-                  <div key={String(label)} className="relative overflow-hidden rounded-2xl border border-white/5 bg-[#0a0a0e]/80 backdrop-blur-md p-4 sm:p-5 shadow-lg group hover:border-white/10 transition-colors">
-                    <p className="flex items-center gap-2 text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-zinc-500 mb-2 relative z-10 truncate">
-                      <IconComponent size={14} className="shrink-0" /> <span className="truncate">{label as string}</span>
-                    </p>
-                    <p className={`text-2xl sm:text-3xl md:text-4xl font-black relative z-10 drop-shadow-md ${cor as string}`}>{valor as number}</p>
-                  </div>
-                );
+            <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {[[Store, 'Galerias', totais.eventos, `${totais.albuns} álbuns`], [ImagePlus, 'Mídias enviadas', totais.fotos, 'Fotos e vídeos'], [Wallet, 'Arquivos vendidos', estadoConexaoMP === 'erro' ? '—' : totais.pedidos, estadoConexaoMP === 'erro' ? 'Atualize para conferir' : 'Pagamentos aprovados'], [BarChart3, 'Receita por diária', estadoConexaoMP === 'erro' ? '—' : formatarMoeda(receitaDiretaTotalCentavos), estadoConexaoMP === 'erro' ? 'Atualize para conferir' : 'Antes da tarifa MP']].map(([Icon, titulo, valor, nota]) => {
+                const Icone = Icon as typeof Camera;
+                return <div key={String(titulo)} className="rounded-xl border border-white/10 bg-black/30 px-3 py-3"><dt className="flex items-center gap-1.5 text-[9px] text-zinc-500"><Icone size={12} />{titulo as string}</dt><dd className="mt-1 break-words text-xl font-bold leading-tight text-white">{valor as string | number}</dd><p className="mt-1 text-[9px] text-zinc-600">{nota as string}</p></div>;
               })}
-            </div>
+            </dl>
           </div>
         </section>
 
-        <section className="mx-auto grid max-w-7xl gap-6 px-4 py-8 md:grid-cols-[1fr_400px] md:px-8 w-full">
+        <section className="mx-auto grid max-w-7xl gap-4 px-4 py-5 lg:grid-cols-[minmax(0,1fr)_320px] md:px-8 w-full">
 
           <div className="space-y-6 w-full min-w-0">
             {/* 🔥 NOVO: PUBLICAR GALERIA EXPANSÍVEL E RESPONSIVO COM OPÇÃO MANUAL */}
@@ -665,7 +634,7 @@ export default function FotosAdminPage() {
                 role="button" tabIndex={0} aria-expanded={mostrarCriarGaleria}
                 onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && !criandoGaleria) { e.preventDefault(); setMostrarCriarGaleria(!mostrarCriarGaleria); } }}
                 onClick={() => { if (!criandoGaleria) setMostrarCriarGaleria(!mostrarCriarGaleria); }}
-                className="flex items-center justify-between p-5 md:p-8 cursor-pointer hover:bg-retratt/[0.05] transition-colors gap-4"
+                className="flex items-center justify-between p-4 cursor-pointer hover:bg-retratt/[0.05] transition-colors gap-4"
               >
                 <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
                    <div className="w-10 h-10 sm:w-12 sm:h-12 shrink-0 rounded-xl bg-retratt/10 border border-retratt/20 flex items-center justify-center text-retratt">
@@ -773,7 +742,7 @@ export default function FotosAdminPage() {
             </div>
 
             {mensagem && <p role="status" className="rounded-xl border border-retratt/20 p-4 text-xs text-retratt">{mensagem}</p>}
-            <div className="rounded-3xl border border-white/5 bg-[#0a0a0e] p-5 sm:p-6 md:p-8 shadow-xl">
+            <div className="rounded-3xl border border-white/5 bg-[#0a0a0e] p-4 sm:p-5 shadow-sm">
               <div className="flex items-center gap-3 mb-6 border-b border-white/5 pb-4">
                  <BarChart3 size={20} className="text-retratt" />
                  <h2 className="text-lg font-black uppercase tracking-tight text-white">Galerias Ativas</h2>
@@ -790,7 +759,7 @@ export default function FotosAdminPage() {
                     {/* 🔥 Informações Principais (Protegido contra textos grandes) */}
                     <div className="flex flex-col sm:flex-row gap-4 sm:items-center justify-between mb-5">
                        <div className="flex-1 min-w-0">
-                          <h3 className="text-sm sm:text-base font-black uppercase text-white truncate mb-2">{evento.nome}</h3>
+                          <h3 className="text-sm sm:text-base font-bold text-white break-words mb-2">{evento.nome}</h3>
                           <div className="flex flex-wrap gap-2">
                              {evento.em_breve && <span className="rounded bg-sky-400/10 px-2 py-1 text-[10px] text-sky-300">Em breve</span>}
                              {evento.acesso_por_link && <span className="rounded bg-white/10 px-2 py-1 text-[10px] text-zinc-300">Por link</span>}
@@ -799,7 +768,7 @@ export default function FotosAdminPage() {
                              <span className="inline-flex items-center gap-1 bg-white/5 text-zinc-400 border border-white/10 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest shrink-0">{formatarMoeda(evento.preco_video_centavos)} / vídeo</span>
                              <span className="inline-flex items-center gap-1 bg-white/5 text-zinc-400 border border-white/10 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest shrink-0">Preço {evento.preco_bloqueado ? "bloqueado" : "livre"}</span>
                              <span className="inline-flex items-center gap-1 border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[8px] font-black uppercase tracking-widest text-emerald-400 shrink-0">{vendasPorGaleria[evento.id] || 0} fotos vendidas</span>
-                             <span className="inline-flex items-center gap-1 border border-retratt/20 bg-retratt/10 px-2 py-0.5 text-[8px] font-black uppercase tracking-widest text-retratt shrink-0">{formatarMoeda(royaltiesPorGaleria[evento.id])} em royalties</span>
+                             {Boolean(royaltiesPorGaleria[evento.id]) && <span className="text-[9px] text-retratt">{formatarMoeda(royaltiesPorGaleria[evento.id])} em royalties</span>}
                           </div>
                        </div>
 
@@ -815,10 +784,10 @@ export default function FotosAdminPage() {
                        </div>
                     </div>
 
-                      <ControleEmBreveGaleria galeriaId={evento.id} ativo={Boolean(evento.em_breve)} onConfirmado={(ativo) => {
+                      {evento.em_breve && <ControleEmBreveGaleria galeriaId={evento.id} ativo={Boolean(evento.em_breve)} onConfirmado={(ativo) => {
                         setFotoEventos(atuais => atuais.map(item => item.id === evento.id ? { ...item, em_breve: ativo } : item));
                         if (editandoGaleria === evento.id) setEdicaoGaleria(atual => ({ ...atual, emBreve: ativo }));
-                      }} />
+                      }} />}
 
                       {editandoGaleria === evento.id && (
                       <div className="mt-4 sm:mt-6 mb-2 rounded-2xl border border-retratt/30 bg-[#050505] overflow-hidden shadow-[0_0_30px_rgba(255,90,31,0.05)] animate-in slide-in-from-top-2 fade-in duration-200">
@@ -929,11 +898,14 @@ export default function FotosAdminPage() {
                       </div>
                     )}
 
-                    <fieldset disabled={salvandoDescontos === evento.id} className="space-y-2">
+                    <SecaoOrganizador titulo="Descontos progressivos" resumo={(regrasCombo[evento.id] || []).length ? `${(regrasCombo[evento.id] || []).length} faixas configuradas · clique para ajustar` : 'Sem desconto configurado'}>
+<fieldset disabled={salvandoDescontos === evento.id} className="space-y-2">
                       <EditorFaixasDesconto faixas={regrasCombo[evento.id] || []} onChange={(faixas) => setRegrasCombo((atual) => ({ ...atual, [evento.id]: faixas }))} />
                       <button type="button" onClick={() => void salvarRegraCombo(evento.id)} className="rounded-xl border border-retratt/30 px-4 py-3 text-xs font-bold text-retratt disabled:opacity-50">{salvandoDescontos === evento.id ? "Salvando..." : "Salvar descontos"}</button>
                     </fieldset>
-                    <div className="mt-2 grid gap-2 rounded-xl border border-white/5 bg-white/[0.02] p-3 sm:grid-cols-[1fr_auto] sm:items-end">
+</SecaoOrganizador>
+                    <SecaoOrganizador titulo="Fotógrafos e recebimento" resumo={`${fotografosPorGaleria[evento.id]?.length || 0} fotógrafo(s) credenciado(s) · modelos e permissões`}>
+<div className="mt-2 grid gap-2 rounded-xl border border-white/5 bg-white/[0.02] p-3 sm:grid-cols-[1fr_auto] sm:items-end">
                       <div className="sm:col-span-2">
                         <p className="mb-2 text-[8px] font-black uppercase tracking-widest text-zinc-500">Fotógrafos credenciados ({fotografosPorGaleria[evento.id]?.length || 0})</p>
                         {(fotografosPorGaleria[evento.id] || []).length ? (
@@ -943,7 +915,7 @@ export default function FotosAdminPage() {
                               const modeloAtual = modeloForm[chave] ?? fotografo.modelo_recebimento ?? 'royalty';
                               const alterado = modeloAtual !== (fotografo.modelo_recebimento || 'royalty') || (modeloAtual === 'royalty' && Number(String(royaltyForm[chave] ?? fotografo.comissao_organizador_percentual ?? 0).replace(',', '.')) !== Number(fotografo.comissao_organizador_percentual || 0));
                               return (
-                                <div key={fotografo.id} className="grid min-h-[104px] gap-4 rounded-2xl border border-retratt/20 bg-retratt/[0.06] p-4 sm:grid-cols-[minmax(0,1fr)_240px] sm:items-center sm:p-5">
+                                <div key={fotografo.id} className="grid gap-3 rounded-xl border border-retratt/20 bg-retratt/[0.06] p-4 sm:grid-cols-[minmax(0,1fr)_240px] sm:items-center sm:p-5">
                                   <div className="flex min-w-0 items-center gap-3">
                                     {fotografo.foto_url ? (
                                       <img src={fotografo.foto_url} alt={`Perfil de ${fotografo.nome || "fotógrafo"}`} className="h-12 w-12 shrink-0 rounded-full border border-retratt/20 object-cover shadow-[0_0_18px_rgba(255,90,31,0.12)]" />
@@ -1028,6 +1000,7 @@ export default function FotosAdminPage() {
                         {credenciandoEvento === evento.id ? "Credenciando..." : "Credenciar"}
                       </button>
                     </div>
+</SecaoOrganizador>
                   </div>
                 ))}
               </div>
@@ -1134,7 +1107,8 @@ export default function FotosAdminPage() {
             )}
 
             {/* MERCADO PAGO / FINANCEIRO */}
-            <div className="rounded-3xl border border-white/5 bg-[#0a0a0e] p-5 sm:p-6 md:p-8 shadow-xl mt-6">
+            <SecaoOrganizador titulo="Detalhes financeiros" resumo={'Royalties, recebimentos e valores por fotógrafo'}>
+<div className="rounded-3xl border border-white/5 bg-[#0a0a0e] p-5 sm:p-6 md:p-8 shadow-xl mt-6">
               <div className="flex items-center gap-3 mb-5 sm:mb-6 border-b border-white/5 pb-4">
                  <Wallet size={20} className="text-retratt shrink-0" />
                   <h2 className="text-lg font-black uppercase tracking-tight text-white truncate">Receitas de fotos</h2>
@@ -1191,6 +1165,7 @@ export default function FotosAdminPage() {
                  </div>
 
             </div>
+</SecaoOrganizador>
           </div>
         </section>
       </main>
