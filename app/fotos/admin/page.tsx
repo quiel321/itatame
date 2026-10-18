@@ -1,5 +1,6 @@
 "use client";
 
+import ControleComboIaGaleria from '@/app/fotos/_components/ControleComboIaGaleria';
 import { caminhoPortfolioOrganizador } from '@/app/lib/fotos-portfolio-url';
 import Link from "next/link";
 import LinkGaleria from "@/app/fotos/_components/LinkGaleria";
@@ -899,6 +900,7 @@ export default function FotosAdminPage() {
                       </div>
                     )}
 
+                    <ControleComboIaGaleria galeriaId={evento.id} />
                     <SecaoOrganizador titulo="Descontos progressivos" resumo={(regrasCombo[evento.id] || []).length ? `${(regrasCombo[evento.id] || []).length} faixas configuradas · clique para ajustar` : 'Sem desconto configurado'}>
 <fieldset disabled={salvandoDescontos === evento.id} className="space-y-2">
                       <EditorFaixasDesconto faixas={regrasCombo[evento.id] || []} onChange={(faixas) => setRegrasCombo((atual) => ({ ...atual, [evento.id]: faixas }))} />

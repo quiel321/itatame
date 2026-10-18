@@ -1,0 +1,17 @@
+# Resultados separados e pacote completo de IA
+
+Os resultados da busca facial passam a ter abas Vídeos e Fotos, com contagem separada. Quando há vídeos, a busca abre nessa aba, inclusive ao reabrir um resultado anterior. No celular o formulário recolhe após encontrar resultados; permanece disponível quando não encontra nada. As abas permitem toque e gesto horizontal. Cada prévia abre pela imagem e apresenta um botão de carrinho; a barra Abrir foto/vídeo foi retirada.
+
+O responsável pode ativar por galeria o Pacote completo na IA. As faixas inclusivas definidas são 15 fotos: 65%, 25 fotos: 75%, 35 fotos: 85%. Só entram fotos da oferta completa encontrada, sem vídeos. Não se somam descontos: prevalece o maior entre o progressivo e o pacote para as fotos elegíveis. Gratuitas ficam fora das ofertas pagas.
+
+O organizador controla suas galerias e o fotógrafo suas próprias galerias. Fotógrafos convidados têm leitura da opção do organizador. A nova coluna `foto_eventos.combo_ia_ativo` é booleana com padrão false; a migração não ativa nenhuma galeria existente. A configuração é lida sob demanda ao expandir o controle, evitando novas consultas para cada galeria ao abrir o painel.
+
+As ofertas são assinadas no servidor com identificador da galeria, todas as fotos, faixa e validade de 24 horas, usando um domínio HMAC separado. A selfie não faz parte da oferta e não é armazenada. A assinatura impede alterar quantidade, percentual ou conjunto de fotos no navegador. Vendedores são agrupados na mesma oferta somente quando todos têm diária ativa; nos demais casos, os pacotes são separados por fotógrafo.
+
+Ao comprar o pacote ou selecionar todas as fotos da oferta, o carrinho o apresenta como um item com quantidade, economia, preço e fotos incluídas em uma seção recolhível. Remover pacote retira todas as suas fotos. A opção Escolher fotos avulsas deixa claro que perde o benefício. Retirar uma foto na busca desfaz o pacote e informa o comprador.
+
+Antes do pagamento, um endpoint sem cobrança confere o conjunto completo, disponibilidade, configuração atual e preços. A preparação do pagamento repete a validação e exige o mesmo total apresentado. Mudança de preço ou desativação pede nova conferência, sem avançar com um valor diferente. Pedidos já preparados mantêm seus valores históricos. A compra comum mantém o limite de 50 arquivos; pacotes assinados permitem até 500 arquivos, com consultas em lotes de 100. O checkout continua atendendo uma galeria por pagamento.
+
+O desconto de cada arquivo é rateado em centavos e atribuído ao fotógrafo daquele arquivo. Vídeos mantêm seu valor. A comissão continua calculada sobre o total efetivamente vendido. Chamadas sem pacote usam o cálculo anterior; nenhuma compra, envio de e-mail ou cobrança real foi usado para testar a funcionalidade.
+
+Validação: testes das três fronteiras, assinatura, prazo, manipulação, pacote incompleto/desativado, comparação carrinho/preferência de pagamento em 15/25/35/101 fotos, autoria, regressões de diária, Pix, upload e controles de galeria. TypeScript e ESLint dos arquivos novos. O carrinho tem alertas legados de tipos any e imagens; sua verificação direcionada mantém as regras restantes. Conferência visual em simulação isolada de 390px: abertura nos vídeos, troca para fotos, oferta completa, compra do pacote, total, expansão de fotos, remoção e ativação simulada do controle.

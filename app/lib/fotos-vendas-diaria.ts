@@ -45,20 +45,24 @@ export function modeloCheckoutAutores(organizadorId: string | null, autores: str
 }
 
 /** Guarda autoria, preço, desconto e comissão no momento da compra, sem depender de regras futuras. */
-export function registrarVendasFotografos(itens: ItemAutoria[], desconto: number, comissao: number): VendaFotografoDiaria[] {
+export function registrarVendasFotografos(itens: ItemAutoria[], desconto: number, comissao: number, descontosPorItem?: number[]): VendaFotografoDiaria[] {
   centavos(desconto); centavos(comissao);
-  const grupos = new Map<string, { nome: string; quantidade: number; bruto: number; elegivel: number }>();
-  for (const item of itens) {
+  if (descontosPorItem && (descontosPorItem.length !== itens.length || descontosPorItem.reduce((s, d) => s + centavos(d), 0) !== desconto)) throw new Error('Desconto por arquivo divergente.');
+  const grupos = new Map<string, { nome: string; quantidade: number; bruto: number; elegivel: number; desconto: number }>();
+  for (const [indice, item] of itens.entries()) {
     if (!item.fotografoId) throw new Error('Autoria indisponível na conferência das vendas.');
     centavos(item.precoCentavos);
-    const grupo = grupos.get(item.fotografoId) || { nome: item.nome || 'Fotógrafo', quantidade: 0, bruto: 0, elegivel: 0 };
+    const descontoItem = descontosPorItem?.[indice] || 0;
+    if (descontoItem > item.precoCentavos || (item.mimeType?.startsWith('video/') && descontoItem)) throw new Error('Desconto inválido no arquivo.');
+    const grupo = grupos.get(item.fotografoId) || { nome: item.nome || 'Fotógrafo', quantidade: 0, bruto: 0, elegivel: 0, desconto: 0 };
     grupo.quantidade++; grupo.bruto += item.precoCentavos;
+    grupo.desconto += descontoItem;
     if (!item.mimeType?.startsWith('video/')) grupo.elegivel += item.precoCentavos;
     grupos.set(item.fotografoId, grupo);
   }
   const lista = [...grupos].sort(([a], [b]) => a.localeCompare(b));
   if (desconto > lista.reduce((s, [, g]) => s + g.elegivel, 0)) throw new Error('Desconto divergente na conferência das vendas.');
-  const descontos = ratearCentavos(desconto, lista.map(([, g]) => g.elegivel));
+  const descontos = descontosPorItem ? lista.map(([, g]) => g.desconto) : ratearCentavos(desconto, lista.map(([, g]) => g.elegivel));
   const totais = lista.map(([, g], n) => g.bruto - descontos[n]);
   if (comissao > totais.reduce((s, v) => s + v, 0)) throw new Error('Comissão divergente na conferência das vendas.');
   const comissoes = ratearCentavos(comissao, totais);

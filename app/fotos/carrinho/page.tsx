@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { guardarOfertasComboIa, lerOfertasComboIa, type OfertaComboIa } from '@/app/lib/fotos-combo-ia';
+import PacoteIaCarrinho from '../_components/PacoteIaCarrinho';
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
@@ -78,6 +80,11 @@ type FotoCarrinho = {
   descontosProgressivos: FaixaDesconto[] | null;
   mimeType: string | null;
 };
+type FotoConsultaCarrinho = {
+  id: string; evento_id: string; titulo?: string | null; mime_type: string | null; preco_centavos: number; preview_url: string | null; thumb_url: string | null; status: string;
+  evento_dados?: { nome: string; desconto_combo_qtd: number | null; desconto_combo_percentual: number | null; descontos_progressivos: unknown }[];
+  fotografo_dados?: { nome: string }[];
+};
 
 const CARRINHO_FOTOS_KEY = "carrinho_fotos";
 const COMBO_QTD_PADRAO = 3;
@@ -133,6 +140,33 @@ export default function FotosCarrinhoPage() {
   const [comprador, setComprador] = useState({ nome: "", email: "" });
   const [itensLiberados, setItensLiberados] = useState<ItemPedidoConvidado[]>([]);
   const fotosDoCheckout = useRef<string[]>([]);
+  const [combosSalvos, setCombosSalvos] = useState<OfertaComboIa[]>([]);
+  const [resumoCombo, setResumoCombo] = useState<{ descontoCentavos: number; totalCentavos: number; pacotes: OfertaComboIa[] } | null>(null);
+  const [conferindoCombo, setConferindoCombo] = useState(false), [erroCombo, setErroCombo] = useState('');
+  const [revisaoCombo, setRevisaoCombo] = useState(0);
+  const chaveFotos = fotos.map(f => f.id).join('|');
+  const combosAtivos = combosSalvos.filter(c => c.fotoIds.some(id => fotos.some(f => f.id === id)));
+  const chaveCombos = combosAtivos.map(c => c.token).join('|');
+  useEffect(() => {
+    let atual = true; const controller = new AbortController();
+    async function conferir() {
+      if (carregandoCart || etapa !== 'carrinho') return;
+      if (!combosAtivos.length) { setResumoCombo(null); setErroCombo(''); setConferindoCombo(false); return; }
+      setConferindoCombo(true); setResumoCombo(null); setErroCombo('');
+      try {
+        const r = await fetch('/api/fotos/combo-ia/conferir', { method: 'POST', signal: controller.signal, cache: 'no-store', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tokens: combosAtivos.map(c => c.token), fotoIds: fotos.map(f => f.id) }) });
+        const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Não foi possível conferir o pacote.');
+        if (atual) setResumoCombo(d);
+      } catch (e) { if (atual) setErroCombo(e instanceof Error ? e.message : 'Não foi possível conferir o pacote.'); }
+      finally { if (atual) setConferindoCombo(false); }
+    }
+    void conferir(); return () => { atual = false; controller.abort(); };
+    // Chaves estáveis evitam repetir a conferência durante edição do nome/e-mail.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chaveFotos, chaveCombos, carregandoCart, etapa, revisaoCombo]);
+  const pacotesNoCarrinho = resumoCombo?.pacotes || [];
+  const idsEmPacotes = new Set(pacotesNoCarrinho.flatMap(c => c.fotoIds));
+  const fotosAvulsas = fotos.filter(f => !idsEmPacotes.has(f.id));
 
   useEffect(() => {
     const atualizar = () => {
@@ -147,9 +181,10 @@ export default function FotosCarrinhoPage() {
   const subtotal = fotos.reduce((acc, foto) => acc + foto.precoCentavos, 0);
   const faixas = faixasDoEvento({ descontos_progressivos: fotos[0]?.descontosProgressivos, desconto_combo_qtd: fotos[0]?.comboQtd ?? COMBO_QTD_PADRAO, desconto_combo_percentual: fotos[0]?.comboPercentual ?? COMBO_PERCENTUAL_PADRAO });
   const fotosElegiveis = fotos.filter((foto) => !foto.mimeType?.startsWith("video/"));
-  const { faixa, valor: valorDesconto } = calcularDescontoFotos(faixas, fotos);
+  const { faixa, valor: descontoProgressivo } = calcularDescontoFotos(faixas, fotos);
+  const valorDesconto = combosAtivos.length ? resumoCombo?.descontoCentavos || 0 : descontoProgressivo;
   const proximaFaixa = faixas.find((item) => item.quantidade > fotosElegiveis.length);
-  const temDesconto = Boolean(faixa);
+  const temDesconto = valorDesconto > 0;
   const comboPercentual = faixa?.percentual ?? 0;
   const total = subtotal - valorDesconto;
   const modalAberto = indiceAberto !== null;
@@ -189,6 +224,7 @@ export default function FotosCarrinhoPage() {
       try {
         const { data: auth } = await supabase.auth.getUser();
         setUserId(auth.user?.id || null);
+        setCombosSalvos(lerOfertasComboIa());
         const idsSalvos = JSON.parse(localStorage.getItem(CARRINHO_FOTOS_KEY) || "[]").map(String);
 
         if (!idsSalvos.length) {
@@ -197,7 +233,10 @@ export default function FotosCarrinhoPage() {
           return;
         }
 
-        let consulta: any = await supabase
+        const consulta: { data: FotoConsultaCarrinho[]; error: { message: string } | null } = { data: [], error: null };
+        for (let offset = 0; offset < idsSalvos.length; offset += 100) {
+          const idsPagina = idsSalvos.slice(offset, offset + 100);
+          let pagina: { data: FotoConsultaCarrinho[] | null; error: { message: string } | null } = await supabase
           .from("foto_arquivos")
           .select(`
             id,
@@ -211,17 +250,20 @@ export default function FotosCarrinhoPage() {
             evento_dados:foto_eventos!evento_id ( nome, desconto_combo_qtd, desconto_combo_percentual, descontos_progressivos ),
             fotografo_dados:fotografos!fotografo_id ( nome )
           `)
-          .in("id", idsSalvos)
+          .in("id", idsPagina)
           .eq("status", "publicada");
 
-        if (consulta.error) {
-          consulta = await supabase
+        if (pagina.error) {
+          pagina = await supabase
             .from("foto_arquivos")
             .select("id, evento_id, titulo, mime_type, preco_centavos, preview_url, thumb_url, status")
-            .in("id", idsSalvos)
+            .in("id", idsPagina)
             .eq("status", "publicada");
         }
 
+          if (pagina.error) { consulta.error = pagina.error; break; }
+          consulta.data.push(...(pagina.data || []));
+        }
         if (consulta.error) throw consulta.error;
 
         const mapa = new Map((consulta.data || []).map((foto: any) => [String(foto.id), foto]));
@@ -279,6 +321,13 @@ export default function FotosCarrinhoPage() {
     carregarCarrinho();
   }, []);
 
+  function atualizarCombos(combos: OfertaComboIa[]) { guardarOfertasComboIa(combos); setCombosSalvos(combos); }
+  function removerPacote(pacote: OfertaComboIa) {
+    const retirar = new Set(pacote.fotoIds), ids = lerCarrinhoFotos().filter(id => !retirar.has(id));
+    setFotos(atuais => atuais.filter(f => !retirar.has(f.id)));
+    localStorage.setItem(CARRINHO_FOTOS_KEY, JSON.stringify(ids));
+    atualizarCombos(combosSalvos.filter(c => c.token !== pacote.token)); notificarCarrinhoAtualizado(ids);
+  }
   function removerFoto(id: string) {
     if (indiceAberto !== null && fotos[indiceAberto]?.id === id) setIndiceAberto(null);
     const novasFotos = fotos.filter((foto) => foto.id !== id);
@@ -295,6 +344,7 @@ export default function FotosCarrinhoPage() {
   }
 
   async function handleGerarPix() {
+    if (conferindoCombo || erroCombo || (combosAtivos.length && !resumoCombo)) { setMensagemPagamento(erroCombo || 'Aguarde a conferência do pacote.'); return; }
     const nome = comprador.nome.trim();
     const email = comprador.email.trim().toLowerCase();
     if (!userId && (nome.length < 3 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) {
@@ -314,6 +364,8 @@ export default function FotosCarrinhoPage() {
       headers: { "Content-Type": "application/json", ...autenticacao },
       body: JSON.stringify({
         fotoIds: fotos.map((foto) => foto.id),
+        combosIa: combosAtivos.map(c => c.token),
+        totalEsperadoCentavos: combosAtivos.length ? resumoCombo?.totalCentavos : undefined,
         acessos: Object.fromEntries(fotos.filter((foto) => foto.acesso).map((foto) => [foto.eventoId, foto.acesso])),
         comprador: userId ? undefined : { nome, email },
       }),
@@ -321,6 +373,7 @@ export default function FotosCarrinhoPage() {
     const data = await response.json();
     if (!response.ok) {
       setMensagemPagamento(data.error || "Não foi possível preparar o pagamento.");
+      if (combosAtivos.length) setRevisaoCombo(n => n + 1);
       setEtapa("carrinho");
       return;
     }
@@ -453,7 +506,7 @@ export default function FotosCarrinhoPage() {
               <h1 className="text-2xl font-black uppercase tracking-tight text-white md:text-4xl">{etapa === 'pago' ? 'Compra confirmada' : 'Carrinho'}</h1>
               {!carregandoCart && (
                 <p className="mt-2 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">
-                  {etapa === 'pago' ? 'Seu pedido contém' : 'Você selecionou'} {fotos.length} {fotos.length === 1 ? "item" : "itens"}
+                  {etapa === 'pago' ? 'Seu pedido contém' : 'Você selecionou'} {fotos.length} {fotos.length === 1 ? "arquivo" : "arquivos"}
                 </p>
               )}
             </div>
@@ -477,8 +530,12 @@ export default function FotosCarrinhoPage() {
             </div>
           ) : (
             <div className="grid items-start gap-6 md:gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
-              <div className="grid min-w-0 grid-cols-2 gap-2.5 sm:gap-4 xl:grid-cols-3">
-                {fotos.map((foto) => (
+              <div className="min-w-0 space-y-4">
+                {combosAtivos.length > 0 && conferindoCombo && <p role="status" className="rounded-xl border border-white/10 p-4 text-xs text-zinc-400">Conferindo seu pacote e os preços atuais…</p>}
+                {erroCombo && <div role="alert" className="rounded-xl border border-orange-400/30 bg-orange-500/10 p-4"><p className="text-xs leading-5 text-orange-200">{erroCombo}</p><button type="button" onClick={() => atualizarCombos([])} className="mt-3 min-h-10 text-xs font-bold text-orange-300 underline">Desfazer pacotes e escolher fotos avulsas</button></div>}
+                {pacotesNoCarrinho.map(pacote => <PacoteIaCarrinho key={pacote.token} pacote={pacote} editavel={etapa === 'carrinho'} onRemover={() => removerPacote(pacote)} onDesfazer={() => atualizarCombos(combosSalvos.filter(c => c.token !== pacote.token))} onAmpliar={id => setIndiceAberto(fotos.findIndex(f => f.id === id))} />)}
+                <div className="grid min-w-0 grid-cols-2 gap-2.5 sm:gap-4 xl:grid-cols-3">
+                {fotosAvulsas.map((foto) => (
                   <div key={foto.id} className="group relative min-w-0 rounded-xl border border-white/5 bg-[#0a0a0e] p-1.5 transition-all duration-300 hover:border-retratt/30 hover:bg-retratt/5 sm:p-2.5">
                     <div className="relative mb-2 aspect-[4/5] overflow-hidden rounded-lg bg-zinc-900 sm:mb-3">
                       <button type="button" onClick={() => setIndiceAberto(fotos.indexOf(foto))} aria-label={`Ampliar ${foto.mimeType?.startsWith("video/") ? "vídeo" : "foto"} no carrinho`} className="absolute inset-0 w-full cursor-zoom-in">
@@ -509,6 +566,7 @@ export default function FotosCarrinhoPage() {
                     </div>
                   </div>
                 ))}
+                </div>
               </div>
 
               <div className="lg:sticky lg:top-28">
@@ -518,7 +576,7 @@ export default function FotosCarrinhoPage() {
                     <Wallet size={16} className="text-retratt" /> Resumo
                   </h3>
 
-                  {etapa === "carrinho" && faixas.length > 0 && (
+                  {etapa === "carrinho" && !combosAtivos.length && faixas.length > 0 && (
                     <div className={`mb-5 rounded-xl border p-3 transition-colors ${temDesconto ? "border-emerald-500/30 bg-emerald-500/10" : "border-white/10 bg-white/5"}`}>
                       <div className="flex items-center gap-3">
                         <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${temDesconto ? "bg-emerald-500/20 text-emerald-400" : "bg-white/10 text-zinc-400"}`}>
@@ -538,12 +596,12 @@ export default function FotosCarrinhoPage() {
 
                   <div className="mb-6 space-y-4 text-sm font-medium">
                     <div className="flex justify-between text-zinc-400">
-                      <span>Subtotal ({fotos.length} {fotos.length === 1 ? "item" : "itens"})</span>
+                      <span>Subtotal ({fotos.length} {fotos.length === 1 ? "arquivo" : "arquivos"})</span>
                       <span>{formatarPrecoFotos(subtotal)}</span>
                     </div>
                     {temDesconto && (
                       <div className="flex justify-between text-emerald-400">
-                        <span>Desconto Combo ({comboPercentual}%)</span>
+                        <span>{combosAtivos.length ? 'Desconto pacote de IA' : `Desconto Combo (${comboPercentual}%)`}</span>
                         <span>- {formatarPrecoFotos(valorDesconto)}</span>
                       </div>
                     )}
@@ -558,7 +616,7 @@ export default function FotosCarrinhoPage() {
                     <div className="text-right">
                       {temDesconto && <p className="mb-1 text-[10px] text-zinc-500 line-through">De {formatarPrecoFotos(subtotal)}</p>}
                       <span className="bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-3xl font-black text-transparent md:text-4xl">
-                        {formatarPrecoFotos(total)}
+                        {combosAtivos.length && !resumoCombo ? erroCombo ? 'Revise o pacote' : 'Conferindo…' : formatarPrecoFotos(total)}
                       </span>
                     </div>
                   </div>
@@ -589,7 +647,7 @@ export default function FotosCarrinhoPage() {
                   )}
 
                   {etapa === "carrinho" && (
-                    <button onClick={handleGerarPix} className="flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-retratt text-[10px] font-black uppercase tracking-widest text-white shadow-[0_0_30px_rgba(255,90,31,0.25)] transition-all hover:scale-[1.02] hover:bg-retratt">
+                    <button onClick={handleGerarPix} disabled={Boolean(conferindoCombo || erroCombo || (combosAtivos.length && !resumoCombo))} className="flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-retratt text-[10px] font-black uppercase tracking-widest text-white shadow-[0_0_30px_rgba(255,90,31,0.25)] transition-all hover:scale-[1.02] hover:bg-retratt disabled:cursor-wait disabled:opacity-50">
                       <QrCode size={16} /> Escolher forma de pagamento
                     </button>
                   )}

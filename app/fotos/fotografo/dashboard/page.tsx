@@ -1,5 +1,6 @@
 "use client";
 
+import ControleComboIaGaleria from '@/app/fotos/_components/ControleComboIaGaleria';
 import Link from "next/link";
 import VendasDiariaFotografos from '../../_components/VendasDiariaFotografos';
 import ControleEmBreveGaleria from '../../_components/ControleEmBreveGaleria';
@@ -629,6 +630,7 @@ export default function FotografoDashboardPage() {
                                   </LinkGaleria>
                                </div>
 
+                            <ControleComboIaGaleria galeriaId={galeria.id} />
                             {renderizarGerenciador(galeria.id)}
                          </div>
                       ))}
@@ -698,6 +700,7 @@ export default function FotografoDashboardPage() {
 
                             {renderizarGerenciador(galeria.id)}
 
+                            <ControleComboIaGaleria galeriaId={galeria.id} />
                             {/* 🔥 PAINEL: EDIÇÃO DE DADOS DA GALERIA */}
                             {editandoGaleria?.id === galeria.id && (
                               <div className="mt-4 sm:mt-6 mb-2 rounded-2xl border border-zinc-500/30 bg-[#050505] overflow-hidden shadow-[0_0_30px_rgba(113,113,122,0.05)] animate-in slide-in-from-top-2 fade-in duration-200">

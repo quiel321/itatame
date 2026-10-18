@@ -16,6 +16,8 @@ import { modeloRecebimentoFotos, obterRecebedorFotos } from "@/app/lib/fotos-rec
 import { calcularDescontoFotos, faixasDoEvento } from "@/app/lib/fotos-descontos";
 import { acessoAlbumPermitido } from "@/app/lib/fotos-acesso-album";
 import { modeloCheckoutAutores, registrarVendasFotografos } from "@/app/lib/fotos-vendas-diaria";
+import { conferirAssinaturasComboIa, validarComboIaNoCheckout } from '@/app/lib/fotos-combo-ia-servidor';
+import { calcularCompraComCombosIa, MAX_ITENS_COMBO_IA } from '@/app/lib/fotos-combo-ia';
 
 export const runtime = "nodejs";
 
@@ -65,20 +67,32 @@ export async function POST(request: Request) {
       convidado = true;
     }
 
-    const fotoIds = [...new Set((Array.isArray(body.fotoIds) ? body.fotoIds : []).map(String))];
-    if (!fotoIds.length || fotoIds.length > 50) {
+    const fotoIds: string[] = [...new Set<string>((Array.isArray(body.fotoIds) ? body.fotoIds : []).map(String))];
+    let combosIa;
+    try { combosIa = conferirAssinaturasComboIa(body.combosIa); }
+    catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : 'Pacote de IA inválido.' }, { status: 409 }); }
+    if (!fotoIds.length || fotoIds.length > (combosIa.length ? MAX_ITENS_COMBO_IA : 50)) {
       return NextResponse.json({ error: "Selecione entre 1 e 50 itens." }, { status: 400 });
     }
 
-    const { data: fotos, error: fotosError } = await supabase
+    const consultarFotos = (ids: string[]) => supabase
       .from("foto_arquivos")
       .select(`
         id, evento_id, fotografo_id, titulo, mime_type, preco_centavos, status,
-        foto_eventos (id, nome, status, vendas_ate, desconto_combo_qtd, desconto_combo_percentual, descontos_progressivos, em_breve, organizador_user_id, acesso_por_link, acesso_token, permite_download_gratis),
+        foto_eventos (id, nome, status, vendas_ate, desconto_combo_qtd, desconto_combo_percentual, descontos_progressivos, em_breve, organizador_user_id, acesso_por_link, acesso_token, permite_download_gratis, combo_ia_ativo),
         fotografos (id, nome, mp_access_token, mp_connected_at, status)
       `)
-      .in("id", fotoIds)
+      .in("id", ids)
       .eq("status", "publicada");
+    const consulta = await consultarFotos(fotoIds.slice(0, 100));
+    const fotos = consulta.data || [], fotosError = consulta.error;
+    if (!fotosError && fotoIds.length > 100) {
+      for (let n = 100; n < fotoIds.length; n += 100) {
+        const pagina = await consultarFotos(fotoIds.slice(n, n + 100));
+        if (pagina.error) return NextResponse.json({ error: 'Não foi possível conferir todos os itens.' }, { status: 503 });
+        fotos.push(...(pagina.data || []));
+      }
+    }
     if (fotosError || !fotos || fotos.length !== fotoIds.length) {
       return NextResponse.json({ error: "Um ou mais itens não estão disponíveis." }, { status: 409 });
     }
@@ -109,8 +123,19 @@ export async function POST(request: Request) {
     }
 
     const subtotalCentavos = fotos.reduce((total, foto) => total + Math.max(0, Number(foto.preco_centavos || 0)), 0);
-    const { valor: descontoCentavos } = calcularDescontoFotos(faixasDoEvento(evento), fotos.map((foto) => ({ precoCentavos: Number(foto.preco_centavos || 0), mimeType: foto.mime_type })));
+    let descontoCentavos = calcularDescontoFotos(faixasDoEvento(evento), fotos.map((foto) => ({ precoCentavos: Number(foto.preco_centavos || 0), mimeType: foto.mime_type }))).valor;
+    let descontosPorItem: number[] | undefined;
+    if (combosIa.length) {
+      try {
+        validarComboIaNoCheckout(combosIa, fotos, evento);
+        const valores = calcularCompraComCombosIa(fotos.map(f => ({ id: f.id, precoCentavos: Number(f.preco_centavos || 0), mimeType: f.mime_type })), faixasDoEvento(evento), combosIa);
+        descontoCentavos = valores.descontoCentavos; descontosPorItem = valores.descontoPorItem;
+      } catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : 'Revise o pacote de IA.' }, { status: 409 }); }
+    }
     const totalCentavos = subtotalCentavos - descontoCentavos;
+    if (combosIa.length && (!Number.isSafeInteger(body.totalEsperadoCentavos) || body.totalEsperadoCentavos !== totalCentavos)) {
+      return NextResponse.json({ error: 'O valor do pacote foi atualizado. Confira o novo total antes de continuar.' }, { status: 409 });
+    }
     if (totalCentavos <= 0) return NextResponse.json({ error: "Total do pedido inválido." }, { status: 409 });
 
     let percentualOrganizador = 0;
@@ -133,7 +158,7 @@ export async function POST(request: Request) {
     const vendasFotografos = modeloRecebimento === 'diaria_organizador' ? registrarVendasFotografos(fotos.map(foto => ({
       fotografoId: String(foto.fotografo_id), nome: primeiraRelacao(foto.fotografos)?.nome || 'Fotógrafo',
       precoCentavos: Number(foto.preco_centavos || 0), mimeType: foto.mime_type,
-    })), descontoCentavos, calcularDistribuicaoDiariaFotos(totalCentavos).comissaoItatameCentavos) : null;
+    })), descontoCentavos, calcularDistribuicaoDiariaFotos(totalCentavos).comissaoItatameCentavos, descontosPorItem) : null;
 
     const recebedor = await obterRecebedorFotos(supabase, request, {
       modelo_recebimento: modeloRecebimento,

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { buscarFotosPorRosto } from "@/app/lib/rekognition";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
 import { chaveLocalidade } from "@/app/lib/localidades";
+import { criarOfertasComboIa } from '@/app/lib/fotos-combo-ia-servidor';
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -151,7 +152,7 @@ export async function POST(request: Request) {
     const eventoIds = [...new Set(fotos.map((foto) => foto.evento_id))];
     const { data: eventos, error: eventosError } = eventoIds.length
       ? await (() => {
-          let consulta = supabase.from("foto_eventos").select("id, nome, data_evento, cidade, estado, permite_download_gratis, desconto_combo_qtd, desconto_combo_percentual, descontos_progressivos")
+          let consulta = supabase.from("foto_eventos").select("id, nome, data_evento, cidade, estado, permite_download_gratis, desconto_combo_qtd, desconto_combo_percentual, descontos_progressivos, combo_ia_ativo")
             .in("id", eventoIds).eq("status", "publicado");
           if (organizadorId) consulta = consulta.eq('organizador_user_id', organizadorId).or('acesso_por_link.eq.false,acesso_por_link.is.null');
           else consulta = consulta.eq('acesso_por_link', false);
@@ -181,8 +182,12 @@ export async function POST(request: Request) {
       }];
     });
 
+    const exibidos = resultados.slice(0, 500);
+    let combos: Awaited<ReturnType<typeof criarOfertasComboIa>> = [], avisoCombos = '';
+    try { combos = await criarOfertasComboIa(supabase, exibidos); }
+    catch { avisoCombos = 'Os pacotes de IA estão temporariamente indisponíveis. As fotos e vídeos encontrados continuam disponíveis para seleção avulsa.'; }
     return NextResponse.json(
-      { resultados: resultados.slice(0, 500), rostoDetectado: true, confiancaDeteccao: resultado.searchedFaceConfidence || 0 },
+      { resultados: exibidos, combos, avisoCombos, rostoDetectado: true, confiancaDeteccao: resultado.searchedFaceConfidence || 0 },
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error: unknown) {

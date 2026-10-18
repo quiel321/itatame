@@ -1,14 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { ChangeEvent, useEffect, useRef, useState } from "react";
+import { guardarOfertasComboIa, lerOfertasComboIa, type OfertaComboIa } from '@/app/lib/fotos-combo-ia';
+import { formatarPrecoFotos } from '@/app/lib/fotos';
+import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "@/app/lib/supabase";
 import { chaveLocalidade, type Localidade } from "@/app/lib/localidades";
 import CameraSelfie from "./CameraSelfie";
 import ProgressoDesconto from "./ProgressoDesconto";
 import { faixasDoEvento } from "@/app/lib/fotos-descontos";
-import { Camera, CheckCircle2, ChevronLeft, ChevronRight, ImagePlus, Loader2, Play, ScanFace, ShieldCheck, ShoppingCart, Download, X } from "lucide-react";
+import { Camera, CheckCircle2, ChevronLeft, ChevronRight, ImagePlus, Loader2, Play, ScanFace, ShieldCheck, ShoppingCart, Download, X, Video, Image as IconeFoto } from "lucide-react";
 
 type ResultadoFace = {
   id: string;
@@ -94,6 +96,10 @@ export default function BuscaFacial({ eventoId, organizadorId, organizadorNome, 
   const [buscando, setBuscando] = useState(false);
   const [erro, setErro] = useState("");
   const [resultados, setResultados] = useState<ResultadoFace[] | null>(null);
+  const [tipoResultado, setTipoResultado] = useState<'fotos' | 'videos'>('videos');
+  const [ofertas, setOfertas] = useState<OfertaComboIa[]>([]);
+  const resultadosRef = useRef<HTMLDivElement>(null);
+  const toqueTipo = useRef<{ x: number; y: number } | null>(null);
   const [fotosNoCarrinho, setFotosNoCarrinho] = useState<string[]>([]);
   const [midiasCarrinho, setMidiasCarrinho] = useState<{ id: string; evento_id: string; fotografo_id: string | null; mime_type: string | null }[]>([]);
   const [indiceAberto, setIndiceAberto] = useState<number | null>(null);
@@ -103,9 +109,18 @@ export default function BuscaFacial({ eventoId, organizadorId, organizadorNome, 
   const inputCamera = useRef<HTMLInputElement>(null);
   const conteudoModal = useRef<HTMLDivElement>(null);
 
+  const totalVideos = resultados?.filter(r => r.mimeType?.startsWith('video/')).length || 0;
+  const totalFotos = (resultados?.length || 0) - totalVideos;
+  const resultadosVisiveis = useMemo(() => (resultados || []).filter(r => tipoResultado === 'videos' ? r.mimeType?.startsWith('video/') : !r.mimeType?.startsWith('video/')), [resultados, tipoResultado]);
+  useEffect(() => {
+    if (resultados === null) return;
+    const frame = requestAnimationFrame(() => resultadosRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }));
+    return () => cancelAnimationFrame(frame);
+  }, [resultados]);
+
   useEffect(() => {
     if (indiceAberto === null || !resultados) return;
-    const vizinhas = [-1, 1].map((delta) => resultados[indiceAberto + delta]).filter((foto): foto is ResultadoFace => Boolean(foto && !foto.mimeType?.startsWith("video/")));
+    const vizinhas = [-1, 1].map((delta) => resultadosVisiveis[indiceAberto + delta]).filter((foto): foto is ResultadoFace => Boolean(foto && !foto.mimeType?.startsWith("video/")));
     for (const foto of vizinhas) {
       if (previewsEmCache.current.has(foto.id)) continue;
       const imagem = new Image();
@@ -113,7 +128,7 @@ export default function BuscaFacial({ eventoId, organizadorId, organizadorNome, 
       previewsEmCache.current.set(foto.id, imagem);
     }
     for (const id of previewsEmCache.current.keys()) if (!vizinhas.some((foto) => foto.id === id)) previewsEmCache.current.delete(id);
-  }, [indiceAberto, resultados]);
+  }, [indiceAberto, resultados, resultadosVisiveis]);
 
   useEffect(() => () => {
     if (preview) URL.revokeObjectURL(preview);
@@ -167,12 +182,12 @@ export default function BuscaFacial({ eventoId, organizadorId, organizadorNome, 
         else if (indiceAberto !== null) setIndiceAberto(null);
         else { setCameraAberta(false); setAberto(false); }
       }
-      if (indiceAberto !== null && event.key === "ArrowRight") setIndiceAberto((atual) => Math.min((resultados?.length || 1) - 1, (atual ?? 0) + 1));
+      if (indiceAberto !== null && event.key === "ArrowRight") setIndiceAberto((atual) => Math.min((resultadosVisiveis.length || 1) - 1, (atual ?? 0) + 1));
       if (indiceAberto !== null && event.key === "ArrowLeft") setIndiceAberto((atual) => Math.max(0, (atual ?? 0) - 1));
     };
     window.addEventListener("keydown", fechar);
     return () => window.removeEventListener("keydown", fechar);
-  }, [aberto, cameraAberta, indiceAberto, resultados?.length]);
+  }, [aberto, cameraAberta, indiceAberto, resultadosVisiveis.length]);
 
   useEffect(() => {
     if (!aberto || !fotosNoCarrinho.length) return;
@@ -220,7 +235,11 @@ export default function BuscaFacial({ eventoId, organizadorId, organizadorNome, 
       const response = await fetch("/api/fotos/buscar-por-face", { method: "POST", body: form });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Nao foi possivel buscar suas fotos.");
-      setResultados((data.resultados || []) as ResultadoFace[]);
+      const encontrados = (data.resultados || []) as ResultadoFace[];
+      setTipoResultado(encontrados.some(r => r.mimeType?.startsWith('video/')) ? 'videos' : 'fotos');
+      setIndiceAberto(null); setOfertas(Array.isArray(data.combos) ? data.combos : []);
+      setErro(typeof data.avisoCombos === 'string' ? data.avisoCombos : '');
+      setResultados(encontrados);
     } catch (error: unknown) {
       setErro(error instanceof Error ? error.message : "Nao foi possivel buscar suas fotos.");
     } finally {
@@ -239,6 +258,8 @@ export default function BuscaFacial({ eventoId, organizadorId, organizadorNome, 
   }
 
   function abrirBusca() {
+    setTipoResultado(resultados?.some(r => r.mimeType?.startsWith('video/')) ? 'videos' : 'fotos');
+    setIndiceAberto(null);
     try {
       const salvas = JSON.parse(localStorage.getItem(CARRINHO_FOTOS_KEY) || "[]");
       setFotosNoCarrinho(Array.isArray(salvas) ? salvas.map(String) : []);
@@ -250,12 +271,23 @@ export default function BuscaFacial({ eventoId, organizadorId, organizadorNome, 
 
   function salvarCarrinho(ids: string[]) {
     const idsUnicos = Array.from(new Set(ids.map(String)));
+    const selecionados = new Set(idsUnicos);
+    const completas = ofertas.filter(c => c.fotoIds.every(id => selecionados.has(id)));
+    const substituidos = new Set(completas.flatMap(c => c.fotoIds));
+    guardarOfertasComboIa([...lerOfertasComboIa().filter(c => c.fotoIds.every(id => selecionados.has(id)) && !c.fotoIds.some(id => substituidos.has(id))), ...completas]);
     localStorage.setItem(CARRINHO_FOTOS_KEY, JSON.stringify(idsUnicos));
     setFotosNoCarrinho(idsUnicos);
     window.dispatchEvent(new CustomEvent("carrinho-fotos-atualizado", { detail: idsUnicos }));
   }
 
   function alternarFotoNoCarrinho(fotoId: string) {
+    if (fotosNoCarrinho.includes(fotoId)) {
+      const salvos = lerOfertasComboIa();
+      if (salvos.some(c => c.fotoIds.includes(fotoId))) {
+        guardarOfertasComboIa(salvos.filter(c => !c.fotoIds.includes(fotoId)));
+        setErro('O pacote foi desfeito ao retirar uma foto. As fotos restantes ficam com o preço avulso e o desconto progressivo disponível.');
+      }
+    }
     salvarCarrinho(
       fotosNoCarrinho.includes(fotoId)
         ? fotosNoCarrinho.filter((id) => id !== fotoId)
@@ -263,7 +295,7 @@ export default function BuscaFacial({ eventoId, organizadorId, organizadorNome, 
     );
   }
 
-  const idsResultados = resultados?.filter((foto) => !foto.evento?.permite_download_gratis).map((foto) => String(foto.id)) || [];
+  const idsResultados = resultadosVisiveis.filter((foto) => !foto.evento?.permite_download_gratis).map((foto) => String(foto.id)) || [];
   const quantidadeSelecionada = idsResultados.filter((id) => fotosNoCarrinho.includes(id)).length;
   const todosResultadosSelecionados = idsResultados.length > 0 && quantidadeSelecionada === idsResultados.length;
 
@@ -275,11 +307,18 @@ export default function BuscaFacial({ eventoId, organizadorId, organizadorNome, 
       return item?.eventoId === foto.eventoId && (item.fotografoId ?? null) === (foto.fotografoId ?? null) && !item.mimeType?.startsWith("video/");
     }).length;
   }
+  const idsEmComboCompleto = new Set(ofertas.filter(c => c.fotoIds.every(id => fotosNoCarrinho.includes(id))).flatMap(c => c.fotoIds));
   const gruposDesconto = new Map<string, ResultadoFace>();
   for (const foto of resultados || []) {
-    if (foto.evento && !foto.evento.permite_download_gratis && !foto.mimeType?.startsWith("video/") && faixasDoEvento(foto.evento).length && quantidadeParaDesconto(foto) > 0) {
+    if (foto.evento && !idsEmComboCompleto.has(foto.id) && !foto.evento.permite_download_gratis && !foto.mimeType?.startsWith("video/") && faixasDoEvento(foto.evento).length && quantidadeParaDesconto(foto) > 0) {
       gruposDesconto.set(`${foto.eventoId}|${foto.fotografoId ?? ""}`, foto);
     }
+  }
+
+  function adicionarCombo(oferta: OfertaComboIa) {
+    const ids = new Set(oferta.fotoIds);
+    guardarOfertasComboIa([...lerOfertasComboIa().filter(c => !c.fotoIds.some(id => ids.has(id))), oferta]);
+    salvarCarrinho([...fotosNoCarrinho, ...oferta.fotoIds]);
   }
 
   function alternarTodosResultados() {
@@ -315,7 +354,7 @@ export default function BuscaFacial({ eventoId, organizadorId, organizadorNome, 
             </div>
 
             <div ref={conteudoModal} className="grid flex-1 gap-4 overflow-y-auto p-3 md:grid-cols-[260px_minmax(0,1fr)] md:p-5">
-              <div className="space-y-3">
+              <div className={`space-y-3 ${(resultados?.length || 0) > 0 ? "hidden md:block" : ""}`}>
                 {organizadorId && <p className="rounded-xl border border-white/10 bg-white/5 p-3 text-xs leading-5 text-zinc-300">Busca nas galerias públicas de <strong>{organizadorNome || 'este organizador'}</strong>.</p>}
                 {!eventoId && !organizadorId && <label className="block text-[10px] font-bold text-zinc-300">1. Selecione a cidade do evento
                   <select ref={cidadeSelect} value={cidadeEvento} onChange={(event) => setCidadeEvento(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-white/15 bg-[#18181b] px-3 text-xs text-white">
@@ -353,7 +392,7 @@ export default function BuscaFacial({ eventoId, organizadorId, organizadorNome, 
                 <p className="flex items-start gap-2 text-[10px] leading-4 text-zinc-500"><ShieldCheck size={14} className="mt-0.5 shrink-0 text-emerald-400" /> A busca inclui resultados fortes, prováveis e possíveis para reduzir a chance de alguma foto ficar de fora.</p>
               </div>
 
-              <div className={`${!buscando && resultados === null && !erro ? "hidden md:block" : "block"} min-h-0`}>
+              <div ref={resultadosRef} className={`${!buscando && resultados === null && !erro ? "hidden md:block" : "block"} min-h-0 scroll-mt-3`}>
                 {erro && <div className="rounded-2xl border border-retratt/30 bg-retratt/10 p-4 text-sm text-red-200">{erro}</div>}
                 {buscando && (
                   <div className="flex min-h-[260px] flex-col items-center justify-center text-center">
@@ -379,58 +418,61 @@ export default function BuscaFacial({ eventoId, organizadorId, organizadorNome, 
                   <div>
                     <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                       <div>
-                        <p className="flex items-center gap-2 text-sm font-black uppercase"><CheckCircle2 size={17} className="text-emerald-400" /> {resultados.length} mídia(s) encontrada(s)</p>
-                        <p className="mt-1 text-[10px] text-zinc-500">Ordenadas pela maior semelhança facial.</p>
+                        <p className="flex items-center gap-2 text-sm font-black uppercase"><CheckCircle2 size={17} className="text-emerald-400" /> {totalFotos} foto(s) e {totalVideos} vídeo(s)</p>
+                        <p className="mt-1 text-[10px] text-zinc-500">Resultados separados por tipo, ordenados pela semelhança facial.</p>
                       </div>
                       {idsResultados.length > 0 && <button type="button" onClick={alternarTodosResultados} className={`rounded-xl border px-3 py-2 text-[8px] font-black uppercase tracking-wider transition-colors ${todosResultadosSelecionados ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300" : "border-white/10 bg-white/5 text-zinc-300 hover:bg-white/10"}`}>
                         {todosResultadosSelecionados ? "Desmarcar todas" : "Selecionar todas as pagas"}
                       </button>}
                     </div>
+                    <button type="button" onClick={() => { setResultados(null); setIndiceAberto(null); }} className="mb-3 text-[10px] text-zinc-400 underline underline-offset-4">Trocar selfie ou local</button>
+                    <div role="tablist" aria-label="Tipo de mídia encontrada" className="mb-4 grid grid-cols-2 gap-2 rounded-xl border border-white/10 bg-black p-1">
+                      {(['videos', 'fotos'] as const).map(tipo => <button key={tipo} type="button" role="tab" id={'aba-ia-' + tipo} aria-selected={tipoResultado === tipo} aria-controls="midias-encontradas-ia" disabled={tipo === 'videos' ? !totalVideos : !totalFotos} onClick={() => { setTipoResultado(tipo); setIndiceAberto(null); }} className={`flex min-h-11 items-center justify-center gap-2 rounded-lg text-xs font-bold disabled:opacity-35 ${tipoResultado === tipo ? 'bg-retratt text-black' : 'text-zinc-400 hover:bg-white/5'}`}>{tipo === 'videos' ? <Video size={16} /> : <IconeFoto size={16} />}{tipo === 'videos' ? 'Vídeos' : 'Fotos'} ({tipo === 'videos' ? totalVideos : totalFotos})</button>)}
+                    </div>
+                    {tipoResultado === 'fotos' && ofertas.map(oferta => <div key={oferta.token} className="mb-4 rounded-2xl border border-orange-400/30 bg-orange-500/10 p-4">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-orange-300">Pacote completo · {oferta.percentual}% de desconto</p>
+                      <p className="mt-1 text-xs text-zinc-400">{oferta.eventoNome}</p>
+                      <p className="mt-3 text-xl font-bold text-white">{oferta.quantidade} fotos por {formatarPrecoFotos(oferta.totalCentavos)}</p>
+                      <p className="mt-1 text-xs text-zinc-400"><s>{formatarPrecoFotos(oferta.subtotalCentavos)}</s> · {formatarPrecoFotos(Math.round(oferta.totalCentavos / oferta.quantidade))} por foto</p>
+                      <Link href="/fotos/carrinho" onClick={() => adicionarCombo(oferta)} className="mt-3 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-retratt px-4 text-xs font-bold text-black"><ShoppingCart size={16} />Comprar todas as {oferta.quantidade} fotos</Link>
+                      <p className="mt-2 text-[10px] text-zinc-500">Inclui todas as fotos desta oferta de IA. Não inclui vídeos. Não acumula descontos.</p>
+                    </div>)}
                     {gruposDesconto.size > 0 && <div className="mb-4 space-y-2">
                       {[...gruposDesconto].map(([chave, foto]) => <div key={chave}>
                         <p className="mb-1 text-[10px] font-bold text-zinc-300">{foto.evento?.nome}</p>
                         <ProgressoDesconto faixas={faixasDoEvento(foto.evento!)} quantidade={quantidadeParaDesconto(foto)} />
                       </div>)}
                     </div>}
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                      {resultados.map((foto) => {
-                        const fotoId = String(foto.id);
-                        const gratuita = Boolean(foto.evento?.permite_download_gratis);
-                        const noCarrinho = !gratuita && fotosNoCarrinho.includes(fotoId);
-                        const ehVideo = Boolean(foto.mimeType?.startsWith("video/"));
-                        return (
-                          <article key={foto.id} className={`relative flex flex-col overflow-hidden rounded-xl border bg-black transition-colors ${noCarrinho ? "border-emerald-400 shadow-[0_0_18px_rgba(52,211,153,0.15)]" : "border-white/10 hover:border-retratt/50"}`}>
-                            {!gratuita && <label className={`absolute right-2 top-2 z-20 flex h-9 w-9 cursor-pointer items-center justify-center rounded-xl border backdrop-blur-md ${noCarrinho ? "border-emerald-300 bg-emerald-400 text-black" : "border-white/20 bg-black/70 text-white"}`}>
-                              <input
-                                type="checkbox"
-                                checked={noCarrinho}
-                                onChange={() => alternarFotoNoCarrinho(fotoId)}
-                                className="h-5 w-5 cursor-pointer accent-emerald-500"
-                                aria-label={`${noCarrinho ? "Remover" : "Adicionar"} ${foto.titulo || "foto"} ${noCarrinho ? "do" : "ao"} carrinho`}
-                              />
-                            </label>}
-                            <button type="button" onClick={() => setIndiceAberto(resultados.indexOf(foto))} className="group block w-full flex-1 text-left">
-                              <div className="relative aspect-[4/5] overflow-hidden bg-zinc-950">
-                                <img data-foto-protegida-imagem src={`/api/fotos/arquivo/${foto.id}?tipo=thumb`} alt={foto.titulo || "Foto encontrada"} loading="lazy" className={`h-full w-full object-cover transition duration-300 group-hover:scale-105 ${noCarrinho ? "opacity-70" : ""}`} />
-                                <MarcaBuscaFacial />
-                                {ehVideo && <span className="absolute bottom-2 left-2 z-10 inline-flex items-center gap-1 rounded-full bg-black/80 px-2 py-1 text-[7px] font-black uppercase tracking-wider text-white"><Play size={9} className="fill-retratt text-retratt" /> Vídeo</span>}
-                                <span className={`absolute left-2 top-2 rounded-full px-2 py-1 text-[8px] font-black uppercase tracking-wider ${foto.nivel === "forte" ? "bg-emerald-400 text-black" : foto.nivel === "provavel" ? "bg-retratt text-black" : "bg-retratt text-black"}`}>{foto.nivel} · {foto.similaridade.toFixed(0)}%</span>
-                              </div>
-                              <div className="p-2.5">
-                                <p className="line-clamp-2 text-[9px] font-black uppercase leading-4 text-white">{foto.evento?.nome || "Galeria Retratt"}</p>
-
-                              </div>
+                    <div id="midias-encontradas-ia" role="tabpanel" aria-labelledby={'aba-ia-' + tipoResultado} className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4" style={{ touchAction: 'pan-y pinch-zoom' }}
+                      onTouchStart={e => { toqueTipo.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }; }}
+                      onTouchEnd={e => {
+                        if (!toqueTipo.current) return;
+                        const dx = e.changedTouches[0].clientX - toqueTipo.current.x, dy = e.changedTouches[0].clientY - toqueTipo.current.y;
+                        toqueTipo.current = null;
+                        if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+                        if (dx < 0 && totalFotos) setTipoResultado('fotos');
+                        else if (dx > 0 && totalVideos) setTipoResultado('videos');
+                      }}>
+                      {resultadosVisiveis.map((foto, indice) => {
+                        const gratuita = Boolean(foto.evento?.permite_download_gratis), noCarrinho = !gratuita && fotosNoCarrinho.includes(foto.id), ehVideo = Boolean(foto.mimeType?.startsWith('video/'));
+                        return <article key={foto.id} className={`min-w-0 overflow-hidden rounded-xl border bg-black ${noCarrinho ? 'border-emerald-400' : 'border-white/10'}`}>
+                          <div className="relative aspect-[4/5] overflow-hidden bg-zinc-950">
+                            <button type="button" onClick={() => setIndiceAberto(indice)} aria-label={`Ampliar ${ehVideo ? 'vídeo' : 'foto'} ${indice + 1}`} className="absolute inset-0 h-full w-full cursor-zoom-in">
+                              <img data-foto-protegida-imagem src={`/api/fotos/arquivo/${foto.id}?tipo=thumb`} alt={foto.titulo || (ehVideo ? 'Vídeo encontrado' : 'Foto encontrada')} loading="lazy" className="h-full w-full object-cover" /><MarcaBuscaFacial />
                             </button>
-                            {!gratuita && <button type="button" onClick={() => setIndiceAberto(resultados.indexOf(foto))} className="flex w-full items-center justify-center gap-1 border-t border-retratt/30 bg-retratt/15 px-2 py-3 text-[10px] font-black uppercase text-orange-300">Abrir {ehVideo ? "vídeo" : "foto"}</button>}
-                            {gratuita && <a href={`/api/fotos/evento/${foto.eventoId}/download-gratuito/${foto.id}`} className="flex items-center justify-center gap-1 border-t border-emerald-400/20 bg-emerald-400/10 px-2 py-3 text-[10px] font-black text-emerald-300"><Download size={13} /> Baixar grátis</a>}
-                          </article>
-                        );
+                            <span className="pointer-events-none absolute left-2 top-2 rounded-full bg-black/75 px-2 py-1 text-[8px] font-bold text-white">{foto.nivel} · {foto.similaridade.toFixed(0)}%</span>
+                            {ehVideo && <span className="pointer-events-none absolute bottom-3 left-2 inline-flex items-center gap-1 rounded-full bg-black/80 px-2 py-1 text-[8px] text-white"><Play size={10} />Vídeo</span>}
+                            {gratuita ? <a href={`/api/fotos/evento/${foto.eventoId}/download-gratuito/${foto.id}`} aria-label="Baixar original grátis" className="absolute bottom-2 right-2 flex h-11 w-11 items-center justify-center rounded-full bg-emerald-400 text-black shadow-lg"><Download size={19} /></a>
+                              : <button type="button" onClick={() => alternarFotoNoCarrinho(foto.id)} aria-label={`${noCarrinho ? 'Remover' : 'Adicionar'} ${ehVideo ? 'vídeo' : 'foto'} ${noCarrinho ? 'do' : 'ao'} carrinho`} aria-pressed={noCarrinho} className={`absolute bottom-2 right-2 flex h-11 w-11 items-center justify-center rounded-full border shadow-lg ${noCarrinho ? 'border-emerald-300 bg-emerald-400 text-black' : 'border-white/40 bg-white/95 text-orange-600'}`}>{noCarrinho ? <CheckCircle2 size={20} /> : <ShoppingCart size={20} />}</button>}
+                          </div>
+                          <div className="p-2.5"><p className="line-clamp-2 text-[9px] font-bold leading-4 text-zinc-400">{foto.evento?.nome || 'Galeria Retratt'}</p><p className="mt-1 text-xs font-bold text-white">{gratuita ? 'Download grátis' : formatarPrecoFotos(foto.precoCentavos)}</p></div>
+                        </article>;
                       })}
                     </div>
                     {quantidadeSelecionada > 0 && (
                       <div className="sticky bottom-0 z-30 mt-4 flex items-center justify-between gap-3 rounded-2xl border border-emerald-400/30 bg-[#101512]/95 p-3 shadow-2xl backdrop-blur-xl">
                         <div className="min-w-0">
-                          <p className="text-[10px] font-black uppercase text-white">{quantidadeSelecionada} {quantidadeSelecionada === 1 ? "foto selecionada" : "fotos selecionadas"}</p>
+                          <p className="text-[10px] font-black uppercase text-white">{quantidadeSelecionada} {quantidadeSelecionada === 1 ? "arquivo selecionado" : "arquivos selecionados"}</p>
                           <p className="mt-0.5 text-[8px] uppercase tracking-wider text-emerald-300">Já adicionada{quantidadeSelecionada === 1 ? "" : "s"} ao carrinho</p>
                         </div>
                         <Link href="/fotos/carrinho" className="flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-emerald-400 px-4 text-[8px] font-black uppercase tracking-wider text-black hover:bg-emerald-300">
@@ -445,23 +487,23 @@ export default function BuscaFacial({ eventoId, organizadorId, organizadorNome, 
             </div>
           </div>
           {cameraAberta && <CameraSelfie onCapture={(file) => { usarSelfie(file); setCameraAberta(false); }} onClose={() => setCameraAberta(false)} onUnavailable={() => { setCameraAberta(false); inputGaleria.current?.click(); }} />}
-          {indiceAberto !== null && resultados?.[indiceAberto] && (
+          {indiceAberto !== null && resultadosVisiveis[indiceAberto] && (
             <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/95 p-3" onClick={() => setIndiceAberto(null)} role="dialog" aria-modal="true" aria-label="Foto encontrada">
               <div className="relative flex h-full w-full max-w-5xl flex-col items-center justify-center gap-3 md:grid md:grid-rows-[minmax(0,1fr)_auto] md:pt-12" onClick={(event) => event.stopPropagation()}
                 onTouchStart={(event) => { toqueInicial.current = event.touches[0]?.clientX ?? null; }}
                 onTouchEnd={(event) => {
                   if (toqueInicial.current === null) return;
                   const distancia = event.changedTouches[0].clientX - toqueInicial.current;
-                  if (Math.abs(distancia) > 50) setIndiceAberto((atual) => Math.max(0, Math.min(resultados.length - 1, (atual ?? 0) + (distancia < 0 ? 1 : -1))));
+                  if (Math.abs(distancia) > 50) setIndiceAberto((atual) => Math.max(0, Math.min(resultadosVisiveis.length - 1, (atual ?? 0) + (distancia < 0 ? 1 : -1))));
                   toqueInicial.current = null;
                 }}>
                 <button type="button" onClick={() => setIndiceAberto(null)} aria-label="Fechar foto" className="absolute right-0 top-0 z-20 rounded-full bg-zinc-900 p-3 text-white"><X size={20} /></button>
                 <div className="flex min-h-0 flex-1 items-center justify-center pt-12 md:h-full md:w-full md:overflow-hidden md:pt-0">
-                  {resultados[indiceAberto].mimeType?.startsWith("video/") ? (
-                    <video key={resultados[indiceAberto].id} src={`/api/fotos/arquivo/${resultados[indiceAberto].id}?tipo=video-preview`} poster={`/api/fotos/arquivo/${resultados[indiceAberto].id}?tipo=thumb`} controls playsInline preload="metadata" className="max-h-full max-w-full" />
+                  {resultadosVisiveis[indiceAberto].mimeType?.startsWith("video/") ? (
+                    <video key={resultadosVisiveis[indiceAberto].id} src={`/api/fotos/arquivo/${resultadosVisiveis[indiceAberto].id}?tipo=video-preview`} poster={`/api/fotos/arquivo/${resultadosVisiveis[indiceAberto].id}?tipo=thumb`} controls playsInline preload="metadata" className="max-h-full max-w-full" />
                   ) : (
                     <div className="relative inline-flex max-h-full max-w-full items-center justify-center overflow-hidden md:h-full md:w-full">
-                      <img data-foto-protegida-imagem src={`/api/fotos/arquivo/${resultados[indiceAberto].id}?tipo=preview`} alt={resultados[indiceAberto].titulo || "Foto encontrada"} className="max-h-full max-w-full object-contain md:h-full md:w-full" />
+                      <img data-foto-protegida-imagem src={`/api/fotos/arquivo/${resultadosVisiveis[indiceAberto].id}?tipo=preview`} alt={resultadosVisiveis[indiceAberto].titulo || "Foto encontrada"} className="max-h-full max-w-full object-contain md:h-full md:w-full" />
                       <MarcaBuscaFacial ampliada />
                     </div>
                   )}
@@ -469,20 +511,20 @@ export default function BuscaFacial({ eventoId, organizadorId, organizadorNome, 
                 <div className="flex w-full items-center justify-between gap-3 pb-4">
                   <button type="button" onClick={() => setIndiceAberto((atual) => Math.max(0, (atual ?? 0) - 1))} disabled={indiceAberto === 0} aria-label="Foto anterior" className="rounded-full bg-zinc-800 p-3 text-white disabled:opacity-30"><ChevronLeft /></button>
                   <div className="min-w-0 flex-1 text-center text-xs text-white">
-                    <p>{indiceAberto + 1} de {resultados.length} · {resultados[indiceAberto].evento?.nome || "Galeria Retratt"}</p>
-                    {resultados[indiceAberto].evento && !resultados[indiceAberto].evento?.permite_download_gratis && !resultados[indiceAberto].mimeType?.startsWith("video/") && <div className="mx-auto mt-2 max-w-sm text-left"><ProgressoDesconto faixas={faixasDoEvento(resultados[indiceAberto].evento!)} quantidade={quantidadeParaDesconto(resultados[indiceAberto])} /></div>}
-                    {resultados[indiceAberto].evento?.permite_download_gratis ? (
-                      <a href={`/api/fotos/evento/${resultados[indiceAberto].eventoId}/download-gratuito/${resultados[indiceAberto].id}`} className="mt-2 inline-flex items-center gap-2 rounded-lg bg-emerald-400 px-4 py-3 font-bold text-black"><Download size={16} /> Baixar original grátis</a>
+                    <p>{indiceAberto + 1} de {resultadosVisiveis.length} · {resultadosVisiveis[indiceAberto].evento?.nome || "Galeria Retratt"}</p>
+                    {resultadosVisiveis[indiceAberto].evento && !idsEmComboCompleto.has(resultadosVisiveis[indiceAberto].id) && !resultadosVisiveis[indiceAberto].evento?.permite_download_gratis && !resultadosVisiveis[indiceAberto].mimeType?.startsWith("video/") && <div className="mx-auto mt-2 max-w-sm text-left"><ProgressoDesconto faixas={faixasDoEvento(resultadosVisiveis[indiceAberto].evento!)} quantidade={quantidadeParaDesconto(resultadosVisiveis[indiceAberto])} /></div>}
+                    {resultadosVisiveis[indiceAberto].evento?.permite_download_gratis ? (
+                      <a href={`/api/fotos/evento/${resultadosVisiveis[indiceAberto].eventoId}/download-gratuito/${resultadosVisiveis[indiceAberto].id}`} className="mt-2 inline-flex items-center gap-2 rounded-lg bg-emerald-400 px-4 py-3 font-bold text-black"><Download size={16} /> Baixar original grátis</a>
                     ) : (
                       <div className="mt-2 flex flex-wrap justify-center gap-2">
-                        <button type="button" onClick={() => alternarFotoNoCarrinho(String(resultados[indiceAberto].id))} className="rounded-lg border border-white/20 px-3 py-2 font-bold text-white">
-                          {fotosNoCarrinho.includes(String(resultados[indiceAberto].id)) ? "Remover do carrinho" : "Adicionar ao carrinho"}
+                        <button type="button" onClick={() => alternarFotoNoCarrinho(String(resultadosVisiveis[indiceAberto].id))} className="rounded-lg border border-white/20 px-3 py-2 font-bold text-white">
+                          {fotosNoCarrinho.includes(String(resultadosVisiveis[indiceAberto].id)) ? "Remover do carrinho" : "Adicionar ao carrinho"}
                         </button>
-                        <Link href="/fotos/carrinho" onClick={() => salvarCarrinho([...fotosNoCarrinho, String(resultados[indiceAberto].id)])} className="inline-flex items-center gap-2 rounded-lg bg-emerald-400 px-3 py-2 font-bold text-black"><ShoppingCart size={15} /> Concluir compra</Link>
+                        <Link href="/fotos/carrinho" onClick={() => salvarCarrinho([...fotosNoCarrinho, String(resultadosVisiveis[indiceAberto].id)])} className="inline-flex items-center gap-2 rounded-lg bg-emerald-400 px-3 py-2 font-bold text-black"><ShoppingCart size={15} /> Concluir compra</Link>
                       </div>
                     )}
                   </div>
-                  <button type="button" onClick={() => setIndiceAberto((atual) => Math.min(resultados.length - 1, (atual ?? 0) + 1))} disabled={indiceAberto === resultados.length - 1} aria-label="Próxima foto" className="rounded-full bg-zinc-800 p-3 text-white disabled:opacity-30"><ChevronRight /></button>
+                  <button type="button" onClick={() => setIndiceAberto((atual) => Math.min(resultadosVisiveis.length - 1, (atual ?? 0) + 1))} disabled={indiceAberto === resultadosVisiveis.length - 1} aria-label="Próxima foto" className="rounded-full bg-zinc-800 p-3 text-white disabled:opacity-30"><ChevronRight /></button>
                 </div>
               </div>
             </div>
