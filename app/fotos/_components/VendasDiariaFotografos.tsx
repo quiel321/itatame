@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/app/lib/supabase';
 import type { ResumoFotografoDiaria } from '@/app/lib/fotos-vendas-diaria';
-import { Download, Loader2, RefreshCw } from 'lucide-react';
+import { ArrowUpRight, ChartNoAxesCombined, Download, Loader2, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
 
 const moeda = (n: number) => (n / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -41,6 +41,7 @@ export default function VendasDiariaFotografos({ perfil = 'organizador', resumid
     <div className="flex flex-wrap items-center justify-between gap-3">
       <h3 className="text-sm font-bold text-white">{proprio ? 'Suas vendas · Recebimento pelo organizador' : 'Vendas por fotógrafo · Diária'}</h3>
       <div className="flex flex-wrap gap-2">
+        {proprio && <Link href={resumido ? '/fotos/fotografo/financeiro#vendas-diaria' : '/fotos/fotografo/vendas'} className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-orange-300/30 bg-retratt px-5 text-xs font-black text-black shadow-[0_4px_18px_rgba(255,90,31,0.18)] transition hover:brightness-110 sm:w-auto"><ChartNoAxesCombined size={17} />Ver minhas vendas<ArrowUpRight size={16} /></Link>}
         <button type="button" onClick={() => void carregar()} disabled={carregando} className="flex min-h-10 items-center gap-2 rounded-lg border border-white/15 px-3 text-xs text-white disabled:opacity-50"><RefreshCw size={13} /> Atualizar vendas</button>
         {!resumido && <button type="button" onClick={exportar} disabled={!vendas.length || carregando || Boolean(erro)} className="flex min-h-10 items-center gap-2 rounded-lg border border-white/15 px-3 text-xs text-white disabled:opacity-40"><Download size={13} /> Baixar planilha</button>}
       </div>
@@ -51,7 +52,7 @@ export default function VendasDiariaFotografos({ perfil = 'organizador', resumid
     {carregando ? <p role="status" className="mt-4 flex items-center gap-2 text-xs text-zinc-400"><Loader2 size={15} className="animate-spin" /> Conferindo vendas…</p>
       : erro ? <p role="alert" className="mt-4 text-xs text-orange-300">{erro}</p>
       : !vendas.length ? <p className="mt-4 text-xs text-zinc-400">Ainda não há vendas pagas no modelo diária. Elas aparecerão aqui após a confirmação do pagamento.</p>
-      : resumido ? <Link href="/fotos/fotografo/financeiro#vendas-diaria" className="mt-4 inline-flex min-h-10 items-center text-xs font-bold text-retratt">Ver minhas vendas por galeria →</Link>
+      : resumido ? null
       : <div className="mt-4 space-y-3">{vendas.map(v => <article key={`${v.galeriaId}:${v.fotografoId}`} className="rounded-xl border border-white/10 p-4">
         <p className="break-words text-sm font-bold text-white">{v.nome}</p>
         <p className="mt-1 break-words text-xs text-zinc-400">{v.galeria} · {v.quantidade} arquivo(s) vendido(s) em {v.pedidosPagos} pedido(s)</p>

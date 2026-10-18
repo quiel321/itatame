@@ -185,10 +185,12 @@ export default function GerenciadorMidias({
   const [carregando, setCarregando] = useState(true);
   const [processando, setProcessando] = useState<"" | "excluir" | "ocultar" | "publicar" | "preco">("");
   const [mensagem, setMensagem] = useState("");
+  const [falhaCarregamento, setFalhaCarregamento] = useState(false);
   const [gerandoAmostraId, setGerandoAmostraId] = useState<string | null>(null);
 
   const carregar = useCallback(async () => {
     setCarregando(true);
+    setFalhaCarregamento(false); setMensagem('');
     setSelecionadas([]);
     try {
       const token = await tokenDaSessao();
@@ -200,6 +202,7 @@ export default function GerenciadorMidias({
       if (!response.ok) throw new Error(resultado?.error || "Não foi possível carregar as mídias.");
       setMidias(resultado?.fotos || []);
     } catch (error) {
+      setFalhaCarregamento(true);
       setMidias([]);
       setMensagem(error instanceof Error ? error.message : "Não foi possível carregar as mídias.");
     } finally {
@@ -415,6 +418,11 @@ export default function GerenciadorMidias({
       <div className="custom-scrollbar max-h-[460px] overflow-y-auto p-3 sm:p-5">
         {carregando ? (
           <div className="flex justify-center py-10"><Loader2 size={24} className="animate-spin text-retratt" /></div>
+        ) : falhaCarregamento ? (
+          <div role="alert" className="py-8 text-center">
+            <p className="text-xs text-orange-200">Não foi possível carregar suas mídias. Tente novamente.</p>
+            <button type="button" onClick={() => void carregar()} className="mt-3 min-h-11 rounded-xl bg-retratt px-4 text-xs font-bold text-black">Tentar carregar novamente</button>
+          </div>
         ) : visiveis.length === 0 ? (
           <p className="py-10 text-center text-[10px] font-bold uppercase tracking-widest text-zinc-500">
             {midias.length ? "Nenhuma mídia neste filtro." : "Nenhuma mídia nesta galeria."}

@@ -29,7 +29,7 @@ export async function GET(request: Request) {
       if (!f) return resposta({ error: 'Perfil de fotógrafo não encontrado.' }, 403);
       fotografoId = String(f.id);
       const [vinculos, proprias] = await Promise.all([
-        db.from('foto_evento_fotografos').select('foto_eventos(id, nome, slug, created_at)').eq('fotografo_id', fotografoId).limit(1000),
+        db.from('foto_evento_fotografos').select('foto_eventos(id, nome, slug, created_at)').eq('fotografo_id', fotografoId).eq('status', 'ativo').limit(1000),
         db.from('foto_eventos').select('id, nome, slug, created_at').eq('created_by', auth.user.id).limit(1000),
       ]);
       if (vinculos.error || proprias.error) throw vinculos.error || proprias.error;

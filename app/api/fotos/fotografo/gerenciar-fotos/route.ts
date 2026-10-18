@@ -36,7 +36,7 @@ export async function GET(request: Request) {
     if (authError || !auth.user) return NextResponse.json({ error: "Sessao invalida." }, { status: 401 });
 
     const eventoId = new URL(request.url).searchParams.get("eventoId") || "";
-    if (!eventoId) return NextResponse.json({ error: "Galeria nao informada." }, { status: 400 });
+    if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(eventoId)) return NextResponse.json({ error: "Galeria inválida." }, { status: 400 });
 
     const fotografo = await obterFotografoDoUsuario(supabase, auth.user.id);
     if (!fotografo || fotografo.status !== "ativo") {
@@ -66,26 +66,46 @@ export async function GET(request: Request) {
       if (!credencial) return NextResponse.json({ error: "Fotografo nao credenciado nesta galeria." }, { status: 403 });
     }
 
-    let query = supabase
+    const consultarFotos = () => {
+      let query = supabase
       .from("foto_arquivos")
       .select("id, evento_id, fotografo_id, titulo, mime_type, status, preco_centavos, thumb_url, preview_url, r2_thumb_key, r2_preview_key, created_at")
       .eq("evento_id", eventoId)
-      .order("created_at", { ascending: false });
+      .order("id");
 
-    if (!acessoIntegral) query = query.eq("fotografo_id", fotografo.id);
+      if (!acessoIntegral) query = query.eq("fotografo_id", fotografo.id);
+      return query;
+    };
 
-    const { data: fotos, error: fotosError } = await query;
+    const { data: primeiraPagina, error: fotosError } = await consultarFotos().limit(500);
     if (fotosError) throw new Error(fotosError.message);
+    const fotos = primeiraPagina || [];
+    let pagina = primeiraPagina || [];
+    while (pagina.length === 500) {
+      const r = await consultarFotos().gt('id', pagina[pagina.length - 1].id).limit(500);
+      if (r.error) throw new Error(r.error.message);
+      pagina = r.data || []; fotos.push(...pagina);
+    }
+    fotos.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)) || String(a.id).localeCompare(String(b.id)));
 
     const fotoIds = (fotos || []).map((foto) => foto.id);
-    const { data: itens, error: itensError } = fotoIds.length
-      ? await supabase
+    const itens: { foto_id: string; foto_pedidos: unknown }[] = [];
+    // URLs limitadas a 100 UUIDs; consulta única com centenas de IDs retorna Bad Request.
+    for (let inicio = 0; inicio < fotoIds.length; inicio += 100) {
+      let ultimoId = '';
+      while (true) {
+        let queryItens = supabase
           .from("foto_pedido_itens")
-          .select("foto_id, foto_pedidos(status)")
-          .in("foto_id", fotoIds)
-      : { data: [], error: null };
-
-    if (itensError) throw new Error(itensError.message);
+          .select("id, foto_id, foto_pedidos(status)")
+          .in("foto_id", fotoIds.slice(inicio, inicio + 100)).order('id').limit(1000);
+        if (ultimoId) queryItens = queryItens.gt('id', ultimoId);
+        const r = await queryItens;
+        if (r.error) throw new Error(r.error.message);
+        itens.push(...(r.data || []));
+        if (!r.data || r.data.length < 1000) break;
+        ultimoId = r.data[r.data.length - 1].id;
+      }
+    }
 
     const situacaoPorFoto = new Map<string, "vendida" | "reservada" | "vinculada">();
     const vendasPorFoto = new Map<string, number>();
@@ -123,7 +143,7 @@ export async function GET(request: Request) {
         miniatura_url: urlDaMiniatura(foto),
         sem_amostra_video: String(foto.mime_type || "").startsWith("video/") && !foto.r2_thumb_key,
       })),
-    });
+    }, { headers: { 'Cache-Control': 'private, no-store', Vary: 'Authorization' } });
   } catch (error: unknown) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Erro ao carregar fotos." },
