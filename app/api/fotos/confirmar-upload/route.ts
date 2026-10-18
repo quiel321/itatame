@@ -40,7 +40,7 @@ export async function POST(request: Request) {
     const ehVideo = String(data.mime_type || "").startsWith("video/");
     after(async () => {
       try {
-        const resultado = await indexarMiniaturaIaDoR2(data.id, ehVideo ? {} : { fallbackOriginalKey: data.r2_original_key });
+        const resultado = await indexarMiniaturaIaDoR2(data.id, ehVideo ? { videoFrames: true } : { fallbackOriginalKey: data.r2_original_key });
         const { error: numerosError } = await supabase
           .from("foto_arquivos")
           .update({ tags: mesclarTagsNumerosIa(data.tags, resultado.detectedNumbers || []) })

@@ -46,6 +46,8 @@ export async function POST(request: Request) {
     const form = await request.formData();
     const imagem = form.get("imagem");
     const eventoIdInformado = form.get("eventoId");
+    const organizadorInformado = form.get('organizadorId');
+    const organizadorId = typeof organizadorInformado === 'string' ? organizadorInformado.trim() : '';
     const cidadeInformada = form.get("cidade");
     const eventoId = typeof eventoIdInformado === "string" && eventoIdInformado.trim()
       ? eventoIdInformado.trim()
@@ -53,9 +55,12 @@ export async function POST(request: Request) {
     if (eventoId && !UUID_PATTERN.test(eventoId)) {
       return NextResponse.json({ error: "Galeria inválida para a busca facial." }, { status: 400 });
     }
+    if (organizadorId && (!UUID_PATTERN.test(organizadorId) || eventoId)) {
+      return NextResponse.json({ error: 'Organizador inválido para a busca facial.' }, { status: 400 });
+    }
     const cidadeSelecionada = typeof cidadeInformada === "string" ? cidadeInformada.trim() : "";
     const [cidade, estado] = cidadeSelecionada.split("|");
-    if (!eventoId && (!cidade || cidade.length > 120 || (estado && !/^[A-Z]{2}$/.test(estado)))) {
+    if (!eventoId && !organizadorId && (!cidade || cidade.length > 120 || (estado && !/^[A-Z]{2}$/.test(estado)))) {
       return NextResponse.json({ error: "Selecione a cidade do evento." }, { status: 400 });
     }
     if (!(imagem instanceof File)) {
@@ -69,7 +74,19 @@ export async function POST(request: Request) {
     }
 
     const supabase = createSupabaseServerClient();
-    if (!eventoId) {
+    const galeriasOrganizador = new Set<string>();
+    if (organizadorId) {
+      for (let inicio = 0; ; inicio += 1000) {
+        const { data, error } = await supabase.from('foto_eventos').select('id')
+          .eq('organizador_user_id', organizadorId).eq('status', 'publicado')
+          .or('acesso_por_link.eq.false,acesso_por_link.is.null').order('id').range(inicio, inicio + 999);
+        if (error) throw new Error(error.message);
+        for (const evento of data || []) galeriasOrganizador.add(evento.id);
+        if (!data || data.length < 1000) break;
+      }
+      if (!galeriasOrganizador.size) return NextResponse.json({ resultados: [], rostoDetectado: true, confiancaDeteccao: 0 }, { headers: { 'Cache-Control': 'no-store' } });
+    }
+    if (!eventoId && !organizadorId) {
       const eventosCidade: { id: string }[] = [];
       for (let inicio = 0; ; inicio += 1000) {
         const { data, error: cidadeError } = await supabase.from("foto_eventos")
@@ -99,7 +116,7 @@ export async function POST(request: Request) {
 
     const ids = [...melhoresPorFoto.entries()]
       .sort((a, b) => b[1] - a[1])
-      .slice(0, 500)
+      .slice(0, organizadorId ? 4096 : 500)
       .map(([id]) => id);
 
     if (!ids.length) {
@@ -125,21 +142,25 @@ export async function POST(request: Request) {
         .in("id", ids.slice(inicio, inicio + 100))
         .eq("status", "publicada");
       if (eventoId) consultaFotos = consultaFotos.eq("evento_id", eventoId);
+      if (organizadorId && galeriasOrganizador.size <= 100) consultaFotos = consultaFotos.in('evento_id', [...galeriasOrganizador]);
       const { data, error } = await consultaFotos;
       if (error) throw new Error(error.message);
-      fotos.push(...(data || []));
+      fotos.push(...(data || []).filter(foto => !organizadorId || galeriasOrganizador.has(foto.evento_id)));
     }
 
     const eventoIds = [...new Set(fotos.map((foto) => foto.evento_id))];
     const { data: eventos, error: eventosError } = eventoIds.length
       ? await (() => {
-          return supabase.from("foto_eventos").select("id, nome, data_evento, cidade, estado, permite_download_gratis, desconto_combo_qtd, desconto_combo_percentual, descontos_progressivos")
-            .in("id", eventoIds).eq("status", "publicado").eq("acesso_por_link", false);
+          let consulta = supabase.from("foto_eventos").select("id, nome, data_evento, cidade, estado, permite_download_gratis, desconto_combo_qtd, desconto_combo_percentual, descontos_progressivos")
+            .in("id", eventoIds).eq("status", "publicado");
+          if (organizadorId) consulta = consulta.eq('organizador_user_id', organizadorId).or('acesso_por_link.eq.false,acesso_por_link.is.null');
+          else consulta = consulta.eq('acesso_por_link', false);
+          return consulta;
         })()
       : { data: [], error: null };
     if (eventosError) throw new Error(eventosError.message);
     const eventoPorId = new Map((eventos || [])
-      .filter((evento) => eventoId || chaveLocalidade(evento.cidade || "", evento.estado || "") === chaveLocalidade(cidade, estado))
+      .filter((evento) => organizadorId ? galeriasOrganizador.has(evento.id) : eventoId || chaveLocalidade(evento.cidade || "", evento.estado || "") === chaveLocalidade(cidade, estado))
       .map((evento) => [evento.id, evento]));
 
     const fotoPorId = new Map(fotos.map((foto) => [foto.id, foto]));
@@ -161,7 +182,7 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json(
-      { resultados, rostoDetectado: true, confiancaDeteccao: resultado.searchedFaceConfidence || 0 },
+      { resultados: resultados.slice(0, 500), rostoDetectado: true, confiancaDeteccao: resultado.searchedFaceConfidence || 0 },
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error: unknown) {

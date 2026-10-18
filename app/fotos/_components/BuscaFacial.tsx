@@ -27,6 +27,8 @@ const CARRINHO_FOTOS_KEY = "carrinho_fotos";
 
 type BuscaFacialProps = {
   eventoId?: string;
+  organizadorId?: string;
+  organizadorNome?: string;
   triggerLabel?: string;
   triggerClassName?: string;
 };
@@ -81,7 +83,7 @@ async function prepararSelfie(file: File) {
   return menor;
 }
 
-export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }: BuscaFacialProps = {}) {
+export default function BuscaFacial({ eventoId, organizadorId, organizadorNome, triggerLabel, triggerClassName }: BuscaFacialProps = {}) {
   const [aberto, setAberto] = useState(false);
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [cidadeEvento, setCidadeEvento] = useState("");
@@ -122,12 +124,12 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
     const overflowAnterior = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     conteudoModal.current?.scrollTo({ top: 0 });
-    if (!eventoId) cidadeSelect.current?.focus();
+    if (!eventoId && !organizadorId) cidadeSelect.current?.focus();
     return () => { document.body.style.overflow = overflowAnterior; };
-  }, [aberto, eventoId]);
+  }, [aberto, eventoId, organizadorId]);
 
   useEffect(() => {
-    if (!aberto || eventoId) return;
+    if (!aberto || eventoId || organizadorId) return;
     let ativo = true;
     void (async () => {
       const unicas = new Map<string, { cidade: string; estado: string }>();
@@ -155,7 +157,7 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
       if (ativo) setCidades([...unicas.values()].sort((a, b) => a.cidade.localeCompare(b.cidade, "pt-BR")));
     })();
     return () => { ativo = false; };
-  }, [aberto, eventoId]);
+  }, [aberto, eventoId, organizadorId]);
 
   useEffect(() => {
     if (!aberto) return;
@@ -204,7 +206,7 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
   }
 
   async function buscar() {
-    if (!arquivo || (!eventoId && !cidadeEvento)) return;
+    if (!arquivo || (!eventoId && !organizadorId && !cidadeEvento)) return;
     setBuscando(true);
     setErro("");
     setResultados(null);
@@ -213,6 +215,7 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
       const form = new FormData();
       form.append("imagem", selfie, "selfie-busca.jpg");
       if (eventoId) form.append("eventoId", eventoId);
+      else if (organizadorId) form.append('organizadorId', organizadorId);
       else form.append("cidade", cidadeEvento);
       const response = await fetch("/api/fotos/buscar-por-face", { method: "POST", body: form });
       const data = await response.json();
@@ -306,14 +309,15 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
             <div className="z-10 flex shrink-0 items-center justify-between gap-3 border-b border-white/10 bg-[#09090b] px-4 py-3 md:px-5 md:py-4">
               <div>
                 <p className="flex items-center gap-1.5 text-[8px] font-black uppercase tracking-[0.18em] text-retratt md:text-[9px]"><ScanFace size={13} /> Busca facial inteligente</p>
-                <h2 className="mt-1 text-base font-black uppercase leading-tight sm:text-lg md:text-xl">Encontre todas as suas fotos</h2>
+                <h2 className="mt-1 text-base font-black uppercase leading-tight sm:text-lg md:text-xl">Encontre suas fotos e vídeos</h2>
               </div>
               <button type="button" onClick={() => { setCameraAberta(false); setAberto(false); }} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 text-zinc-400 hover:bg-white hover:text-black" aria-label="Fechar"><X size={18} /></button>
             </div>
 
             <div ref={conteudoModal} className="grid flex-1 gap-4 overflow-y-auto p-3 md:grid-cols-[260px_minmax(0,1fr)] md:p-5">
               <div className="space-y-3">
-                {!eventoId && <label className="block text-[10px] font-bold text-zinc-300">1. Selecione a cidade do evento
+                {organizadorId && <p className="rounded-xl border border-white/10 bg-white/5 p-3 text-xs leading-5 text-zinc-300">Busca nas galerias públicas de <strong>{organizadorNome || 'este organizador'}</strong>.</p>}
+                {!eventoId && !organizadorId && <label className="block text-[10px] font-bold text-zinc-300">1. Selecione a cidade do evento
                   <select ref={cidadeSelect} value={cidadeEvento} onChange={(event) => setCidadeEvento(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-white/15 bg-[#18181b] px-3 text-xs text-white">
                     <option value="">Selecione a cidade</option>
                     {cidades.map(({ cidade, estado }) => <option key={`${cidade}|${estado}`} value={`${cidade}|${estado}`}>{cidade}{estado ? ` / ${estado}` : ""}</option>)}
@@ -343,7 +347,7 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
                   A imagem é usada somente para localizar suas fotos. A selfie não será armazenada.
                 </p>
 
-                <button type="button" onClick={() => void buscar()} disabled={!arquivo || (!eventoId && !cidadeEvento) || buscando} className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-retratt text-[9px] font-black uppercase tracking-widest text-black disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500">
+                <button type="button" onClick={() => void buscar()} disabled={!arquivo || (!eventoId && !organizadorId && !cidadeEvento) || buscando} className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-retratt text-[9px] font-black uppercase tracking-widest text-black disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500">
                   {buscando ? <><Loader2 size={17} className="animate-spin" /> Comparando rostos</> : <><ScanFace size={17} /> Encontrar minhas fotos</>}
                 </button>
                 <p className="flex items-start gap-2 text-[10px] leading-4 text-zinc-500"><ShieldCheck size={14} className="mt-0.5 shrink-0 text-emerald-400" /> A busca inclui resultados fortes, prováveis e possíveis para reduzir a chance de alguma foto ficar de fora.</p>
@@ -354,7 +358,7 @@ export default function BuscaFacial({ eventoId, triggerLabel, triggerClassName }
                 {buscando && (
                   <div className="flex min-h-[260px] flex-col items-center justify-center text-center">
                     <Loader2 size={42} className="animate-spin text-retratt" />
-                    <p className="mt-4 text-sm font-black uppercase tracking-wider">{eventoId ? "Procurando nesta galeria" : "Procurando na cidade selecionada"}</p>
+                    <p className="mt-4 text-sm font-black uppercase tracking-wider">{eventoId ? "Procurando nesta galeria" : organizadorId ? 'Procurando nas galerias do organizador' : "Procurando na cidade selecionada"}</p>
                     <p className="mt-2 text-xs text-zinc-500">Isso costuma levar apenas alguns segundos.</p>
                   </div>
                 )}

@@ -36,7 +36,9 @@ export async function GET(request: NextRequest) {
 
     const jpeg = await sharp(bruto, { limitInputPixels: 80_000_000 })
       .rotate()
-      .resize(LARGURA, ALTURA, { fit: "cover", position: "attention" })
+      .resize(LARGURA, ALTURA, alvo.tipo === 'organizador'
+        ? { fit: 'contain', position: 'centre', background: '#09090b' }
+        : { fit: "cover", position: "attention" })
       .jpeg({ quality: 80, mozjpeg: true })
       .toBuffer();
 

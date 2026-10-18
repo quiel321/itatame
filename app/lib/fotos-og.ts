@@ -41,7 +41,7 @@ export const carregarDadosOgFotos = cache(async (alvo: AlvoOgFotos): Promise<Dad
     return {
       titulo: org.nome || "Organizador",
       descricao: `Galerias oficiais de ${org.nome || "eventos"}${org.localizacao ? ` · ${org.localizacao}` : ""}. Encontre suas fotos por evento ou reconhecimento facial.`,
-      capaUrl: org.capa_url || org.avatar_url || null,
+      capaUrl: org.avatar_url || org.capa_url || null,
       caminho: caminhoPortfolioOrganizador(alvo.slug),
     };
   }
@@ -99,7 +99,7 @@ function hostsDeCapaPermitidos() {
 export function urlImagemOg(alvo: AlvoOgFotos, dados: DadosOgFotos | null) {
   if (!dados || !capaOgPermitida(dados.capaUrl)) return "/opengraph-image";
   const params = new URLSearchParams();
-  if (alvo.tipo === "organizador") params.set("organizador", alvo.slug);
+  if (alvo.tipo === "organizador") { params.set("organizador", alvo.slug); params.set('perfil', 'logo'); }
   else {
     params.set("evento", alvo.eventoId);
     if (alvo.albumId) params.set("album", alvo.albumId);

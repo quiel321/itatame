@@ -21,6 +21,7 @@ import {
 } from "@/app/lib/fotos-video";
 import { desenharProtecaoRetratt, gerarAmostraVideoRapida, inicioDaAmostra } from "@/app/lib/fotos-video-amostra";
 import { abrirLeituraVideo } from "@/app/lib/fotos-video-leitura";
+import { VIDEO_IA_LARGURA_QUADRO, VIDEO_IA_ALTURA_QUADRO, enquadramentoQuadroIa } from '@/app/lib/fotos-video-ia';
 import FotosShell from "../../_components/FotosShell";
 import {
   AlertTriangle,
@@ -197,9 +198,11 @@ function desenharVideoPreenchido(
   width: number,
   height: number,
 ) {
-  const escala = Math.max(width / video.videoWidth, height / video.videoHeight);
+  const escala = Math.min(width / video.videoWidth, height / video.videoHeight);
   const largura = video.videoWidth * escala;
   const altura = video.videoHeight * escala;
+  ctx.fillStyle = '#000';
+  ctx.fillRect(x, y, width, height);
   ctx.drawImage(video, x + (width - largura) / 2, y + (height - altura) / 2, largura, altura);
 }
 
@@ -212,8 +215,8 @@ function escolherTipoPreviewVideo() {
 async function gerarMiniaturaIaVideo(video: HTMLVideoElement) {
   const colunas = 2;
   const linhas = Math.ceil(VIDEO_IA_FRAME_COUNT / colunas);
-  const larguraQuadro = 480;
-  const alturaQuadro = 270;
+  const larguraQuadro = VIDEO_IA_LARGURA_QUADRO;
+  const alturaQuadro = VIDEO_IA_ALTURA_QUADRO;
   const canvas = document.createElement("canvas");
   canvas.width = larguraQuadro * colunas;
   canvas.height = alturaQuadro * linhas;
@@ -390,20 +393,16 @@ async function gerarDerivadosVideo(file: File) {
       desenharProtecaoRetratt(ctx, canvas.width, canvas.height);
       const previewBlob = await canvasParaJpeg(canvas, 0.82);
       const mosaico = document.createElement("canvas");
-      mosaico.width = 960; mosaico.height = 810;
+      mosaico.width = VIDEO_IA_LARGURA_QUADRO * 2; mosaico.height = VIDEO_IA_ALTURA_QUADRO * 3;
       const ctxIa = mosaico.getContext("2d");
       if (!ctxIa) throw new Error("Quadros de busca indisponíveis.");
       for (let i = 0; i < VIDEO_IA_FRAME_COUNT; i++) {
         const quadro = await leitura.quadro(leitura.duracao * (i + 1) / (VIDEO_IA_FRAME_COUNT + 1));
         if (!quadro) throw new Error("Quadro indisponível.");
-        const escala = Math.max(480 / quadro.width, 270 / quadro.height);
-        const largura = quadro.width * escala, altura = quadro.height * escala;
-        ctxIa.save();
-        ctxIa.beginPath();
-        ctxIa.rect(i % 2 * 480, Math.floor(i / 2) * 270, 480, 270);
-        ctxIa.clip();
-        ctxIa.drawImage(quadro, i % 2 * 480 + (480 - largura) / 2, Math.floor(i / 2) * 270 + (270 - altura) / 2, largura, altura);
-        ctxIa.restore();
+        const desenho = enquadramentoQuadroIa(quadro.width, quadro.height, i);
+        ctxIa.fillStyle = '#000';
+        ctxIa.fillRect(i % 2 * VIDEO_IA_LARGURA_QUADRO, Math.floor(i / 2) * VIDEO_IA_ALTURA_QUADRO, VIDEO_IA_LARGURA_QUADRO, VIDEO_IA_ALTURA_QUADRO);
+        ctxIa.drawImage(quadro, desenho.x, desenho.y, desenho.width, desenho.height);
       }
       let miniaturaIa: Blob | null = null;
       for (const qualidade of [0.82, 0.72, 0.62, 0.52, 0.42, 0.32]) {
@@ -429,7 +428,7 @@ async function gerarDerivadosVideo(file: File) {
         ctx.fillText(formatarDuracaoVideo(leitura.duracao), 480, 285);
         desenharProtecaoRetratt(ctx, 960, 540);
         const previewBlob = await canvasParaJpeg(canvas, 0.76);
-        return { duracaoSegundos: leitura.duracao, previewBlob, miniaturaIa: previewBlob, previewVideoBlob: null, previewVideoContentType: "", avisoPreparacao: "Vídeo enviado com capa padrão. O arquivo original foi preservado." };
+        return { duracaoSegundos: leitura.duracao, previewBlob, miniaturaIa: previewBlob, previewVideoBlob: null, previewVideoContentType: "", avisoPreparacao: "Vídeo enviado com capa padrão e original preservado. Sem quadros legíveis, ele não será encontrado pela busca facial." };
       }
     }
   } finally { leitura.fechar(); }

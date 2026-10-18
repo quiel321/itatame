@@ -2,6 +2,7 @@ import sharp from "sharp";
 import { FOTO_IA_MAX_BYTES, FOTO_IA_MAX_DIMENSAO, fotoIaIndiceStorageKey, fotoIaStorageKey } from "@/app/lib/fotos-ai";
 import { cadastrarRostosDaFoto, detectarNumerosDaImagem, excluirRostos } from "@/app/lib/rekognition";
 import { deleteR2Object, getR2ObjectBytes, putR2Object, tryGetR2ObjectBytes } from "@/app/lib/r2";
+import { recortesMosaicoVideo } from './fotos-video-ia';
 
 type FotoIndiceIa = {
   fotoId: string;
@@ -12,7 +13,8 @@ type FotoIndiceIa = {
   indexedFaces: number;
   unindexedFaces: string[];
   detectedNumbers?: string[];
-  strategy?: "full" | "full+tiles";
+  strategy?: "full" | "full+tiles" | 'video-frames-v1' | 'video-frames-partial' | 'video-cover-v1';
+  videoFramesIndexed?: number[];
   indexedAt: string;
 };
 
@@ -120,15 +122,48 @@ async function indexarTilesComplementares(fotoId: string, source: Buffer, indice
 
 export async function indexarMiniaturaIaDoR2(
   fotoId: string,
-  options: { force?: boolean; fallbackOriginalKey?: string; fallbackSource?: Buffer } = {},
+  options: { force?: boolean; fallbackOriginalKey?: string; fallbackSource?: Buffer; videoFrames?: boolean } = {},
 ) {
   const existente = await obterIndiceIa(fotoId);
-  if (existente && !options.force && Array.isArray(existente.detectedNumbers)) {
+  if (existente && !options.force && Array.isArray(existente.detectedNumbers)
+    && (!options.videoFrames || existente.strategy === 'video-frames-v1' || existente.strategy === 'video-cover-v1')) {
     return { ...existente, skipped: true as const };
   }
 
   const sourceKey = fotoIaStorageKey(fotoId);
   const imageBytes = await getR2ObjectBytes(sourceKey, FOTO_IA_MAX_BYTES);
+
+  if (options.videoFrames) {
+    const metadata = await sharp(imageBytes).metadata();
+    const recortes = recortesMosaicoVideo(metadata.width || 0, metadata.height || 0);
+    const detectedNumbers = existente?.detectedNumbers ?? await detectarNumerosDaImagem(imageBytes);
+    let indice = existente;
+    const concluidos = new Set(options.force ? [] : existente?.videoFramesIndexed || []);
+    // Acrescenta vetores e salva o progresso; os rostos anteriores seguem pesquisáveis.
+    for (let i = 0; i < (recortes.length || 1); i++) {
+      if (concluidos.has(i)) continue;
+      const quadro = recortes.length
+        ? await sharp(imageBytes).extract(recortes[i]).resize({ width: 1280, height: 1280, fit: 'inside' }).jpeg({ quality: 90 }).toBuffer()
+        : imageBytes;
+      const resultado = await cadastrarRostosDaFoto(fotoId, quadro);
+      concluidos.add(i);
+      const faceIds = [...new Set([...(indice?.faceIds || []), ...resultado.faceIds])];
+      indice = {
+        fotoId, sourceKey, collectionId: resultado.collectionId, modelVersion: resultado.modelVersion,
+        faceIds, indexedFaces: faceIds.length,
+        unindexedFaces: [...(indice?.unindexedFaces || []), ...resultado.unindexedFaces],
+        detectedNumbers, videoFramesIndexed: [...concluidos],
+        strategy: recortes.length ? 'video-frames-partial' : 'video-cover-v1', indexedAt: new Date().toISOString(),
+      };
+      await salvarIndice(indice);
+    }
+    if (!indice) throw new Error('Não foi possível indexar os quadros do vídeo.');
+    if (recortes.length) {
+      indice = { ...indice, strategy: 'video-frames-v1', indexedAt: new Date().toISOString() };
+      await salvarIndice(indice);
+    }
+    return { ...indice, skipped: false as const };
+  }
 
   if (existente && !options.force) {
     const detectados = await detectarNumerosDaImagem(imageBytes);
@@ -175,19 +210,19 @@ export async function prepararEIndexarFotoExistente(
   foto: { id: string; r2_original_key: string; r2_preview_key?: string | null; mime_type?: string | null },
   options: { force?: boolean } = {},
 ) {
+  const ehVideo = String(foto.mime_type || "").startsWith("video/");
   const existente = await obterIndiceIa(foto.id);
   if (existente && !options.force) {
-    const resultado = await indexarMiniaturaIaDoR2(foto.id, options);
+    const resultado = await indexarMiniaturaIaDoR2(foto.id, { ...options, videoFrames: ehVideo });
     return { ...resultado, thumbnailBytes: null };
   }
 
-  const ehVideo = String(foto.mime_type || "").startsWith("video/");
   const sourceKey = ehVideo ? foto.r2_preview_key : foto.r2_original_key;
   if (!sourceKey) throw new Error("Vídeo sem capa disponível para indexação facial.");
   const original = await getR2ObjectBytes(sourceKey, 6 * 1024 * 1024);
   const miniatura = await criarMiniaturaIa(original);
   await putR2Object(fotoIaStorageKey(foto.id), miniatura, "image/jpeg");
-  const resultado = await indexarMiniaturaIaDoR2(foto.id, ehVideo ? options : { ...options, fallbackSource: original });
+  const resultado = await indexarMiniaturaIaDoR2(foto.id, ehVideo ? { ...options, videoFrames: true } : { ...options, fallbackSource: original });
   return { ...resultado, thumbnailBytes: miniatura.length };
 }
 
