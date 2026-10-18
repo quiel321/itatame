@@ -4,6 +4,7 @@ import { cache } from "react";
 import { acessoAlbumPermitido } from './fotos-acesso-album';
 import { versaoDaCapa } from './fotos-compartilhamento';
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
+import { caminhoPortfolioOrganizador } from './fotos-portfolio-url';
 
 export type AlvoOgFotos =
   | { tipo: "evento"; eventoId: string; albumId?: string | null; acesso?: string | null }
@@ -41,7 +42,7 @@ export const carregarDadosOgFotos = cache(async (alvo: AlvoOgFotos): Promise<Dad
       titulo: org.nome || "Organizador",
       descricao: `Galerias oficiais de ${org.nome || "eventos"}${org.localizacao ? ` · ${org.localizacao}` : ""}. Encontre suas fotos por evento ou reconhecimento facial.`,
       capaUrl: org.capa_url || org.avatar_url || null,
-      caminho: `/organizador/${encodeURIComponent(alvo.slug)}`,
+      caminho: caminhoPortfolioOrganizador(alvo.slug),
     };
   }
 

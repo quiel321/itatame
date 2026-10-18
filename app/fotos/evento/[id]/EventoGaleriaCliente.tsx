@@ -1,4 +1,5 @@
 ﻿"use client";
+import { caminhoPortfolioOrganizador } from '@/app/lib/fotos-portfolio-url';
 import { linkCompartilhamentoGaleria } from '@/app/lib/fotos-compartilhamento';
 
 import Link from "next/link";
@@ -511,7 +512,7 @@ export default function EventoGaleriaCliente({ initialData, acesso }: { initialD
                 {/* 🔥 IDENTIFICAÇÃO DO AUTOR DA GALERIA */}
                 <div className="mb-2">
                    {evento?.tipo_autor === "organizador" && evento?.autor_slug ? (
-                       <Link href={`/fotos/organizador/${evento.autor_slug}`} className="inline-flex items-center gap-2.5 bg-white/10 hover:bg-white/20 border border-white/10 rounded-full pr-4 pl-1 py-1 backdrop-blur-md transition-all cursor-pointer group w-fit">
+                       <Link href={`/fotos${caminhoPortfolioOrganizador(evento.autor_slug)}`} className="inline-flex items-center gap-2.5 bg-white/10 hover:bg-white/20 border border-white/10 rounded-full pr-4 pl-1 py-1 backdrop-blur-md transition-all cursor-pointer group w-fit">
                           <div className="w-6 h-6 rounded-full bg-zinc-900 border border-white/10 flex items-center justify-center text-[9px] font-black text-white group-hover:scale-110 transition-transform">
                              <Building2 size={12} className="text-zinc-400 group-hover:text-white" />
                           </div>

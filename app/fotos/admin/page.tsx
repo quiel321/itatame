@@ -1,5 +1,6 @@
 "use client";
 
+import { caminhoPortfolioOrganizador } from '@/app/lib/fotos-portfolio-url';
 import Link from "next/link";
 import LinkGaleria from "@/app/fotos/_components/LinkGaleria";
 import { useEffect, useState, useRef } from "react";
@@ -614,7 +615,7 @@ export default function FotosAdminPage() {
 
             <div className="mb-5 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
               <div className="flex min-w-0 items-center gap-3"><span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/15 bg-white/5">{avatarOrganizador ? <img src={avatarOrganizador} alt={`Perfil de ${orgForm.nome || primeiroNome}`} className="h-full w-full object-cover" /> : <Trophy size={21} className="text-retratt" />}</span><div className="min-w-0"><p className="text-[9px] font-bold uppercase tracking-widest text-zinc-500">Painel do organizador</p><h1 className="mt-1 break-words text-xl font-bold tracking-tight sm:text-2xl">Olá, {primeiroNome}.</h1></div></div>
-              <div className="flex flex-wrap gap-2"><Link href="/fotos/admin/vendas" className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-retratt px-4 text-[10px] font-bold text-black">Vendas e pedidos <BarChart3 size={14} /></Link>{slugPublico && <Link href={`/fotos/organizador/${slugPublico}`} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-white/15 px-3 text-[10px] font-bold text-zinc-300">Meu site público <ArrowRight size={13} /></Link>}{userId && <button type="button" onClick={deslogar} className="inline-flex min-h-10 items-center gap-2 rounded-xl px-3 text-[10px] font-bold text-zinc-500 hover:text-white">Sair <LogOut size={13} /></button>}</div>
+              <div className="flex flex-wrap gap-2"><Link href="/fotos/admin/vendas" className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-retratt px-4 text-[10px] font-bold text-black">Vendas e pedidos <BarChart3 size={14} /></Link>{slugPublico && <Link href={`/fotos${caminhoPortfolioOrganizador(slugPublico)}`} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-white/15 px-3 text-[10px] font-bold text-zinc-300">Meu site público <ArrowRight size={13} /></Link>}{userId && <button type="button" onClick={deslogar} className="inline-flex min-h-10 items-center gap-2 rounded-xl px-3 text-[10px] font-bold text-zinc-500 hover:text-white">Sair <LogOut size={13} /></button>}</div>
             </div>
             <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {[[Store, 'Galerias', totais.eventos, `${totais.albuns} álbuns`], [ImagePlus, 'Mídias enviadas', totais.fotos, 'Fotos e vídeos'], [Wallet, 'Arquivos vendidos', estadoConexaoMP === 'erro' ? '—' : totais.pedidos, estadoConexaoMP === 'erro' ? 'Atualize para conferir' : 'Pagamentos aprovados'], [BarChart3, 'Receita por diária', estadoConexaoMP === 'erro' ? '—' : formatarMoeda(receitaDiretaTotalCentavos), estadoConexaoMP === 'erro' ? 'Atualize para conferir' : 'Antes da tarifa MP']].map(([Icon, titulo, valor, nota]) => {

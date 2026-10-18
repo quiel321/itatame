@@ -6,6 +6,7 @@ import FotosShell from '../../_components/FotosShell';
 import { ArrowDown, ArrowUpRight, CalendarDays, Camera, Check, Image as IconeImagem, MapPin, Search, Share2, SlidersHorizontal, X } from 'lucide-react';
 import { categoriaDaGaleria, nomeCategoriaFotos } from '@/app/lib/fotos-categorias';
 import { filtrarGaleriasPortfolio, type PortfolioOrganizador, type GaleriaPortfolio } from '@/app/lib/fotos-portfolio';
+import { caminhoPortfolioOrganizador } from '@/app/lib/fotos-portfolio-url';
 
 const data = (s: string | null) => s ? new Date(s.slice(0, 10) + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
 function Capa({ src, nome, className, prioridade = false }: { src: string | null; nome: string; className: string; prioridade?: boolean }) {
@@ -33,14 +34,14 @@ export default function PerfilOrganizacaoCliente({ dados }: { dados: PortfolioOr
   const filtradas = useMemo(() => filtrarGaleriasPortfolio(galerias, { busca, cidade, categoria, ano }), [galerias, busca, cidade, categoria, ano]);
   const ultima = galerias.find(g => !g.em_breve) || galerias[0];
   async function compartilhar() {
-    const url = new URL(`/organizador/${org.slug}`, window.location.origin).toString();
+    const url = new URL(caminhoPortfolioOrganizador(org.slug), window.location.origin).toString();
     try {
       if (navigator.share) await navigator.share({ title: org.nome, url });
       else { await navigator.clipboard.writeText(url); setCopiado(true); }
       setAviso('');
     } catch (e) { if (!(e instanceof Error && e.name === 'AbortError')) setAviso(`Copie o endereço da página para compartilhar: ${url}`); }
   }
-  return <FotosShell marca={{ nome: org.nome, avatarUrl: org.avatar_url, href: `/fotos/organizador/${org.slug}` }}>
+  return <FotosShell marca={{ nome: org.nome, avatarUrl: org.avatar_url, href: `/fotos${caminhoPortfolioOrganizador(org.slug)}` }}>
     <main className="min-h-screen bg-[#080809] pb-16 text-white">
       <section className="relative isolate overflow-hidden border-b border-white/10">
         <div className="absolute inset-0"><Capa src={org.capa_url || ultima?.capa_url || null} nome={`Capa de ${org.nome}`} prioridade className="object-cover opacity-55" /><div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/65 to-black/15" /><div className="absolute inset-0 bg-gradient-to-t from-[#080809] via-transparent to-transparent" /></div>
