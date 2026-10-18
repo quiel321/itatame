@@ -18,7 +18,7 @@ import EditorFaixasDesconto from "../../_components/EditorFaixasDesconto";
 import ParceirosAlbum from "../_components/ParceirosAlbum";
 import { faixasDoEvento, validarFaixasDesconto, type FaixaDesconto } from "@/app/lib/fotos-descontos";
 import { CATEGORIAS_FOTOS, nomeCategoriaFotos } from "@/app/lib/fotos-categorias";
-import CidadeEstadoInput from "@/app/components/CidadeEstadoInput";
+import LocalidadeFotosInput from "@/app/fotos/_components/LocalidadeFotosInput";
 import OpcoesPublicacaoGaleria from "../../_components/OpcoesPublicacaoGaleria";
 import { ACCEPT_FOTOS_RETRATT } from "@/app/lib/fotos-formatos";
 import DataGaleriaInput from "@/app/fotos/_components/DataGaleriaInput";
@@ -543,14 +543,7 @@ export default function FotografoDashboardPage() {
                            <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Categoria</label>
                            <select value={galeriaForm.categoria} onChange={(e) => setGaleriaForm({ ...galeriaForm, categoria: e.target.value })} className="h-11 w-full rounded-xl border border-white/10 bg-black px-3 text-xs text-white">{CATEGORIAS_FOTOS.map((categoria) => <option key={categoria.id} value={categoria.id}>{categoria.nome}</option>)}</select>
                          </div>
-                         <div>
-                           <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Cidade</label>
-                           <CidadeEstadoInput cidade={galeriaForm.cidade} estado={galeriaForm.estado} onChange={({ cidade, estado }) => setGaleriaForm({ ...galeriaForm, cidade, estado })} />
-                         </div>
-                         <div>
-                           <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Estado (UF)</label>
-                           <input value={galeriaForm.estado} readOnly placeholder="Preenchido ao selecionar a cidade" className="h-11 w-full rounded-xl border border-white/10 bg-black px-3 text-xs font-bold uppercase text-zinc-400" />
-                         </div>
+                         <LocalidadeFotosInput cidade={galeriaForm.cidade} estado={galeriaForm.estado} onChange={({ cidade, estado }) => setGaleriaForm({ ...galeriaForm, cidade, estado })} />
                          <div>
                            <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Data do Evento</label>
                            <DataGaleriaInput value={galeriaForm.dataEvento} onChange={(dataEvento) => setGaleriaForm({ ...galeriaForm, dataEvento })} />
@@ -728,15 +721,7 @@ export default function FotografoDashboardPage() {
                                      <select value={editGaleriaForm.categoria} onChange={(e) => setEditGaleriaForm({ ...editGaleriaForm, categoria: e.target.value })} className="h-11 w-full rounded-xl border border-white/10 bg-black px-4 text-xs text-white">{CATEGORIAS_FOTOS.map((categoria) => <option key={categoria.id} value={categoria.id}>{categoria.nome}</option>)}</select>
                                    </div>
 
-                                   <div>
-                                      <label className="mb-1.5 ml-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Cidade</label>
-                                      <CidadeEstadoInput cidade={editGaleriaForm.cidade} estado={editGaleriaForm.estado} onChange={({ cidade, estado }) => setEditGaleriaForm({ ...editGaleriaForm, cidade, estado })} className="h-11 sm:h-12 w-full rounded-xl border border-white/10 bg-black px-4 text-xs font-bold text-white outline-none focus:border-retratt focus:ring-1 focus:ring-retratt/50 transition-all" />
-                                   </div>
-
-                                   <div>
-                                      <label className="mb-1.5 ml-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Estado (UF)</label>
-                                      <input value={editGaleriaForm.estado} readOnly placeholder="Preenchido ao selecionar a cidade" className="h-11 sm:h-12 w-full rounded-xl border border-white/10 bg-black px-4 text-xs font-bold uppercase text-zinc-400" />
-                                   </div>
+                                   <LocalidadeFotosInput cidade={editGaleriaForm.cidade} estado={editGaleriaForm.estado} onChange={({ cidade, estado }) => setEditGaleriaForm({ ...editGaleriaForm, cidade, estado })} className="h-11 sm:h-12 w-full rounded-xl border border-white/10 bg-black px-4 text-xs font-bold text-white outline-none focus:border-retratt focus:ring-1 focus:ring-retratt/50 transition-all" />
 
                                    <div>
                                       <label className="mb-1.5 ml-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Data do Evento</label>
@@ -869,8 +854,7 @@ export default function FotografoDashboardPage() {
                          <div><label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">CPF</label><input value={perfilForm.documento} onChange={(e) => setPerfilForm({ ...perfilForm, documento: e.target.value })} className="cursor-text h-11 w-full rounded-xl border border-white/10 bg-[#050505] px-3 text-xs font-bold text-white outline-none focus:border-retratt" placeholder="000.000.000-00" /></div>
                          <div><label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">CEP</label><input value={perfilForm.cep} onChange={(e) => setPerfilForm({ ...perfilForm, cep: e.target.value })} className="cursor-text h-11 w-full rounded-xl border border-white/10 bg-[#050505] px-3 text-xs font-bold text-white outline-none focus:border-retratt" placeholder="00000-000" /></div>
                          <div className="min-w-0"><label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Endereço Completo</label><input value={perfilForm.endereco} onChange={(e) => setPerfilForm({ ...perfilForm, endereco: e.target.value })} className="cursor-text h-11 w-full rounded-xl border border-white/10 bg-[#050505] px-3 text-xs font-bold text-white outline-none focus:border-retratt" placeholder="Rua, Número, Bairro" /></div>
-                         <div><label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Cidade</label><CidadeEstadoInput cidade={perfilForm.cidade} estado={perfilForm.estado} onChange={({ cidade, estado }) => setPerfilForm({ ...perfilForm, cidade, estado })} className="h-11 w-full rounded-xl border border-white/10 bg-[#050505] px-3 text-xs font-bold text-white outline-none focus:border-retratt" /></div>
-                         <div><label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Estado (UF)</label><input value={perfilForm.estado} readOnly placeholder="Preenchido ao selecionar a cidade" className="h-11 w-full rounded-xl border border-white/10 bg-[#050505] px-3 text-xs font-bold text-zinc-400" /></div>
+                         <LocalidadeFotosInput cidade={perfilForm.cidade} estado={perfilForm.estado} onChange={({ cidade, estado }) => setPerfilForm({ ...perfilForm, cidade, estado })} className="h-11 w-full rounded-xl border border-white/10 bg-[#050505] px-3 text-xs font-bold text-white outline-none focus:border-retratt" />
                          <div className="min-w-0"><label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Bio (Equipamento / Foco)</label><textarea value={perfilForm.bio} onChange={(e) => setPerfilForm({ ...perfilForm, bio: e.target.value })} className="cursor-text min-h-20 w-full rounded-xl border border-white/10 bg-[#050505] p-3 text-xs font-bold text-white outline-none focus:border-retratt" placeholder="Ex: Especialista em desporto. Utilizo Sony A7IV com lente 70-200mm." /></div>
                        </div>
                        <div className="mt-6"><button type="button" onClick={salvarPerfilFotografo} disabled={salvandoPerfil || !perfilForm.nome.trim() || !perfilForm.telefone.trim() || !perfilForm.documento.trim()} className="cursor-pointer h-12 w-full flex items-center justify-center rounded-xl bg-retratt text-[11px] font-black uppercase tracking-widest text-black hover:bg-retratt disabled:cursor-not-allowed disabled:opacity-50 transition-all shadow-[0_0_15px_rgba(255,90,31,0.2)]">{salvandoPerfil ? "A Processar..." : "Salvar Perfil Seguro"}</button></div>

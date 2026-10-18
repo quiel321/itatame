@@ -15,7 +15,7 @@ import { ArrowRight, BarChart3, Camera, CheckCircle2, FolderPlus, ImagePlus, Pen
 import { formatarDocumento } from '@/app/lib/formatar-documento';
 import { formatarTelefone } from '@/app/lib/formatar-telefone';
 import { CATEGORIAS_FOTOS } from "@/app/lib/fotos-categorias";
-import CidadeEstadoInput from "@/app/components/CidadeEstadoInput";
+import LocalidadeFotosInput from "@/app/fotos/_components/LocalidadeFotosInput";
 import OpcoesPublicacaoGaleria from "../_components/OpcoesPublicacaoGaleria";
 import { ACCEPT_FOTOS_RETRATT } from "@/app/lib/fotos-formatos";
 import DataGaleriaInput from "@/app/fotos/_components/DataGaleriaInput";
@@ -696,14 +696,7 @@ export default function FotosAdminPage() {
                            <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Nome da Galeria Avulsa</label>
                            <input value={manualForm.nome} onChange={(e) => setManualForm({ ...manualForm, nome: e.target.value })} className="h-12 w-full rounded-xl border border-white/10 bg-[#050505] px-4 text-xs font-bold text-white outline-none focus:border-retratt/50" placeholder="Ex: Open de Verão" />
                          </div>
-                         <div>
-                           <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Cidade</label>
-                           <CidadeEstadoInput cidade={manualForm.cidade} estado={manualForm.estado} onChange={({ cidade, estado }) => setManualForm({ ...manualForm, cidade, estado })} className="h-12 w-full rounded-xl border border-white/10 bg-[#050505] px-4 text-xs font-bold text-white outline-none focus:border-retratt/50" />
-                         </div>
-                         <div>
-                           <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Estado (UF)</label>
-                           <input value={manualForm.estado} readOnly placeholder="Preenchido ao selecionar a cidade" className="h-12 w-full rounded-xl border border-white/10 bg-[#050505] px-4 text-xs font-bold uppercase text-zinc-400" />
-                         </div>
+                         <LocalidadeFotosInput cidade={manualForm.cidade} estado={manualForm.estado} onChange={({ cidade, estado }) => setManualForm({ ...manualForm, cidade, estado })} className="h-12 w-full rounded-xl border border-white/10 bg-[#050505] px-4 text-xs font-bold text-white outline-none focus:border-retratt/50" />
                          <div>
                            <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Data do Evento</label>
                            <DataGaleriaInput value={manualForm.dataEvento} onChange={(dataEvento) => setManualForm({ ...manualForm, dataEvento })} />
@@ -1080,14 +1073,7 @@ export default function FotosAdminPage() {
                         <input value={formatarDocumento(orgForm.documento)} onChange={(e) => setOrgForm({ ...orgForm, documento: formatarDocumento(e.target.value) })} className="h-11 w-full rounded-xl border border-white/10 bg-[#050505] px-3 text-xs font-bold text-white outline-none focus:border-retratt" placeholder="000.000.000-00" />
                      </div>
 
-                     <div>
-                        <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Cidade</label>
-                        <CidadeEstadoInput cidade={orgForm.cidade} estado={orgForm.estado} onChange={({ cidade, estado }) => setOrgForm({ ...orgForm, cidade, estado })} className="h-11 w-full rounded-xl border border-white/10 bg-[#050505] px-3 text-xs font-bold text-white outline-none focus:border-retratt" />
-                     </div>
-                     <div>
-                        <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Estado (UF)</label>
-                        <input value={orgForm.estado} readOnly placeholder="Preenchido ao selecionar a cidade" className="h-11 w-full rounded-xl border border-white/10 bg-[#050505] px-3 text-xs font-bold text-zinc-400" />
-                     </div>
+                     <LocalidadeFotosInput cidade={orgForm.cidade} estado={orgForm.estado} onChange={({ cidade, estado }) => setOrgForm({ ...orgForm, cidade, estado })} className="h-11 w-full rounded-xl border border-white/10 bg-[#050505] px-3 text-xs font-bold text-white outline-none focus:border-retratt" />
 
                      <div className="sm:col-span-2">
                         <label className="ml-1 mb-1 block text-[8px] font-black uppercase tracking-widest text-zinc-500">Tipo de Negócio</label>
