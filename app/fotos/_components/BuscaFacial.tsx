@@ -96,7 +96,7 @@ export default function BuscaFacial({ eventoId, organizadorId, organizadorNome, 
   const [buscando, setBuscando] = useState(false);
   const [erro, setErro] = useState("");
   const [resultados, setResultados] = useState<ResultadoFace[] | null>(null);
-  const [tipoResultado, setTipoResultado] = useState<'fotos' | 'videos'>('videos');
+  const [tipoResultado, setTipoResultado] = useState<'fotos' | 'videos'>('fotos');
   const [ofertas, setOfertas] = useState<OfertaComboIa[]>([]);
   const resultadosRef = useRef<HTMLDivElement>(null);
   const toqueTipo = useRef<{ x: number; y: number } | null>(null);
@@ -236,7 +236,7 @@ export default function BuscaFacial({ eventoId, organizadorId, organizadorNome, 
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Nao foi possivel buscar suas fotos.");
       const encontrados = (data.resultados || []) as ResultadoFace[];
-      setTipoResultado(encontrados.some(r => r.mimeType?.startsWith('video/')) ? 'videos' : 'fotos');
+      setTipoResultado(encontrados.some(r => !r.mimeType?.startsWith('video/')) ? 'fotos' : 'videos');
       setIndiceAberto(null); setOfertas(Array.isArray(data.combos) ? data.combos : []);
       setErro(typeof data.avisoCombos === 'string' ? data.avisoCombos : '');
       setResultados(encontrados);
@@ -258,7 +258,7 @@ export default function BuscaFacial({ eventoId, organizadorId, organizadorNome, 
   }
 
   function abrirBusca() {
-    setTipoResultado(resultados?.some(r => r.mimeType?.startsWith('video/')) ? 'videos' : 'fotos');
+    setTipoResultado(resultados?.length && !resultados.some(r => !r.mimeType?.startsWith('video/')) ? 'videos' : 'fotos');
     setIndiceAberto(null);
     try {
       const salvas = JSON.parse(localStorage.getItem(CARRINHO_FOTOS_KEY) || "[]");
@@ -426,17 +426,29 @@ export default function BuscaFacial({ eventoId, organizadorId, organizadorNome, 
                       </button>}
                     </div>
                     <button type="button" onClick={() => { setResultados(null); setIndiceAberto(null); }} className="mb-3 text-[10px] text-zinc-400 underline underline-offset-4">Trocar selfie ou local</button>
+                    {ofertas.length > 0 && <div aria-label="Pacotes especiais de fotos" className="sticky top-0 z-20 mb-3 bg-[#09090b] pb-2 pt-1">
+                      <div className="max-h-[40dvh] space-y-2 overflow-y-auto overscroll-contain">
+                        {ofertas.map(oferta => <section key={oferta.token} aria-label={`Pacote especial de ${oferta.quantidade} fotos`} className="flex overflow-hidden rounded-2xl border border-orange-400/40 bg-[#251309]">
+                          <div className="flex w-8 shrink-0 items-center justify-center border-r border-orange-400/20 bg-orange-500/20 sm:w-9">
+                            <span className="rotate-180 whitespace-nowrap text-[10px] font-black uppercase tracking-[0.14em] text-orange-200 [writing-mode:vertical-rl]">Pacote especial</span>
+                          </div>
+                          <div className="min-w-0 flex-1 p-3">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-[10px] font-bold text-orange-200">Garanta todas as suas fotos</p>
+                              <span className="shrink-0 rounded-full bg-orange-400/15 px-2 py-1 text-[10px] font-black text-orange-200">−{oferta.percentual}%</span>
+                            </div>
+                            <p className="mt-1 truncate text-[10px] text-zinc-400">{oferta.eventoNome}</p>
+                            <p className="mt-1 text-lg font-black leading-tight text-white sm:text-xl">{oferta.quantidade} fotos por {formatarPrecoFotos(oferta.totalCentavos)}</p>
+                            <p className="mt-1 text-[10px] text-zinc-400"><s>{formatarPrecoFotos(oferta.subtotalCentavos)}</s> · {formatarPrecoFotos(Math.round(oferta.totalCentavos / oferta.quantidade))} por foto</p>
+                            <Link href="/fotos/carrinho" onClick={() => adicionarCombo(oferta)} className="mt-2 flex min-h-10 items-center justify-center gap-2 rounded-xl bg-retratt px-2 text-[11px] font-bold text-black sm:text-xs"><ShoppingCart size={16} />Comprar todas as {oferta.quantidade} fotos</Link>
+                            <p className="mt-2 text-[9px] leading-3 text-zinc-400">Não inclui vídeos. Descontos não se acumulam.</p>
+                          </div>
+                        </section>)}
+                      </div>
+                    </div>}
                     <div role="tablist" aria-label="Tipo de mídia encontrada" className="mb-4 grid grid-cols-2 gap-2 rounded-xl border border-white/10 bg-black p-1">
-                      {(['videos', 'fotos'] as const).map(tipo => <button key={tipo} type="button" role="tab" id={'aba-ia-' + tipo} aria-selected={tipoResultado === tipo} aria-controls="midias-encontradas-ia" disabled={tipo === 'videos' ? !totalVideos : !totalFotos} onClick={() => { setTipoResultado(tipo); setIndiceAberto(null); }} className={`flex min-h-11 items-center justify-center gap-2 rounded-lg text-xs font-bold disabled:opacity-35 ${tipoResultado === tipo ? 'bg-retratt text-black' : 'text-zinc-400 hover:bg-white/5'}`}>{tipo === 'videos' ? <Video size={16} /> : <IconeFoto size={16} />}{tipo === 'videos' ? 'Vídeos' : 'Fotos'} ({tipo === 'videos' ? totalVideos : totalFotos})</button>)}
+                      {(['fotos', 'videos'] as const).map(tipo => <button key={tipo} type="button" role="tab" id={'aba-ia-' + tipo} aria-selected={tipoResultado === tipo} aria-controls="midias-encontradas-ia" disabled={tipo === 'videos' ? !totalVideos : !totalFotos} onClick={() => { setTipoResultado(tipo); setIndiceAberto(null); }} className={`flex min-h-11 items-center justify-center gap-2 rounded-lg text-xs font-bold disabled:opacity-35 ${tipoResultado === tipo ? 'bg-retratt text-black' : 'text-zinc-400 hover:bg-white/5'}`}>{tipo === 'videos' ? <Video size={16} /> : <IconeFoto size={16} />}{tipo === 'videos' ? 'Vídeos' : 'Fotos'} ({tipo === 'videos' ? totalVideos : totalFotos})</button>)}
                     </div>
-                    {tipoResultado === 'fotos' && ofertas.map(oferta => <div key={oferta.token} className="mb-4 rounded-2xl border border-orange-400/30 bg-orange-500/10 p-4">
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-orange-300">Pacote completo · {oferta.percentual}% de desconto</p>
-                      <p className="mt-1 text-xs text-zinc-400">{oferta.eventoNome}</p>
-                      <p className="mt-3 text-xl font-bold text-white">{oferta.quantidade} fotos por {formatarPrecoFotos(oferta.totalCentavos)}</p>
-                      <p className="mt-1 text-xs text-zinc-400"><s>{formatarPrecoFotos(oferta.subtotalCentavos)}</s> · {formatarPrecoFotos(Math.round(oferta.totalCentavos / oferta.quantidade))} por foto</p>
-                      <Link href="/fotos/carrinho" onClick={() => adicionarCombo(oferta)} className="mt-3 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-retratt px-4 text-xs font-bold text-black"><ShoppingCart size={16} />Comprar todas as {oferta.quantidade} fotos</Link>
-                      <p className="mt-2 text-[10px] text-zinc-500">Inclui todas as fotos desta oferta de IA. Não inclui vídeos. Não acumula descontos.</p>
-                    </div>)}
                     {gruposDesconto.size > 0 && <div className="mb-4 space-y-2">
                       {[...gruposDesconto].map(([chave, foto]) => <div key={chave}>
                         <p className="mb-1 text-[10px] font-bold text-zinc-300">{foto.evento?.nome}</p>
@@ -450,8 +462,8 @@ export default function BuscaFacial({ eventoId, organizadorId, organizadorNome, 
                         const dx = e.changedTouches[0].clientX - toqueTipo.current.x, dy = e.changedTouches[0].clientY - toqueTipo.current.y;
                         toqueTipo.current = null;
                         if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
-                        if (dx < 0 && totalFotos) setTipoResultado('fotos');
-                        else if (dx > 0 && totalVideos) setTipoResultado('videos');
+                        if (dx < 0 && totalVideos) setTipoResultado('videos');
+                        else if (dx > 0 && totalFotos) setTipoResultado('fotos');
                       }}>
                       {resultadosVisiveis.map((foto, indice) => {
                         const gratuita = Boolean(foto.evento?.permite_download_gratis), noCarrinho = !gratuita && fotosNoCarrinho.includes(foto.id), ehVideo = Boolean(foto.mimeType?.startsWith('video/'));
