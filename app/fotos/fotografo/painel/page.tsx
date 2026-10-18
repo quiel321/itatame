@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -20,6 +20,7 @@ import {
   VIDEO_PREVIEW_MAX_WIDTH,
 } from "@/app/lib/fotos-video";
 import { desenharProtecaoRetratt, gerarAmostraVideoRapida, inicioDaAmostra } from "@/app/lib/fotos-video-amostra";
+import { abrirLeituraVideo } from "@/app/lib/fotos-video-leitura";
 import FotosShell from "../../_components/FotosShell";
 import {
   AlertTriangle,
@@ -69,11 +70,12 @@ function arquivoEhVideo(arquivo: File) {
 }
 
 function mensagemFormatoVideo(nome: string) {
-  return `${nome}: o navegador não conseguiu ler as imagens deste vídeo (comum em HEVC/H.265 do iPhone). Exporte em MP4 (H.264) e tente novamente.`;
+  return `${nome}: este aparelho não conseguiu preparar a prévia do vídeo.`;
 }
 
 function aguardarVideo(video: HTMLVideoElement, evento: "loadedmetadata" | "loadeddata", nome: string, limiteMs = 20000) {
   return new Promise<void>((resolve, reject) => {
+    if (video.readyState >= (evento === "loadeddata" ? 2 : 1)) { resolve(); return; }
     const timeout = window.setTimeout(() => {
       limpar();
       reject(new Error(mensagemFormatoVideo(nome)));
@@ -316,16 +318,26 @@ async function gerarAmostraProtegidaVideo(video: HTMLVideoElement) {
   return blob;
 }
 
-async function gerarDerivadosVideo(file: File) {
+async function gerarDerivadosVideoNativo(file: File) {
   const url = URL.createObjectURL(file);
   const video = document.createElement("video");
   video.preload = "auto";
   video.muted = true;
+  video.defaultMuted = true;
   video.playsInline = true;
-  video.src = url;
+  video.setAttribute("playsinline", "");
+  video.setAttribute("webkit-playsinline", "");
+  video.setAttribute("aria-hidden", "true");
+  video.style.cssText = "position:fixed;left:0;top:0;width:1px;height:1px;opacity:0.001;pointer-events:none";
+  document.body.appendChild(video);
 
   try {
-    await aguardarVideo(video, "loadeddata", file.name);
+    const pronto = aguardarVideo(video, "loadeddata", file.name, 8000);
+    video.src = url;
+    video.load();
+    void video.play().catch(() => undefined);
+    await pronto;
+    video.pause();
     if (!video.videoWidth || !video.videoHeight) throw new Error(mensagemFormatoVideo(file.name));
     if (!Number.isFinite(video.duration) || video.duration <= 0) throw new Error(`Não foi possível medir a duração de ${file.name}.`);
     if (video.duration > VIDEO_MAX_DURATION_SECONDS) throw new Error(`${file.name} ultrapassa o limite de 2 minutos.`);
@@ -360,7 +372,67 @@ async function gerarDerivadosVideo(file: File) {
     URL.revokeObjectURL(url);
     video.removeAttribute("src");
     video.load();
+    video.remove();
   }
+}
+
+async function gerarDerivadosVideo(file: File) {
+  const leitura = await abrirLeituraVideo(file);
+  try {
+    try {
+      const capa = await leitura.quadro(Math.min(1, leitura.duracao * 0.1));
+      if (!capa) throw new Error("Leitura direta dos quadros indisponível.");
+      const canvas = document.createElement("canvas");
+      canvas.width = capa.width; canvas.height = capa.height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("Prévia indisponível.");
+      ctx.drawImage(capa, 0, 0);
+      desenharProtecaoRetratt(ctx, canvas.width, canvas.height);
+      const previewBlob = await canvasParaJpeg(canvas, 0.82);
+      const mosaico = document.createElement("canvas");
+      mosaico.width = 960; mosaico.height = 810;
+      const ctxIa = mosaico.getContext("2d");
+      if (!ctxIa) throw new Error("Quadros de busca indisponíveis.");
+      for (let i = 0; i < VIDEO_IA_FRAME_COUNT; i++) {
+        const quadro = await leitura.quadro(leitura.duracao * (i + 1) / (VIDEO_IA_FRAME_COUNT + 1));
+        if (!quadro) throw new Error("Quadro indisponível.");
+        const escala = Math.max(480 / quadro.width, 270 / quadro.height);
+        const largura = quadro.width * escala, altura = quadro.height * escala;
+        ctxIa.save();
+        ctxIa.beginPath();
+        ctxIa.rect(i % 2 * 480, Math.floor(i / 2) * 270, 480, 270);
+        ctxIa.clip();
+        ctxIa.drawImage(quadro, i % 2 * 480 + (480 - largura) / 2, Math.floor(i / 2) * 270 + (270 - altura) / 2, largura, altura);
+        ctxIa.restore();
+      }
+      let miniaturaIa: Blob | null = null;
+      for (const qualidade of [0.82, 0.72, 0.62, 0.52, 0.42, 0.32]) {
+        miniaturaIa = await canvasParaJpeg(mosaico, qualidade);
+        if (miniaturaIa.size <= FOTO_IA_MAX_BYTES) break;
+      }
+      if (!miniaturaIa || miniaturaIa.size > FOTO_IA_MAX_BYTES) throw new Error("Miniatura acima do limite.");
+      const previewVideoBlob = await gerarAmostraVideoRapida(file).catch(() => null);
+      return { duracaoSegundos: leitura.duracao, miniaturaIa, previewBlob, previewVideoBlob, previewVideoContentType: previewVideoBlob?.type || "", avisoPreparacao: "" };
+    } catch {
+      try { return { ...await gerarDerivadosVideoNativo(file), avisoPreparacao: "" }; }
+      catch {
+        // A falha opcional da capa não invalida um contêiner já verificado.
+        // O original segue intacto, com duração e tamanho sujeitos aos mesmos limites.
+        const canvas = document.createElement("canvas");
+        canvas.width = 960; canvas.height = 540;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) throw new Error("Não foi possível preparar a capa do vídeo. Tente novamente.");
+        ctx.fillStyle = "#090b12"; ctx.fillRect(0, 0, 960, 540);
+        ctx.textAlign = "center"; ctx.fillStyle = "#ff5a1f"; ctx.font = "bold 48px Arial";
+        ctx.fillText("VÍDEO ORIGINAL", 480, 220);
+        ctx.fillStyle = "#ffffff"; ctx.font = "28px Arial";
+        ctx.fillText(formatarDuracaoVideo(leitura.duracao), 480, 285);
+        desenharProtecaoRetratt(ctx, 960, 540);
+        const previewBlob = await canvasParaJpeg(canvas, 0.76);
+        return { duracaoSegundos: leitura.duracao, previewBlob, miniaturaIa: previewBlob, previewVideoBlob: null, previewVideoContentType: "", avisoPreparacao: "Vídeo enviado com capa padrão. O arquivo original foi preservado." };
+      }
+    }
+  } finally { leitura.fechar(); }
 }
 
 function enviarDiretoAoR2(url: string, arquivo: Blob, onProgress: (percentual: number) => void) {
@@ -708,6 +780,7 @@ export default function PainelFotografoPage() {
     });
     const confirmarData = await confirmarResponse.json();
     if (!confirmarResponse.ok) throw new Error(confirmarData.error || "Upload feito, mas não confirmado no banco.");
+    return derivadosVideo?.avisoPreparacao || "";
     } catch (error) {
       await fetch("/api/fotos/upload-url", {
         method: "DELETE",
@@ -742,6 +815,7 @@ export default function PainelFotografoPage() {
 
     const lote = [...arquivos];
     const falhas: Array<{ arquivo: File; erro: string }> = [];
+    const avisosPreparacao: string[] = [];
     const progressoPorArquivo = new Map<number, number>();
     let proximo = 0;
     let concluidas = 0;
@@ -768,7 +842,8 @@ export default function PainelFotografoPage() {
           atualizarProgresso(indice, fracaoDaEtapa(etapa, percentual));
         });
         try {
-          await (arquivoEhVideo(arquivo) ? emSequencia(enviar) : enviar());
+          const aviso = await (arquivoEhVideo(arquivo) ? emSequencia(enviar) : enviar());
+          if (aviso) avisosPreparacao.push(aviso);
           concluidas += 1;
           setUploadConcluidas(concluidas);
         } catch (error: unknown) {
@@ -796,7 +871,7 @@ export default function PainelFotografoPage() {
       setArquivos([]);
       if (fileInputRef.current) fileInputRef.current.value = "";
       setStatus("ok");
-      setMensagem(`${concluidas} mídia(s) publicada(s) com sucesso. Elas já estão disponíveis na galeria.`);
+      setMensagem(`${concluidas} mídia(s) publicada(s) com sucesso. Elas já estão disponíveis na galeria.${avisosPreparacao.length ? ` ${avisosPreparacao.length} vídeo(s) com capa padrão; os originais foram preservados.` : ""}`);
       return;
     }
 

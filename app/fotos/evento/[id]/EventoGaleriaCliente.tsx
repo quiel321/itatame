@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import { linkCompartilhamentoGaleria } from '@/app/lib/fotos-compartilhamento';
 
 import Link from "next/link";
@@ -841,7 +841,7 @@ export default function EventoGaleriaCliente({ initialData, acesso }: { initialD
                     <div className="max-w-xs rounded-2xl border border-white/20 bg-black/75 px-5 py-4 text-center text-white shadow-2xl backdrop-blur-sm">
                       <Play size={26} className="mx-auto fill-white" />
                       <p className="mt-2 text-[9px] font-black uppercase tracking-widest">Prévia em vídeo indisponível</p>
-                      <p className="mt-1 text-[9px] font-medium text-zinc-400">A imagem mostra um quadro do vídeo. O arquivo completo é entregue após a compra.</p>
+                      <p className="mt-1 text-[9px] font-medium text-zinc-400">O vídeo original completo é entregue após a compra.</p>
                     </div>
                   </div>
                 )}
