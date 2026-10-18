@@ -10,10 +10,10 @@ const id = (n: number) => `22222222-2222-4222-8222-${String(n).padStart(12, '0')
 const combo = (n = 15): ComboIaAssinado => ({ versao: 1, eventoId, fotoIds: Array.from({ length: n }, (_, i) => id(i)), percentual: percentualComboIa(n), expira: Math.floor(Date.now() / 1000) + 3600 });
 
 test('faixas são inclusivas em 15, 25 e 35 fotos; vídeos não recebem desconto', () => {
-  for (const [n, p] of [[14, 0], [15, 65], [24, 65], [25, 75], [34, 75], [35, 85]]) assert.equal(percentualComboIa(n), p);
+  for (const [n, p] of [[14, 0], [15, 60], [24, 60], [25, 70], [34, 70], [35, 80]]) assert.equal(percentualComboIa(n), p);
   const fotos = Array.from({ length: 15 }, (_, n) => ({ id: id(n), precoCentavos: 999, mimeType: 'image/jpeg' }));
   const r = calcularCompraComCombosIa([...fotos, { id: 'video', precoCentavos: 3999, mimeType: 'video/quicktime' }], [{ quantidade: 3, percentual: 10 }], [combo()]);
-  assert.equal(r.descontoCentavos, Math.round(15 * 999 * .65)); assert.equal(r.descontoPorItem.at(-1), 0);
+  assert.equal(r.descontoCentavos, Math.round(15 * 999 * .60)); assert.equal(r.descontoPorItem.at(-1), 0);
   assert.equal(r.totalCentavos, 15 * 999 + 3999 - r.descontoCentavos);
   assert.throws(() => calcularCompraComCombosIa(fotos.slice(1), [], [combo()]), /todas/);
   assert.throws(() => calcularCompraComCombosIa(fotos, [], [combo(), combo()]), /dois pacotes/);
@@ -41,7 +41,7 @@ test('autoria conserva os descontos específicos do pacote e todos os centavos',
   const itens = Array.from({ length: 16 }, (_, i) => ({ id: id(i), precoCentavos: 1000, mimeType: 'image/jpeg' }));
   const r = calcularCompraComCombosIa(itens, [{ quantidade: 3, percentual: 20 }], [combo()]);
   const registro = registrarVendasFotografos(itens.map((i, n) => ({ ...i, fotografoId: n < 15 ? 'a' : 'b', nome: n < 15 ? 'A' : 'B' })), r.descontoCentavos, Math.round(r.totalCentavos * .05), r.descontoPorItem);
-  assert.equal(registro.find(v => v.fotografoId === 'a')?.descontoCentavos, 9750);
+  assert.equal(registro.find(v => v.fotografoId === 'a')?.descontoCentavos, 9000);
   assert.equal(registro.find(v => v.fotografoId === 'b')?.descontoCentavos, 200);
   assert.doesNotThrow(() => conferirRegistroVendas(registro, r.totalCentavos, Math.round(r.totalCentavos * .05)));
 });
@@ -58,7 +58,7 @@ test('ofertas exigem opt-in e combinam autores somente na diária ativa', async 
   try {
     const db = createSupabaseServerClient(); assert.deepEqual(await criarOfertasComboIa(db, resultados), []); assert.equal(chamadas, 0);
     resultados.forEach(r => { r.evento.combo_ia_ativo = true; });
-    const ofertas = await criarOfertasComboIa(db, resultados); assert.equal(ofertas.length, 1); assert.equal(ofertas[0].quantidade, 15); assert.equal(ofertas[0].percentual, 65);
+    const ofertas = await criarOfertasComboIa(db, resultados); assert.equal(ofertas.length, 1); assert.equal(ofertas[0].quantidade, 15); assert.equal(ofertas[0].percentual, 60);
     diaria = false; assert.deepEqual(await criarOfertasComboIa(db, resultados), []);
   } finally { globalThis.fetch = antesFetch; nomes.forEach((n, i) => { if (antes[i] === undefined) delete process.env[n]; else process.env[n] = antes[i]; }); }
 });

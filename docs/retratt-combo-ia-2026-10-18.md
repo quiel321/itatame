@@ -1,8 +1,8 @@
 # Resultados separados e pacote completo de IA
 
-Os resultados da busca facial passam a ter abas Vídeos e Fotos, com contagem separada. Quando há vídeos, a busca abre nessa aba, inclusive ao reabrir um resultado anterior. No celular o formulário recolhe após encontrar resultados; permanece disponível quando não encontra nada. As abas permitem toque e gesto horizontal. Cada prévia abre pela imagem e apresenta um botão de carrinho; a barra Abrir foto/vídeo foi retirada.
+Os resultados da busca facial passam a ter abas Fotos e Vídeos, com contagem separada. Quando há fotos, a busca abre nessa aba, inclusive ao reabrir um resultado anterior; se há apenas vídeos, abre em Vídeos. No celular o formulário recolhe após encontrar resultados; permanece disponível quando não encontra nada. As abas permitem toque e gesto horizontal. Cada prévia abre pela imagem e apresenta um botão de carrinho; a barra Abrir foto/vídeo foi retirada. O aviso do pacote permanece acima das duas abas e acompanha a rolagem, com faixa lateral Pacote especial.
 
-O responsável pode ativar por galeria o Pacote completo na IA. As faixas inclusivas definidas são 15 fotos: 65%, 25 fotos: 75%, 35 fotos: 85%. Só entram fotos da oferta completa encontrada, sem vídeos. Não se somam descontos: prevalece o maior entre o progressivo e o pacote para as fotos elegíveis. Gratuitas ficam fora das ofertas pagas.
+O responsável pode ativar por galeria o Pacote completo na IA. As faixas inclusivas definidas são 15 fotos: 60%, 25 fotos: 70%, 35 fotos: 80%. Só entram fotos da oferta completa encontrada, sem vídeos. Não se somam descontos: prevalece o maior entre o progressivo e o pacote para as fotos elegíveis. Gratuitas ficam fora das ofertas pagas.
 
 O organizador controla suas galerias e o fotógrafo suas próprias galerias. Fotógrafos convidados têm leitura da opção do organizador. A nova coluna `foto_eventos.combo_ia_ativo` é booleana com padrão false; a migração não ativa nenhuma galeria existente. A configuração é lida sob demanda ao expandir o controle, evitando novas consultas para cada galeria ao abrir o painel.
 
