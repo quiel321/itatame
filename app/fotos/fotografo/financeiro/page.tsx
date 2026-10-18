@@ -87,7 +87,8 @@ export default function FinanceiroFotografoPage() {
                 <h1 className="mt-4 text-3xl font-black uppercase tracking-tight sm:text-4xl md:text-5xl">Suas vendas e recebimentos.</h1>
                 <p className="mt-3 max-w-2xl text-xs leading-5 text-zinc-400 md:text-sm">Nas vendas diretas, o líquido é informado pelo Mercado Pago. As vendas por diária aparecem separadas abaixo: o organizador recebe e combina o repasse com você.</p>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
+                <Link href="/fotos/fotografo/vendas" className="inline-flex min-h-11 items-center justify-center rounded-xl border border-retratt/30 bg-retratt/10 px-4 text-[9px] font-black uppercase text-orange-200">Vendas e pedidos</Link>
                 <Link href="/fotos/fotografo/dashboard" className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 text-[9px] font-black uppercase tracking-widest hover:bg-white/10 sm:flex-none"><ArrowLeft size={14} /> Dashboard</Link>
                 <button type="button" onClick={() => void carregar()} disabled={carregando} className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-400 px-4 text-[9px] font-black uppercase tracking-widest text-black disabled:opacity-50 sm:flex-none"><RefreshCw size={14} className={carregando ? "animate-spin" : ""} /> Atualizar</button>
               </div>

@@ -1141,6 +1141,7 @@ export default function FotosAdminPage() {
               </div>
 
                <div className="space-y-4">
+                 <Link href="/fotos/admin/vendas" className="flex min-h-14 items-center justify-between gap-3 rounded-xl border border-retratt/30 bg-retratt/10 px-4 py-3 text-sm font-bold text-white hover:bg-retratt/20"><span>Vendas e pedidos<span className="mt-1 block text-[10px] font-normal text-zinc-400">Compradores, pagamentos, entregas e compras relacionadas</span></span><ArrowRight size={18} className="shrink-0 text-retratt" /></Link>
                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/40 p-4">
                    <div><p className="text-xs font-black text-white">Receber vendas de fotógrafos por diária</p><p className="mt-1 text-[10px] text-zinc-400">Conecte sua conta Mercado Pago à Retratt para ativar essa opção.</p></div>
                    {estadoConexaoMP === 'conectado' && <MercadoPagoConnectButton conectado={mercadoPagoOrganizadorConectado} perfil="organizador_fotos" returnTo="/fotos/admin" className="rounded-lg bg-retratt px-4 py-2.5 text-[9px] font-black uppercase text-black" />}
