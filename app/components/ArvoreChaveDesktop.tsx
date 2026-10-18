@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import VisorArvoreMobile from './VisorArvoreMobile';
 import { placeholderSlotChaveDeTres } from '@/app/lib/chave-de-tres';
 import { estruturaVisualChave, rotulosColunasArvore, rotulosLadoArvore } from '@/app/lib/chave-visual';
 import { situacaoAtletaLuta } from '@/app/lib/situacao-atleta-luta';
@@ -341,10 +342,12 @@ export default function ArvoreChaveDesktop({
   buscarFoto,
   destaque = '',
   onAvancar,
+  mobile = false,
 }: {
   lutas: LutaArvore[];
   abaAtual?: number;
   totalAbas?: number;
+  mobile?: boolean;
   buscarFoto: (id?: number | null, nome?: string | null) => string | null;
   destaque?: string;
   onAvancar?: (...args: unknown[]) => void;
@@ -364,22 +367,7 @@ export default function ArvoreChaveDesktop({
     id_banco: final?.id,
   };
 
-  return (
-    <div className="relative hidden w-full min-w-0 rounded-3xl border border-white/10 bg-[#050816] shadow-2xl md:block">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/5 px-4 py-3">
-        <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.22em] text-cyan-400">Árvore da chave</p>
-          {totalAbas > 1 && <p className="text-xs font-bold text-zinc-500">Painel {abaAtual}/{totalAbas}</p>}
-        </div>
-        <div className="flex items-center gap-1 rounded-full border border-white/10 bg-black/40 p-1">
-          <button type="button" onClick={() => setZoom(z => Math.max(0.7, Number((z - 0.1).toFixed(1))))} className="h-8 w-8 rounded-full text-lg font-black text-zinc-300 hover:bg-white/10" aria-label="Diminuir zoom">−</button>
-          <button type="button" onClick={() => setZoom(1)} className="min-w-[52px] rounded-full px-2 text-[11px] font-black text-white">{Math.round(zoom * 100)}%</button>
-          <button type="button" onClick={() => setZoom(z => Math.min(1.4, Number((z + 0.1).toFixed(1))))} className="h-8 w-8 rounded-full text-lg font-black text-zinc-300 hover:bg-white/10" aria-label="Aumentar zoom">+</button>
-        </div>
-      </div>
-
-      <div className="overflow-x-auto pb-6 pt-2 scrollbar-hide">
-        <div className="flex min-w-max origin-top flex-col items-center px-4 py-4 md:min-w-full" style={{ transform: `scale(${zoom})` }}>
+  const desenho = <>
           <div className="mb-4 flex w-full max-w-sm flex-col items-center rounded-2xl border border-yellow-500/40 bg-gradient-to-b from-yellow-500/15 to-black/70 px-4 py-3 shadow-[0_0_24px_rgba(234,179,8,0.18)]">
             <span className="text-[11px] font-black uppercase tracking-widest text-yellow-400">Campeão</span>
             <Atleta {...campeao} centralizado campeao destaque={marcaDestaque(campeao, destaque)} />
@@ -415,8 +403,30 @@ export default function ArvoreChaveDesktop({
               />
             )}
           </div>
+  </>;
+
+  return (
+    <>
+    {mobile && <VisorArvoreMobile chave={`${abaAtual}:${lutas.map(luta => luta.id || luta.id_visual).join(',')}`}>{desenho}</VisorArvoreMobile>}
+    <div className="relative hidden w-full min-w-0 rounded-3xl border border-white/10 bg-[#050816] shadow-2xl md:block">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/5 px-4 py-3">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.22em] text-cyan-400">Árvore da chave</p>
+          {totalAbas > 1 && <p className="text-xs font-bold text-zinc-500">Painel {abaAtual}/{totalAbas}</p>}
+        </div>
+        <div className="flex items-center gap-1 rounded-full border border-white/10 bg-black/40 p-1">
+          <button type="button" onClick={() => setZoom(z => Math.max(0.7, Number((z - 0.1).toFixed(1))))} className="h-8 w-8 rounded-full text-lg font-black text-zinc-300 hover:bg-white/10" aria-label="Diminuir zoom">−</button>
+          <button type="button" onClick={() => setZoom(1)} className="min-w-[52px] rounded-full px-2 text-[11px] font-black text-white">{Math.round(zoom * 100)}%</button>
+          <button type="button" onClick={() => setZoom(z => Math.min(1.4, Number((z + 0.1).toFixed(1))))} className="h-8 w-8 rounded-full text-lg font-black text-zinc-300 hover:bg-white/10" aria-label="Aumentar zoom">+</button>
+        </div>
+      </div>
+
+      <div className="overflow-x-auto pb-6 pt-2 scrollbar-hide">
+        <div className="flex min-w-max origin-top flex-col items-center px-4 py-4 md:min-w-full" style={{ transform: `scale(${zoom})` }}>
+          {desenho}
         </div>
       </div>
     </div>
+    </>
   );
 }

@@ -370,7 +370,7 @@ export default function ChavesPublicoPage() {
         )}
 
         {totalAbas > 1 && (
-          <div className="mb-4 mt-5 hidden flex-wrap justify-center gap-2 px-4 md:flex">
+          <div className="mb-4 mt-5 flex flex-wrap justify-center gap-2 px-4">
             {Array.from({ length: totalAbas }).map((_, i) => (
               <button key={i} onClick={() => setAbaAtual(i + 1)} className={`rounded-lg px-6 py-2 font-bold transition-all ${abaAtual === i + 1 ? "bg-red-600 text-white" : "bg-zinc-800 text-zinc-500 hover:bg-zinc-700"}`}>
                 {i + 1}/{totalAbas}
@@ -379,8 +379,9 @@ export default function ChavesPublicoPage() {
           </div>
         )}
 
-        <div className="mt-5 hidden px-4 md:mt-5 md:block md:px-0">
+        <div className="mt-4 px-4 md:mt-5 md:px-0">
           <ArvoreChaveDesktop
+            mobile
             lutas={lutas}
             abaAtual={abaAtual}
             totalAbas={totalAbas}
