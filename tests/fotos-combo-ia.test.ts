@@ -9,8 +9,8 @@ const eventoId = '11111111-1111-4111-8111-111111111111';
 const id = (n: number) => `22222222-2222-4222-8222-${String(n).padStart(12, '0')}`;
 const combo = (n = 15): ComboIaAssinado => ({ versao: 1, eventoId, fotoIds: Array.from({ length: n }, (_, i) => id(i)), percentual: percentualComboIa(n), expira: Math.floor(Date.now() / 1000) + 3600 });
 
-test('faixas são inclusivas em 15, 25 e 35 fotos; vídeos não recebem desconto', () => {
-  for (const [n, p] of [[14, 0], [15, 60], [24, 60], [25, 70], [34, 70], [35, 80]]) assert.equal(percentualComboIa(n), p);
+test('faixas são inclusivas em 10, 15, 25 e 35 fotos; vídeos não recebem desconto', () => {
+  for (const [n, p] of [[9, 0], [10, 40], [14, 40], [15, 60], [24, 60], [25, 70], [34, 70], [35, 80]]) assert.equal(percentualComboIa(n), p);
   const fotos = Array.from({ length: 15 }, (_, n) => ({ id: id(n), precoCentavos: 999, mimeType: 'image/jpeg' }));
   const r = calcularCompraComCombosIa([...fotos, { id: 'video', precoCentavos: 3999, mimeType: 'video/quicktime' }], [{ quantidade: 3, percentual: 10 }], [combo()]);
   assert.equal(r.descontoCentavos, Math.round(15 * 999 * .60)); assert.equal(r.descontoPorItem.at(-1), 0);

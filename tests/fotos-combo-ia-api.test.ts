@@ -42,7 +42,7 @@ test('conferência e cobrança do pacote usam os mesmos centavos e não aceitam 
   }
   const req = (body: unknown) => new Request('https://retratt.com/api/fotos/teste', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ficticio' }, body: JSON.stringify(body) });
   try {
-    for (const n of [15, 25, 35, 101]) {
+    for (const n of [10, 15, 25, 35, 101]) {
       quantidade = n; const { ids, token } = dados();
       const r = await conferir(req({ fotoIds: ids, tokens: [token] })); assert.equal(r.status, 200); const resumo = await r.json();
       assert.equal(resumo.descontoCentavos, Math.round(n * 999 * percentualComboIa(n) / 100));
