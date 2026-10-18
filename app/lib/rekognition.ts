@@ -7,6 +7,7 @@ import {
   RekognitionClient,
   SearchFacesByImageCommand,
 } from "@aws-sdk/client-rekognition";
+import { MIN_SIMILARIDADE_BUSCA } from './fotos-busca-criterios';
 
 function requireEnv(name: string) {
   const value = process.env[name]?.trim();
@@ -103,7 +104,7 @@ export async function buscarFotosPorRosto(imageBytes: Buffer | Uint8Array) {
   const response = await criarCliente().send(new SearchFacesByImageCommand({
     CollectionId: collectionId,
     Image: { Bytes: imageBytes },
-    FaceMatchThreshold: 75,
+    FaceMatchThreshold: MIN_SIMILARIDADE_BUSCA,
     MaxFaces: 4096,
     QualityFilter: "LOW",
   }));

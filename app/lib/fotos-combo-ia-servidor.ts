@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { MAX_ITENS_COMBO_IA, percentualComboIa, type ComboIaAssinado, type OfertaComboIa } from './fotos-combo-ia';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { correspondenciaSegura } from './fotos-busca-criterios';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 function assinatura(payload: string) {
@@ -23,7 +24,7 @@ export function conferirAssinaturasComboIa(tokens: unknown): ComboIaAssinado[] {
     if (esperada.length !== recebida.length || !crypto.timingSafeEqual(esperada, recebida)) throw new Error('Pacote de IA inválido. Refaça a busca.');
     let combo: ComboIaAssinado;
     try { combo = JSON.parse(Buffer.from(partes[0], 'base64url').toString()); } catch { throw new Error('Pacote de IA inválido.'); }
-    if (combo.versao !== 1 || !UUID.test(combo.eventoId) || !Array.isArray(combo.fotoIds) || !combo.fotoIds.length || combo.fotoIds.length > MAX_ITENS_COMBO_IA
+    if (combo.versao !== 2 || !UUID.test(combo.eventoId) || !Array.isArray(combo.fotoIds) || !combo.fotoIds.length || combo.fotoIds.length > MAX_ITENS_COMBO_IA
       || combo.fotoIds.some(id => typeof id !== 'string' || !UUID.test(id)) || new Set(combo.fotoIds).size !== combo.fotoIds.length
       || !Number.isSafeInteger(combo.expira) || combo.expira < Date.now() / 1000 || combo.percentual !== percentualComboIa(combo.fotoIds.length) || !combo.percentual) {
       throw new Error('O pacote de IA expirou ou está inválido. Refaça a busca para atualizar a oferta.');
@@ -32,9 +33,9 @@ export function conferirAssinaturasComboIa(tokens: unknown): ComboIaAssinado[] {
   });
 }
 
-type Resultado = { id: string; eventoId: string; fotografoId: string | null; mimeType: string | null; precoCentavos: number; evento: { id: string; nome: string; combo_ia_ativo?: boolean; permite_download_gratis: boolean } | null };
+type Resultado = { id: string; eventoId: string; fotografoId: string | null; mimeType: string | null; precoCentavos: number; similaridade: number; evento: { id: string; nome: string; combo_ia_ativo?: boolean; permite_download_gratis: boolean } | null };
 export async function criarOfertasComboIa(db: SupabaseClient, resultados: Resultado[]): Promise<OfertaComboIa[]> {
-  const elegiveis = resultados.filter(r => r.evento?.combo_ia_ativo && !r.evento.permite_download_gratis && !r.mimeType?.startsWith('video/') && r.precoCentavos > 0);
+  const elegiveis = resultados.filter(r => correspondenciaSegura(r.similaridade) && r.evento?.combo_ia_ativo && !r.evento.permite_download_gratis && !r.mimeType?.startsWith('video/') && r.precoCentavos > 0);
   if (!elegiveis.length) return [];
   const eventos = [...new Set(elegiveis.map(r => r.eventoId))];
   const { data: vinculos, error } = await db.from('foto_evento_fotografos').select('evento_id,fotografo_id,status,modelo_recebimento').in('evento_id', eventos).eq('status', 'ativo');
@@ -51,7 +52,7 @@ export async function criarOfertasComboIa(db: SupabaseClient, resultados: Result
     const fotoIds = [...new Set(grupo.map(r => r.id))].sort(), percentual = percentualComboIa(fotoIds.length);
     if (!percentual) return [];
     const subtotalCentavos = grupo.reduce((s, r) => s + r.precoCentavos, 0), descontoCentavos = Math.round(subtotalCentavos * percentual / 100);
-    const combo: ComboIaAssinado = { versao: 1, eventoId: grupo[0].eventoId, fotoIds, percentual, expira };
+    const combo: ComboIaAssinado = { versao: 2, eventoId: grupo[0].eventoId, fotoIds, percentual, expira };
     return [{ ...combo, eventoNome: grupo[0].evento!.nome, quantidade: fotoIds.length, subtotalCentavos, descontoCentavos, totalCentavos: subtotalCentavos - descontoCentavos, token: assinarComboIa(combo) }];
   });
 }

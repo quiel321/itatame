@@ -2,9 +2,16 @@ import assert from "node:assert/strict";
 import test, { mock } from "node:test";
 import { DescribeCollectionCommand, RekognitionClient, SearchFacesByImageCommand } from "@aws-sdk/client-rekognition";
 import { POST } from "../app/api/fotos/buscar-por-face/route";
+import { correspondenciaSegura, MIN_SIMILARIDADE_BUSCA } from '../app/lib/fotos-busca-criterios';
 
 const fotoId = "11111111-1111-4111-8111-111111111111";
 const eventoId = "22222222-2222-4222-8222-222222222222";
+
+test('critério do pacote aceita apenas similaridade válida de 99 a 100', () => {
+  assert.equal(MIN_SIMILARIDADE_BUSCA, 95);
+  for (const n of [0, 79, 95, 98.999, NaN, Infinity, 100.1]) assert.equal(correspondenciaSegura(n), false);
+  for (const n of [99, 99.99, 100]) assert.equal(correspondenciaSegura(n), true);
+});
 
 test("busca facial informa download gratuito mesmo com preço cadastrado", async () => {
   const ambiente = { NEXT_PUBLIC_SUPABASE_URL: "https://supabase.test", SUPABASE_SERVICE_ROLE_KEY: "teste", AWS_REGION: "us-east-1", AWS_ACCESS_KEY_ID: "teste", AWS_SECRET_ACCESS_KEY: "teste" };
@@ -14,12 +21,16 @@ test("busca facial informa download gratuito mesmo com preço cadastrado", async
   mock.method(RekognitionClient.prototype, "send", async (command: unknown) => {
     if (command instanceof DescribeCollectionCommand) return { FaceModelVersion: "7", FaceCount: 1 };
     assert.ok(command instanceof SearchFacesByImageCommand);
-    return { SearchedFaceConfidence: 99, FaceMatches: [{ Similarity: 99, Face: { ExternalImageId: fotoId } }] };
+    assert.equal(command.input.FaceMatchThreshold, 95);
+    return { SearchedFaceConfidence: 99, FaceMatches: [{ Similarity: 99, Face: { ExternalImageId: fotoId } }, { Similarity: 79, Face: { ExternalImageId: '99999999-9999-4999-8999-999999999999' } }] };
   });
   globalThis.fetch = async input => {
     const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
     assert.equal(url.origin, "https://supabase.test", "Não acessar serviços reais");
-    if (url.pathname === "/rest/v1/foto_arquivos") return Response.json([{ id: fotoId, evento_id: eventoId, titulo: "Foto", preco_centavos: 3500, mime_type: "image/jpeg", fotografo_id: "fotografo-teste" }]);
+    if (url.pathname === "/rest/v1/foto_arquivos") {
+      assert.ok(!url.searchParams.get('id')?.includes('99999999-9999-4999-8999-999999999999'));
+      return Response.json([{ id: fotoId, evento_id: eventoId, titulo: "Foto", preco_centavos: 3500, mime_type: "image/jpeg", fotografo_id: "fotografo-teste" }]);
+    }
     assert.equal(url.pathname, "/rest/v1/foto_eventos");
     assert.ok(url.searchParams.get("select")?.includes("permite_download_gratis"));
     assert.ok(url.searchParams.get("select")?.includes("descontos_progressivos"));

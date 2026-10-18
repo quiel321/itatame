@@ -29,6 +29,7 @@ export default function FotosMinhasComprasPage() {
   const [itensCarrinho, setItensCarrinho] = useState(0);
   const [pedidoAberto, setPedidoAberto] = useState<string | null>(null);
   const [baixandoItem, setBaixandoItem] = useState<string | null>(null);
+  const [baixandoPedido, setBaixandoPedido] = useState<string | null>(null);
   const perfilInvalido: 'fotógrafo' | 'organizador' | null = null;
   const [verificandoPedido, setVerificandoPedido] = useState<string | null>(null);
   const [mensagemPagamento, setMensagemPagamento] = useState("");
@@ -157,6 +158,21 @@ export default function FotosMinhasComprasPage() {
     document.body.appendChild(link);
     link.click();
     link.remove();
+  }
+
+  async function baixarPedido(pedidoId: string) {
+    setBaixandoPedido(pedidoId); setMensagemPagamento('');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { router.push(rotaLoginFotos('comprador', '/fotos/minhas-compras')); return; }
+      const response = await fetch(`/api/fotos/download-pedido/${pedidoId}?link=1`, { headers: { Authorization: `Bearer ${session.access_token}` } });
+      const dados = await response.json();
+      if (!response.ok || !dados.url) throw new Error(dados.error || 'Não foi possível preparar o ZIP.');
+      const link = document.createElement('a'); link.href = dados.url;
+      document.body.appendChild(link); link.click(); link.remove();
+      setMensagemPagamento('Download do ZIP solicitado. Acompanhe nos downloads do navegador. Vídeos continuam disponíveis individualmente.');
+    } catch (error) { setMensagemPagamento(error instanceof Error ? error.message : 'Não foi possível iniciar o ZIP. Tente novamente.'); }
+    finally { setBaixandoPedido(null); }
   }
 
   async function verificarPagamento(pedidoId: string) {
@@ -288,6 +304,18 @@ export default function FotosMinhasComprasPage() {
             <div className="mb-3 flex items-center justify-between gap-3">
               <h2 className="flex items-center gap-2 text-sm font-black uppercase text-white"><Download size={16} className="text-retratt" /> Fotos para baixar</h2>
               <span className="text-xs font-bold text-retratt">{fotosLiberadas}</span>
+            </div>
+            <div className="mb-3 space-y-2">
+              {pedidos.filter(p => p.status === 'pago').map(pedido => {
+                const quantidade = (pedido.foto_pedido_itens || []).filter(item => {
+                  const foto = Array.isArray(item.foto_arquivos) ? item.foto_arquivos[0] : item.foto_arquivos;
+                  return foto && !foto.mime_type?.startsWith('video/');
+                }).length;
+                return quantidade > 0 && <div key={pedido.id} className="flex flex-col gap-2 rounded-xl border border-orange-400/20 bg-retratt/5 p-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div><p className="text-xs font-bold text-white">{quantidade} {quantidade === 1 ? 'foto original' : 'fotos originais'} · Pedido {pedido.id.slice(0, 8)}</p><p className="mt-1 text-[10px] text-zinc-400">Um arquivo ZIP com todas as fotos deste pedido. Vídeos à parte.</p></div>
+                  <button type="button" onClick={() => baixarPedido(pedido.id)} disabled={baixandoPedido !== null} className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-retratt px-4 text-xs font-bold text-black disabled:opacity-50"><Download size={16} />{baixandoPedido === pedido.id ? 'Preparando ZIP...' : 'Baixar todas as fotos (.zip)'}</button>
+                </div>;
+              })}
             </div>
             {arquivosLiberados.length ? (
               <div className="grid gap-2 md:grid-cols-2">

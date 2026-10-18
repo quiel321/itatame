@@ -7,7 +7,7 @@ import { createSupabaseServerClient } from '../app/lib/supabase-server';
 
 const eventoId = '11111111-1111-4111-8111-111111111111';
 const id = (n: number) => `22222222-2222-4222-8222-${String(n).padStart(12, '0')}`;
-const combo = (n = 15): ComboIaAssinado => ({ versao: 1, eventoId, fotoIds: Array.from({ length: n }, (_, i) => id(i)), percentual: percentualComboIa(n), expira: Math.floor(Date.now() / 1000) + 3600 });
+const combo = (n = 15): ComboIaAssinado => ({ versao: 2, eventoId, fotoIds: Array.from({ length: n }, (_, i) => id(i)), percentual: percentualComboIa(n), expira: Math.floor(Date.now() / 1000) + 3600 });
 
 test('faixas são inclusivas em 10, 15, 25 e 35 fotos; vídeos não recebem desconto', () => {
   for (const [n, p] of [[9, 0], [10, 50], [14, 50], [15, 60], [24, 60], [25, 70], [34, 70], [35, 80]]) assert.equal(percentualComboIa(n), p);
@@ -30,6 +30,7 @@ test('assinatura recusa alteração, prazo vencido e quantidade falsa; ativaçã
     assert.throws(() => conferirAssinaturasComboIa([forjado]), /inválido/);
     assert.throws(() => conferirAssinaturasComboIa([assinarComboIa({ ...c, expira: 1 })]), /expirou/);
     assert.throws(() => conferirAssinaturasComboIa([assinarComboIa({ ...c, fotoIds: c.fotoIds.slice(1) })]), /inválido/);
+    assert.throws(() => conferirAssinaturasComboIa([assinarComboIa({ ...c, versao: 1 } as unknown as ComboIaAssinado)]), /inválido/);
     const itens = c.fotoIds.map(i => ({ id: i, evento_id: eventoId, mime_type: 'image/jpeg' }));
     assert.throws(() => validarComboIaNoCheckout([c], itens, { id: eventoId, combo_ia_ativo: false }), /disponível/);
     assert.throws(() => validarComboIaNoCheckout([c], itens.slice(1), { id: eventoId, combo_ia_ativo: true }), /disponível/);
@@ -54,11 +55,14 @@ test('ofertas exigem opt-in e combinam autores somente na diária ativa', async 
     const u = new URL(String(input)); assert.equal(u.hostname, 'fixture.supabase.co'); assert.equal(u.pathname, '/rest/v1/foto_evento_fotografos'); chamadas++;
     return Response.json(['a', 'b'].map(fotografo_id => ({ evento_id: eventoId, fotografo_id, status: 'ativo', modelo_recebimento: diaria ? 'diaria_organizador' : 'royalty' })));
   };
-  const resultados = Array.from({ length: 15 }, (_, i) => ({ id: id(i), eventoId, fotografoId: i < 8 ? 'a' : 'b', mimeType: 'image/jpeg', precoCentavos: 999, evento: { id: eventoId, nome: 'Galeria', permite_download_gratis: false, combo_ia_ativo: false } }));
+  const resultados = Array.from({ length: 15 }, (_, i) => ({ id: id(i), eventoId, fotografoId: i < 8 ? 'a' : 'b', mimeType: 'image/jpeg', precoCentavos: 999, similaridade: 99.9, evento: { id: eventoId, nome: 'Galeria', permite_download_gratis: false, combo_ia_ativo: false } }));
   try {
     const db = createSupabaseServerClient(); assert.deepEqual(await criarOfertasComboIa(db, resultados), []); assert.equal(chamadas, 0);
     resultados.forEach(r => { r.evento.combo_ia_ativo = true; });
     const ofertas = await criarOfertasComboIa(db, resultados); assert.equal(ofertas.length, 1); assert.equal(ofertas[0].quantidade, 15); assert.equal(ofertas[0].percentual, 60);
+    resultados[0].similaridade = 98.99;
+    const seguras = await criarOfertasComboIa(db, resultados); assert.equal(seguras[0].quantidade, 14); assert.equal(seguras[0].percentual, 50); assert.ok(!seguras[0].fotoIds.includes(resultados[0].id));
+    resultados[0].similaridade = 99.9;
     diaria = false; assert.deepEqual(await criarOfertasComboIa(db, resultados), []);
   } finally { globalThis.fetch = antesFetch; nomes.forEach((n, i) => { if (antes[i] === undefined) delete process.env[n]; else process.env[n] = antes[i]; }); }
 });

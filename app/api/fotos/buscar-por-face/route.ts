@@ -3,6 +3,7 @@ import { buscarFotosPorRosto } from "@/app/lib/rekognition";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
 import { chaveLocalidade } from "@/app/lib/localidades";
 import { criarOfertasComboIa } from '@/app/lib/fotos-combo-ia-servidor';
+import { MIN_SIMILARIDADE_BUSCA, correspondenciaSegura } from '@/app/lib/fotos-busca-criterios';
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -111,7 +112,7 @@ export async function POST(request: Request) {
     const resultado = await buscarFotosPorRosto(Buffer.from(await imagem.arrayBuffer()));
     const melhoresPorFoto = new Map<string, number>();
     for (const match of resultado.matches) {
-      if (!UUID_PATTERN.test(match.fotoId)) continue;
+      if (!UUID_PATTERN.test(match.fotoId) || !Number.isFinite(match.similarity) || match.similarity < MIN_SIMILARIDADE_BUSCA || match.similarity > 100) continue;
       melhoresPorFoto.set(match.fotoId, Math.max(melhoresPorFoto.get(match.fotoId) || 0, match.similarity));
     }
 
@@ -177,7 +178,7 @@ export async function POST(request: Request) {
         mimeType: foto.mime_type,
         fotografoId: foto.fotografo_id,
         similaridade,
-        nivel: similaridade >= 90 ? "forte" : similaridade >= 82 ? "provavel" : "possivel",
+        nivel: correspondenciaSegura(similaridade) ? "forte" : "provavel",
         evento: eventoPorId.get(foto.evento_id) || null,
       }];
     });

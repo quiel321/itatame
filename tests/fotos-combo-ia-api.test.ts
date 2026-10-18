@@ -37,7 +37,7 @@ test('conferência e cobrança do pacote usam os mesmos centavos e não aceitam 
   };
   function dados() {
     const ids = Array.from({ length: quantidade }, (_, n) => fotoId(n));
-    const token = assinarComboIa({ versao: 1, eventoId, fotoIds: ids, percentual: percentualComboIa(quantidade), expira: Math.floor(Date.now() / 1000) + 3600 });
+    const token = assinarComboIa({ versao: 2, eventoId, fotoIds: ids, percentual: percentualComboIa(quantidade), expira: Math.floor(Date.now() / 1000) + 3600 });
     return { ids: [...ids, fotoId(999)], token };
   }
   const req = (body: unknown) => new Request('https://retratt.com/api/fotos/teste', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ficticio' }, body: JSON.stringify(body) });
