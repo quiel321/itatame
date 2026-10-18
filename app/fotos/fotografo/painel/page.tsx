@@ -37,7 +37,7 @@ import {
   Wallet,
 } from "lucide-react";
 
-type UploadStatus = "idle" | "preparando" | "enviando" | "confirmando" | "ok" | "erro";
+type UploadStatus = "idle" | "verificando" | "preparando" | "enviando" | "confirmando" | "ok" | "erro";
 type EtapaUpload = "preparando" | "enviando" | "confirmando";
 
 // Vídeos entram na mesma fila, mas são processados um de cada vez para não esgotar a memória do navegador.
@@ -494,7 +494,7 @@ export default function PainelFotografoPage() {
   const albumSelecionado = useMemo(() => albuns.find((album) => album.id === albumId), [albuns, albumId]);
   const valorFotoAtual = formatarPrecoFotos(eventoSelecionado?.preco_bloqueado ? Number(eventoSelecionado.preco_padrao_centavos || 0) : converterPrecoCentavos(precoFoto, 0));
   const valorVideoAtual = formatarPrecoFotos(eventoSelecionado?.preco_bloqueado ? Number(eventoSelecionado.preco_video_centavos || 0) : converterPrecoCentavos(precoVideo, 0));
-  const enviando = ["preparando", "enviando", "confirmando"].includes(status);
+  const enviando = ["verificando", "preparando", "enviando", "confirmando"].includes(status);
   const uploadBloqueado = !eventoId || carregandoAlbuns || enviando || criandoAlbum;
   const totalBytes = useMemo(() => arquivos.reduce((total, arquivo) => total + arquivo.size, 0), [arquivos]);
   const arquivosFiltrados = useMemo(() => arquivos
@@ -651,7 +651,7 @@ export default function PainelFotografoPage() {
     });
 
     const uploadData = await uploadResponse.json();
-    if (!uploadResponse.ok) throw new Error(uploadData.error || "Erro ao preparar os links de upload.");
+    if (!uploadResponse.ok) throw Object.assign(new Error(uploadData.error || "Erro ao preparar os links de upload."), { bloqueioDeAcesso: [401, 403, 404].includes(uploadResponse.status) });
 
     try {
     async function enviarArquivo(blob: Blob, tipo: "preview" | "original" | "thumb" | "ia", contentType: string) {
@@ -725,11 +725,18 @@ export default function PainelFotografoPage() {
       return;
     }
 
+    setStatus("verificando");
+    setMensagem("Conferindo a autorização antes de preparar e enviar o lote...");
     try {
-      await tokenDaSessao();
-    } catch {
+      const token = await tokenDaSessao();
+      const resposta = await fetch(`/api/fotos/upload-url?${new URLSearchParams({ eventoId, albumId: destinoAlbumId })}`, {
+        headers: { Authorization: `Bearer ${token}` }, cache: "no-store", signal: AbortSignal.timeout(20000),
+      });
+      const acesso = await resposta.json().catch(() => null);
+      if (!resposta.ok || acesso?.autorizado !== true) throw new Error(acesso?.error || "Não foi possível confirmar a permissão. Tente novamente.");
+    } catch (error) {
       setStatus("erro");
-      setMensagem("Sua sessão expirou. Faça login novamente.");
+      setMensagem(`Envio não iniciado. ${error instanceof Error ? error.message : "Não foi possível conferir a autorização."} As ${arquivos.length} mídias continuam na fila.`);
       return;
     }
 
@@ -739,6 +746,7 @@ export default function PainelFotografoPage() {
     let proximo = 0;
     let concluidas = 0;
     let filaVideos: Promise<unknown> = Promise.resolve();
+    let bloqueioDeAcesso = false;
 
     const atualizarProgresso = (indice: number, fracao: number | null) => {
       if (fracao === null) progressoPorArquivo.delete(indice);
@@ -753,7 +761,7 @@ export default function PainelFotografoPage() {
     };
 
     async function worker() {
-      while (proximo < lote.length) {
+      while (proximo < lote.length && !bloqueioDeAcesso) {
         const indice = proximo++;
         const arquivo = lote[indice];
         const enviar = () => enviarUmaFoto(arquivo, destinoAlbumId, (etapa, percentual) => {
@@ -764,6 +772,7 @@ export default function PainelFotografoPage() {
           concluidas += 1;
           setUploadConcluidas(concluidas);
         } catch (error: unknown) {
+          if (error && typeof error === "object" && "bloqueioDeAcesso" in error && error.bloqueioDeAcesso) bloqueioDeAcesso = true;
           falhas.push({ arquivo, erro: error instanceof Error ? error.message : `${arquivo.name}: erro desconhecido.` });
         } finally {
           atualizarProgresso(indice, null);
@@ -792,9 +801,10 @@ export default function PainelFotografoPage() {
     }
 
     const arquivosComFalha = new Set(falhas.map((falha) => falha.arquivo));
-    setArquivos(lote.filter((arquivo) => arquivosComFalha.has(arquivo)));
+    const restantes = lote.filter((arquivo, indice) => arquivosComFalha.has(arquivo) || indice >= proximo);
+    setArquivos(restantes);
     setStatus("erro");
-    setMensagem(`${concluidas} mídia(s) publicada(s). ${falhas.length} ficaram na fila para tentar novamente. ${falhas[0].erro}`);
+    setMensagem(`${concluidas} mídia(s) publicada(s). ${restantes.length} ficaram na fila para tentar novamente. ${falhas[0].erro}`);
   }
 
   async function iniciarEnvio() {
@@ -1007,13 +1017,13 @@ export default function PainelFotografoPage() {
                 <p className="mt-3 text-xs text-zinc-500">Lote atual: <span className="font-bold text-white">{arquivos.length}</span> mídia(s) · {formatarTamanho(totalBytes)}</p>
 
                 <button type="button" onClick={() => void iniciarEnvio()} disabled={uploadBloqueado} className="mt-4 inline-flex min-h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-retratt px-3 py-3 text-center text-xs font-black uppercase tracking-wider text-black shadow-[0_0_24px_rgba(255,90,31,0.18)] transition hover:bg-retratt disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500">
-                  {criandoAlbum ? <><Loader2 size={16} className="animate-spin" /> Preparando pasta</> : enviando ? <><Loader2 size={16} className="animate-spin" /> Publicando {uploadAtual}/{uploadTotal}</> : !arquivos.length ? <><ImagePlus size={16} /> Escolher mídias</> : !albumId ? <><FolderPlus size={16} /> Preparar pasta e publicar</> : <><CloudUpload size={16} /> Publicar {arquivos.length} mídia(s)</>}
+                  {criandoAlbum ? <><Loader2 size={16} className="animate-spin" /> Preparando pasta</> : status === "verificando" ? <><Loader2 size={16} className="animate-spin" /> Conferindo autorização</> : enviando ? <><Loader2 size={16} className="animate-spin" /> Publicando {uploadAtual}/{uploadTotal}</> : !arquivos.length ? <><ImagePlus size={16} /> Escolher mídias</> : !albumId ? <><FolderPlus size={16} /> Preparar pasta e publicar</> : <><CloudUpload size={16} /> Publicar {arquivos.length} mídia(s)</>}
                 </button>
 
                 {(enviando || status === "ok") && (
                   <div className="mt-4">
                     <div className="mb-2 flex items-center justify-between text-[10px] font-bold">
-                      <span className="text-zinc-400">{status === "ok" ? "Publicação concluída" : status === "preparando" ? "Criando prévias" : status === "enviando" ? "Enviando com segurança" : "Finalizando publicação"}</span>
+                      <span className="text-zinc-400">{status === "ok" ? "Publicação concluída" : status === "verificando" ? "Conferindo autorização" : status === "preparando" ? "Criando prévias" : status === "enviando" ? "Enviando com segurança" : "Finalizando publicação"}</span>
                       <span className={status === "ok" ? "text-emerald-300" : "text-retratt"}>{progressoPercentual}%</span>
                     </div>
                     <div className="h-2 overflow-hidden rounded-full bg-white/5">
