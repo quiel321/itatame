@@ -58,15 +58,15 @@ export default function FotosOrganizadorPage() {
           <div className="absolute inset-0 z-0 pointer-events-none">
             {/* 🔥 CORREÇÃO MOBILE: bg-[30%_center] puxa o centro da imagem para a direita no celular */}
             <div
-              className="absolute inset-y-0 right-0 w-full bg-[url('https://loremflickr.com/1920/1080/event,crowd?lock=88')] bg-cover bg-[30%_center] opacity-[0.35] mix-blend-luminosity sm:bg-[40%_center] md:w-[78%] md:bg-center md:opacity-[0.45]"
+              className="absolute inset-y-0 right-0 w-full opacity-40 md:w-[72%] md:opacity-90"
               style={{
                 WebkitMaskImage: "linear-gradient(to right, transparent 0%, black 22%, black 100%)",
                 maskImage: "linear-gradient(to right, transparent 0%, black 22%, black 100%)",
               }}
-            />
+            ><img src="/retratt/hero-sports/jiu-jitsu.jpg" alt="Atletas de jiu-jitsu durante uma competição" width={720} height={479} fetchPriority="high" className="h-full w-full object-cover object-center" /></div>
 
             {/* Máscara de Gradiente: Escuro na esquerda sumindo para a direita */}
-            <div className="absolute inset-0 bg-gradient-to-r from-[#050505] via-[#050505]/95 md:via-[#050505]/80 to-transparent z-10"></div>
+            <div className="absolute inset-0 bg-gradient-to-r from-[#050505] via-[#050505]/85 md:via-[#050505]/40 to-transparent z-10"></div>
 
             {/* Gradiente de baixo para cima */}
             <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-transparent to-[#050505]/50 z-10"></div>

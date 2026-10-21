@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { ArrowUpRight, CheckCircle2, Clock3, Copy, FileText, Loader2, RefreshCw, Search, X } from 'lucide-react';
 import { supabase } from '@/app/lib/supabase';
 import { ROTULOS_PEDIDO_FOTOS, type PedidoFotosPainel } from '@/app/lib/fotos-acompanhamento';
+import TarifasMercadoPago from '../admin/_components/TarifasMercadoPago';
 import PainelOrganizador from '../admin/_components/PainelOrganizador';
 import PainelFotografo from '../fotografo/_components/PainelFotografo';
 import s from '../fotografo/_components/gestao.module.css';
@@ -89,7 +90,7 @@ function JanelaPedido({ pedido, perfil, consultar, fechar }: { pedido: PedidoFot
   </dialog>;
 }
 
-export default function AcompanhamentoVendasFotos({ perfil }: { perfil: Perfil }) {
+export default function AcompanhamentoVendasFotos({ perfil, semPainel = false }: { perfil: Perfil; semPainel?: boolean }) {
   const router = useRouter();
   const [dados, setDados] = useState<Dados | null>(null), [carregando, setCarregando] = useState(true), [erro, setErro] = useState('');
   const [galeria, setGaleria] = useState(''), [busca, setBusca] = useState(''), [filtro, setFiltro] = useState('todos'), [pagina, setPagina] = useState(1);
@@ -127,6 +128,7 @@ export default function AcompanhamentoVendasFotos({ perfil }: { perfil: Perfil }
     <div className={s.filtros}><label className="min-w-0 flex-1 text-[10px] text-zinc-400">Galeria<select aria-label="Galeria dos pedidos" value={galeria || dados?.galeriaId || ''} disabled={carregando} onChange={e => { setGaleria(e.target.value); setSelecionado(null); setPagina(1); }} className="mt-1 min-h-11 w-full rounded-xl border border-white/10 bg-black px-3 text-xs text-white"><option value="" disabled>Escolha uma galeria</option>{dados?.galerias.map(g => <option key={g.id} value={g.id}>{g.nome}</option>)}</select></label><label className="min-w-0 flex-1 text-[10px] text-zinc-400">{proprio ? 'Buscar pedido' : 'Buscar comprador, e-mail ou pedido'}<div className="mt-1 flex min-h-11 items-center gap-2 rounded-xl border border-white/10 bg-black px-3"><Search size={14} /><input aria-label="Buscar pedidos" value={busca} onChange={e => { setBusca(e.target.value); setPagina(1); }} placeholder="Digite para filtrar" className="min-w-0 flex-1 bg-transparent text-xs text-white outline-none" /></div></label></div>
     {erro && <p role="alert" className="rounded-xl border border-orange-400/20 bg-orange-400/10 p-4 text-xs text-orange-100">{erro}</p>}
     {dados?.parcial && <p className="rounded-xl border border-amber-400/20 p-3 text-xs text-amber-200">Exibindo os {dados.limite} pedidos mais recentes desta galeria. Os totais abaixo correspondem a esse recorte. Lembretes estão desativados porque o histórico pode estar incompleto.</p>}
+    {!proprio && dados?.galeriaId && <TarifasMercadoPago galeria={dados.galeriaId} />}
     {carregando ? <div role="status" className="flex min-h-48 items-center justify-center gap-3 text-sm text-zinc-400"><Loader2 className="animate-spin" size={22} /> Consultando seus pedidos…</div> : dados && <>
       {resumo.semValores > 0 && <p className="rounded-xl border border-amber-400/20 p-3 text-xs text-amber-200">{resumo.semValores} pedido(s) pago(s) não têm valores que puderam ser conferidos. Esses valores não foram incluídos na soma abaixo.</p>}
       <dl className={s.linhaResumo}>{[['Vendas pagas', `${resumo.pagos} · ${resumo.arquivos} arquivo(s)`], [proprio ? 'Suas vendas após descontos' : 'Vendas após descontos', moeda(resumo.total)], ['Pix aguardando pagamento', String(resumo.pix)], ['Checkouts iniciados', String(resumo.checkouts)]].map(([titulo, valor]) => <div key={titulo} className={undefined}><dt className="text-[10px] leading-4 text-zinc-400">{titulo}</dt><dd className="mt-2 break-words text-lg font-black sm:text-xl">{valor}</dd></div>)}</dl>
@@ -137,5 +139,6 @@ export default function AcompanhamentoVendasFotos({ perfil }: { perfil: Perfil }
     </>}
     {selecionado && <JanelaPedido key={selecionado.id} pedido={selecionado} perfil={perfil} consultar={consultar} fechar={() => setSelecionado(null)} />}
   </div>;
+  if (semPainel) return <><div className="mb-4 flex justify-end"><button type="button" className={s.botao} disabled={carregando} onClick={() => void carregar()}><RefreshCw size={14} /> Atualizar pedidos</button></div>{conteudo}</>;
   return proprio ? <PainelFotografo pagina="vendas" titulo="Vendas e pedidos" descricao="Acompanhe pagamentos e a entrega dos seus arquivos por galeria. Abra um pedido para conferir os detalhes da sua participação." acoes={<button type="button" disabled={carregando} onClick={() => void carregar()} className={s.botao}><RefreshCw size={14} className={carregando ? 'animate-spin' : ''} /> Atualizar pedidos</button>}>{conteudo}</PainelFotografo> : <PainelOrganizador tela="vendas" titulo="Vendas e pedidos" descricao="Acompanhe compradores, pagamentos e a entrega das mídias. Pix pendente e checkout iniciado aparecem separados." acoes={<button type="button" disabled={carregando} onClick={() => void carregar()} className={s.botao}><RefreshCw size={14} className={carregando ? 'animate-spin' : ''} /> Atualizar pedidos</button>}>{conteudo}</PainelOrganizador>;
 }

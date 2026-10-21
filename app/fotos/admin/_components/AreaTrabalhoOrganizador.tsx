@@ -6,17 +6,19 @@ import Link from "next/link";
 import LinkGaleria from "@/app/fotos/_components/LinkGaleria";
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
+import AcompanhamentoVendasFotos from "@/app/fotos/_components/AcompanhamentoVendasFotos";
 import { supabase } from "@/app/lib/supabase";
 import { comprimirAvatarRetratt as comprimirAvatar, comprimirCapaRetratt as comprimirCapa } from "@/app/lib/fotos-preparar";
 import FotosShell from "@/app/fotos/_components/FotosShell";
 import PainelOrganizador from "./PainelOrganizador";
 import ResumoOrganizador from "./ResumoOrganizador";
+import TarifasMercadoPago from "./TarifasMercadoPago";
 import EquipeGaleriaOrganizador from "./EquipeGaleriaOrganizador";
 import g from "@/app/fotos/fotografo/_components/gestao.module.css";
 import s from "./organizador.module.css";
 import MercadoPagoConnectButton from "@/app/admin/_components/MercadoPagoConnectButton";
 import ConexaoMercadoPagoObrigatoria, { type EstadoConexaoMP } from '@/app/fotos/_components/ConexaoMercadoPagoObrigatoria';
-import { ArrowRight, BarChart3, Camera, CheckCircle2, FolderPlus, Pencil, Trophy, Check, AlertCircle, UploadCloud, Loader2, X, Trash2, Plus } from "lucide-react";
+import { ArrowRight, BarChart3, Camera, CheckCircle2, FolderPlus, Pencil, Trophy, Check, AlertCircle, UploadCloud, Loader2, X, Trash2, Plus, RefreshCw } from "lucide-react";
 import { formatarDocumento } from '@/app/lib/formatar-documento';
 import { formatarTelefone } from '@/app/lib/formatar-telefone';
 import { CATEGORIAS_FOTOS } from "@/app/lib/fotos-categorias";
@@ -59,9 +61,12 @@ function formatarMoeda(valorCentavos?: number | null) {
   return ((valorCentavos || 0) / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
-export default function AreaTrabalhoOrganizador({ tela = "visao-geral" }: { tela?: "visao-geral" | "galerias" | "fotografos" | "financeiro" | "perfil" }) {
+export default function AreaTrabalhoOrganizador({ tela = "visao-geral" }: { tela?: "visao-geral" | "galerias" | "fotografos" | "financeiro" | "perfil" | "vendas" }) {
   const router = useRouter();
   const [galeriaReferencia, setGaleriaReferencia] = useState(''), [buscaGaleria, setBuscaGaleria] = useState(''), [filtroGaleria, setFiltroGaleria] = useState('todas');
+  const [revisao, setRevisao] = useState(0);
+  const telaAtual = useRef(tela);
+  useEffect(() => { telaAtual.current = tela; }, [tela]);
   const [resumoConferido, setResumoConferido] = useState(false);
 
   // 🔥 HOOKS NO TOPO ABSOLUTO
@@ -144,20 +149,25 @@ export default function AreaTrabalhoOrganizador({ tela = "visao-geral" }: { tela
     if (!/^(galeria-[a-f0-9-]+|nova-galeria|recebimentos)$/.test(alvo)) return;
     const frame = window.requestAnimationFrame(() => document.getElementById(alvo)?.scrollIntoView({ block: 'start' }));
     return () => window.cancelAnimationFrame(frame);
-  }, [carregando, tela]);
+  }, [carregando, tela, mostrarCriarGaleria]);
 
   useEffect(() => {
+    let cancelado = false;
     async function carregar() {
       setCarregando(true);
+      setResumoConferido(false);
+      setPerfilInvalido(null); setContaNaoExiste(false);
       const { data: auth } = await supabase.auth.getUser();
+      if (cancelado) return;
       const user = auth.user;
 
       if (!user) {
-        router.replace(`/fotos/login?perfil=organizador&next=${encodeURIComponent(tela === "visao-geral" ? "/fotos/admin" : `/fotos/admin/${tela}`)}`);
+        router.replace(`/fotos/login?perfil=organizador&next=${encodeURIComponent(telaAtual.current === "visao-geral" ? "/fotos/admin" : `/fotos/admin/${telaAtual.current}`)}`);
         return;
       }
 
       const { data: isFoto } = await supabase.from("fotografos").select("id").eq("user_id", user.id).maybeSingle();
+      if (cancelado) return;
       if (isFoto) {
         setPerfilInvalido('fotógrafo');
         setCarregando(false);
@@ -173,6 +183,7 @@ export default function AreaTrabalhoOrganizador({ tela = "visao-geral" }: { tela
         supabase.from("foto_organizadores_privado").select("email, telefone, documento, tipo_entidade, academia, perfil_completo").eq("id", user.id).maybeSingle(),
       ]);
 
+      if (cancelado) return;
       if (!org.data && !fotoOrg.data) {
         setContaNaoExiste(true);
         setCarregando(false);
@@ -199,8 +210,9 @@ export default function AreaTrabalhoOrganizador({ tela = "visao-geral" }: { tela
         estado: est
       });
 
-      const base = await supabase.from("eventos").select("id, nome, local, cidade, estado, data_evento, banner_url").eq("organizador_id", user.id).order("data_evento", { ascending: false }).limit(50);
-      const fotoEvt = await supabase.from("foto_eventos").select("id, nome, categoria, evento_id, status, capa_url, preco_padrao_centavos, preco_video_centavos, preco_bloqueado, desconto_combo_qtd, desconto_combo_percentual, descontos_progressivos, em_breve, acesso_por_link, acesso_token, permite_download_gratis").eq("organizador_user_id", user.id).order("created_at", { ascending: false });
+      // Estas consultas não dependem umas das outras.
+      const resumoPromise = supabase.auth.getSession().then(({ data: { session } }) => session ? fetch("/api/fotos/admin/resumo-galerias", { headers: { Authorization: `Bearer ${session.access_token}` }, cache: 'no-store', signal: AbortSignal.timeout(20000) }) : null).catch(() => null);
+      const [base, fotoEvt] = await Promise.all([supabase.from("eventos").select("id, nome, local, cidade, estado, data_evento, banner_url").eq("organizador_id", user.id).order("data_evento", { ascending: false }).limit(50), supabase.from("foto_eventos").select("id, nome, categoria, evento_id, status, capa_url, preco_padrao_centavos, preco_video_centavos, preco_bloqueado, desconto_combo_qtd, desconto_combo_percentual, descontos_progressivos, em_breve, acesso_por_link, acesso_token, permite_download_gratis").eq("organizador_user_id", user.id).order("created_at", { ascending: false })]);
       let galeriasDados: FotoEventoAdmin[] = (fotoEvt.data || []) as FotoEventoAdmin[];
       if (fotoEvt.error?.code === "42703") {
         const fallback = await supabase.from("foto_eventos").select("id, nome, evento_id, status, capa_url, preco_padrao_centavos, preco_video_centavos, preco_bloqueado, desconto_combo_qtd, desconto_combo_percentual, descontos_progressivos, em_breve, acesso_por_link, acesso_token, permite_download_gratis").eq("organizador_user_id", user.id).order("created_at", { ascending: false });
@@ -224,10 +236,10 @@ export default function AreaTrabalhoOrganizador({ tela = "visao-geral" }: { tela
         faixasDoEvento(evento),
       ])));
       setTotais({ eventos: listaGalerias.length, albuns: albuns.count || 0, fotos: fotos.count || 0, pedidos: pedidos.count || 0 });
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
+      const resumoResponse = await resumoPromise;
+      if (cancelado) return;
+      if (resumoResponse) {
         try {
-        const resumoResponse = await fetch("/api/fotos/admin/resumo-galerias", { headers: { Authorization: `Bearer ${session.access_token}` }, cache: 'no-store', signal: AbortSignal.timeout(20000) });
           if (resumoResponse.ok) {
             const resumo = await resumoResponse.json();
             setResumoConferido(true);
@@ -261,8 +273,18 @@ export default function AreaTrabalhoOrganizador({ tela = "visao-geral" }: { tela
       setCarregando(false);
     }
 
-    void carregar();
-  }, [router, tela]);
+    void carregar().catch(() => { if (cancelado) return; setMensagem("Não foi possível carregar o painel. Tente atualizar novamente."); setCarregando(false); setEstadoConexaoMP("erro"); });
+    return () => { cancelado = true; };
+  }, [router, revisao]);
+
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT' || (event === 'SIGNED_IN' && userId && session?.user.id !== userId)) {
+        setCarregando(true); setUserId(null); setRevisao(v => v + 1);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [userId]);
 
   async function deslogar() {
     await supabase.auth.signOut();
@@ -630,14 +652,15 @@ export default function AreaTrabalhoOrganizador({ tela = "visao-geral" }: { tela
   }
 
   const portfolio = slugPublico ? `/fotos${caminhoPortfolioOrganizador(slugPublico)}` : null;
-  const titulos = { 'visao-geral': `Olá, ${primeiroNome}.`, galerias: 'Suas galerias', fotografos: 'Equipe de fotógrafos', financeiro: 'Financeiro', perfil: 'Sua organização' };
+  const titulos = { 'visao-geral': `Olá, ${primeiroNome}.`, galerias: 'Suas galerias', fotografos: 'Equipe de fotógrafos', financeiro: 'Financeiro', perfil: 'Sua organização', vendas: 'Vendas e pedidos' };
   const equipeTotal = new Set(Object.values(fotografosPorGaleria).flat().map(f => f.id)).size;
   const galeriaEquipe = fotoEventos.some(e => e.id === galeriaReferencia) ? galeriaReferencia : fotoEventos[0]?.id || '';
   const galeriasVisiveis = fotoEventos.filter(e => (filtroGaleria === 'todas' || (filtroGaleria === 'arquivadas' ? e.status === 'arquivado' : e.status !== 'arquivado')) && e.nome.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(buscaGaleria.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()));
-  return <PainelOrganizador tela={tela} titulo={titulos[tela]} nome={orgForm.nome} avatar={avatarOrganizador} portfolio={portfolio}
-    descricao={tela === 'visao-geral' ? 'Suas galerias, sua equipe e os resultados do seu trabalho em um só lugar.' : tela === 'galerias' ? 'Publique, organize e prepare cada galeria para vender. Preços e descontos ficam dentro do trabalho correspondente.' : tela === 'fotografos' ? 'Escolha uma galeria para credenciar fotógrafos e definir os acordos de recebimento.' : tela === 'financeiro' ? 'Acompanhe receitas por galeria e a participação de cada fotógrafo, com clareza sobre o que cada valor representa.' : 'Cuide da identidade da sua marca, dos dados de cadastro e da conta de recebimento.'}
-    acoes={tela === 'visao-geral' ? <Link href="/fotos/admin/galerias#nova-galeria" className={g.primario}><Plus size={15} /> Nova galeria</Link> : tela === 'galerias' ? <button type="button" className={g.primario} onClick={() => { setMostrarCriarGaleria(true); window.setTimeout(() => document.getElementById('nova-galeria')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); }}><Plus size={15} /> Nova galeria</button> : undefined}>
+  return <PainelOrganizador tela={tela} titulo={titulos[tela]} nome={orgForm.nome} avatar={avatarOrganizador} portfolio={portfolio} onNovaGaleria={() => setMostrarCriarGaleria(true)}
+    descricao={tela === 'visao-geral' ? 'Suas galerias, sua equipe e os resultados do seu trabalho em um só lugar.' : tela === 'galerias' ? 'Publique, organize e prepare cada galeria para vender. Preços e descontos ficam dentro do trabalho correspondente.' : tela === 'fotografos' ? 'Escolha uma galeria para credenciar fotógrafos e definir os acordos de recebimento.' : tela === 'vendas' ? 'Acompanhe compradores, pagamentos e a entrega das mídias.' : tela === 'financeiro' ? 'Acompanhe receitas por galeria e a participação de cada fotógrafo, com clareza sobre o que cada valor representa.' : 'Cuide da identidade da sua marca, dos dados de cadastro e da conta de recebimento.'}
+    acoes={<><button type="button" className={g.botao} onClick={() => setRevisao(v => v + 1)}><RefreshCw size={14} /> Atualizar painel</button>{tela === 'visao-geral' ? <Link href="/fotos/admin/galerias#nova-galeria" className={g.primario}><Plus size={15} /> Nova galeria</Link> : tela === 'galerias' ? <button type="button" className={g.primario} onClick={() => { setMostrarCriarGaleria(true); window.setTimeout(() => document.getElementById('nova-galeria')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); }}><Plus size={15} /> Nova galeria</button> : undefined}</>}>
     {userId && <ConexaoMercadoPagoObrigatoria estado={estadoConexaoMP} onVerificar={() => void conferirConexaoMercadoPago()} onSair={() => void deslogar()} />}
+    {tela === 'vendas' && <AcompanhamentoVendasFotos perfil="organizador" semPainel />}
     {tela === 'visao-geral' && <ResumoOrganizador galerias={fotoEventos} totais={totais} vendidos={vendasPorGaleria} receitas={receitaDiretaPorGaleria} royalties={royaltiesPorGaleria} receitaTotal={receitaDiretaTotalCentavos} royaltyTotal={royaltiesTotalCentavos} equipe={equipeTotal} conectado={mercadoPagoOrganizadorConectado} perfilPendente={perfilPendente} resumoDisponivel={resumoConferido} portfolio={portfolio} />}
     {tela === 'galerias' && <><div className={g.secao}><div className={g.filtros}><label>Buscar galeria<input value={buscaGaleria} onChange={e => setBuscaGaleria(e.target.value)} placeholder="Nome da galeria" /></label><label>Situação<select value={filtroGaleria} onChange={e => setFiltroGaleria(e.target.value)}><option value="todas">Todas as galerias</option><option value="ativas">Em operação</option><option value="arquivadas">Arquivadas</option></select></label></div></div><div className={s.formulario}>          <div className="space-y-6 w-full min-w-0">
             {/* 🔥 NOVO: PUBLICAR GALERIA EXPANSÍVEL E RESPONSIVO COM OPÇÃO MANUAL */}
@@ -920,7 +943,7 @@ export default function AreaTrabalhoOrganizador({ tela = "visao-geral" }: { tela
 </div></>}
     {tela === 'fotografos' && <section className={g.secao}><div className={s.equipeCabecalho}><label>Galeria da equipe<select aria-label="Galeria da equipe" value={galeriaEquipe} onChange={e => setGaleriaReferencia(e.target.value)}><option value="" disabled>Escolha uma galeria</option>{fotoEventos.map(e => <option key={e.id} value={e.id}>{e.nome}{e.status === 'arquivado' ? ' · Arquivada' : ''}</option>)}</select></label><Link href="/fotos/admin/financeiro" className={g.botao}>Vendas da equipe <ArrowRight size={14} /></Link></div>{!resumoConferido ? <p className={g.aviso}>Não foi possível conferir os credenciamentos. Atualize a página para tentar novamente.</p> : !fotoEventos.length ? <p className={g.vazio}>Crie uma galeria para credenciar sua equipe.</p> : fotoEventos.filter(e => e.id === galeriaEquipe).map(evento => <div key={evento.id} className={`${s.formulario} ${s.equipeLista}`}><EquipeGaleriaOrganizador eventoId={evento.id} fotografos={fotografosPorGaleria[evento.id] || []} modelos={modeloForm} royalties={royaltyForm} avisos={avisosRoyalty} salvando={salvandoRoyalty} removendo={removendoFotografo} email={emailFotografo[evento.id] || ''} credenciando={credenciandoEvento === evento.id} onModelo={(chave, modelo) => setModeloForm(atual => ({ ...atual, [chave]: modelo }))} onRoyalty={(chave, valor) => setRoyaltyForm(atual => ({ ...atual, [chave]: valor }))} onSalvar={id => void salvarRoyaltyFotografo(evento.id, id)} onRemover={f => void descredenciarFotografo(evento.id, f)} onEmail={valor => setEmailFotografo(atual => ({ ...atual, [evento.id]: valor }))} onCredenciar={() => void credenciarFotografo(evento.id)} />
 </div>)}<p className={g.nota}>Alterações do modelo ou percentual valem para as próximas compras. Pedidos anteriores mantêm os valores registrados. Salve cada alteração para confirmar o acordo.</p></section>}
-    {tela === 'financeiro' && <><ResumoOrganizador financeiro galeriaInicial={galeriaReferencia} galerias={fotoEventos} totais={totais} vendidos={vendasPorGaleria} receitas={receitaDiretaPorGaleria} royalties={royaltiesPorGaleria} receitaTotal={receitaDiretaTotalCentavos} royaltyTotal={royaltiesTotalCentavos} equipe={equipeTotal} conectado={mercadoPagoOrganizadorConectado} perfilPendente={perfilPendente} resumoDisponivel={resumoConferido} /><div id="vendas-diaria" className="scroll-mt-24"><VendasDiariaFotografos gestao /></div></>}
+    {tela === 'financeiro' && <><TarifasMercadoPago key={revisao} /><ResumoOrganizador financeiro galeriaInicial={galeriaReferencia} galerias={fotoEventos} totais={totais} vendidos={vendasPorGaleria} receitas={receitaDiretaPorGaleria} royalties={royaltiesPorGaleria} receitaTotal={receitaDiretaTotalCentavos} royaltyTotal={royaltiesTotalCentavos} equipe={equipeTotal} conectado={mercadoPagoOrganizadorConectado} perfilPendente={perfilPendente} resumoDisponivel={resumoConferido} /><div id="vendas-diaria" className="scroll-mt-24"><VendasDiariaFotografos gestao /></div></>}
     {tela === 'perfil' && <div className={s.formulario}><div className={s.perfil}>
             {(!exibirFormularioPerfil && !perfilPendente) ? (
                <div className="bg-[#0a0a0e] rounded-3xl p-4 sm:p-5 border border-white/5 shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">

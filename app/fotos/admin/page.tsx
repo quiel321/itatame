@@ -1,3 +1,2 @@
-import AreaTrabalhoOrganizador from "./_components/AreaTrabalhoOrganizador";
-
-export default function OrganizadorPage() { return <AreaTrabalhoOrganizador />; }
+// O layout mantém os dados do painel durante a navegação entre as áreas.
+export default function PaginaOrganizador() { return null; }

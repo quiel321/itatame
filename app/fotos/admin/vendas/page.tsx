@@ -1,5 +1,2 @@
-import AcompanhamentoVendasFotos from '../../_components/AcompanhamentoVendasFotos';
-
-export default function VendasOrganizadorPage() {
-  return <AcompanhamentoVendasFotos perfil="organizador" />;
-}
+// O layout mantém os dados do painel durante a navegação entre as áreas.
+export default function PaginaOrganizador() { return null; }
