@@ -6,9 +6,10 @@ import type { ResumoFotografoDiaria } from '@/app/lib/fotos-vendas-diaria';
 import { ArrowUpRight, ChartNoAxesCombined, Download, Loader2, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
 import VendasOrganizadorTabela from '../fotografo/_components/VendasOrganizadorTabela';
+import VendasEquipeTabela from '../admin/_components/VendasEquipeTabela';
 
 const moeda = (n: number) => (n / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-export default function VendasDiariaFotografos({ perfil = 'organizador', resumido = false }: { perfil?: 'organizador' | 'fotografo'; resumido?: boolean }) {
+export default function VendasDiariaFotografos({ perfil = 'organizador', resumido = false, gestao = false }: { perfil?: 'organizador' | 'fotografo'; resumido?: boolean; gestao?: boolean }) {
   const proprio = perfil === 'fotografo';
   const [vendas, setVendas] = useState<ResumoFotografoDiaria[]>([]);
   const [carregando, setCarregando] = useState(true);
@@ -39,6 +40,7 @@ export default function VendasDiariaFotografos({ perfil = 'organizador', resumid
   }
   const totais = vendas.reduce((s, v) => ({ quantidade: s.quantidade + v.quantidade, total: s.total + v.totalCentavos, antesTarifa: s.antesTarifa + v.antesTarifaCentavos }), { quantidade: 0, total: 0, antesTarifa: 0 });
   if (proprio) return <VendasOrganizadorTabela vendas={vendas} carregando={carregando} erro={erro} atualizadoEm={atualizadoEm} resumido={resumido} atualizar={() => void carregar()} exportar={exportar} />;
+  if (gestao) return <VendasEquipeTabela vendas={vendas} carregando={carregando} erro={erro} atualizadoEm={atualizadoEm} atualizar={() => void carregar()} exportar={exportar} />;
   return <section aria-label={proprio ? 'Suas vendas no modelo diária' : 'Vendas por fotógrafo no modelo diária'} className="rounded-2xl border border-white/10 bg-black/40 p-4 sm:p-5">
     <div className="flex flex-wrap items-center justify-between gap-3">
       <h3 className="text-sm font-bold text-white">{proprio ? 'Suas vendas · Recebimento pelo organizador' : 'Vendas por fotógrafo · Diária'}</h3>

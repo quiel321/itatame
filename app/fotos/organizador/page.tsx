@@ -93,11 +93,11 @@ export default function FotosOrganizadorPage() {
               </p>
 
               <div className="flex flex-col sm:flex-row gap-3 md:gap-4 w-full sm:w-auto mb-8 md:mb-10">
-                <Link href="/fotos/login?perfil=organizador&next=/fotos/admin" className="flex items-center justify-center gap-2 bg-retratt hover:bg-retratt text-black px-6 py-3.5 md:px-7 md:py-3.5 rounded-xl text-[9px] md:text-[11px] font-black uppercase tracking-widest transition-all shadow-[0_0_30px_rgba(255,90,31,0.3)] hover:scale-105">
-                  Ativar Fotos no Evento <ArrowRight size={14} className="md:w-4 md:h-4" />
+                <Link href="/fotos/cadastro?perfil=organizador&next=/fotos/admin" className="flex items-center justify-center gap-2 bg-retratt hover:bg-retratt text-black px-6 py-3.5 md:px-7 md:py-3.5 rounded-xl text-[9px] md:text-[11px] font-black uppercase tracking-widest transition-all shadow-[0_0_30px_rgba(255,90,31,0.3)] hover:scale-105">
+                  Cadastre-se <ArrowRight size={14} className="md:w-4 md:h-4" />
                 </Link>
-                <Link href="/fotos/fotografo" className="flex items-center justify-center bg-white/5 hover:bg-white/10 text-white border border-white/10 px-6 py-3.5 md:px-7 md:py-3.5 rounded-xl text-[9px] md:text-[11px] font-black uppercase tracking-widest transition-colors backdrop-blur-md">
-                  Ver lado do fotógrafo
+                <Link href="/fotos/login?perfil=organizador&next=/fotos/admin" className="flex items-center justify-center bg-white/5 hover:bg-white/10 text-white border border-white/10 px-6 py-3.5 md:px-7 md:py-3.5 rounded-xl text-[9px] md:text-[11px] font-black uppercase tracking-widest transition-colors backdrop-blur-md">
+                  Acessar painel do organizador
                 </Link>
               </div>
 

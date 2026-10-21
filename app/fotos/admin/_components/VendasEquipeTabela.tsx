@@ -1,0 +1,17 @@
+'use client';
+
+import Link from 'next/link';
+import { useState } from 'react';
+import { Download, RefreshCw } from 'lucide-react';
+import type { ResumoFotografoDiaria } from '@/app/lib/fotos-vendas-diaria';
+import g from '@/app/fotos/fotografo/_components/gestao.module.css';
+
+const moeda = (n: number) => (n / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+export default function VendasEquipeTabela({ vendas, carregando, erro, atualizadoEm, atualizar, exportar }: { vendas: ResumoFotografoDiaria[]; carregando: boolean; erro: string; atualizadoEm: string; atualizar: () => void; exportar: () => void }) {
+  const [galeria, setGaleria] = useState('');
+  const linhas = vendas.filter(v => !galeria || galeria === v.galeriaId);
+  return <section className={g.secao} aria-label="Vendas por fotógrafo no modelo diária"><header className={g.secaoCabecalho}><div><h2>Vendas da equipe · Diária</h2><p>Autoria dos arquivos vendidos e pagos nas galerias em que você recebe a venda.</p></div><div className="flex flex-wrap gap-2"><button type="button" onClick={atualizar} disabled={carregando} className={g.botao}><RefreshCw size={14} /> Atualizar</button><button type="button" onClick={exportar} disabled={carregando || !!erro || !vendas.length} className={g.botao}><Download size={14} /> Exportar todas</button></div></header><div className={g.filtros}><label>Galeria da equipe<select value={galeria} onChange={e => setGaleria(e.target.value)}><option value="">Todas as galerias</option>{[...new Map(vendas.map(v => [v.galeriaId, v.galeria])).entries()].map(([id, nome]) => <option key={id} value={id}>{nome}</option>)}</select></label></div>
+    {carregando ? <p role="status" className={g.vazio}>Conferindo vendas da equipe…</p> : erro ? <p role="alert" className={g.aviso}>{erro}</p> : !linhas.length ? <p className={g.vazio}>Ainda não há vendas pagas no modelo diária neste filtro.</p> : <div className={g.rolagem} tabIndex={0} role="region" aria-label="Participação de cada fotógrafo"><table className={g.tabela}><thead><tr><th>Fotógrafo / galeria</th><th className={g.numero}>Pedidos pagos</th><th className={g.numero}>Arquivos</th><th className={g.numero}>Preço dos arquivos</th><th className={g.numero}>Descontos</th><th className={g.numero}>Após descontos</th><th className={g.numero}>Retratt</th><th className={g.numero}>Antes da tarifa MP</th><th /></tr></thead><tbody>{linhas.map(v => <tr key={`${v.galeriaId}:${v.fotografoId}`}><td><strong>{v.nome}</strong><small>{v.galeria}</small></td><td className={g.numero}>{v.pedidosPagos}</td><td className={g.numero}>{v.quantidade}</td><td className={g.numero}>{moeda(v.subtotalCentavos)}</td><td className={g.numero}>− {moeda(v.descontoCentavos)}</td><td className={g.numero}>{moeda(v.totalCentavos)}</td><td className={g.numero}>− {moeda(v.comissaoRetrattCentavos)}</td><td className={`${g.numero} ${g.positivo}`}>{moeda(v.antesTarifaCentavos)}</td><td><Link href={`/fotos/admin/vendas?galeria=${v.galeriaId}`}>Pedidos →</Link></td></tr>)}</tbody></table></div>}
+    <p className={g.nota}>O repasse é manual, conforme o acordo com cada fotógrafo. Os valores não comprovam repasse realizado e ainda não descontam a tarifa Mercado Pago. Um pedido com arquivos de vários fotógrafos aparece na contagem de cada autor.{!carregando && !erro && atualizadoEm ? ` Conferido em ${new Date(atualizadoEm).toLocaleString('pt-BR')}.` : ''}</p>
+  </section>;
+}
