@@ -19,7 +19,7 @@ function CabecalhoPortfolio({ marca }: { marca: MarcaPortfolio }) {
   return <header className="sticky top-0 z-40 border-b border-white/10 bg-[#080809]/95 text-white backdrop-blur-lg"><div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-5 py-3 sm:px-8"><Link href={marca.href} className="flex min-w-0 items-center gap-3"><span className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/15 bg-white/5">{marca.avatarUrl ? <Image src={marca.avatarUrl} alt={`Logo de ${marca.nome}`} width={40} height={40} unoptimized className="h-full w-full object-contain" /> : <span className="text-sm font-black text-orange-300">{marca.nome.slice(0, 2).toUpperCase()}</span>}</span><span className="max-w-[200px] break-words text-sm font-bold leading-tight sm:max-w-xs sm:text-base">{marca.nome}</span></Link><nav aria-label="Navegação do portfólio" className="flex items-center gap-3 text-[11px] text-zinc-300 sm:gap-5"><a href="#galerias" className="hidden min-h-10 items-center hover:text-white sm:inline-flex">Galerias</a><a href="#sobre" className="hidden min-h-10 items-center hover:text-white sm:inline-flex">Sobre</a><Link href="/fotos/minhas-compras" className="inline-flex min-h-10 items-center hover:text-white">Minhas fotos</Link><Link href="/fotos/carrinho" aria-label={`Carrinho com ${quantidade} itens`} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-white/15 px-3 hover:bg-white/5"><ShoppingBag size={15} /><span>{quantidade || 'Carrinho'}</span></Link></nav></div></header>;
 }
 
-export default function FotosShell({ children, area = "publico", marca }: { children: ReactNode; area?: "publico" | "fotografo"; marca?: MarcaPortfolio }) {
+export default function FotosShell({ children, area = "publico", marca, cabecalho }: { children: ReactNode; area?: "publico" | "fotografo"; marca?: MarcaPortfolio; cabecalho?: ReactNode }) {
   const sitePrincipal = process.env.NEXT_PUBLIC_BASE_URL || "https://www.itatame.com.br";
   useEffect(() => {
     document.body.classList.add("fotos-route");
@@ -28,7 +28,7 @@ export default function FotosShell({ children, area = "publico", marca }: { chil
 
   return (
     <div data-fotos-shell className="min-h-screen bg-black text-white flex flex-col font-sans">
-      {marca ? <CabecalhoPortfolio marca={marca} /> : <FotosNavbar area={area} />}
+      {cabecalho || (marca ? <CabecalhoPortfolio marca={marca} /> : <FotosNavbar area={area} />)}
       <AcompanharPagamentosFotos />
       <WhatsAppSuporteRetratt />
 

@@ -5,6 +5,7 @@ import { supabase } from '@/app/lib/supabase';
 import type { ResumoFotografoDiaria } from '@/app/lib/fotos-vendas-diaria';
 import { ArrowUpRight, ChartNoAxesCombined, Download, Loader2, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
+import VendasOrganizadorTabela from '../fotografo/_components/VendasOrganizadorTabela';
 
 const moeda = (n: number) => (n / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 export default function VendasDiariaFotografos({ perfil = 'organizador', resumido = false }: { perfil?: 'organizador' | 'fotografo'; resumido?: boolean }) {
@@ -25,7 +26,7 @@ export default function VendasDiariaFotografos({ perfil = 'organizador', resumid
     } catch (error) { setErro(error instanceof Error ? error.message : 'Não foi possível conferir as vendas.'); }
     finally { setCarregando(false); }
   }, [proprio]);
-  useEffect(() => { void carregar(); }, [carregar]);
+  useEffect(() => { const timer = window.setTimeout(() => void carregar(), 0); return () => window.clearTimeout(timer); }, [carregar]);
 
   function exportar() {
     const celula = (v: string | number) => `"${String(v).replace(/^[=+@\-\t\r]/, "'$&").replaceAll('"', '""')}"`;
@@ -37,6 +38,7 @@ export default function VendasDiariaFotografos({ perfil = 'organizador', resumid
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   const totais = vendas.reduce((s, v) => ({ quantidade: s.quantidade + v.quantidade, total: s.total + v.totalCentavos, antesTarifa: s.antesTarifa + v.antesTarifaCentavos }), { quantidade: 0, total: 0, antesTarifa: 0 });
+  if (proprio) return <VendasOrganizadorTabela vendas={vendas} carregando={carregando} erro={erro} atualizadoEm={atualizadoEm} resumido={resumido} atualizar={() => void carregar()} exportar={exportar} />;
   return <section aria-label={proprio ? 'Suas vendas no modelo diária' : 'Vendas por fotógrafo no modelo diária'} className="rounded-2xl border border-white/10 bg-black/40 p-4 sm:p-5">
     <div className="flex flex-wrap items-center justify-between gap-3">
       <h3 className="text-sm font-bold text-white">{proprio ? 'Suas vendas · Recebimento pelo organizador' : 'Vendas por fotógrafo · Diária'}</h3>
