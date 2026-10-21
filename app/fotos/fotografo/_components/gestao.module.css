@@ -692,3 +692,4 @@
   .secao, .linhaResumo > div, .botao, .primario, .navegacao > a, .tabela tbody tr { transition: none; }
   .linhaResumo > div:hover, .botao:not(:disabled):hover, .primario:not(:disabled):hover, .botao:not(:disabled):active, .primario:not(:disabled):active, .navegacao > a:hover { transform: none; }
 }
+.topo .sair { min-height: 36px; padding: 7px 12px; font-size: 12px; flex-shrink: 0; } @media (max-width: 767px) { .topo .identificacao { display: none; } }
