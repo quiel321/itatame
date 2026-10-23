@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/app/fotos/_components/LinkFotos";
 import LinkGaleria from "@/app/fotos/_components/LinkGaleria";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/app/lib/supabase";

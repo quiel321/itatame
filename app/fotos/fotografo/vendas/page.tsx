@@ -1,5 +1,2 @@
-import AcompanhamentoVendasFotos from '../../_components/AcompanhamentoVendasFotos';
-
-export default function VendasFotografoPage() {
-  return <AcompanhamentoVendasFotos perfil="fotografo" />;
-}
+// Os dados e as telas de gestão persistem no layout do fotógrafo.
+export default function PaginaFotografo() { return null; }

@@ -1,15 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/app/lib/supabase';
 import type { ResumoFotografoDiaria } from '@/app/lib/fotos-vendas-diaria';
 import { ArrowUpRight, ChartNoAxesCombined, Download, Loader2, RefreshCw } from 'lucide-react';
-import Link from 'next/link';
+import Link from '@/app/fotos/_components/LinkFotos';
 import VendasOrganizadorTabela from '../fotografo/_components/VendasOrganizadorTabela';
 import VendasEquipeTabela from '../admin/_components/VendasEquipeTabela';
 
 const moeda = (n: number) => (n / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-export default function VendasDiariaFotografos({ perfil = 'organizador', resumido = false, gestao = false }: { perfil?: 'organizador' | 'fotografo'; resumido?: boolean; gestao?: boolean }) {
+export default function VendasDiariaFotografos({ perfil = 'organizador', resumido = false, gestao = false, ativo = true }: { perfil?: 'organizador' | 'fotografo'; resumido?: boolean; gestao?: boolean; ativo?: boolean }) {
+  const consultado = useRef<string | null>(null);
   const proprio = perfil === 'fotografo';
   const [vendas, setVendas] = useState<ResumoFotografoDiaria[]>([]);
   const [carregando, setCarregando] = useState(true);
@@ -23,11 +24,12 @@ export default function VendasDiariaFotografos({ perfil = 'organizador', resumid
       const resposta = await fetch(proprio ? '/api/fotos/fotografo/vendas-diaria' : '/api/fotos/admin/vendas-diaria', { headers: { Authorization: `Bearer ${session.access_token}` }, cache: 'no-store', signal: AbortSignal.timeout(25000) });
       const dados = await resposta.json();
       if (!resposta.ok) throw Error(dados.error || 'Não foi possível conferir as vendas.');
+      consultado.current = perfil;
       setVendas(dados.vendas); setAtualizadoEm(dados.atualizadoEm);
     } catch (error) { setErro(error instanceof Error ? error.message : 'Não foi possível conferir as vendas.'); }
     finally { setCarregando(false); }
-  }, [proprio]);
-  useEffect(() => { const timer = window.setTimeout(() => void carregar(), 0); return () => window.clearTimeout(timer); }, [carregar]);
+  }, [proprio, perfil]);
+  useEffect(() => { if (!ativo || consultado.current === perfil) return; const timer = window.setTimeout(() => void carregar(), 0); return () => window.clearTimeout(timer); }, [carregar, ativo, perfil]);
 
   function exportar() {
     const celula = (v: string | number) => `"${String(v).replace(/^[=+@\-\t\r]/, "'$&").replaceAll('"', '""')}"`;

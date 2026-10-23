@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import Link from '@/app/fotos/_components/LinkFotos';
 import { useState, type ReactNode } from 'react';
 import { ArrowUpRight, ChartNoAxesCombined, Check, FolderOpen, LayoutDashboard, LogOut, Menu, ReceiptText, Settings2, Trophy, Users, X } from 'lucide-react';
 import { supabase } from '@/app/lib/supabase';

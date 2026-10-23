@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/app/fotos/_components/LinkFotos";
 import { useEffect, useState } from "react";
 import { supabase } from "@/app/lib/supabase";
-import { resolverPerfilFotos, rotaLoginFotos, rotaPainelFotos, type PerfilFotos } from "@/app/lib/fotos-acesso";
+import { rotaLoginFotos, rotaPainelFotos, type PerfilFotos } from "@/app/lib/fotos-acesso";
 import { ChartNoAxesCombined, FolderPlus, LayoutDashboard, Menu, ShoppingCart, UserRound, X } from "lucide-react";
 
 const CARRINHO_FOTOS_KEY = "carrinho_fotos";
@@ -32,55 +32,56 @@ export default function FotosNavbar({ area = "publico" }: FotosNavbarProps) {
   const [itensCarrinho, setItensCarrinho] = useState(0);
 
   useEffect(() => {
-    let cancelado = false;
+    let cancelado = false, sequencia = 0;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    let unsubscribe: (() => void) | undefined;
     async function carregar() {
+      const atual = ++sequencia;
       const { data } = await supabase.auth.getUser();
-      if (cancelado) return;
+      if (cancelado || atual !== sequencia) return;
       if (!data.user) {
         setNome(null);
         setFotoPerfil(null);
         setPerfil(null);
         return;
       }
-      const perfilAtual = await resolverPerfilFotos(supabase, data.user);
+
 
       // 🔥 O CÉREBRO DA NAVBAR: Descobre qual é o tipo de usuário para direcionar o botão vermelho!
-      const [resAtleta, resComprador, resFotografo, resOrg] = await Promise.all([
+      const [resAtleta, resComprador, resFotografo, resOrg, resOrgFotos] = await Promise.all([
         supabase.from("atletas").select("nome").eq("user_id", data.user.id).maybeSingle(),
         supabase.from("foto_compradores").select("nome").eq("user_id", data.user.id).maybeSingle(),
-        supabase.from("fotografos").select("nome, foto_url").eq("user_id", data.user.id).maybeSingle(),
+        supabase.from("fotografos").select("id, nome, foto_url").eq("user_id", data.user.id).maybeSingle(),
         supabase.from("organizadores").select("nome").eq("user_id", data.user.id).maybeSingle(),
+        supabase.from("foto_organizadores").select("id, nome").eq("id", data.user.id).maybeSingle(),
       ]);
 
+      const perfilAtual: PerfilFotos | null = resFotografo.data ? "fotografo" : resOrg.data || resOrgFotos.data ? "organizador" : resComprador.data ? "comprador" : null;
       let nomeEncontrado = null;
 
       if (resFotografo.data) {
         nomeEncontrado = resFotografo.data.nome;
-      } else if (resOrg.data) {
-        nomeEncontrado = resOrg.data.nome;
+      } else if (resOrg.data || resOrgFotos.data) {
+        nomeEncontrado = resOrgFotos.data?.nome || resOrg.data?.nome;
       } else if (resComprador.data) {
         nomeEncontrado = resComprador.data.nome;
       } else if (resAtleta.data) {
         nomeEncontrado = resAtleta.data.nome;
       }
 
-      if (cancelado) return;
+      if (cancelado || atual !== sequencia) return;
       setNome(nomeEncontrado?.split(" ")?.[0] || data.user.email?.split("@")[0] || "Conta");
       setFotoPerfil(resFotografo.data?.foto_url || null);
       setPerfil(perfilAtual);
     }
 
-    void carregar().finally(() => {
-      if (cancelado) return;
-      const { data } = supabase.auth.onAuthStateChange(() => {
-        clearTimeout(timer);
-        timer = setTimeout(() => { if (!cancelado) void carregar().catch(() => {}); }, 0);
-      });
-      unsubscribe = () => data.subscription.unsubscribe();
-    }).catch(() => {});
-    return () => { cancelado = true; clearTimeout(timer); unsubscribe?.(); };
+    const { data: assinatura } = supabase.auth.onAuthStateChange((evento) => {
+      if (evento === "INITIAL_SESSION") return;
+      clearTimeout(timer);
+      if (evento === "SIGNED_OUT") { sequencia++; setNome(null); setFotoPerfil(null); setPerfil(null); return; }
+      timer = setTimeout(() => { if (!cancelado) void carregar().catch(() => {}); }, 0);
+    });
+    void carregar().catch(() => {});
+    return () => { cancelado = true; clearTimeout(timer); assinatura.subscription.unsubscribe(); };
   }, []);
 
   useEffect(() => {

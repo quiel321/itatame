@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/app/fotos/_components/LinkFotos";
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouterFotos as useRouter } from "@/app/fotos/_components/useRouterFotos";
 import { KeyRound, Loader2, Mail, ShieldCheck } from "lucide-react";
 import { supabase } from "@/app/lib/supabase";
 import FotosShell from "../_components/FotosShell";

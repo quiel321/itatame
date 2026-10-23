@@ -2,10 +2,10 @@
 
 import ControleComboIaGaleria from '@/app/fotos/_components/ControleComboIaGaleria';
 import { caminhoPortfolioOrganizador } from '@/app/lib/fotos-portfolio-url';
-import Link from "next/link";
+import Link from "@/app/fotos/_components/LinkFotos";
 import LinkGaleria from "@/app/fotos/_components/LinkGaleria";
 import { useEffect, useState, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouterFotos as useRouter } from "@/app/fotos/_components/useRouterFotos";
 import AcompanhamentoVendasFotos from "@/app/fotos/_components/AcompanhamentoVendasFotos";
 import { supabase } from "@/app/lib/supabase";
 import { comprimirAvatarRetratt as comprimirAvatar, comprimirCapaRetratt as comprimirCapa } from "@/app/lib/fotos-preparar";
@@ -1041,4 +1041,3 @@ export default function AreaTrabalhoOrganizador({ tela = "visao-geral" }: { tela
 <section id="recebimentos" className={g.secao}><header className={g.secaoCabecalho}><div><h2>Conta de recebimento</h2><p>Mercado Pago da sua organização.</p></div></header><div className="space-y-4 p-5"><p className="text-sm text-emerald-200">{estadoConexaoMP === 'conectado' ? 'Mercado Pago conectado' : 'Conferir conexão Mercado Pago'}</p><p className="text-xs leading-6 text-zinc-300">Nas vendas por diária, o pagamento entra nesta conta e você combina o repasse com o fotógrafo. Nas vendas por royalty, o fotógrafo recebe a venda e a sua participação fica registrada para repasse.</p>{estadoConexaoMP === 'conectado' && <MercadoPagoConnectButton conectado={mercadoPagoOrganizadorConectado} perfil="organizador_fotos" returnTo="/fotos/admin/perfil" className="rounded-xl bg-retratt px-4 py-3 text-xs font-bold text-black" />}</div></section></div></div>}
   </PainelOrganizador>;
 }
-

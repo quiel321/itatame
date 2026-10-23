@@ -1,4 +1,4 @@
-﻿import Link from "next/link";
+import Link from "@/app/fotos/_components/LinkFotos";
 import {
   ArrowRight,
   BrainCircuit,

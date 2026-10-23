@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import Link from '@/app/fotos/_components/LinkFotos';
 import { useState } from 'react';
 import { Download, RefreshCw } from 'lucide-react';
 import type { ResumoFotografoDiaria } from '@/app/lib/fotos-vendas-diaria';

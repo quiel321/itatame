@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/app/fotos/_components/LinkFotos";
 import LinkGaleria from "@/app/fotos/_components/LinkGaleria";
 import { notFound } from "next/navigation";
 import { Camera, CalendarDays, MapPin, Phone } from "lucide-react";

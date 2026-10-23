@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/app/fotos/_components/LinkFotos";
 import { FormEvent, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { CheckCircle2, Hash, Loader2, Search, ShoppingCart, X } from "lucide-react";

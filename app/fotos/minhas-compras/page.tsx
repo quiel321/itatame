@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/app/fotos/_components/LinkFotos";
 import { useEffect, useState, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useRouterFotos as useRouter } from "@/app/fotos/_components/useRouterFotos";
 import { supabase } from "@/app/lib/supabase";
 import { formatarPrecoFotos } from "@/app/lib/fotos";
 import { podeAcessarPerfilFotos, rotaLoginFotos } from "@/app/lib/fotos-acesso";

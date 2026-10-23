@@ -1,19 +1,21 @@
 "use client";
 
 import ControleComboIaGaleria from '@/app/fotos/_components/ControleComboIaGaleria';
-import Link from "next/link";
+import Link from "@/app/fotos/_components/LinkFotos";
 import VendasDiariaFotografos from '../../_components/VendasDiariaFotografos';
 import ControleEmBreveGaleria from '../../_components/ControleEmBreveGaleria';
 import { edicaoGaleriaConfirmada } from '@/app/lib/fotos-confirmar-edicao';
 import LinkGaleria from "@/app/fotos/_components/LinkGaleria";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouterFotos as useRouter } from "@/app/fotos/_components/useRouterFotos";
 import { supabase } from "@/app/lib/supabase";
 import { comprimirAvatarRetratt as comprimirAvatar, comprimirCapaRetratt } from "@/app/lib/fotos-preparar";
 import PainelFotografo from "./PainelFotografo";
+import FinanceiroFotografo from "./FinanceiroFotografo";
+import AcompanhamentoVendasFotos from "@/app/fotos/_components/AcompanhamentoVendasFotos";
 import VisaoGeralFotografo from "./VisaoGeralFotografo";
 import s from "./gestao.module.css";
-import { Camera, CheckCircle2, ChevronDown, CloudUpload, CreditCard, ImagePlus, ShieldCheck, LogOut, AlertCircle, X, Edit, Calendar, MapPin, Trash2, Loader2, Check, Plus, Images, Trophy, Link2 } from "lucide-react";
+import { Camera, CheckCircle2, ChevronDown, CloudUpload, CreditCard, ImagePlus, ShieldCheck, LogOut, AlertCircle, X, Edit, Calendar, MapPin, Trash2, Loader2, Check, Plus, Images, Trophy, Link2, RefreshCw } from "lucide-react";
 import MercadoPagoConnectButton from "@/app/admin/_components/MercadoPagoConnectButton";
 import GerenciadorMidias from "../_components/GerenciadorMidias";
 import EditorFaixasDesconto from "../../_components/EditorFaixasDesconto";
@@ -38,8 +40,11 @@ function perfilParaForm(perfil: FotografoPerfil | null, email: string | null): P
   return { nome: perfil?.nome || email?.split("@")[0] || "", telefone: perfil?.telefone || "", documento: perfil?.documento || "", cep: perfil?.cep || "", endereco: perfil?.endereco || "", cidade: perfil?.cidade || "", estado: perfil?.estado || "", bio: perfil?.bio || "", };
 }
 
-export default function AreaTrabalhoFotografo({ tela = "visao-geral" }: { tela?: "visao-geral" | "galerias" | "perfil" }) {
+export default function AreaTrabalhoFotografo({ tela = "visao-geral" }: { tela?: "visao-geral" | "galerias" | "perfil" | "vendas" | "financeiro" }) {
   const router = useRouter();
+  const [revisao, setRevisao] = useState(0), [erroCarregamento, setErroCarregamento] = useState('');
+  const telaAtual = useRef(tela);
+  useEffect(() => { telaAtual.current = tela; }, [tela]);
 
   const [userId, setUserId] = useState<string | null>(null);
   const [email, setEmail] = useState<string | null>(null);
@@ -99,17 +104,25 @@ export default function AreaTrabalhoFotografo({ tela = "visao-geral" }: { tela?:
   }, [router, tela]);
 
   useEffect(() => {
+    let cancelado = false;
     async function carregar() {
       setCarregando(true);
+      setErroCarregamento('');
       const { data: auth } = await supabase.auth.getUser();
+      if (cancelado) return;
       const user = auth.user;
 
       if (!user) {
-        router.replace(`/fotos/login?perfil=fotografo&next=${encodeURIComponent(`/fotos/fotografo/${tela === 'visao-geral' ? 'dashboard' : tela}`)}`);
+        router.replace(`/fotos/login?perfil=fotografo&next=${encodeURIComponent(`/fotos/fotografo/${telaAtual.current === 'visao-geral' ? 'dashboard' : telaAtual.current}`)}`);
         return;
       }
 
-      const { data: isOrg } = await supabase.from("organizadores").select("user_id").eq("user_id", user.id).maybeSingle();
+      const [org, tentativaCompleta] = await Promise.all([
+        supabase.from("organizadores").select("user_id").eq("user_id", user.id).maybeSingle(),
+        supabase.from("fotografos").select("id, nome, email, foto_url, telefone, documento, cep, endereco, cidade, estado, bio, perfil_completo, status, mp_connected_at, mp_user_id").eq("user_id", user.id).maybeSingle(),
+      ]);
+      if (cancelado) return;
+      const isOrg = org.data;
       if (isOrg) {
         router.replace("/fotos/admin");
         return;
@@ -119,7 +132,7 @@ export default function AreaTrabalhoFotografo({ tela = "visao-geral" }: { tela?:
       setEmail(user.email || null);
 
       let perfilAtual: FotografoPerfil | null = null;
-      const tentativaCompleta = await supabase.from("fotografos").select("id, nome, email, foto_url, telefone, documento, cep, endereco, cidade, estado, bio, perfil_completo, status, mp_connected_at, mp_user_id").eq("user_id", user.id).maybeSingle();
+
 
       if (tentativaCompleta.data) {
         perfilAtual = tentativaCompleta.data as FotografoPerfil;
@@ -128,6 +141,7 @@ export default function AreaTrabalhoFotografo({ tela = "visao-geral" }: { tela?:
         perfilAtual = (tentativaBasica.data as FotografoPerfil | null) || null;
       }
 
+      if (cancelado) return;
       if (!perfilAtual) {
         router.replace("/fotos/login?perfil=fotografo");
         return;
@@ -152,6 +166,7 @@ export default function AreaTrabalhoFotografo({ tela = "visao-geral" }: { tela?:
           galeriasDados = (fallback.data || []) as GaleriaFreelancer[];
         }
 
+        if (cancelado) return;
         setMinhasGalerias(galeriasDados);
 
         const eventosPermitidos = (credenciais.data || []).map((item) => item.evento_id);
@@ -190,6 +205,7 @@ export default function AreaTrabalhoFotografo({ tela = "visao-geral" }: { tela?:
              }));
         }
 
+        if (cancelado) return;
         setGaleriasOficiais(oficiaisDb);
         setTotais((atual) => ({
            ...atual,
@@ -200,10 +216,20 @@ export default function AreaTrabalhoFotografo({ tela = "visao-geral" }: { tela?:
         }));
       }
 
-      setCarregando(false);
+      if (!cancelado) setCarregando(false);
     }
-    void carregar();
-  }, [router, tela]);
+    void carregar().catch(() => { if (!cancelado) { setErroCarregamento('Não foi possível carregar o painel. Tente atualizar novamente.'); setCarregando(false); } });
+    return () => { cancelado = true; };
+  }, [router, revisao]);
+
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT' || (event === 'SIGNED_IN' && userId && session?.user.id !== userId)) {
+        setCarregando(true); setUserId(null); setRevisao(v => v + 1);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [userId]);
 
   useEffect(() => {
     if (carregando || tela === "visao-geral") return;
@@ -470,12 +496,15 @@ export default function AreaTrabalhoFotografo({ tela = "visao-geral" }: { tela?:
     );
   }
 
-  const titulos = { 'visao-geral': 'Visão geral', galerias: 'Galerias e mídias', perfil: 'Perfil e conta' };
+  const titulos = { 'visao-geral': 'Visão geral', galerias: 'Galerias e mídias', perfil: 'Perfil e conta', vendas: 'Vendas e pedidos', financeiro: 'Financeiro' };
   return <PainelFotografo pagina={tela} titulo={titulos[tela]} nome={nomeExibicao} fotoUrl={perfil?.foto_url}
-    descricao={tela === 'visao-geral' ? 'Acompanhe seus trabalhos e consulte os resultados das suas vendas.' : tela === 'galerias' ? 'Publique arquivos, organize álbuns e gerencie as galerias em que você participa.' : 'Atualize seu cadastro e gerencie a conta de recebimento.'}
-    acoes={tela === 'visao-geral' ? <Link href="/fotos/fotografo/galerias#criar-galeria" className={s.primario}><Plus size={15} /> Nova galeria</Link> : tela === 'perfil' ? <button type="button" onClick={deslogar} className={s.botao}><LogOut size={14} /> Sair da conta</button> : undefined}>
+    descricao={tela === 'visao-geral' ? 'Acompanhe seus trabalhos e consulte os resultados das suas vendas.' : tela === 'galerias' ? 'Publique arquivos, organize álbuns e gerencie as galerias em que você participa.' : tela === 'financeiro' ? 'Confira vendas, comissões e tarifas por forma de recebimento.' : tela === 'vendas' ? 'Acompanhe seus arquivos e pagamentos por galeria.' : 'Atualize seu cadastro e gerencie a conta de recebimento.'}
+    acoes={<><button type="button" className={s.botao} onClick={() => setRevisao(v => v + 1)}><RefreshCw size={14} /> Atualizar painel</button>{tela === 'visao-geral' ? <Link href="/fotos/fotografo/galerias#criar-galeria" className={s.primario}><Plus size={15} /> Nova galeria</Link> : tela === 'perfil' ? <button type="button" onClick={deslogar} className={s.botao}><LogOut size={14} /> Sair da conta</button> : undefined}</>}>
+    {erroCarregamento && <p role="alert" className={s.aviso}>{erroCarregamento}</p>}
     {carregando ? <p role="status" className={s.vazio}>Carregando seu painel…</p> : <>
-      {tela === 'visao-geral' && <><VisaoGeralFotografo totais={totais} proprias={minhasGalerias} convidadas={galeriasOficiais} perfilPendente={perfilPendente} mercadoPagoConectado={mercadoPagoConectado} />{perfil?.id && <VendasDiariaFotografos perfil="fotografo" resumido />}</>}
+      <section hidden={tela !== 'financeiro'} aria-label="Financeiro do fotógrafo"><FinanceiroFotografo semPainel ativo={tela === 'financeiro'} /></section>
+      <section hidden={tela !== 'vendas'} aria-label="Pedidos do fotógrafo"><AcompanhamentoVendasFotos perfil="fotografo" semPainel ativo={tela === 'vendas'} /></section>
+      <section hidden={tela !== 'visao-geral'} aria-label="Visão geral do fotógrafo"><VisaoGeralFotografo totais={totais} proprias={minhasGalerias} convidadas={galeriasOficiais} perfilPendente={perfilPendente} mercadoPagoConectado={mercadoPagoConectado} />{perfil?.id && <VendasDiariaFotografos perfil="fotografo" resumido ativo={tela === 'visao-geral'} />}</section>
       {tela === 'galerias' && <div className={s.operacao}>          <div className="space-y-6 w-full min-w-0">
             {!userId ? null : (
               <>

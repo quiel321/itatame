@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/app/fotos/_components/LinkFotos';
 import s from './gestao.module.css';
 
 type GaleriaResumo = { id: string; nome: string; cidade?: string | null; estado?: string | null; data_evento?: string | null; modelo_recebimento?: string };

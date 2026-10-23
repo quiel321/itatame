@@ -1,8 +1,8 @@
-﻿"use client";
+"use client";
 import { caminhoPortfolioOrganizador } from '@/app/lib/fotos-portfolio-url';
 import { linkCompartilhamentoGaleria } from '@/app/lib/fotos-compartilhamento';
 
-import Link from "next/link";
+import Link from "@/app/fotos/_components/LinkFotos";
 import { resumirFotoGaleria, type FotoGaleria } from "@/app/lib/fotos-galeria";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";

@@ -1,5 +1,5 @@
 'use client';
-import Link from 'next/link';
+import Link from '@/app/fotos/_components/LinkFotos';
 import {useState,useSyncExternalStore,type ComponentProps} from 'react';
 import {destinoGaleriaRetratt} from '@/app/lib/fotos-navegacao';
 const escutar=()=>()=>{};

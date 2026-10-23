@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/app/fotos/_components/LinkFotos";
 import { guardarOfertasComboIa, lerOfertasComboIa, type OfertaComboIa } from '@/app/lib/fotos-combo-ia';
 import { formatarPrecoFotos } from '@/app/lib/fotos';
 import { correspondenciaSegura } from '@/app/lib/fotos-busca-criterios';

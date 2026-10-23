@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import Link from '@/app/fotos/_components/LinkFotos';
 import { useState, type ReactNode } from 'react';
 import { ArrowUpRight, Camera, CircleDollarSign, FolderOpen, LayoutDashboard, LogOut, Menu, ReceiptText, UserRound, X } from 'lucide-react';
 import { supabase } from '@/app/lib/supabase';

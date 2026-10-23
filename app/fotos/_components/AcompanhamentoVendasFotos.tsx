@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouterFotos as useRouter } from '@/app/fotos/_components/useRouterFotos';
 import { ArrowUpRight, CheckCircle2, Clock3, Copy, FileText, Loader2, RefreshCw, Search, X } from 'lucide-react';
 import { supabase } from '@/app/lib/supabase';
 import { ROTULOS_PEDIDO_FOTOS, type PedidoFotosPainel } from '@/app/lib/fotos-acompanhamento';
@@ -90,13 +90,13 @@ function JanelaPedido({ pedido, perfil, consultar, fechar }: { pedido: PedidoFot
   </dialog>;
 }
 
-export default function AcompanhamentoVendasFotos({ perfil, semPainel = false }: { perfil: Perfil; semPainel?: boolean }) {
+export default function AcompanhamentoVendasFotos({ perfil, semPainel = false, ativo = true }: { perfil: Perfil; semPainel?: boolean; ativo?: boolean }) {
   const router = useRouter();
   const [dados, setDados] = useState<Dados | null>(null), [carregando, setCarregando] = useState(true), [erro, setErro] = useState('');
   const [galeria, setGaleria] = useState(''), [busca, setBusca] = useState(''), [filtro, setFiltro] = useState('todos'), [pagina, setPagina] = useState(1);
   const [selecionado, setSelecionado] = useState<PedidoFotosPainel | null>(null);
   const sequencia = useRef(0), proprio = perfil === 'fotografo';
-  useEffect(() => { const id = new URLSearchParams(window.location.search).get('galeria'); if (!id || !/^[a-f0-9-]{36}$/i.test(id)) return; const timer = window.setTimeout(() => setGaleria(id), 0); return () => window.clearTimeout(timer); }, [perfil]);
+  useEffect(() => { if (!ativo) return; const id = new URLSearchParams(window.location.search).get('galeria'); if (!id || !/^[a-f0-9-]{36}$/i.test(id)) return; const timer = window.setTimeout(() => setGaleria(id), 0); return () => window.clearTimeout(timer); }, [perfil, ativo]);
   const consultar = useCallback(async <T,>(extra: Record<string, string> = {}, signal?: AbortSignal): Promise<T> => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) { router.replace(`/fotos/login?perfil=${perfil}&next=${encodeURIComponent(proprio ? '/fotos/fotografo/vendas' : '/fotos/admin/vendas')}`); throw new Error('Entre na sua conta para continuar.'); }
@@ -114,7 +114,7 @@ export default function AcompanhamentoVendasFotos({ perfil, semPainel = false }:
     catch (e) { if (!signal?.aborted && atual === sequencia.current) setErro(e instanceof Error ? e.message : 'Consulta indisponível.'); }
     finally { if (!signal?.aborted && atual === sequencia.current) setCarregando(false); }
   }, [consultar]);
-  useEffect(() => { const c = new AbortController(); const timer = window.setTimeout(() => void carregar(c.signal), 0); return () => { window.clearTimeout(timer); c.abort(); }; }, [carregar]);
+  useEffect(() => { if (!ativo) return; const c = new AbortController(); const timer = window.setTimeout(() => void carregar(c.signal), 0); return () => { window.clearTimeout(timer); c.abort(); }; }, [carregar, ativo]);
   const pedidos = useMemo(() => dados?.pedidos || [], [dados]);
   const resumo = useMemo(() => {
     const pagos = pedidos.filter(p => p.situacao === 'pago');
@@ -129,7 +129,7 @@ export default function AcompanhamentoVendasFotos({ perfil, semPainel = false }:
     {erro && <p role="alert" className="rounded-xl border border-orange-400/20 bg-orange-400/10 p-4 text-xs text-orange-100">{erro}</p>}
     {dados?.parcial && <p className="rounded-xl border border-amber-400/20 p-3 text-xs text-amber-200">Exibindo os {dados.limite} pedidos mais recentes desta galeria. Os totais abaixo correspondem a esse recorte. Lembretes estão desativados porque o histórico pode estar incompleto.</p>}
     {!proprio && dados?.galeriaId && <TarifasMercadoPago galeria={dados.galeriaId} />}
-    {carregando ? <div role="status" className="flex min-h-48 items-center justify-center gap-3 text-sm text-zinc-400"><Loader2 className="animate-spin" size={22} /> Consultando seus pedidos…</div> : dados && <>
+    {carregando && !dados ? <div role="status" className="flex min-h-48 items-center justify-center gap-3 text-sm text-zinc-400"><Loader2 className="animate-spin" size={22} /> Consultando seus pedidos…</div> : dados && <>
       {resumo.semValores > 0 && <p className="rounded-xl border border-amber-400/20 p-3 text-xs text-amber-200">{resumo.semValores} pedido(s) pago(s) não têm valores que puderam ser conferidos. Esses valores não foram incluídos na soma abaixo.</p>}
       <dl className={s.linhaResumo}>{[['Vendas pagas', `${resumo.pagos} · ${resumo.arquivos} arquivo(s)`], [proprio ? 'Suas vendas após descontos' : 'Vendas após descontos', moeda(resumo.total)], ['Pix aguardando pagamento', String(resumo.pix)], ['Checkouts iniciados', String(resumo.checkouts)]].map(([titulo, valor]) => <div key={titulo} className={undefined}><dt className="text-[10px] leading-4 text-zinc-400">{titulo}</dt><dd className="mt-2 break-words text-lg font-black sm:text-xl">{valor}</dd></div>)}</dl>
       <div className="flex flex-wrap gap-2" role="group" aria-label="Filtrar situação dos pedidos">{[['todos', 'Todos'], ['pago', 'Pagos'], ['pix_pendente', 'Pix pendentes'], ['checkout_iniciado', 'Checkouts iniciados'], ['relacionados', `Compras relacionadas (${resumo.conferir})`], ['cobranca_gerada', 'Outras cobranças'], ['cancelado', 'Cancelados'], ['reembolsado', 'Reembolsados']].map(([id, nome]) => <button type="button" key={id} aria-pressed={filtro === id} onClick={() => { setFiltro(id); setPagina(1); }} className={`min-h-10 rounded-xl border px-3 py-2 text-[11px] font-bold ${filtro === id ? 'border-retratt bg-retratt text-black' : 'border-white/10 text-zinc-400 hover:text-white'}`}>{nome}</button>)}</div>
@@ -137,7 +137,7 @@ export default function AcompanhamentoVendasFotos({ perfil, semPainel = false }:
       {filtrados.length > 20 && <nav aria-label="Páginas dos pedidos" className="flex items-center justify-between gap-3 text-xs"><button className={botao} disabled={pagina === 1} onClick={() => setPagina(p => p - 1)}>Anterior</button><span>{pagina} / {Math.ceil(filtrados.length / 20)}</span><button className={botao} disabled={pagina * 20 >= filtrados.length} onClick={() => setPagina(p => p + 1)}>Próxima</button></nav>}
       <p className="flex items-start gap-2 text-[10px] leading-5 text-zinc-500"><CheckCircle2 size={13} className="mt-1 shrink-0" />Conferido em {quando(dados.atualizadoEm)}. Atualize para buscar novas compras. Pagamentos e entregas continuam sendo processados pelo fluxo normal da Retratt.</p>
     </>}
-    {selecionado && <JanelaPedido key={selecionado.id} pedido={selecionado} perfil={perfil} consultar={consultar} fechar={() => setSelecionado(null)} />}
+    {ativo && selecionado && <JanelaPedido key={selecionado.id} pedido={selecionado} perfil={perfil} consultar={consultar} fechar={() => setSelecionado(null)} />}
   </div>;
   if (semPainel) return <><div className="mb-4 flex justify-end"><button type="button" className={s.botao} disabled={carregando} onClick={() => void carregar()}><RefreshCw size={14} /> Atualizar pedidos</button></div>{conteudo}</>;
   return proprio ? <PainelFotografo pagina="vendas" titulo="Vendas e pedidos" descricao="Acompanhe pagamentos e a entrega dos seus arquivos por galeria. Abra um pedido para conferir os detalhes da sua participação." acoes={<button type="button" disabled={carregando} onClick={() => void carregar()} className={s.botao}><RefreshCw size={14} className={carregando ? 'animate-spin' : ''} /> Atualizar pedidos</button>}>{conteudo}</PainelFotografo> : <PainelOrganizador tela="vendas" titulo="Vendas e pedidos" descricao="Acompanhe compradores, pagamentos e a entrega das mídias. Pix pendente e checkout iniciado aparecem separados." acoes={<button type="button" disabled={carregando} onClick={() => void carregar()} className={s.botao}><RefreshCw size={14} className={carregando ? 'animate-spin' : ''} /> Atualizar pedidos</button>}>{conteudo}</PainelOrganizador>;

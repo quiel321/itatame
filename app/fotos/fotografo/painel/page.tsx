@@ -1,8 +1,8 @@
-﻿"use client";
+"use client";
 
-import Link from "next/link";
+import Link from "@/app/fotos/_components/LinkFotos";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouterFotos as useRouter } from "@/app/fotos/_components/useRouterFotos";
 import { ACCEPT_MIDIAS_RETRATT, FOTO_ORIGEM_MAX_BYTES, TIPOS_FOTO_RETRATT, normalizarMidiaRetratt } from "@/app/lib/fotos-formatos";
 import { otimizarFotoParaUpload } from "@/app/lib/fotos-preparar";
 import { FOTO_IA_MAX_BYTES, FOTO_IA_MAX_DIMENSAO } from "@/app/lib/fotos-ai";

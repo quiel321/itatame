@@ -1,5 +1,5 @@
 "use client";
-import Link from 'next/link';
+import Link from '@/app/fotos/_components/LinkFotos';
 import { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/app/lib/supabase';
 import { lerCarrinhoFotos, pagamentosFotosPendentes, retirarFotosCompradas, retirarPagamentoFotos } from '@/app/lib/fotos-carrinho-pagamentos';

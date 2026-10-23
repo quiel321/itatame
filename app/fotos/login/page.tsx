@@ -1,8 +1,8 @@
-﻿"use client";
+"use client";
 
-import Link from "next/link";
+import Link from "@/app/fotos/_components/LinkFotos";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useRouterFotos as useRouter } from "@/app/fotos/_components/useRouterFotos";
 import { supabase } from "@/app/lib/supabase";
 import { podeAcessarPerfilFotos } from "@/app/lib/fotos-acesso";
 import FotosShell from "../_components/FotosShell";

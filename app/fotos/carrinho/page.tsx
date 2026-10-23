@@ -1,10 +1,10 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/app/fotos/_components/LinkFotos";
 import { guardarOfertasComboIa, lerOfertasComboIa, type OfertaComboIa } from '@/app/lib/fotos-combo-ia';
 import PacoteIaCarrinho from '../_components/PacoteIaCarrinho';
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouterFotos as useRouter } from "@/app/fotos/_components/useRouterFotos";
 import { supabase } from "@/app/lib/supabase";
 import { formatarPrecoFotos } from "@/app/lib/fotos";
 import { calcularDescontoFotos, faixasDoEvento, type FaixaDesconto } from "@/app/lib/fotos-descontos";

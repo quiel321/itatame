@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useEffect, useSyncExternalStore } from "react";
-import Link from "next/link";
+import Link from "@/app/fotos/_components/LinkFotos";
 import Image from 'next/image';
 import { ShoppingBag, ArrowUpRight } from 'lucide-react';
 import FotosNavbar from "./FotosNavbar";

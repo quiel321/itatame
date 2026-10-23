@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import Link from '@/app/fotos/_components/LinkFotos';
 import { useState } from 'react';
 import { ArrowUpRight, Globe2 } from 'lucide-react';
 import g from '@/app/fotos/fotografo/_components/gestao.module.css';
