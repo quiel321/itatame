@@ -7,6 +7,7 @@ import { consumirLimiteAuth, ipDaRequisicao } from '@/app/lib/limite-auth';
 import { cpfValido, variantesCpf } from '@/app/lib/validar-cpf';
 import { decidirVinculoProfessor } from '@/app/lib/vincular-professor';
 import { validarNascimentoTitular } from '@/app/lib/idade-cadastro';
+import { salvarMidiaPublica } from '@/app/lib/midia-publica-servidor';
 
 import { academiaPreenchida, equipePreenchida } from '@/app/lib/alunos-sugeridos';
 
@@ -230,15 +231,12 @@ export async function POST(request: Request) {
         await supabase.auth.admin.deleteUser(data.user.id);
         return NextResponse.json({ error: "A foto deve ser uma imagem de até 5 MB." }, { status: 400 });
       }
-      const ext = (foto.name.split(".").pop() || "jpg").replace(/[^a-zA-Z0-9]/g, "").slice(0, 5);
-      const caminho = `organizadores/${data.user.id}-${Date.now()}.${ext}`;
-      const bytes = Buffer.from(await foto.arrayBuffer());
-      const { error: uploadError } = await supabase.storage.from("avatars").upload(caminho, bytes, { contentType: foto.type, upsert: false });
-      if (uploadError) {
+      try {
+        fotoUrl = (await salvarMidiaPublica(Buffer.from(await foto.arrayBuffer()), 'avatar')).publicUrl;
+      } catch {
         await supabase.auth.admin.deleteUser(data.user.id);
         return NextResponse.json({ error: "Não foi possível salvar a foto do perfil." }, { status: 500 });
       }
-      fotoUrl = supabase.storage.from("avatars").getPublicUrl(caminho).data.publicUrl;
     }
 
     const resultado = perfil === "organizador"

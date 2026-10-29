@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import imageCompression from "browser-image-compression";
+import { enviarMidiaPublica } from '@/app/lib/enviar-midia-publica';
 import {
   ArrowLeft,
   CalendarDays,
@@ -346,32 +347,15 @@ export default function EventoForm({ modo, eventoId }: EventoFormProps) {
       let finalTabelaPesoUrl = tabelaPesoAtualUrl;
 
       if (bannerFile) {
-        const fileExt = bannerFile.type.split("/")[1] || "webp";
-        const filePath = editando
-          ? "banners/banner-" + eventoId + "-" + Date.now() + "." + fileExt
-          : "banners/banner-" + Date.now() + "." + fileExt;
-        const { error: uploadError } = await supabase.storage.from("eventos").upload(filePath, bannerFile, { upsert: false });
-        if (uploadError) throw new Error("Erro no upload do banner: " + uploadError.message);
-        finalBannerUrl = supabase.storage.from("eventos").getPublicUrl(filePath).data.publicUrl;
+        finalBannerUrl = await enviarMidiaPublica(bannerFile, 'banner');
       }
 
       if (regulamentoFile) {
-        const fileExt = regulamentoFile.name.split(".").pop() || "pdf";
-        const filePath = editando
-          ? "regulamentos/reg-" + eventoId + "-" + Date.now() + "." + fileExt
-          : "regulamentos/reg-" + Date.now() + "." + fileExt;
-        const { error: uploadError } = await supabase.storage.from("eventos").upload(filePath, regulamentoFile, { upsert: false });
-        if (uploadError) throw new Error("Erro no upload do cronograma: " + uploadError.message);
-        finalRegulamentoUrl = supabase.storage.from("eventos").getPublicUrl(filePath).data.publicUrl;
+        finalRegulamentoUrl = await enviarMidiaPublica(regulamentoFile, 'documento');
       }
 
       if (tabelaPesoFile) {
-        const filePath = editando
-          ? "regulamentos/tabela-peso-" + eventoId + "-" + Date.now() + ".pdf"
-          : "regulamentos/tabela-peso-" + Date.now() + ".pdf";
-        const { error: uploadError } = await supabase.storage.from("eventos").upload(filePath, tabelaPesoFile, { contentType: "application/pdf", upsert: false });
-        if (uploadError) throw new Error("Erro no upload da tabela de peso: " + uploadError.message);
-        finalTabelaPesoUrl = supabase.storage.from("eventos").getPublicUrl(filePath).data.publicUrl;
+        finalTabelaPesoUrl = await enviarMidiaPublica(tabelaPesoFile, 'documento');
       }
 
       const regrasPontuacaoEquipes: RegrasPontuacao = {

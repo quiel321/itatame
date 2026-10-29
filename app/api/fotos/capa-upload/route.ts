@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
+import { salvarMidiaPublica } from '@/app/lib/midia-publica-servidor';
 
 export const runtime = "nodejs";
 
@@ -23,10 +24,10 @@ export async function POST(request: Request) {
   if (!(file instanceof File)) return NextResponse.json({ error: "Selecione uma imagem." }, { status: 400 });
   if (!TIPOS.has(file.type) || file.size > MAX_BYTES) return NextResponse.json({ error: "Use JPG, PNG ou WebP de até 10 MB." }, { status: 400 });
 
-  const extensao = file.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
-  const caminho = `fotos/${auth.user.id}/capa-${crypto.randomUUID()}.${extensao}`;
-  const { error } = await supabase.storage.from("eventos").upload(caminho, file, { contentType: file.type, upsert: false });
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  const publicUrl = supabase.storage.from("eventos").getPublicUrl(caminho).data.publicUrl;
-  return NextResponse.json({ publicUrl });
+  try {
+    const { publicUrl } = await salvarMidiaPublica(Buffer.from(await file.arrayBuffer()), 'capa', 'retratt');
+    return NextResponse.json({ publicUrl });
+  } catch {
+    return NextResponse.json({ error: 'Não foi possível enviar a capa. Tente novamente.' }, { status: 400 });
+  }
 }
