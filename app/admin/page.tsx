@@ -8,6 +8,7 @@ import { obterEventoOrganizador, guardarEventoOrganizador } from '@/app/lib/even
 import { Suspense, useEffect, useState, useRef } from "react";
 import AvisoProgramacaoConcluida from './_components/AvisoProgramacaoConcluida';
 import { supabase } from "../lib/supabase";
+import { enviarMidiaPublica } from '@/app/lib/enviar-midia-publica';
 import CidadeEstadoInput from "@/app/components/CidadeEstadoInput";
 import { comprimirAvatar } from "../lib/comprimir-avatar";
 import { getPlanoComercial } from "../lib/planos-comerciais";
@@ -365,14 +366,7 @@ export default function AdminPage() {
 
       if (novaFoto && currentUserId) {
         const leve = await comprimirAvatar(novaFoto);
-        const fileName = `${currentUserId}-${Date.now()}.webp`;
-        const filePath = `organizadores/${fileName}`;
-
-        const { error: uploadError } = await supabase.storage.from('avatars').upload(filePath, leve, { contentType: 'image/webp' });
-        if (uploadError) throw uploadError;
-
-        const { data: publicUrlData } = supabase.storage.from('avatars').getPublicUrl(filePath);
-        fotoUrlFinal = publicUrlData.publicUrl;
+        fotoUrlFinal = await enviarMidiaPublica(leve, 'avatar');
       }
 
       const { error: updateError } = await supabase

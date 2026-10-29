@@ -30,16 +30,23 @@ function canonicalQuery(params: Record<string, string>) {
     .join("&");
 }
 
-export function r2Config() {
-  const endpoint = requireEnv("R2_ENDPOINT").replace(/\/$/, "");
-  const bucket = requireEnv("R2_BUCKET_NAME");
-  const accessKeyId = requireEnv("R2_ACCESS_KEY_ID");
-  const secretAccessKey = requireEnv("R2_SECRET_ACCESS_KEY");
+export type R2Escopo = 'itatame' | 'retratt';
+
+export function r2Config(escopo: R2Escopo = 'retratt') {
+  const prefixo = escopo === 'itatame' ? 'R2_ITATAME_' : 'R2_RETRATT_';
+  const endpoint = (process.env[`${prefixo}ENDPOINT`] || requireEnv("R2_ENDPOINT")).replace(/\/$/, "");
+  // O bucket legado pertence ao Retratt. iTatame exige destino próprio.
+  const bucket = process.env[`${prefixo}BUCKET_NAME`] || (escopo === 'retratt' ? requireEnv("R2_BUCKET_NAME") : requireEnv('R2_ITATAME_BUCKET_NAME'));
+  const accessKeyId = process.env[`${prefixo}ACCESS_KEY_ID`] || requireEnv("R2_ACCESS_KEY_ID");
+  const secretAccessKey = process.env[`${prefixo}SECRET_ACCESS_KEY`] || requireEnv("R2_SECRET_ACCESS_KEY");
+  if (escopo === 'itatame' && bucket === (process.env.R2_RETRATT_BUCKET_NAME || process.env.R2_BUCKET_NAME)) {
+    throw new Error('iTatame e Retratt precisam usar buckets diferentes.');
+  }
   return { endpoint, bucket, accessKeyId, secretAccessKey };
 }
 
-function createR2PresignedUrl(key: string, method: "GET" | "PUT" | "DELETE", expiresSeconds = 900, responseHeaders: Record<string, string> = {}) {
-  const { endpoint, bucket, accessKeyId, secretAccessKey } = r2Config();
+function createR2PresignedUrl(key: string, method: "GET" | "PUT" | "DELETE", expiresSeconds = 900, responseHeaders: Record<string, string> = {}, escopo: R2Escopo = 'retratt') {
+  const { endpoint, bucket, accessKeyId, secretAccessKey } = r2Config(escopo);
   const url = new URL(endpoint);
   const host = url.host;
   const region = "auto";
@@ -79,12 +86,12 @@ function createR2PresignedUrl(key: string, method: "GET" | "PUT" | "DELETE", exp
   return `${endpoint}${canonicalUri}?${canonicalQuery({ ...queryParams, "X-Amz-Signature": signature })}`;
 }
 
-export function createR2PresignedPutUrl(key: string, expiresSeconds = 900) {
-  return createR2PresignedUrl(key, "PUT", expiresSeconds);
+export function createR2PresignedPutUrl(key: string, expiresSeconds = 900, escopo: R2Escopo = 'retratt') {
+  return createR2PresignedUrl(key, "PUT", expiresSeconds, {}, escopo);
 }
 
-export function createR2PresignedGetUrl(key: string, expiresSeconds = 300) {
-  return createR2PresignedUrl(key, "GET", expiresSeconds);
+export function createR2PresignedGetUrl(key: string, expiresSeconds = 300, escopo: R2Escopo = 'retratt') {
+  return createR2PresignedUrl(key, "GET", expiresSeconds, {}, escopo);
 }
 
 export function createR2PresignedDownloadUrl(key: string, nome: string, expiresSeconds = 120) {
@@ -109,8 +116,8 @@ export async function deleteR2Object(key: string) {
   }
 }
 
-export async function getR2ObjectBytes(key: string, maxBytes = 10 * 1024 * 1024) {
-  const response = await fetch(createR2PresignedGetUrl(key, 300), { cache: "no-store" });
+export async function getR2ObjectBytes(key: string, maxBytes = 10 * 1024 * 1024, escopo: R2Escopo = 'retratt') {
+  const response = await fetch(createR2PresignedGetUrl(key, 300, escopo), { cache: "no-store", signal: AbortSignal.timeout(30000) });
   if (!response.ok) {
     const error = new Error(`Falha ao ler objeto do R2 (${response.status}).`) as Error & { status?: number };
     error.status = response.status;
@@ -134,14 +141,15 @@ export async function tryGetR2ObjectBytes(key: string, maxBytes = 10 * 1024 * 10
   }
 }
 
-export async function putR2Object(key: string, body: Buffer | Uint8Array, contentType: string) {
+export async function putR2Object(key: string, body: Buffer | Uint8Array, contentType: string, cacheControl?: string, escopo: R2Escopo = 'retratt') {
   const payload = new ArrayBuffer(body.byteLength);
   new Uint8Array(payload).set(body);
-  const response = await fetch(createR2PresignedPutUrl(key, 300), {
+  const response = await fetch(createR2PresignedPutUrl(key, 300, escopo), {
     method: "PUT",
-    headers: { "Content-Type": contentType },
+    headers: { "Content-Type": contentType, ...(cacheControl ? { "Cache-Control": cacheControl } : {}) },
     body: payload,
     cache: "no-store",
+    signal: AbortSignal.timeout(30000),
   });
 
   if (!response.ok) throw new Error(`Falha ao gravar objeto no R2 (${response.status}).`);

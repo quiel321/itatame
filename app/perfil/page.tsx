@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { supabase } from "../lib/supabase";
+import { enviarMidiaPublica } from '@/app/lib/enviar-midia-publica';
 import { calcularResultadosChaves } from "../lib/ranking-eventos";
 import QRCode from "react-qr-code";
 import { formatarTelefone } from '@/app/lib/formatar-telefone';
@@ -600,12 +601,9 @@ export default function PerfilPage() {
 
   async function enviarFotoAvatar(alvoUserId: string, arquivo: File) {
     const compressedFile = await comprimirAvatar(arquivo);
-    const fileName = `avatar-${userId}-${alvoUserId}-${Date.now()}.webp`;
-    const { error: uploadError } = await supabase.storage.from('avatars').upload(fileName, compressedFile, { contentType: 'image/webp', upsert: false });
-    if (uploadError) throw uploadError;
-    const { data: publicUrlData } = supabase.storage.from('avatars').getPublicUrl(fileName);
-    const url = publicUrlData.publicUrl;
-    await supabase.from('atletas').update({ foto_url: url }).eq('user_id', alvoUserId);
+    const url = await enviarMidiaPublica(compressedFile, 'avatar');
+    const { error } = await supabase.from('atletas').update({ foto_url: url }).eq('user_id', alvoUserId);
+    if (error) throw error;
     return url;
   }
 

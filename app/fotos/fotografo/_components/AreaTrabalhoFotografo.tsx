@@ -9,6 +9,7 @@ import LinkGaleria from "@/app/fotos/_components/LinkGaleria";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouterFotos as useRouter } from "@/app/fotos/_components/useRouterFotos";
 import { supabase } from "@/app/lib/supabase";
+import { enviarMidiaPublica } from '@/app/lib/enviar-midia-publica';
 import { comprimirAvatarRetratt as comprimirAvatar, comprimirCapaRetratt } from "@/app/lib/fotos-preparar";
 import PainelFotografo from "./PainelFotografo";
 import FinanceiroFotografo from "./FinanceiroFotografo";
@@ -273,10 +274,7 @@ export default function AreaTrabalhoFotografo({ tela = "visao-geral" }: { tela?:
     setEnviandoFoto(true);
     try {
       const leve = await comprimirAvatar(file);
-      const caminho = `fotos-fotografos/${userId}/perfil-${Date.now()}.jpg`;
-      const { error: uploadError } = await supabase.storage.from("avatars").upload(caminho, leve, { contentType: leve.type, upsert: false });
-      if (uploadError) throw uploadError;
-      const fotoUrl = supabase.storage.from("avatars").getPublicUrl(caminho).data.publicUrl;
+      const fotoUrl = await enviarMidiaPublica(leve, 'avatar', 'retratt');
       const { error } = await supabase.from("fotografos").update({ foto_url: fotoUrl }).eq("id", perfil.id).eq("user_id", userId);
       if (error) throw error;
       setPerfil({ ...perfil, foto_url: fotoUrl });

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import sharp from 'sharp';
+import { salvarMidiaPublica } from '@/app/lib/midia-publica-servidor';
 import { autenticarRequest } from '@/app/lib/api-auth';
 import { createSupabaseServerClient } from '@/app/lib/supabase-server';
 
@@ -69,12 +70,7 @@ export async function POST(request: Request) {
 
   try {
     const webp = await comprimirLogoLeve(Buffer.from(await arquivo.arrayBuffer()));
-    const destino = tipo === 'academia'
-      ? `equipes/${eventoId}/academia-${academiaId || equipeId}.webp`
-      : `equipes/${eventoId}/${equipeId}.webp`;
-    const { error: uploadError } = await db.storage.from('avatars').upload(destino, webp, { contentType: 'image/webp', upsert: true });
-    if (uploadError) return NextResponse.json({ error: 'Não foi possível enviar a logo.' }, { status: 500 });
-    const logoUrl = `${db.storage.from('avatars').getPublicUrl(destino).data.publicUrl}?v=${Date.now()}`;
+    const { publicUrl: logoUrl } = await salvarMidiaPublica(webp, 'avatar');
 
     if (tipo === 'academia' && academiaId && !academiaId.startsWith('equipe-')) {
       const { data: vinculo, error } = await db.from('solicitacoes_equipe_evento').update({ logo_url: logoUrl }).eq('id', academiaId).eq('evento_id', eventoId).eq('equipe_id', equipeId).select('academia').maybeSingle();

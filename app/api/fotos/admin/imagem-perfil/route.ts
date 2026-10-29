@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/app/lib/supabase-server";
+import { salvarMidiaPublica } from '@/app/lib/midia-publica-servidor';
 
 export const runtime = "nodejs";
 
@@ -28,18 +29,16 @@ export async function POST(request: Request) {
     .select("id").eq("id", auth.user.id).maybeSingle();
   if (perfilError || !perfil) return NextResponse.json({ error: "Perfil de organizador não encontrado." }, { status: 404 });
 
-  const extensao=file.type==='image/jpeg'?'jpg':'webp';
-  const caminho = `fotos-organizadores/${auth.user.id}/${tipo}-${crypto.randomUUID()}.${extensao}`;
-  const { error: uploadError } = await supabase.storage.from("avatars")
-    .upload(caminho, file, { contentType: file.type, upsert: false });
-  if (uploadError) return NextResponse.json({ error: uploadError.message }, { status: 500 });
-
-  const publicUrl = supabase.storage.from("avatars").getPublicUrl(caminho).data.publicUrl;
+  let publicUrl: string;
+  try {
+    publicUrl = (await salvarMidiaPublica(Buffer.from(await file.arrayBuffer()), tipo, 'retratt')).publicUrl;
+  } catch {
+    return NextResponse.json({ error: 'Não foi possível enviar a imagem. Tente novamente.' }, { status: 400 });
+  }
   const coluna = tipo === "avatar" ? "avatar_url" : "capa_url";
   const { data: atualizado, error: updateError } = await supabase.from("foto_organizadores")
     .update({ [coluna]: publicUrl }).eq("id", auth.user.id).select("id, avatar_url, capa_url").maybeSingle();
   if (updateError || !atualizado || atualizado[coluna] !== publicUrl) {
-    await supabase.storage.from("avatars").remove([caminho]);
     return NextResponse.json({ error: updateError?.message || "Não foi possível salvar a imagem no perfil público." }, { status: 500 });
   }
 

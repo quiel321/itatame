@@ -86,7 +86,7 @@ export function capaOgPermitida(url: string | null): url is string {
 
 function hostsDeCapaPermitidos() {
   const hosts = new Set<string>();
-  for (const base of [process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_BASE_URL || "https://www.itatame.com.br"]) {
+  for (const base of [process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_BASE_URL || "https://www.itatame.com.br", process.env.MIDIA_PUBLICA_BASE_URL || 'https://itatame.com.br', process.env.NEXT_PUBLIC_FOTOS_URL || 'https://retratt.com', process.env.R2_ITATAME_PUBLIC_BASE_URL, process.env.R2_RETRATT_PUBLIC_BASE_URL]) {
     try {
       if (base) hosts.add(new URL(base).host);
     } catch {
