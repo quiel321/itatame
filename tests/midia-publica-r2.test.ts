@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import sharp from 'sharp';
-import { enderecoMidiaPublica, prepararMidiaPublica, salvarMidiaPublica } from '../app/lib/midia-publica-servidor';
+import { baseMidiaPublica, enderecoMidiaPublica, prepararMidiaPublica, salvarMidiaPublica } from '../app/lib/midia-publica-servidor';
 import { origemPublicaSupabase, chaveMidiaPublica } from '../app/lib/midia-publica';
 import { r2Config, createR2PresignedGetUrl } from '../app/lib/r2';
 import { GET, HEAD } from '../app/api/midia-publica/[escopo]/[arquivo]/route';
@@ -23,6 +23,18 @@ async function simular(rodar: () => Promise<void>) {
 }
 const arquivo = 'a'.repeat(64) + '.webp';
 const ctx = (escopo = 'itatame', nome = arquivo) => ({ params: Promise.resolve({ escopo, arquivo: nome }) });
+
+test('URLs públicas usam os domínios canônicos e evitam o redirecionamento de www', () => {
+  const nomes = ['NEXT_PUBLIC_BASE_URL', 'NEXT_PUBLIC_FOTOS_URL', 'MIDIA_PUBLICA_BASE_URL'];
+  const anteriores = nomes.map(n => process.env[n]);
+  try {
+    delete process.env.MIDIA_PUBLICA_BASE_URL;
+    process.env.NEXT_PUBLIC_BASE_URL = 'https://www.itatame.com.br';
+    process.env.NEXT_PUBLIC_FOTOS_URL = 'https://www.retratt.com';
+    assert.equal(baseMidiaPublica('itatame'), 'https://itatame.com.br');
+    assert.equal(baseMidiaPublica('retratt'), 'https://retratt.com');
+  } finally { nomes.forEach((n, i) => { if (anteriores[i] === undefined) delete process.env[n]; else process.env[n] = anteriores[i]; }); }
+});
 
 test('avatares são WebP pequenos; banners preservam proporção; nomes mudam com o conteúdo', async () => {
   const entrada = await sharp({ create: { width: 1800, height: 900, channels: 4, background: '#aa1122' } }).png().toBuffer();

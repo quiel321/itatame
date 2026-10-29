@@ -4,9 +4,11 @@ import { putR2Object } from './r2';
 import { CACHE_MIDIA_PUBLICA, chaveMidiaPublica, urlMidiaPublica, type TipoMidiaPublica, type EscopoMidiaPublica } from './midia-publica';
 
 export function baseMidiaPublica(escopo: EscopoMidiaPublica = 'itatame') {
-  return escopo === 'retratt'
+  const base = new URL(escopo === 'retratt'
     ? process.env.NEXT_PUBLIC_FOTOS_URL || 'https://retratt.com'
-    : process.env.MIDIA_PUBLICA_BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || 'https://itatame.com.br';
+    : process.env.MIDIA_PUBLICA_BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || 'https://itatame.com.br');
+  if (base.hostname === 'www.itatame.com.br' || base.hostname === 'www.retratt.com') base.hostname = base.hostname.slice(4);
+  return base.origin;
 }
 
 export function enderecoMidiaPublica(arquivo: string, escopo: EscopoMidiaPublica) {
